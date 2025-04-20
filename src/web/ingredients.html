@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ingredients - Cocktail Database</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <header>
+        <h1>Cocktail Database</h1>
+        <nav>
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="ingredients.html">Ingredients</a></li>
+                <li><a href="recipes.html">Recipes</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <section class="ingredients-section">
+            <h2>Manage Ingredients</h2>
+
+            <div class="ingredient-form">
+                <h3>Add New Ingredient</h3>
+                <form id="ingredient-form">
+                    <div class="form-group">
+                        <label for="ingredient-name">Name:</label>
+                        <input type="text" id="ingredient-name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ingredient-category">Category:</label>
+                        <select id="ingredient-category" required>
+                            <option value="">Select a category</option>
+                            <option value="spirit">Spirit</option>
+                            <option value="mixer">Mixer</option>
+                            <option value="garnish">Garnish</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ingredient-description">Description:</label>
+                        <textarea id="ingredient-description" rows="3"></textarea>
+                    </div>
+
+                    <button type="submit">Add Ingredient</button>
+                </form>
+            </div>
+
+            <div class="ingredients-list">
+                <h3>Existing Ingredients</h3>
+                <div class="search-bar">
+                    <input type="text" id="ingredient-search" placeholder="Search ingredients...">
+                </div>
+                <div id="ingredients-container">
+                    <!-- Ingredients will be loaded here -->
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Cocktail Database</p>
+    </footer>
+
+    <script src="js/api.js"></script>
+    <script src="js/ingredients.js"></script>
+</body>
+
+</html>

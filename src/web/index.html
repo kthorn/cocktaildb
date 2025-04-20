@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cocktail Database</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <header>
+        <h1>Cocktail Database</h1>
+        <nav>
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="ingredients.html">Ingredients</a></li>
+                <li><a href="recipes.html">Recipes</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <section class="welcome">
+            <h2>Welcome to the Cocktail Database</h2>
+            <p>Manage your cocktail ingredients and recipes in one place.</p>
+        </section>
+
+        <section class="quick-stats">
+            <div class="stat-card">
+                <h3>Total Ingredients</h3>
+                <p id="total-ingredients">Loading...</p>
+            </div>
+            <div class="stat-card">
+                <h3>Total Recipes</h3>
+                <p id="total-recipes">Loading...</p>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Cocktail Database</p>
+    </footer>
+
+    <script src="js/api.js"></script>
+    <script src="js/index.js"></script>
+</body>
+
+</html>
