@@ -1,18 +1,46 @@
 class CocktailAPI {
     constructor(baseUrl = '') {
-        // Use the current origin as the base URL if not provided
-        this.baseUrl = baseUrl || window.location.origin + '/api';
+        this.baseUrl = baseUrl;
+        this.initializeApiUrl();
+    }
+
+    async initializeApiUrl() {
+        if (!this.baseUrl) {
+            try {
+                // Fetch the configuration from the config endpoint
+                const response = await fetch('/api/config');
+                const config = await response.json();
+
+                if (config.apiUrl) {
+                    this.baseUrl = config.apiUrl;
+                } else {
+                    console.error('API Gateway URL not found in configuration');
+                    this.baseUrl = 'https://your-api-gateway-url.execute-api.${AWS::Region}.amazonaws.com/api';
+                }
+            } catch (error) {
+                console.error('Error fetching configuration:', error);
+                this.baseUrl = 'https://your-api-gateway-url.execute-api.${AWS::Region}.amazonaws.com/api';
+            }
+        }
+    }
+
+    async handleResponse(response) {
+        const data = await response.json();
+        if (response.status >= 400) {
+            throw new Error(data.error || 'An error occurred');
+        }
+        return data;
     }
 
     // Ingredients API
     async getIngredients() {
         const response = await fetch(`${this.baseUrl}/ingredients`);
-        return await response.json();
+        return this.handleResponse(response);
     }
 
     async getIngredient(id) {
         const response = await fetch(`${this.baseUrl}/ingredients/${id}`);
-        return await response.json();
+        return this.handleResponse(response);
     }
 
     async createIngredient(ingredientData) {
@@ -23,7 +51,7 @@ class CocktailAPI {
             },
             body: JSON.stringify(ingredientData),
         });
-        return await response.json();
+        return this.handleResponse(response);
     }
 
     async updateIngredient(id, ingredientData) {
@@ -34,14 +62,14 @@ class CocktailAPI {
             },
             body: JSON.stringify(ingredientData),
         });
-        return await response.json();
+        return this.handleResponse(response);
     }
 
     async deleteIngredient(id) {
         const response = await fetch(`${this.baseUrl}/ingredients/${id}`, {
             method: 'DELETE',
         });
-        return await response.json();
+        return this.handleResponse(response);
     }
 
     // Recipes API

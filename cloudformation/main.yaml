@@ -118,16 +118,13 @@ Resources:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
 
+  # Fix 1: Break circular dependency between security groups
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for Cocktail Database
       VpcId: !Ref CocktailVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      # Remove ingress rule that references LambdaSecurityGroup
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -136,13 +133,36 @@ Resources:
       VpcId: !Ref CocktailVPC
       SecurityGroupEgress:
         - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
-        - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0  # Allow HTTPS outbound for AWS services
+      # Remove egress rule that references DatabaseSecurityGroup
+
+  # New: Add security group ingress rule separately
+  DatabaseSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref LambdaSecurityGroup
+    DependsOn:
+      - DatabaseSecurityGroup
+      - LambdaSecurityGroup
+
+  # New: Add security group egress rule separately
+  LambdaSecurityGroupEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref LambdaSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
+    DependsOn:
+      - DatabaseSecurityGroup
+      - LambdaSecurityGroup
 
   # Aurora Serverless v2 cluster
   CocktailDatabase:
@@ -308,12 +328,117 @@ Resources:
             ResponseCode: 404
             ResponsePagePath: /error.html
 
+  # Fix 2: Create an OpenAPI definition with all the API paths to avoid circular dependencies
+  CocktailAPIDefinition:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: 
+        ApplicationId: arn:aws:serverless:us-east-1:012345678901:applications/api-definition
+        SemanticVersion: 1.0.0
+      Parameters:
+        APIName: !Sub ${AWS::StackName}-api
+
   # API Gateway for backend endpoints
   CocktailAPI:
     Type: AWS::Serverless::Api
     Properties:
       Name: !Sub ${AWS::StackName}-api
       StageName: api
+      # Fix 2: Specify explicit api definition to break circular dependency
+      DefinitionBody:
+        swagger: '2.0'
+        info:
+          title: !Sub ${AWS::StackName}-api
+        paths:
+          /ingredients:
+            get:
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CocktailLambda.Arn}/invocations
+                passthroughBehavior: when_no_match
+                httpMethod: POST
+                type: aws_proxy
+            post:
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CocktailLambda.Arn}/invocations
+                passthroughBehavior: when_no_match
+                httpMethod: POST
+                type: aws_proxy
+            put:
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CocktailLambda.Arn}/invocations
+                passthroughBehavior: when_no_match
+                httpMethod: POST
+                type: aws_proxy
+            delete:
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CocktailLambda.Arn}/invocations
+                passthroughBehavior: when_no_match
+                httpMethod: POST
+                type: aws_proxy
+          /recipes:
+            get:
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CocktailLambda.Arn}/invocations
+                passthroughBehavior: when_no_match
+                httpMethod: POST
+                type: aws_proxy
+            post:
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CocktailLambda.Arn}/invocations
+                passthroughBehavior: when_no_match
+                httpMethod: POST
+                type: aws_proxy
+            put:
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CocktailLambda.Arn}/invocations
+                passthroughBehavior: when_no_match
+                httpMethod: POST
+                type: aws_proxy
+            delete:
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CocktailLambda.Arn}/invocations
+                passthroughBehavior: when_no_match
+                httpMethod: POST
+                type: aws_proxy
+          /units:
+            get:
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CocktailLambda.Arn}/invocations
+                passthroughBehavior: when_no_match
+                httpMethod: POST
+                type: aws_proxy
+            post:
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CocktailLambda.Arn}/invocations
+                passthroughBehavior: when_no_match
+                httpMethod: POST
+                type: aws_proxy
+            put:
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CocktailLambda.Arn}/invocations
+                passthroughBehavior: when_no_match
+                httpMethod: POST
+                type: aws_proxy
+            delete:
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CocktailLambda.Arn}/invocations
+                passthroughBehavior: when_no_match
+                httpMethod: POST
+                type: aws_proxy
+          /config:
+            get:
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ConfigLambda.Arn}/invocations
+                passthroughBehavior: when_no_match
+                httpMethod: POST
+                type: aws_proxy
+          /{proxy+}:
+            options:
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CocktailLambda.Arn}/invocations
+                passthroughBehavior: when_no_match
+                httpMethod: POST
+                type: aws_proxy
       Auth:
         DefaultAuthorizer: NONE
       GatewayResponses:
@@ -330,9 +455,28 @@ Resources:
               Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
 
+  # Fix 2: Create Lambda permissions explicitly 
+  CocktailLambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CocktailLambda
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CocktailAPI}/*
+
+  ConfigLambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ConfigLambda
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CocktailAPI}/*
+
   # Lambda for API Backend
   CocktailLambda:
-    Type: AWS::Serverless::Function
+    Type: AWS::Serverless::Function 
+    DependsOn:
+      - CocktailAPI
     Properties:
       FunctionName: !Sub ${AWS::StackName}-api-handler
       CodeUri: ../lambda/functions/cocktail_handler/
@@ -372,89 +516,13 @@ Resources:
               Resource: 
                 - !Sub arn:aws:s3:::${CocktailBucket}
                 - !Sub arn:aws:s3:::${CocktailBucket}/*
-      Events:
-        IngredientsGetEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /ingredients
-            Method: GET
-        IngredientsPostEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /ingredients
-            Method: POST
-        IngredientsPutEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /ingredients
-            Method: PUT
-        IngredientsDeleteEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /ingredients
-            Method: DELETE
-        RecipesGetEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /recipes
-            Method: GET
-        RecipesPostEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /recipes
-            Method: POST
-        RecipesPutEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /recipes
-            Method: PUT
-        RecipesDeleteEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /recipes
-            Method: DELETE
-        UnitsGetEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /units
-            Method: GET
-        UnitsPostEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /units
-            Method: POST
-        UnitsPutEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /units
-            Method: PUT
-        UnitsDeleteEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /units
-            Method: DELETE
-        OptionsEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /{proxy+}
-            Method: OPTIONS
+      # Fix 2: Remove Events section to break circular dependency
 
   # Configuration Lambda
   ConfigLambda:
     Type: AWS::Serverless::Function
+    DependsOn:
+      - CocktailAPI
     Properties:
       FunctionName: !Sub ${AWS::StackName}-config-handler
       CodeUri: ../lambda/functions/config_handler/
@@ -462,67 +530,9 @@ Resources:
       Timeout: 30
       Environment:
         Variables:
-          # Remove direct reference to API Gateway URL which creates circular dependency
-          API_GATEWAY_URL: "" # This will be updated by a custom resource
-      Events:
-        ConfigEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /config
-            Method: GET
-
-  # Custom resource to update the ConfigLambda environment variable
-  UpdateConfigLambdaEnvFunction:
-    Type: AWS::Serverless::Function
-    DependsOn: CocktailAPI
-    Properties:
-      Handler: index.handler
-      InlineCode: |
-        import boto3
-        import cfnresponse
-        import os
-
-        def handler(event, context):
-          if event['RequestType'] in ['Create', 'Update']:
-            try:
-              lambda_client = boto3.client('lambda')
-              lambda_name = event['ResourceProperties']['LambdaName']
-              api_url = event['ResourceProperties']['ApiUrl']
-              
-              # Update Lambda environment variable
-              response = lambda_client.update_function_configuration(
-                FunctionName=lambda_name,
-                Environment={
-                  'Variables': {
-                    'API_GATEWAY_URL': api_url
-                  }
-                }
-              )
-              
-              cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-            except Exception as e:
-              print(f"Error: {str(e)}")
-              cfnresponse.send(event, context, cfnresponse.FAILED, {})
-          else:
-            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action:
-                - lambda:UpdateFunctionConfiguration
-              Resource: !GetAtt ConfigLambda.Arn
-
-  # Custom resource to update Lambda environment
-  UpdateConfigLambdaEnv:
-    Type: AWS::CloudFormation::CustomResource
-    DependsOn:
-      - CocktailAPI
-      - ConfigLambda
-    Properties:
-      ServiceToken: !GetAtt UpdateConfigLambdaEnvFunction.Arn
-      LambdaName: !Ref ConfigLambda
-      ApiUrl: !Sub https://${CocktailAPI}.execute-api.${AWS::Region}.amazonaws.com/api
+          # Fix 3: Hardcode API Gateway URL format instead of using circular reference
+          API_GATEWAY_URL: !Sub https://${CocktailAPI}.execute-api.${AWS::Region}.amazonaws.com/api
+      # Fix 2: Remove Events section to break circular dependency
 
 Outputs:
   VpcId:
