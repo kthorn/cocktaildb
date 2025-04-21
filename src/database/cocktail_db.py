@@ -7,6 +7,7 @@ from sqlalchemy import (
     Table,
     ForeignKey,
     Enum,
+    Boolean,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -30,9 +31,7 @@ class Unit(Base):
     name = Column(String(20), nullable=False, unique=True)
     abbreviation = Column(String(10), unique=True)
     type = Column(Enum(UnitType), nullable=False)
-    conversion_factor = Column(
-        Float
-    )  # For converting to base unit (e.g., ml for volume)
+    conversion_factor = Column(Float)  # For converting to base unit
     description = Column(String(100))
 
 
@@ -55,9 +54,19 @@ class Ingredient(Base):
     description = Column(String(500))
     category = Column(String(50))  # e.g., spirit, mixer, garnish
 
+    # Brand-specific fields
+    is_brand = Column(Boolean, default=False)
+    brand_producer = Column(String(100))
+
+    # Self-referential relationship for ingredient hierarchy
+    parent_id = Column(Integer, ForeignKey("ingredients.id"))
+    children = relationship(
+        "Ingredient", backref=relationship.backref("parent", remote_side=[id])
+    )
+
     # Relationship with cocktails
     cocktails = relationship(
-        "Cocktail", secondary=cocktail_ingredients, back_populates="ingredients"
+        "Cocktail", secondary="cocktail_ingredients", back_populates="ingredients"
     )
 
 
@@ -69,7 +78,7 @@ class Cocktail(Base):
     description = Column(String(500))
     instructions = Column(String(1000))
     image_url = Column(String(255))
-    category = Column(String(50))  # e.g., classic, modern, tiki
+    # category = Column(String(50))  # e.g., classic, modern, tiki
 
     # Relationship with ingredients
     ingredients = relationship(
@@ -252,3 +261,85 @@ class Database:
         # Convert to base unit first, then to target unit
         base_amount = amount * from_unit.conversion_factor
         return base_amount / to_unit.conversion_factor
+
+    def create_ingredient_with_parent(
+        self, ingredient_data: dict, parent_name: str = None
+    ) -> Ingredient:
+        """
+        Create an ingredient with an optional parent.
+
+        Example:
+        - create_ingredient_with_parent({'name': 'Bourbon', 'category': 'spirit'}, parent_name='Whiskey')
+        - create_ingredient_with_parent({
+            'name': 'Blanton\'s',
+            'is_brand': True,
+            'brand_producer': 'Buffalo Trace',
+            'category': 'spirit'
+          }, parent_name='Bourbon')
+        """
+        # Create the ingredient
+        ingredient = Ingredient(**ingredient_data)
+
+        # Link to parent if specified
+        if parent_name:
+            parent = self.session.query(Ingredient).filter_by(name=parent_name).first()
+            if not parent:
+                raise ValueError(f"Parent ingredient '{parent_name}' not found")
+            ingredient.parent = parent
+
+        self.session.add(ingredient)
+        self.session.commit()
+        return ingredient
+
+    def get_ingredient_by_name(self, name: str) -> Ingredient:
+        """Get an ingredient by name"""
+        return self.session.query(Ingredient).filter_by(name=name).first()
+
+    def get_ingredient_hierarchy(self, ingredient_id: int) -> list[Ingredient]:
+        """Get the full hierarchy for an ingredient (including parents)"""
+        ingredient = self.get_ingredient(ingredient_id)
+        if not ingredient:
+            return []
+
+        # Start with the ingredient itself
+        hierarchy = [ingredient]
+        current = ingredient
+
+        # Move up the tree
+        while current.parent:
+            hierarchy.append(current.parent)
+            current = current.parent
+
+        # Return in order from most generic to most specific
+        return list(reversed(hierarchy))
+
+    def get_subtypes(self, ingredient_id: int) -> list[Ingredient]:
+        """Get all ingredient subtypes (children)"""
+        ingredient = self.get_ingredient(ingredient_id)
+        if not ingredient:
+            return []
+
+        # Recursive function to collect all descendants
+        def collect_children(ing):
+            result = []
+            for child in ing.children:
+                result.append(child)
+                result.extend(collect_children(child))
+            return result
+
+        return collect_children(ingredient)
+
+    def get_compatible_ingredients(self, ingredient_id: int) -> list[Ingredient]:
+        """Get all ingredients compatible with this one (including self, parent types, and subtypes)"""
+        ingredient = self.get_ingredient(ingredient_id)
+        if not ingredient:
+            return []
+
+        # Get all parent types
+        hierarchy = self.get_ingredient_hierarchy(ingredient_id)
+
+        # Get all subtypes
+        subtypes = self.get_subtypes(ingredient_id)
+
+        # Combine them all (including the original ingredient which is in the hierarchy)
+        return hierarchy + subtypes

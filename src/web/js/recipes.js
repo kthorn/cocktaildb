@@ -5,6 +5,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const addIngredientBtn = document.getElementById('add-ingredient');
     const ingredientsList = document.getElementById('ingredients-list');
 
+    if (!recipeForm || !recipesContainer || !searchInput || !addIngredientBtn || !ingredientsList) {
+        console.error('Required elements not found in the DOM');
+        return;
+    }
+
     // Load recipes and units on page load
     loadRecipes();
     loadUnits();
@@ -26,20 +31,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const recipeData = {
             name: document.getElementById('recipe-name').value,
-            category: document.getElementById('recipe-category').value,
             description: document.getElementById('recipe-description').value,
             instructions: document.getElementById('recipe-instructions').value,
             ingredients: ingredients
         };
 
         try {
-            await api.createRecipe(recipeData);
+            if (recipeForm.dataset.mode === 'edit') {
+                await api.updateRecipe(recipeForm.dataset.id, recipeData);
+            } else {
+                await api.createRecipe(recipeData);
+            }
             recipeForm.reset();
             ingredientsList.innerHTML = '';
+            delete recipeForm.dataset.mode;
+            delete recipeForm.dataset.id;
             loadRecipes();
         } catch (error) {
-            console.error('Error creating recipe:', error);
-            alert('Failed to create recipe. Please try again.');
+            console.error('Error saving recipe:', error);
+            alert('Failed to save recipe. Please try again.');
         }
     });
 
@@ -80,6 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadUnits() {
         try {
             const units = await api.getUnits();
+            // Store units in a closure instead of global window object
             window.availableUnits = units;
         } catch (error) {
             console.error('Error loading units:', error);
@@ -130,7 +141,6 @@ document.addEventListener('DOMContentLoaded', () => {
             card.className = 'recipe-card';
             card.innerHTML = `
                 <h4>${recipe.name}</h4>
-                <p><strong>Category:</strong> ${recipe.category}</p>
                 <p>${recipe.description || 'No description'}</p>
                 <div class="ingredients">
                     <h5>Ingredients:</h5>
@@ -156,13 +166,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Edit recipe
 async function editRecipe(id) {
+    const form = document.getElementById('recipe-form');
+    if (!form) {
+        console.error('Recipe form not found');
+        return;
+    }
+
     try {
         const recipe = await api.getRecipe(id);
-        const form = document.getElementById('recipe-form');
 
         // Populate form with recipe data
         document.getElementById('recipe-name').value = recipe.name;
-        document.getElementById('recipe-category').value = recipe.category;
         document.getElementById('recipe-description').value = recipe.description || '';
         document.getElementById('recipe-instructions').value = recipe.instructions;
 

@@ -1,11 +1,17 @@
 class CocktailAPI {
-    constructor(baseUrl = 'http://localhost:3000/api') {
-        this.baseUrl = baseUrl;
+    constructor(baseUrl = '') {
+        // Use the current origin as the base URL if not provided
+        this.baseUrl = baseUrl || window.location.origin + '/api';
     }
 
     // Ingredients API
     async getIngredients() {
         const response = await fetch(`${this.baseUrl}/ingredients`);
+        return await response.json();
+    }
+
+    async getIngredient(id) {
+        const response = await fetch(`${this.baseUrl}/ingredients/${id}`);
         return await response.json();
     }
 
@@ -41,6 +47,11 @@ class CocktailAPI {
     // Recipes API
     async getRecipes() {
         const response = await fetch(`${this.baseUrl}/recipes`);
+        return await response.json();
+    }
+
+    async getRecipe(id) {
+        const response = await fetch(`${this.baseUrl}/recipes/${id}`);
         return await response.json();
     }
 

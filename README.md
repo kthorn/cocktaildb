@@ -1,47 +1,97 @@
-# Cocktail Database on AWS
+# Cocktail Database
 
-This project implements a serverless cocktail database using AWS services including:
-- AWS Lambda for backend processing
-- Amazon Aurora Serverless for database storage
-- Amazon S3 for static assets and images
-- AWS CloudFormation for infrastructure as code
+A full-stack web application for managing and exploring cocktail recipes.
 
-## Project Structure
+## Architecture
 
-```
-├── cloudformation/         # CloudFormation templates
-│   ├── templates/         # Nested stacks and reusable components
-│   └── main.yaml         # Main deployment template
-├── lambda/               # Lambda function code
-│   ├── functions/       # Individual Lambda functions
-│   └── layers/          # Lambda layers
-├── src/                 # Source code
-│   ├── api/            # API Gateway integration code
-│   └── database/       # Database access code
-├── tests/              # Test files
-├── scripts/            # Deployment and utility scripts
-└── docs/              # Documentation
-```
+This project uses the following AWS services:
+- Amazon Aurora PostgreSQL (Serverless v2) for the database
+- AWS Lambda for serverless backend logic
+- Amazon API Gateway for REST API
+- Amazon S3 for static website hosting and image storage
+- Amazon CloudFront for content delivery
+- AWS Secrets Manager for database credentials
 
 ## Prerequisites
 
-- AWS CLI configured with appropriate credentials
-- Python 3.8 or later
-- Node.js and npm (for deployment tools)
+- AWS CLI installed and configured with appropriate credentials
+- AWS SAM CLI installed (https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
+- Python 3.9 or later
+- boto3 Python package (`pip install boto3`)
 
-## Deployment
+## Deployment Instructions
 
-1. Install dependencies:
-```bash
-pip install -r requirements.txt
+You can deploy the application using either the batch script (Windows) or by running the commands manually.
+
+### Windows Deployment (Using deploy.bat)
+
+For Windows users, simply run the deploy.bat script:
+
+```
+scripts\deploy.bat
 ```
 
-2. Deploy using AWS SAM:
+This script will:
+1. Build the application with AWS SAM
+2. Deploy the CloudFormation stack using SAM
+3. Upload web content to S3
+4. Display the CloudFormation stack outputs
+
+### Manual Deployment
+
+#### 1. Build with SAM
+
+Build the application using AWS SAM:
+
 ```bash
-sam build
-sam deploy --guided
+sam build --template-file cloudformation/main.yaml
 ```
+
+This will:
+1. Process the CloudFormation template
+2. Automatically package Lambda functions
+3. Create a deployment-ready template
+
+#### 2. Deploy with SAM
+
+Once the application is built, deploy it with SAM:
+
+```bash
+sam deploy \
+  --template-file .aws-sam/build/template.yaml \
+  --stack-name cocktaildb \
+  --capabilities CAPABILITY_IAM \
+  --region us-east-1
+```
+
+#### 3. Monitor Deployment
+
+You can monitor the deployment progress in the AWS CloudFormation console or using the AWS CLI:
+
+```bash
+aws cloudformation describe-stacks --stack-name cocktaildb
+```
+
+## Architecture Changes
+
+- **Single Subnet**: The template has been modified to use a single subnet for simplicity.
+- **Serverless Application Model**: The project uses AWS SAM for easier serverless application deployment.
+
+## Website Access
+
+After deployment is complete, you can access the website using the CloudFront URL provided in the CloudFormation outputs:
+
+```bash
+aws cloudformation describe-stack-outputs --stack-name cocktaildb
+```
+
+## API Endpoints
+
+The API includes the following endpoints:
+- `/api/ingredients` - Manage cocktail ingredients
+- `/api/recipes` - Manage cocktail recipes
+- `/api/units` - Manage measurement units
 
 ## License
 
-MIT License - see LICENSE file for details
+This project is licensed under the MIT License - see the LICENSE file for details.

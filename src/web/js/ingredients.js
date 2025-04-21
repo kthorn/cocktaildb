@@ -3,6 +3,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const ingredientsContainer = document.getElementById('ingredients-container');
     const searchInput = document.getElementById('ingredient-search');
 
+    if (!ingredientForm || !ingredientsContainer || !searchInput) {
+        console.error('Required elements not found in the DOM');
+        return;
+    }
+
     // Load ingredients on page load
     loadIngredients();
 
@@ -17,12 +22,18 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         try {
-            await api.createIngredient(ingredientData);
+            if (ingredientForm.dataset.mode === 'edit') {
+                await api.updateIngredient(ingredientForm.dataset.id, ingredientData);
+            } else {
+                await api.createIngredient(ingredientData);
+            }
             ingredientForm.reset();
+            delete ingredientForm.dataset.mode;
+            delete ingredientForm.dataset.id;
             loadIngredients();
         } catch (error) {
-            console.error('Error creating ingredient:', error);
-            alert('Failed to create ingredient. Please try again.');
+            console.error('Error saving ingredient:', error);
+            alert('Failed to save ingredient. Please try again.');
         }
     });
 
@@ -82,9 +93,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Edit ingredient
 async function editIngredient(id) {
+    const form = document.getElementById('ingredient-form');
+    if (!form) {
+        console.error('Ingredient form not found');
+        return;
+    }
+
     try {
         const ingredient = await api.getIngredient(id);
-        const form = document.getElementById('ingredient-form');
 
         // Populate form with ingredient data
         document.getElementById('ingredient-name').value = ingredient.name;

@@ -1,55 +1,97 @@
 AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
 Description: Cocktail Database Infrastructure
 
 Parameters:
-  Environment:
-    Type: String
-    Default: dev
-    AllowedValues:
-      - dev
-      - staging
-      - prod
-
   DatabaseName:
     Type: String
     Default: cocktaildb
 
-  VpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: VPC ID for the Aurora cluster
-
-  SubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: Subnet IDs for the Aurora cluster
-
 Resources:
-  CocktailDatabase:
-    Type: AWS::RDS::DBCluster
+  # VPC and Network Configuration
+  CocktailVPC:
+    Type: AWS::EC2::VPC
     Properties:
-      Engine: aurora-postgresql
-      EngineMode: serverless
-      DatabaseName: !Ref DatabaseName
-      MasterUsername: !Sub '{{resolve:secretsmanager:${AWS::StackName}-db-creds:SecretString:username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-db-creds:SecretString:password}}'
-      ScalingConfiguration:
-        AutoPause: true
-        MinCapacity: 2
-        MaxCapacity: 16
-      VpcSecurityGroupIds:
-        - !Ref DatabaseSecurityGroup
-      DBSubnetGroupName: !Ref DBSubnetGroup
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-vpc
 
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CocktailVPC
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-public-subnet-1
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-igw
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref CocktailVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref CocktailVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-route-table
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  Subnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref RouteTable
+
+  # Database credentials in Secrets Manager
+  DBCredentialsSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${AWS::StackName}-db-creds
+      Description: !Sub Credentials for ${DatabaseName} database
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "postgres"}'
+        GenerateStringKey: password
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+
+  # Database Resources
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: Subnet group for Cocktail Database
-      SubnetIds: !Ref SubnetIds
+      SubnetIds:
+        - !Ref PublicSubnet1
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for Cocktail Database
-      VpcId: !Ref VpcId
+      VpcId: !Ref CocktailVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 5432
@@ -60,23 +102,295 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for Lambda functions
-      VpcId: !Ref VpcId
+      VpcId: !Ref CocktailVPC
 
+  # Aurora Serverless v2 cluster
+  CocktailDatabase:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: aurora-postgresql
+      EngineVersion: 16.3
+      EngineMode: provisioned
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: 0
+        MaxCapacity: 1
+      DatabaseName: !Ref DatabaseName
+      MasterUsername: !Sub '{{resolve:secretsmanager:${AWS::StackName}-db-creds:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-db-creds:SecretString:password}}'
+      VpcSecurityGroupIds:
+        - !Ref DatabaseSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+
+  # Aurora Serverless v2 instance
+  CocktailDatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: aurora-postgresql
+      DBClusterIdentifier: !Ref CocktailDatabase
+      DBInstanceClass: db.serverless
+      PubliclyAccessible: false
+
+  # S3 bucket for cocktail images
   CocktailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-cocktail-images-${Environment}'
+      BucketName: !Sub ${AWS::StackName}-cocktail-images
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
 
+  # S3 bucket for website hosting
+  WebsiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AWS::StackName}-website
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+              - HEAD
+            AllowedOrigins:
+              - '*'
+            MaxAge: 3600
+
+  # Bucket policy to allow CloudFront access
+  WebsiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DependsOn: CloudFrontDistribution
+    Properties:
+      Bucket: !Ref WebsiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub arn:aws:s3:::${WebsiteBucket}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}
+
+  # CloudFront Origin Access Control
+  CloudFrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub ${AWS::StackName}-oac
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # CloudFront Distribution
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt WebsiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt CloudFrontOAC.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
+          OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf # Managed-CORS-S3Origin
+
+  # API Gateway for backend endpoints
+  CocktailAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub ${AWS::StackName}-api
+      StageName: api
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+
+  # Lambda for API Backend
+  CocktailLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-api-handler
+      CodeUri: ./lambda/functions/cocktail_handler/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Timeout: 30
+      Environment:
+        Variables:
+          DB_SECRET_ARN: !Ref DBCredentialsSecret
+          DB_NAME: !Ref DatabaseName
+          DB_CLUSTER_ARN: !GetAtt CocktailDatabase.DBClusterArn
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PublicSubnet1
+      Policies:
+        - VPCAccessPolicy: {}
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref DBCredentialsSecret
+            - Effect: Allow
+              Action:
+                - rds:DescribeDBClusters
+              Resource: !GetAtt CocktailDatabase.DBClusterArn
+      Events:
+        IngredientsEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ingredients
+            Method: ANY
+        RecipesEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes
+            Method: ANY
+        UnitsEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /units
+            Method: ANY
+
+  # Create a sample index.html file
+  IndexFileFunction:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt CreateIndexFileFunction.Arn
+      BucketName: !Ref WebsiteBucket
+
+  # Lambda function to create the index.html file
+  CreateIndexFileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      InlineCode: |
+        import boto3
+        import cfnresponse
+        import os
+
+        def handler(event, context):
+          if event['RequestType'] in ['Create', 'Update']:
+            try:
+              s3 = boto3.client('s3')
+              bucket_name = event['ResourceProperties']['BucketName']
+
+              # Create a simple HTML file
+              html_content = """
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <title>Cocktail Database</title>
+                <style>
+                  body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+                  h1 { color: #333; text-align: center; }
+                  .container { background-color: #f8f9fa; padding: 20px; border-radius: 5px; }
+                </style>
+              </head>
+              <body>
+                <div class="container">
+                  <h1>Welcome to the Cocktail Database</h1>
+                  <p>Your cocktail database infrastructure has been successfully deployed!</p>
+                </div>
+              </body>
+              </html>
+              """
+
+              # Upload the file to S3
+              s3.put_object(
+                Bucket=bucket_name,
+                Key='index.html',
+                Body=html_content,
+                ContentType='text/html'
+              )
+
+              # Create a simple error page
+              error_content = """
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <title>Error - Cocktail Database</title>
+                <style>
+                  body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+                  h1 { color: #cc0000; text-align: center; }
+                  .container { background-color: #f8f9fa; padding: 20px; border-radius: 5px; }
+                </style>
+              </head>
+              <body>
+                <div class="container">
+                  <h1>Error</h1>
+                  <p>Sorry, the page you requested was not found.</p>
+                </div>
+              </body>
+              </html>
+              """
+
+              s3.put_object(
+                Bucket=bucket_name,
+                Key='error.html',
+                Body=error_content,
+                ContentType='text/html'
+              )
+
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+            except Exception as e:
+              print(f"Error: {str(e)}")
+              cfnresponse.send(event, context, cfnresponse.FAILED, {})
+          else:
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+      Runtime: python3.9
+      Timeout: 60
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub arn:aws:s3:::${WebsiteBucket}/*
+
 Outputs:
+  VpcId:
+    Description: ID of the VPC
+    Value: !Ref CocktailVPC
+
+  PublicSubnet1Id:
+    Description: ID of Public Subnet 1
+    Value: !Ref PublicSubnet1
+
   DatabaseEndpoint:
     Description: Database endpoint
     Value: !GetAtt CocktailDatabase.Endpoint.Address
 
   CocktailBucketName:
     Description: S3 bucket for cocktail images
-    Value: !Ref CocktailBucket 
+    Value: !Ref CocktailBucket
+
+  WebsiteURL:
+    Description: S3 Website URL (direct)
+    Value: !GetAtt WebsiteBucket.WebsiteURL
+
+  CloudFrontURL:
+    Description: CloudFront Distribution URL (use this for your website)
+    Value: !Sub https://${CloudFrontDistribution.DomainName}
+
+  ApiEndpoint:
+    Description: API Gateway Endpoint URL
+    Value: !Sub https://${CocktailAPI}.execute-api.${AWS::Region}.amazonaws.com/api
