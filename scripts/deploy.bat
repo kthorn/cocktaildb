@@ -36,9 +36,20 @@ echo Deployment complete!
 
 REM Get website bucket name from CloudFormation outputs
 echo Getting S3 bucket name...
-for /f "tokens=*" %%i in ('aws cloudformation describe-stacks --stack-name %STACK_NAME% --query "Stacks[0].Outputs[?OutputKey=='WebsiteBucketName'].OutputValue" --output text --region %REGION%') do (
+set BUCKET_NAME=
+set AWS_CMD=aws cloudformation describe-stacks --stack-name %STACK_NAME% --query "Stacks[0].Outputs[?OutputKey=='WebsiteBucketName'].OutputValue" --output text --region %REGION%
+for /f "tokens=*" %%i in ('%AWS_CMD%') do (
     set BUCKET_NAME=%%i
 )
+
+REM Verify we got a valid bucket name
+if "!BUCKET_NAME!"=="" (
+    echo Error: Could not retrieve bucket name from CloudFormation outputs
+    echo Please check if the stack deployment completed successfully
+    exit /b 1
+)
+
+echo Found bucket name: !BUCKET_NAME!
 
 REM Upload web content to S3 after deployment
 echo Uploading web content to S3 bucket: !BUCKET_NAME!
@@ -49,6 +60,21 @@ if %ERRORLEVEL% neq 0 (
     exit /b %ERRORLEVEL%
 ) else (
     echo Web content uploaded successfully!
+)
+
+REM Invalidate CloudFront cache
+echo Invalidating CloudFront cache...
+set DISTRIBUTION_ID=
+set AWS_CMD=aws cloudformation describe-stacks --stack-name %STACK_NAME% --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistribution'].OutputValue" --output text --region %REGION%
+for /f "tokens=*" %%i in ('%AWS_CMD%') do (
+    set DISTRIBUTION_ID=%%i
+)
+
+if not "!DISTRIBUTION_ID!"=="" (
+    aws cloudfront create-invalidation --distribution-id !DISTRIBUTION_ID! --paths "/*" --region %REGION%
+    echo CloudFront cache invalidation initiated
+) else (
+    echo Warning: Could not retrieve CloudFront distribution ID
 )
 
 echo Getting CloudFormation outputs...

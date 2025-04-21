@@ -134,6 +134,15 @@ Resources:
     Properties:
       GroupDescription: Security group for Lambda functions
       VpcId: !Ref CocktailVPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0  # Allow HTTPS outbound for AWS services
 
   # Aurora Serverless v2 cluster
   CocktailDatabase:
@@ -184,6 +193,9 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
       CorsConfiguration:
         CorsRules:
           - AllowedHeaders:
@@ -212,7 +224,8 @@ Resources:
             try:
                 if event['RequestType'] in ['Create', 'Update']:
                     bucket_name = event['ResourceProperties']['BucketName']
-                    distribution_arn = event['ResourceProperties']['DistributionArn']
+                    distribution_id = event['ResourceProperties']['DistributionId']
+                    account_id = event['ResourceProperties']['AccountId']
 
                     policy = {
                         'Version': '2012-10-17',
@@ -223,7 +236,7 @@ Resources:
                             'Resource': f'arn:aws:s3:::{bucket_name}/*',
                             'Condition': {
                                 'StringEquals': {
-                                    'AWS:SourceArn': distribution_arn
+                                    'AWS:SourceArn': f'arn:aws:cloudfront::{account_id}:distribution/{distribution_id}'
                                 }
                             }
                         }]
@@ -255,7 +268,8 @@ Resources:
     Properties:
       ServiceToken: !GetAtt WebsiteBucketPolicyFunction.Arn
       BucketName: !Ref WebsiteBucket
-      DistributionArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}
+      DistributionId: !Ref CloudFrontDistribution
+      AccountId: !Ref AWS::AccountId
 
   # CloudFront Origin Access Control
   CloudFrontOAC:
@@ -286,6 +300,13 @@ Resources:
           ViewerProtocolPolicy: redirect-to-https
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
           OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf # Managed-CORS-S3Origin
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 404
+            ResponsePagePath: /error.html
+          - ErrorCode: 404
+            ResponseCode: 404
+            ResponsePagePath: /error.html
 
   # API Gateway for backend endpoints
   CocktailAPI:
@@ -293,6 +314,21 @@ Resources:
     Properties:
       Name: !Sub ${AWS::StackName}-api
       StageName: api
+      Auth:
+        DefaultAuthorizer: NONE
+      GatewayResponses:
+        DEFAULT_4XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        DEFAULT_5XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
 
   # Lambda for API Backend
   CocktailLambda:
@@ -307,11 +343,13 @@ Resources:
           DB_SECRET_ARN: !Ref DBCredentialsSecret
           DB_NAME: !Ref DatabaseName
           DB_CLUSTER_ARN: !GetAtt CocktailDatabase.DBClusterArn
+          S3_BUCKET: !Ref CocktailBucket
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
         SubnetIds:
           - !Ref PublicSubnet1
+          - !Ref PublicSubnet2
       Policies:
         - VPCAccessPolicy: {}
         - Statement:
@@ -322,37 +360,122 @@ Resources:
             - Effect: Allow
               Action:
                 - rds:DescribeDBClusters
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
               Resource: !GetAtt CocktailDatabase.DBClusterArn
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+                - s3:DeleteObject
+                - s3:ListBucket
+              Resource: 
+                - !Sub arn:aws:s3:::${CocktailBucket}
+                - !Sub arn:aws:s3:::${CocktailBucket}/*
       Events:
-        IngredientsEvent:
+        IngredientsGetEvent:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
             Path: /ingredients
-            Method: ANY
-        RecipesEvent:
+            Method: GET
+        IngredientsPostEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ingredients
+            Method: POST
+        IngredientsPutEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ingredients
+            Method: PUT
+        IngredientsDeleteEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ingredients
+            Method: DELETE
+        RecipesGetEvent:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
             Path: /recipes
-            Method: ANY
-        UnitsEvent:
+            Method: GET
+        RecipesPostEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes
+            Method: POST
+        RecipesPutEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes
+            Method: PUT
+        RecipesDeleteEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes
+            Method: DELETE
+        UnitsGetEvent:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
             Path: /units
-            Method: ANY
+            Method: GET
+        UnitsPostEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /units
+            Method: POST
+        UnitsPutEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /units
+            Method: PUT
+        UnitsDeleteEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /units
+            Method: DELETE
+        OptionsEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /{proxy+}
+            Method: OPTIONS
 
-  # Create a sample index.html file
-  IndexFileFunction:
-    Type: AWS::CloudFormation::CustomResource
-    Properties:
-      ServiceToken: !GetAtt CreateIndexFileFunction.Arn
-      BucketName: !Ref WebsiteBucket
-
-  # Lambda function to create the index.html file
-  CreateIndexFileFunction:
+  # Configuration Lambda
+  ConfigLambda:
     Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-config-handler
+      CodeUri: ../lambda/functions/config_handler/
+      Handler: app.lambda_handler
+      Timeout: 30
+      Environment:
+        Variables:
+          # Remove direct reference to API Gateway URL which creates circular dependency
+          API_GATEWAY_URL: "" # This will be updated by a custom resource
+      Events:
+        ConfigEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /config
+            Method: GET
+
+  # Custom resource to update the ConfigLambda environment variable
+  UpdateConfigLambdaEnvFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: CocktailAPI
     Properties:
       Handler: index.handler
       InlineCode: |
@@ -363,66 +486,20 @@ Resources:
         def handler(event, context):
           if event['RequestType'] in ['Create', 'Update']:
             try:
-              s3 = boto3.client('s3')
-              bucket_name = event['ResourceProperties']['BucketName']
-
-              # Create a simple HTML file
-              html_content = """
-              <!DOCTYPE html>
-              <html>
-              <head>
-                <title>Cocktail Database</title>
-                <style>
-                  body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-                  h1 { color: #333; text-align: center; }
-                  .container { background-color: #f8f9fa; padding: 20px; border-radius: 5px; }
-                </style>
-              </head>
-              <body>
-                <div class="container">
-                  <h1>Welcome to the Cocktail Database</h1>
-                  <p>Your cocktail database infrastructure has been successfully deployed!</p>
-                </div>
-              </body>
-              </html>
-              """
-
-              # Upload the file to S3
-              s3.put_object(
-                Bucket=bucket_name,
-                Key='index.html',
-                Body=html_content,
-                ContentType='text/html'
+              lambda_client = boto3.client('lambda')
+              lambda_name = event['ResourceProperties']['LambdaName']
+              api_url = event['ResourceProperties']['ApiUrl']
+              
+              # Update Lambda environment variable
+              response = lambda_client.update_function_configuration(
+                FunctionName=lambda_name,
+                Environment={
+                  'Variables': {
+                    'API_GATEWAY_URL': api_url
+                  }
+                }
               )
-
-              # Create a simple error page
-              error_content = """
-              <!DOCTYPE html>
-              <html>
-              <head>
-                <title>Error - Cocktail Database</title>
-                <style>
-                  body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-                  h1 { color: #cc0000; text-align: center; }
-                  .container { background-color: #f8f9fa; padding: 20px; border-radius: 5px; }
-                </style>
-              </head>
-              <body>
-                <div class="container">
-                  <h1>Error</h1>
-                  <p>Sorry, the page you requested was not found.</p>
-                </div>
-              </body>
-              </html>
-              """
-
-              s3.put_object(
-                Bucket=bucket_name,
-                Key='error.html',
-                Body=error_content,
-                ContentType='text/html'
-              )
-
+              
               cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
             except Exception as e:
               print(f"Error: {str(e)}")
@@ -433,8 +510,19 @@ Resources:
         - Statement:
             - Effect: Allow
               Action:
-                - s3:PutObject
-              Resource: !Sub arn:aws:s3:::${WebsiteBucket}/*
+                - lambda:UpdateFunctionConfiguration
+              Resource: !GetAtt ConfigLambda.Arn
+
+  # Custom resource to update Lambda environment
+  UpdateConfigLambdaEnv:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn:
+      - CocktailAPI
+      - ConfigLambda
+    Properties:
+      ServiceToken: !GetAtt UpdateConfigLambdaEnvFunction.Arn
+      LambdaName: !Ref ConfigLambda
+      ApiUrl: !Sub https://${CocktailAPI}.execute-api.${AWS::Region}.amazonaws.com/api
 
 Outputs:
   VpcId:
@@ -453,13 +541,21 @@ Outputs:
     Description: Database endpoint
     Value: !GetAtt CocktailDatabase.Endpoint.Address
 
+  DatabasePort:
+    Description: Database port
+    Value: 5432
+
   CocktailBucketName:
     Description: S3 bucket for cocktail images
     Value: !Ref CocktailBucket
 
   WebsiteURL:
     Description: S3 Website URL (direct)
-    Value: !GetAtt WebsiteBucket.WebsiteURL
+    Value: !Sub "https://${WebsiteBucket.DomainName}"
+
+  WebsiteBucketName:
+    Description: Name of the S3 bucket used for website hosting
+    Value: !Ref WebsiteBucket
 
   CloudFrontURL:
     Description: CloudFront Distribution URL (use this for your website)
@@ -468,3 +564,7 @@ Outputs:
   ApiEndpoint:
     Description: API Gateway Endpoint URL
     Value: !Sub https://${CocktailAPI}.execute-api.${AWS::Region}.amazonaws.com/api
+
+  ConfigEndpoint:
+    Description: Configuration endpoint URL
+    Value: !Sub https://${CocktailAPI}.execute-api.${AWS::Region}.amazonaws.com/api/config
