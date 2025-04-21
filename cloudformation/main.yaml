@@ -7,6 +7,17 @@ Parameters:
     Type: String
     Default: cocktaildb
 
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 60
+  
+  Api:
+    Cors:
+      AllowMethods: '''GET,POST,PUT,DELETE,OPTIONS'''
+      AllowHeaders: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+      AllowOrigin: '''*'''
+
 Resources:
   # VPC and Network Configuration
   CocktailVPC:
@@ -31,6 +42,19 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${AWS::StackName}-public-subnet-1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CocktailVPC
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs ''
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-public-subnet-2
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -67,6 +91,12 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       RouteTableId: !Ref RouteTable
 
+  Subnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref RouteTable
+
   # Database credentials in Secrets Manager
   DBCredentialsSecret:
     Type: AWS::SecretsManager::Secret
@@ -86,6 +116,7 @@ Resources:
       DBSubnetGroupDescription: Subnet group for Cocktail Database
       SubnetIds:
         - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -129,6 +160,8 @@ Resources:
       DBClusterIdentifier: !Ref CocktailDatabase
       DBInstanceClass: db.serverless
       PubliclyAccessible: false
+      MultiAZ: false
+      AvailabilityZone: !Select [0, !GetAZs '']
 
   # S3 bucket for cocktail images
   CocktailBucket:
@@ -146,9 +179,11 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub ${AWS::StackName}-website
-      WebsiteConfiguration:
-        IndexDocument: index.html
-        ErrorDocument: error.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       CorsConfiguration:
         CorsRules:
           - AllowedHeaders:
@@ -163,30 +198,73 @@ Resources:
               - '*'
             MaxAge: 3600
 
-  # Bucket policy to allow CloudFront access
-  WebsiteBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    DependsOn: CloudFrontDistribution
+  # Bucket policy to allow CloudFront access using custom resource to avoid circular dependency
+  WebsiteBucketPolicyFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      Bucket: !Ref WebsiteBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: cloudfront.amazonaws.com
-            Action: s3:GetObject
-            Resource: !Sub arn:aws:s3:::${WebsiteBucket}/*
-            Condition:
-              StringEquals:
-                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}
+      Handler: index.handler
+      InlineCode: |
+        import boto3
+        import cfnresponse
+        import json
+
+        def handler(event, context):
+            try:
+                if event['RequestType'] in ['Create', 'Update']:
+                    bucket_name = event['ResourceProperties']['BucketName']
+                    distribution_arn = event['ResourceProperties']['DistributionArn']
+
+                    policy = {
+                        'Version': '2012-10-17',
+                        'Statement': [{
+                            'Effect': 'Allow',
+                            'Principal': {'Service': 'cloudfront.amazonaws.com'},
+                            'Action': 's3:GetObject',
+                            'Resource': f'arn:aws:s3:::{bucket_name}/*',
+                            'Condition': {
+                                'StringEquals': {
+                                    'AWS:SourceArn': distribution_arn
+                                }
+                            }
+                        }]
+                    }
+
+                    s3 = boto3.client('s3')
+                    s3.put_bucket_policy(
+                        Bucket=bucket_name,
+                        Policy=json.dumps(policy)
+                    )
+
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+            except Exception as e:
+                print(f"Error: {str(e)}")
+                cfnresponse.send(event, context, cfnresponse.FAILED, {})
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutBucketPolicy
+              Resource: !Sub arn:aws:s3:::${WebsiteBucket}
+
+  # Bucket policy custom resource
+  BucketPolicyResource:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn:
+      - WebsiteBucket
+      - CloudFrontDistribution
+    Properties:
+      ServiceToken: !GetAtt WebsiteBucketPolicyFunction.Arn
+      BucketName: !Ref WebsiteBucket
+      DistributionArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}
 
   # CloudFront Origin Access Control
   CloudFrontOAC:
     Type: AWS::CloudFront::OriginAccessControl
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       OriginAccessControlConfig:
-        Name: !Sub ${AWS::StackName}-oac
+        Name: !Sub ${AWS::StackName}-oac-${AWS::Region}
         OriginAccessControlOriginType: s3
         SigningBehavior: always
         SigningProtocol: sigv4
@@ -202,8 +280,7 @@ Resources:
           - Id: S3Origin
             DomainName: !GetAtt WebsiteBucket.RegionalDomainName
             OriginAccessControlId: !GetAtt CloudFrontOAC.Id
-            S3OriginConfig:
-              OriginAccessIdentity: ''
+            S3OriginConfig: {}
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: redirect-to-https
@@ -216,19 +293,14 @@ Resources:
     Properties:
       Name: !Sub ${AWS::StackName}-api
       StageName: api
-      Cors:
-        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-        AllowOrigin: "'*'"
 
   # Lambda for API Backend
   CocktailLambda:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub ${AWS::StackName}-api-handler
-      CodeUri: ./lambda/functions/cocktail_handler/
+      CodeUri: ../lambda/functions/cocktail_handler/
       Handler: app.lambda_handler
-      Runtime: python3.9
       Timeout: 30
       Environment:
         Variables:
@@ -357,8 +429,6 @@ Resources:
               cfnresponse.send(event, context, cfnresponse.FAILED, {})
           else:
             cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-      Runtime: python3.9
-      Timeout: 60
       Policies:
         - Statement:
             - Effect: Allow
@@ -374,6 +444,10 @@ Outputs:
   PublicSubnet1Id:
     Description: ID of Public Subnet 1
     Value: !Ref PublicSubnet1
+
+  PublicSubnet2Id:
+    Description: ID of Public Subnet 2
+    Value: !Ref PublicSubnet2
 
   DatabaseEndpoint:
     Description: Database endpoint

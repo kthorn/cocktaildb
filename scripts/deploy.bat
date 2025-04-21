@@ -23,7 +23,9 @@ sam deploy ^
     --parameter-overrides Environment=prod ^
     --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM ^
     --no-fail-on-empty-changeset ^
-    --region %REGION%
+    --resolve-s3 ^
+    --on-failure DELETE ^
+    --region %REGION% 
 
 if %ERRORLEVEL% neq 0 (
     echo Error deploying with SAM
@@ -32,9 +34,22 @@ if %ERRORLEVEL% neq 0 (
 
 echo Deployment complete!
 
+REM Get website bucket name from CloudFormation outputs
+echo Getting S3 bucket name...
+for /f "tokens=*" %%i in ('aws cloudformation describe-stacks --stack-name %STACK_NAME% --query "Stacks[0].Outputs[?OutputKey=='WebsiteBucketName'].OutputValue" --output text --region %REGION%') do (
+    set BUCKET_NAME=%%i
+)
+
 REM Upload web content to S3 after deployment
-echo Uploading web content to S3...
-python scripts\upload_web_content.py
+echo Uploading web content to S3 bucket: !BUCKET_NAME!
+aws s3 sync src\web\ s3://!BUCKET_NAME!/ --delete --region %REGION%
+
+if %ERRORLEVEL% neq 0 (
+    echo Error uploading web content with AWS CLI
+    exit /b %ERRORLEVEL%
+) else (
+    echo Web content uploaded successfully!
+)
 
 echo Getting CloudFormation outputs...
 aws cloudformation describe-stacks --stack-name %STACK_NAME% --query "Stacks[0].Outputs" --output table --region %REGION%
