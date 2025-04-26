@@ -140,10 +140,10 @@ class Database:
 
             # Create a connection string with explicit parameters
             connection_string = (
-                f"postgresql://{username}:{password}@{endpoint}:{port}/{db_name}"
+                f"postgresql+pg8000://{username}:{password}@{endpoint}:{port}/{db_name}"
             )
             logger.info(
-                f"Attempting to connect with connection string: postgresql://{username}:****@{endpoint}:{port}/{db_name}"
+                f"Attempting to connect with connection string: postgresql+pg8000://{username}:****@{endpoint}:{port}/{db_name}"
             )
 
             # Create a connection to the RDS database
