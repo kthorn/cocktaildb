@@ -1,29 +1,20 @@
 import json
-import os
-import boto3
-import time
 import logging
-from typing import Dict, Any
-import sys
-from pathlib import Path
+import time
+from typing import Any, Dict
+
 from tenacity import (
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
 )
+
+from db import Database  # Relative import
 
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
-# Add the src directory to the Python path
-src_path = str(Path(__file__).parent.parent.parent.parent / "src")
-sys.path.append(src_path)
-logger.info(f"Added src path: {src_path}")
-
-from database.cocktail_db import Database
-
 
 # Retry decorator for database operations
 @retry(
@@ -350,4 +341,4 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Error in lambda_handler: {str(e)}", exc_info=True)
-        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+        return {"statusCode": 500, "body": json.dumps({"error": str(e)})} 

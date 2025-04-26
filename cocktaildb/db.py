@@ -2,7 +2,6 @@ import json
 import os
 import boto3
 import logging
-import sqlalchemy
 from sqlalchemy import (
     Column,
     Integer,
@@ -14,7 +13,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, Session, sessionmaker
+from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy.pool import NullPool
 
 # Configure logging
@@ -130,12 +129,8 @@ class Database:
 
             # Connection parameters for better performance and debugging
             connect_args = {
-                "connect_timeout": 10,  # 10 seconds connection timeout
+                "timeout": 10,  # 10 seconds connection timeout
                 "application_name": "CocktailDB-API",
-                "keepalives": 1,
-                "keepalives_idle": 30,
-                "keepalives_interval": 10,
-                "keepalives_count": 5,
             }
 
             # Create a connection string with explicit parameters

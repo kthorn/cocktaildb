@@ -1,0 +1,5 @@
+pg8000
+sqlalchemy
+boto3
+tenacity
+python-dotenv

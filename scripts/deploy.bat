@@ -9,7 +9,7 @@ set STACK_NAME=cocktail-db-prod
 set REGION=us-east-1
 
 echo Building application with SAM...
-sam build --template-file cloudformation\main.yaml --region %REGION%
+sam build --template-file template.yaml --region %REGION%
 
 if %ERRORLEVEL% neq 0 (
     echo Error building with SAM
