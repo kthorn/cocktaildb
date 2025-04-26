@@ -1,27 +1,8 @@
+import config from './config.js';
+
 class CocktailAPI {
     constructor(baseUrl = '') {
-        this.baseUrl = baseUrl;
-        this.initializeApiUrl();
-    }
-
-    async initializeApiUrl() {
-        if (!this.baseUrl) {
-            try {
-                // Fetch the configuration from the config endpoint
-                const response = await fetch('/api/config');
-                const config = await response.json();
-
-                if (config.apiUrl) {
-                    this.baseUrl = config.apiUrl;
-                } else {
-                    console.error('API Gateway URL not found in configuration');
-                    this.baseUrl = 'https://your-api-gateway-url.execute-api.${AWS::Region}.amazonaws.com/api';
-                }
-            } catch (error) {
-                console.error('Error fetching configuration:', error);
-                this.baseUrl = 'https://your-api-gateway-url.execute-api.${AWS::Region}.amazonaws.com/api';
-            }
-        }
+        this.baseUrl = baseUrl || config.apiUrl;
     }
 
     async handleResponse(response) {
@@ -135,5 +116,6 @@ class CocktailAPI {
     }
 }
 
-// Create a global API instance
-const api = new CocktailAPI(); 
+// Create and export the API instance
+const api = new CocktailAPI();
+export { api }; 

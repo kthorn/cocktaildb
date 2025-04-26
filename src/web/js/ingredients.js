@@ -1,3 +1,5 @@
+import { api } from './api.js';
+
 document.addEventListener('DOMContentLoaded', () => {
     const ingredientForm = document.getElementById('ingredient-form');
     const ingredientsContainer = document.getElementById('ingredients-container');

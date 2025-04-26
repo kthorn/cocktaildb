@@ -430,25 +430,11 @@ Resources:
                 - !Sub arn:aws:s3:::${CocktailBucket}
                 - !Sub arn:aws:s3:::${CocktailBucket}/*
 
-  # Configuration Lambda
-  ConfigLambda:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub ${AWS::StackName}-config-handler
-      CodeUri: ../lambda/functions/config_handler/
-      Handler: app.lambda_handler
-      Timeout: 60
-      Environment:
-        Variables:
-          # We'll update this later with the actual API endpoint
-          API_GATEWAY_URL: !Sub ""
-
   # API Gateway for backend endpoints - Create API after Lambda functions
   CocktailAPI:
     Type: AWS::Serverless::Api
     DependsOn:
       - CocktailLambda
-      - ConfigLambda
     Properties:
       Name: !Sub ${AWS::StackName}-api
       StageName: api
@@ -532,13 +518,6 @@ Resources:
                 passthroughBehavior: when_no_match
                 httpMethod: POST
                 type: aws_proxy
-          /config:
-            get:
-              x-amazon-apigateway-integration:
-                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ConfigLambda.Arn}/invocations
-                passthroughBehavior: when_no_match
-                httpMethod: POST
-                type: aws_proxy
           /{proxy+}:
             options:
               x-amazon-apigateway-integration:
@@ -573,74 +552,6 @@ Resources:
       FunctionName: !Ref CocktailLambda
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CocktailAPI}/*/*
-
-  ConfigLambdaApiGatewayPermission:
-    Type: AWS::Lambda::Permission
-    DependsOn:
-      - CocktailAPI
-      - ConfigLambda
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !Ref ConfigLambda
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CocktailAPI}/*/*
-
-  # Update Config Lambda environment after API is created
-  ConfigLambdaApiUrlUpdate:
-    Type: AWS::CloudFormation::CustomResource
-    DependsOn:
-      - CocktailAPI
-      - ConfigLambda
-    Properties:
-      ServiceToken: !GetAtt UpdateConfigLambdaFunction.Arn
-      LambdaName: !Ref ConfigLambda
-      ApiUrl: !Sub https://${CocktailAPI}.execute-api.${AWS::Region}.amazonaws.com/api
-
-  # Helper function to update Config Lambda environment variables
-  UpdateConfigLambdaFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: index.handler
-      InlineCode: |
-        import boto3
-        import cfnresponse
-        
-        def handler(event, context):
-            try:
-                if event['RequestType'] in ['Create', 'Update']:
-                    lambda_name = event['ResourceProperties']['LambdaName']
-                    api_url = event['ResourceProperties']['ApiUrl']
-                    
-                    lambda_client = boto3.client('lambda')
-                    
-                    # Get current environment
-                    response = lambda_client.get_function_configuration(
-                        FunctionName=lambda_name
-                    )
-                    
-                    # Update environment with API URL
-                    environment = response.get('Environment', {}).get('Variables', {})
-                    environment['API_GATEWAY_URL'] = api_url
-                    
-                    # Update Lambda environment
-                    lambda_client.update_function_configuration(
-                        FunctionName=lambda_name,
-                        Environment={
-                            'Variables': environment
-                        }
-                    )
-                    
-                cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-            except Exception as e:
-                print(f"Error: {str(e)}")
-                cfnresponse.send(event, context, cfnresponse.FAILED, {})
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action:
-                - lambda:GetFunctionConfiguration
-                - lambda:UpdateFunctionConfiguration
-              Resource: !GetAtt ConfigLambda.Arn
 
   # Add VPC Endpoint for RDS Data API
   RDSDataVPCEndpoint:
@@ -696,7 +607,3 @@ Outputs:
   ApiEndpoint:
     Description: API Gateway Endpoint URL
     Value: !Sub https://${CocktailAPI}.execute-api.${AWS::Region}.amazonaws.com/api
-
-  ConfigEndpoint:
-    Description: Configuration endpoint URL
-    Value: !Sub https://${CocktailAPI}.execute-api.${AWS::Region}.amazonaws.com/api/config
