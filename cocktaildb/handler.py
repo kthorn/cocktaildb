@@ -3,40 +3,43 @@ import logging
 import time
 from typing import Any, Dict
 
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
+from db import Database 
 
-from db import Database  # Relative import
-
-# Configure logging
+logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # CORS headers for all responses
 CORS_HEADERS = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-    'Access-Control-Allow-Credentials': 'true'
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+    "Access-Control-Allow-Credentials": "true",
 }
 
-# Retry decorator for database operations
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=1, max=10),
-    retry=retry_if_exception_type(Exception),
-    before_sleep=lambda retry_state: logger.warning(
-        f"Retrying database operation after error: {retry_state.outcome.exception()}, "
-        f"attempt {retry_state.attempt_number}"
-    ),
-)
+# Global database connection - persists between Lambda invocations in the same container
+_DB_INSTANCE = None
+_DB_INIT_TIME = 0
+
+
 def get_database():
-    """Get database with retry logic"""
-    return Database()
+    """Get database with connection pooling and metadata caching"""
+    global _DB_INSTANCE, _DB_INIT_TIME
+    current_time = time.time()
+
+    # If DB instance exists and is less than 5 minutes old, reuse it
+    if _DB_INSTANCE is not None and current_time - _DB_INIT_TIME < 300:
+        logger.info(
+            f"Reusing existing database connection (age: {current_time - _DB_INIT_TIME:.2f}s)"
+        )
+        return _DB_INSTANCE
+
+    # Initialize a new database connection
+    logger.info("Creating new database connection")
+    _DB_INSTANCE = Database()
+    _DB_INIT_TIME = current_time
+
+    return _DB_INSTANCE
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -51,17 +54,13 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         http_method = event.get("httpMethod", "GET")
         path = event.get("path", "")
         logger.info(f"HTTP Method: {http_method}, Path: {path}")
-        
+
         # Handle OPTIONS method for CORS preflight
         if http_method == "OPTIONS":
             logger.info("Handling OPTIONS request for CORS preflight")
-            return {
-                "statusCode": 200,
-                "headers": CORS_HEADERS,
-                "body": json.dumps({})
-            }
+            return {"statusCode": 200, "headers": CORS_HEADERS, "body": json.dumps({})}
 
-        # Initialize database with retry
+        # Initialize database with connection pooling
         logger.info("Initializing database connection...")
         db_init_start = time.time()
 
@@ -80,7 +79,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Handle ingredients endpoints
         if path.startswith("/ingredients"):
             if http_method == "GET":
-                # List all ingredients
                 logger.info("Querying for all ingredients...")
                 query_start = time.time()
                 try:
@@ -122,27 +120,65 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 # Create new ingredient
                 logger.info("Creating new ingredient...")
                 body = json.loads(event.get("body", "{}"))
-                ingredient = db.create_ingredient(body)
-                logger.info(f"Ingredient created with ID: {ingredient.id}")
-                return {
-                    "statusCode": 201,
-                    "headers": CORS_HEADERS,
-                    "body": json.dumps(
-                        {
-                            "id": ingredient.id,
-                            "name": ingredient.name,
-                            "category": ingredient.category,
-                            "description": ingredient.description,
+                try:
+                    ingredient = db.create_ingredient(body)
+                    logger.info(f"Ingredient created with ID: {ingredient.id}")
+                    return {
+                        "statusCode": 201,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps(
+                            {
+                                "id": ingredient.id,
+                                "name": ingredient.name,
+                                "category": ingredient.category,
+                                "description": ingredient.description,
+                                "message": "Ingredient created successfully",
+                            }
+                        ),
+                    }
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error(f"Error creating ingredient: {str(e)}")
+
+                    # Check for duplicate ingredient error
+                    error_str = str(e)
+                    if (
+                        "duplicate key value violates unique constraint" in error_str
+                        and "ingredients_name_key" in error_str
+                    ):
+                        # Extract the duplicate name from the error message
+                        import re
+
+                        name_match = re.search(
+                            r"Key \(name\)=\((.+?)\) already exists", error_str
+                        )
+                        ingredient_name = (
+                            name_match.group(1) if name_match else "ingredient"
+                        )
+
+                        return {
+                            "statusCode": 409,  # Conflict status code
+                            "headers": CORS_HEADERS,
+                            "body": json.dumps(
+                                {
+                                    "error": f"An ingredient with the name '{ingredient_name}' already exists"
+                                }
+                            ),
                         }
-                    ),
-                }
+                    else:
+                        return {
+                            "statusCode": 500,
+                            "headers": CORS_HEADERS,
+                            "body": json.dumps(
+                                {"error": f"Failed to create ingredient: {str(e)}"}
+                            ),
+                        }
             elif http_method == "PUT":
                 # Update ingredient
                 ingredient_id = int(event.get("pathParameters", {}).get("id", 0))
                 logger.info(f"Updating ingredient with ID: {ingredient_id}")
                 body = json.loads(event.get("body", "{}"))
                 ingredient = db.update_ingredient(ingredient_id, body)
-
                 if ingredient:
                     logger.info(f"Ingredient {ingredient_id} updated successfully")
                     return {
@@ -169,7 +205,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 ingredient_id = int(event.get("pathParameters", {}).get("id", 0))
                 logger.info(f"Deleting ingredient with ID: {ingredient_id}")
                 success = db.delete_ingredient(ingredient_id)
-
                 if success:
                     logger.info(f"Ingredient {ingredient_id} deleted successfully")
                     return {"statusCode": 204, "headers": CORS_HEADERS, "body": ""}
@@ -184,7 +219,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Handle recipe endpoints
         elif path.startswith("/recipes"):
             if http_method == "GET":
-                # List all recipes
                 logger.info("Querying for all recipes...")
                 query_start = time.time()
                 try:
@@ -257,7 +291,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 logger.info(f"Updating recipe with ID: {recipe_id}")
                 body = json.loads(event.get("body", "{}"))
                 recipe = db.update_recipe(recipe_id, body)
-
                 if recipe:
                     logger.info(f"Recipe {recipe_id} updated successfully")
                     return {
@@ -285,7 +318,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 recipe_id = int(event.get("pathParameters", {}).get("id", 0))
                 logger.info(f"Deleting recipe with ID: {recipe_id}")
                 success = db.delete_recipe(recipe_id)
-
                 if success:
                     logger.info(f"Recipe {recipe_id} deleted successfully")
                     return {"statusCode": 204, "headers": CORS_HEADERS, "body": ""}
@@ -300,10 +332,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Handle units endpoints
         elif path.startswith("/units"):
             if http_method == "GET":
-                # List all units
                 logger.info("Querying for all units...")
                 try:
-                    units = db.get_units()
+                    units = db.session.query(db.Unit).all()
                     response = {
                         "statusCode": 200,
                         "headers": CORS_HEADERS,
@@ -359,29 +390,25 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                             {"error": f"Failed to create unit: {str(e)}"}
                         ),
                     }
-
-        # Handle other endpoints (cocktails, etc.)
-        elif path.startswith("/cocktails"):
-            # TODO: Implement cocktail endpoints
-            logger.info("Cocktail endpoints not implemented yet")
-            return {
-                "statusCode": 501,
-                "headers": CORS_HEADERS,
-                "body": json.dumps({"error": "Not implemented yet"}),
-            }
-
         else:
             logger.warning(f"Unrecognized path: {path}")
             return {
-                "statusCode": 404, 
-                "headers": CORS_HEADERS, 
-                "body": json.dumps({"error": "Not found"})
+                "statusCode": 404,
+                "headers": CORS_HEADERS,
+                "body": json.dumps({"error": "Not found"}),
             }
 
     except Exception as e:
         logger.error(f"Error in lambda_handler: {str(e)}", exc_info=True)
         return {
-            "statusCode": 500, 
-            "headers": CORS_HEADERS, 
-            "body": json.dumps({"error": str(e)})
-        } 
+            "statusCode": 500,
+            "headers": CORS_HEADERS,
+            "body": json.dumps({"error": str(e)}),
+        }
+
+    # Default return for any unforeseen code paths
+    return {
+        "statusCode": 500,
+        "headers": CORS_HEADERS,
+        "body": json.dumps({"error": "An unexpected error occurred"}),
+    }

@@ -24,10 +24,14 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         try {
+            let response;
             if (ingredientForm.dataset.mode === 'edit') {
-                await api.updateIngredient(ingredientForm.dataset.id, ingredientData);
+                response = await api.updateIngredient(ingredientForm.dataset.id, ingredientData);
             } else {
-                await api.createIngredient(ingredientData);
+                response = await api.createIngredient(ingredientData);
+                if (response.message) {
+                    showNotification(response.message, 'success');
+                }
             }
             ingredientForm.reset();
             delete ingredientForm.dataset.mode;
@@ -35,7 +39,11 @@ document.addEventListener('DOMContentLoaded', () => {
             loadIngredients();
         } catch (error) {
             console.error('Error saving ingredient:', error);
-            alert('Failed to save ingredient. Please try again.');
+            if (error.message.includes('already exists')) {
+                showNotification(error.message, 'error');
+            } else {
+                showNotification('Failed to save ingredient. Please try again.', 'error');
+            }
         }
     });
 
@@ -134,4 +142,21 @@ async function deleteIngredient(id) {
         console.error('Error deleting ingredient:', error);
         alert('Failed to delete ingredient. Please try again.');
     }
+}
+
+// Display notification to the user
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    
+    // Add to the DOM
+    const container = document.querySelector('.container') || document.body;
+    container.insertBefore(notification, container.firstChild);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        notification.classList.add('fade-out');
+        setTimeout(() => notification.remove(), 500);
+    }, 5000);
 } 

@@ -13,14 +13,18 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
-from sqlalchemy.pool import NullPool
+from sqlalchemy.orm import relationship, sessionmaker, scoped_session
+from sqlalchemy.pool import QueuePool
 
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.WARNING)
 
+# Define Base and cache metadata to avoid reflection overhead
 Base = declarative_base()
+
+# Global metadata cache to prevent repeated reflection
+_METADATA_INITIALIZED = False
 
 
 class Ingredient(Base):
@@ -69,6 +73,7 @@ class RecipeIngredient(Base):
 class Database:
     def __init__(self):
         """Initialize the database connection"""
+        global _METADATA_INITIALIZED
         logger.info("Initializing Database class")
         self.Ingredient = Ingredient
         self.Unit = Unit
@@ -77,12 +82,21 @@ class Database:
 
         try:
             self.engine = self._get_db_engine()
-            Session = sessionmaker(bind=self.engine)
-            self.session = Session()
 
-            # Create tables if they don't exist
-            logger.info("Creating tables if they don't exist")
-            Base.metadata.create_all(self.engine)
+            # Use scoped_session for thread safety
+            self.session_factory = sessionmaker(bind=self.engine)
+            self.Session = scoped_session(self.session_factory)
+            self.session = self.Session()
+
+            # Create tables if they don't exist, but only if metadata isn't initialized
+            if not _METADATA_INITIALIZED:
+                logger.info("Initializing metadata and creating tables if needed")
+                Base.metadata.create_all(self.engine)
+                _METADATA_INITIALIZED = True
+                logger.info("Metadata initialization complete")
+            else:
+                logger.info("Using cached metadata, skipping table creation check")
+
             logger.info("Database initialization complete")
         except Exception as e:
             logger.error(f"Error initializing database: {str(e)}", exc_info=True)
@@ -97,6 +111,13 @@ class Database:
             secret_arn = os.environ.get("DB_SECRET_ARN")
             db_name = os.environ.get("DB_NAME")
             db_cluster_arn = os.environ.get("DB_CLUSTER_ARN")
+
+            # Validate required environment variables
+            if not secret_arn or not db_name or not db_cluster_arn:
+                raise ValueError(
+                    "Missing required environment variables: DB_SECRET_ARN, DB_NAME, or DB_CLUSTER_ARN"
+                )
+
             # Get database credentials from Secrets Manager
             secret_response = client.get_secret_value(SecretId=secret_arn)
             secret = json.loads(secret_response["SecretString"])
@@ -127,10 +148,14 @@ class Database:
                 )
                 raise
 
-            # Connection parameters for better performance and debugging
+            # Enhanced connection parameters for better performance
             connect_args = {
-                "timeout": 10,  # 10 seconds connection timeout
+                "timeout": 30,  # Increase timeout from 10 to 30 seconds
                 "application_name": "CocktailDB-API",
+                "tcp_keepalive": True,
+                # Using only parameters supported by pg8000
+                # "connect_timeout": 15,  # Not supported by pg8000
+                "ssl_context": True,  # Enable SSL connection
             }
 
             # Create a connection string with explicit parameters
@@ -142,32 +167,81 @@ class Database:
             )
 
             # Create a connection to the RDS database
-            # Using NullPool to avoid connection pooling overhead in Lambda
-            logger.info("Creating database engine")
+            # Using QueuePool for connection pooling in Lambda
+            logger.info("Creating database engine with connection pooling")
             engine = create_engine(
                 connection_string,
-                poolclass=NullPool,
+                poolclass=QueuePool,  # Use connection pooling
+                pool_size=3,  # Reduce pool size for Lambda
+                max_overflow=5,  # Reduce max overflow for Lambda
+                pool_timeout=30,  # Connection request timeout
+                pool_recycle=300,  # Recycle connections after 5 minutes (more frequent in Lambda)
+                pool_pre_ping=True,  # Verify connections before use
                 connect_args=connect_args,
-                echo=True,  # Enable SQL debugging
+                echo=(
+                    os.environ.get("SQL_DEBUG", "false").lower() == "true"
+                ),  # Only enable SQL echo in debug mode
             )
             logger.info("Database engine created successfully")
 
-            # Test the connection
+            # Test the connection - with retry logic
             logger.info("Testing database connection...")
-            try:
-                with engine.connect() as conn:
-                    result = conn.execute(text("SELECT 1"))
-                    logger.info(
-                        "Successfully connected to database and executed test query"
-                    )
-            except Exception as e:
-                logger.error(f"Failed to connect to database: {str(e)}", exc_info=True)
-                raise
+            retry_count = 0
+            max_retries = 3
+            last_error = None
 
-            return engine
+            while retry_count < max_retries:
+                try:
+                    with engine.connect() as conn:
+                        conn.execute(text("SELECT 1"))
+                        logger.info(
+                            "Successfully connected to database and executed test query"
+                        )
+                        return engine
+                except Exception as e:
+                    last_error = e
+                    retry_count += 1
+                    logger.warning(
+                        f"Connection attempt {retry_count} failed: {str(e)}. "
+                        f"{'Retrying...' if retry_count < max_retries else 'Max retries reached.'}"
+                    )
+                    if retry_count < max_retries:
+                        # Add exponential backoff before retrying
+                        import time
+
+                        time.sleep(2**retry_count)  # 2, 4, 8 seconds
+
+            # If we've exhausted retries, log the error and raise
+            logger.error(
+                f"Failed to connect to database after {max_retries} attempts: {str(last_error)}",
+                exc_info=True,
+            )
+            raise last_error or Exception(
+                "Failed to connect to database after multiple attempts"
+            )
+
         except Exception as e:
             logger.error(f"Error getting database engine: {str(e)}", exc_info=True)
+
+            # If the environment variable is set, use a SQLite fallback for local development/testing
+            if os.environ.get("USE_SQLITE_FALLBACK", "false").lower() == "true":
+                logger.warning("Using SQLite fallback database")
+                sqlite_path = os.environ.get("SQLITE_PATH", "cocktaildb.db")
+                engine = create_engine(f"sqlite:///{sqlite_path}")
+                Base.metadata.create_all(engine)
+                return engine
+
             raise
+
+    def __del__(self):
+        """Clean up resources when the object is deleted"""
+        if hasattr(self, "session") and self.session:
+            self.session.close()
+
+    def close(self):
+        """Explicitly close the session"""
+        if hasattr(self, "session") and self.session:
+            self.session.close()
 
     def create_ingredient(self, data):
         """Create a new ingredient"""

@@ -1,6 +1,21 @@
 @echo off
 setlocal enabledelayedexpansion
 
+REM Check if we're in the right mamba environment
+echo Checking mamba environment...
+call conda info --envs | findstr "cocktaildb-312" > nul
+if %ERRORLEVEL% neq 0 (
+    echo Activating mamba cocktaildb-312 environment...
+    call mamba activate cocktaildb-312
+    if %ERRORLEVEL% neq 0 (
+        echo Error: Failed to activate mamba cocktaildb-312 environment
+        exit /b 1
+    )
+    echo Successfully activated mamba cocktaildb-312 environment
+) else (
+    echo Already in the correct mamba environment
+)
+
 REM Change to project root directory
 cd %~dp0\..
 
