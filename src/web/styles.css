@@ -57,6 +57,29 @@ section {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+.recipes-list {
+    margin-top: 2rem;
+}
+
+.recipes-list h3 {
+    margin-bottom: 1.5rem;
+    font-size: 1.6rem;
+    color: #2c3e50;
+}
+
+/* Add container for better card display */
+#recipes-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 1.5rem;
+}
+
+@media (max-width: 768px) {
+    #recipes-container {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Form styles */
 .form-group {
     margin-bottom: 1rem;
@@ -140,21 +163,112 @@ button:hover {
 .recipe-card {
     background-color: white;
     border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 1rem;
-    margin-bottom: 1rem;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: box-shadow 0.3s ease;
+}
+
+.ingredient-card:hover,
+.recipe-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
 .ingredient-card h4,
 .recipe-card h4 {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
     color: #2c3e50;
+    font-size: 1.4rem;
+    font-weight: 600;
+    border-bottom: 1px solid #f0f0f0;
+    padding-bottom: 0.5rem;
 }
 
 .ingredient-card p,
 .recipe-card p {
+    margin-bottom: 1rem;
+    color: #555;
+    font-style: italic;
+    font-family: Georgia, 'Times New Roman', Times, serif;
+}
+
+.recipe-card .ingredients {
+    margin: 1rem 0;
+    font-family: Georgia, 'Times New Roman', Times, serif;
+}
+
+.recipe-card .ingredients h5,
+.recipe-card .instructions h5 {
+    font-size: 1.1rem;
+    color: #3498db;
     margin-bottom: 0.5rem;
-    color: #666;
+    font-weight: 600;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.recipe-card .ingredients ul {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+.recipe-card .ingredients ul li {
+    padding: 0.3rem 0;
+    border-bottom: 1px dotted #eee;
+    display: flex;
+    align-items: baseline;
+    line-height: 1.6;
+}
+
+/* Remove the bullet point ::before element */
+.recipe-card .ingredients ul li::before {
+    content: none;
+}
+
+.recipe-card .ingredients ul li:last-child {
+    border-bottom: none;
+}
+
+.recipe-card .instructions {
+    margin: 1rem 0;
+}
+
+.recipe-card .instructions p {
+    font-style: normal;
+    white-space: pre-line;
+    line-height: 1.5;
+    color: #333;
+    font-family: Georgia, 'Times New Roman', Times, serif;
+}
+
+.card-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #f0f0f0;
+}
+
+.card-actions button {
+    padding: 0.4rem 1rem;
+    background-color: #f8f9fa;
+    color: #2c3e50;
+    border: 1px solid #dee2e6;
+}
+
+.card-actions button:hover {
+    background-color: #e9ecef;
+}
+
+.card-actions button:nth-child(2) {
+    background-color: #fff5f5;
+    color: #e74c3c;
+    border-color: #ffcdd2;
+}
+
+.card-actions button:nth-child(2):hover {
+    background-color: #fee;
 }
 
 /* Stats cards */

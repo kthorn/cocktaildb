@@ -336,17 +336,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 <h4>${recipe.name}</h4>
                 <p>${recipe.description || 'No description'}</p>
                 <div class="ingredients">
-                    <h5>Ingredients:</h5>
+                    <h5>Ingredients</h5>
                     <ul>
                         ${recipe.ingredients.map(ing => {
-                        // Format with proper spaces between amount, unit and ingredient name
-                        const unitDisplay = ing.unit ? `${ing.unit} ` : '';
-                        return `<li>${ing.amount} ${unitDisplay}${ing.name}</li>`;
-                    }).join('')}
+                            // Format with proper spaces between amount, unit and ingredient name
+                            const unitDisplay = ing.unit ? `${ing.unit} ` : '';
+                            return `<li>${ing.amount} ${unitDisplay}${ing.name}</li>`;
+                        }).join('')}
                     </ul>
                 </div>
                 <div class="instructions">
-                    <h5>Instructions:</h5>
+                    <h5>Instructions</h5>
                     <p>${recipe.instructions}</p>
                 </div>
                 <div class="card-actions">
