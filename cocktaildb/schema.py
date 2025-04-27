@@ -16,7 +16,7 @@ Base = declarative_base()
 class Ingredient(Base):
     __tablename__ = "ingredients"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False, unique=True)
     category = Column(String(50))
     description = Column(Text)
@@ -25,7 +25,7 @@ class Ingredient(Base):
 class Unit(Base):
     __tablename__ = "units"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(50), nullable=False, unique=True)
     abbreviation = Column(String(10))
 
@@ -33,7 +33,7 @@ class Unit(Base):
 class Recipe(Base):
     __tablename__ = "recipes"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False)
     instructions = Column(Text)
     description = Column(Text)
@@ -45,7 +45,7 @@ class Recipe(Base):
 class RecipeIngredient(Base):
     __tablename__ = "recipe_ingredients"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     recipe_id = Column(Integer, ForeignKey("recipes.id"), nullable=False)
     ingredient_id = Column(Integer, ForeignKey("ingredients.id"), nullable=False)
     unit_id = Column(Integer, ForeignKey("units.id"))

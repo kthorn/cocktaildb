@@ -228,6 +228,7 @@ Resources:
       VpcSecurityGroupIds:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
+      EnableHttpEndpoint: true
 
   # Aurora Serverless v2 instance
   CocktailDatabaseInstance:
