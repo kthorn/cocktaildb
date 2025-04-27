@@ -263,9 +263,9 @@ footer {
     margin-bottom: 0.25rem;
 }
 
-.ingredient-search-container select {
+.ingredient-search-container select.ingredient-name {
     width: 100%;
-    display: none; /* Hide the actual select element */
+    display: none; /* Hide only the ingredient select element */
 }
 
 .autocomplete-dropdown {

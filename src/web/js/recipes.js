@@ -40,16 +40,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
         ingredientInputs.forEach(input => {
             const ingredientName = input.querySelector('.ingredient-name').value;
-            const ingredient = availableIngredients.find(ing => ing.name === ingredientName);
+            const ingredientUnitName = input.querySelector('.ingredient-unit').value;
+            const amountInput = input.querySelector('.ingredient-amount');
+            const amount = parseFloat(amountInput.value);
             
+            // Find the ingredient by name
+            const ingredient = availableIngredients.find(ing => ing.name === ingredientName);
             if (!ingredient) {
                 throw new Error(`Ingredient "${ingredientName}" not found`);
             }
 
+            // Find the unit by name
+            const unit = window.availableUnits.find(u => u.name === ingredientUnitName);
+            if (!ingredientUnitName) {
+                throw new Error(`Please select a unit for "${ingredientName}"`);
+            }
+            if (!unit) {
+                throw new Error(`Unit "${ingredientUnitName}" not found`);
+            }
+
+            if (amount < 0) {
+                throw new Error(`Amount for "${ingredientName}" cannot be negative`);
+            }
+
             ingredients.push({
                 ingredient_id: ingredient.id,
-                amount: parseFloat(input.querySelector('.ingredient-amount').value),
-                unit: input.querySelector('.ingredient-unit').value
+                amount: amount,
+                unit_id: unit.id  // Send unit_id instead of unit name
             });
         });
 
@@ -131,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         div.innerHTML = `
             <div class="ingredient-fields">
                 <div class="form-group">
-                    <input type="number" class="ingredient-amount" placeholder="Amount" step="1" required>
+                    <input type="number" class="ingredient-amount" placeholder="Amount" step="0.01" min="0" required>
                 </div>
                 <div class="form-group">
                     <select class="ingredient-unit" required>
@@ -321,9 +338,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="ingredients">
                     <h5>Ingredients:</h5>
                     <ul>
-                        ${recipe.ingredients.map(ing =>
-                `<li>${ing.amount} ${ing.unit} ${ing.name}</li>`
-            ).join('')}
+                        ${recipe.ingredients.map(ing => {
+                        // Format with proper spaces between amount, unit and ingredient name
+                        const unitDisplay = ing.unit ? `${ing.unit} ` : '';
+                        return `<li>${ing.amount} ${unitDisplay}${ing.name}</li>`;
+                    }).join('')}
                     </ul>
                 </div>
                 <div class="instructions">
@@ -366,11 +385,24 @@ async function editRecipe(id) {
         recipe.ingredients.forEach(ingredient => {
             addIngredientInput();
             const lastInput = ingredientsList.lastElementChild;
+            
+            // Set ingredient selection
             lastInput.querySelector('.ingredient-name').value = ingredient.name;
-            lastInput.querySelector('.ingredient-amount').value = ingredient.amount;
-            lastInput.querySelector('.ingredient-unit').value = ingredient.unit;
-            // Also set the search input value
             lastInput.querySelector('.ingredient-search').value = ingredient.name;
+            
+            // Set amount and unit
+            lastInput.querySelector('.ingredient-amount').value = ingredient.amount;
+            
+            // Set the unit by name if available
+            if (ingredient.unit && window.availableUnits) {
+                const unitSelect = lastInput.querySelector('.ingredient-unit');
+                const matchingUnit = window.availableUnits.find(u => u.name === ingredient.unit);
+                if (matchingUnit) {
+                    unitSelect.value = matchingUnit.name;
+                } else {
+                    console.warn(`Unit "${ingredient.unit}" not found in available units`);
+                }
+            }
         });
 
         // Change form to update mode
