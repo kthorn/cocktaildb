@@ -1,73 +1,20 @@
 import json
-import os
-import boto3
 import logging
-from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    Text,
-    ForeignKey,
-    Float,
-    create_engine,
-    text,
-)
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker, scoped_session
+import os
+
+import boto3
+from schema import Base, Ingredient, Recipe, RecipeIngredient, Unit
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.pool import QueuePool
 
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.WARNING)
 
-# Define Base and cache metadata to avoid reflection overhead
-Base = declarative_base()
 
 # Global metadata cache to prevent repeated reflection
 _METADATA_INITIALIZED = False
-
-
-class Ingredient(Base):
-    __tablename__ = "ingredients"
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False, unique=True)
-    category = Column(String(50))
-    description = Column(Text)
-
-
-class Unit(Base):
-    __tablename__ = "units"
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String(50), nullable=False, unique=True)
-    abbreviation = Column(String(10))
-
-
-class Recipe(Base):
-    __tablename__ = "recipes"
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
-    instructions = Column(Text)
-    description = Column(Text)
-    image_url = Column(String(255))
-
-    ingredients = relationship("RecipeIngredient", back_populates="recipe")
-
-
-class RecipeIngredient(Base):
-    __tablename__ = "recipe_ingredients"
-
-    id = Column(Integer, primary_key=True)
-    recipe_id = Column(Integer, ForeignKey("recipes.id"), nullable=False)
-    ingredient_id = Column(Integer, ForeignKey("ingredients.id"), nullable=False)
-    unit_id = Column(Integer, ForeignKey("units.id"))
-    amount = Column(Float)
-
-    recipe = relationship("Recipe", back_populates="ingredients")
-    ingredient = relationship("Ingredient")
-    unit = relationship("Unit")
 
 
 class Database:
