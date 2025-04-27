@@ -1,83 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recipes - Cocktail Database</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="shortcut icon" href="/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <meta name="apple-mobile-web-app-title" content="CocktailDB" />
-    <link rel="manifest" href="/site.webmanifest" />
-</head>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Recipes - Cocktail Database</title>
+        <link rel="stylesheet" href="styles.css">
+        <link rel="icon" type="image/png" href="/favicon-96x96.png"
+            sizes="96x96" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180"
+            href="/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-title" content="CocktailDB" />
+        <link rel="manifest" href="/site.webmanifest" />
+    </head>
 
-<body>
-    <header>
-        <h1>Cocktail Database</h1>
-        <nav>
-            <ul>
-                <li><a href="index.html">Home</a></li>
-                <li><a href="ingredients.html">Ingredients</a></li>
-                <li><a href="recipes.html">Recipes</a></li>
-            </ul>
-        </nav>
-    </header>
+    <body>
+        <header>
+            <h1>Cocktail Database</h1>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="ingredients.html">Ingredients</a></li>
+                    <li><a href="recipes.html">Recipes</a></li>
+                </ul>
+            </nav>
+        </header>
 
-    <main>
-        <section class="recipes-section">
-            <h2>Manage Recipes</h2>
+        <main>
+            <section class="recipes-section">
+                <h2>Manage Recipes</h2>
 
-            <div class="recipe-form">
-                <h3>Add New Recipe</h3>
-                <form id="recipe-form">
-                    <div class="form-group">
-                        <label for="recipe-name">Name:</label>
-                        <input type="text" id="recipe-name" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="recipe-description">Description:</label>
-                        <textarea id="recipe-description" rows="3"></textarea>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="recipe-instructions">Instructions:</label>
-                        <textarea id="recipe-instructions" rows="5" required></textarea>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Ingredients:</label>
-                        <div id="ingredients-list">
-                            <!-- Dynamic ingredient inputs will be added here -->
+                <div class="recipe-form">
+                    <h3>Add New Recipe</h3>
+                    <form id="recipe-form">
+                        <div class="form-group">
+                            <label>Ingredients:</label>
+                            <div id="ingredients-list">
+                                <!-- Dynamic ingredient inputs will be added here -->
+                            </div>
+                            <button type="button" id="add-ingredient">Add
+                                Ingredient</button>
                         </div>
-                        <button type="button" id="add-ingredient">Add Ingredient</button>
+
+                        <div class="form-group">
+                            <label for="recipe-name">Name:</label>
+                            <input type="text" id="recipe-name" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="recipe-description">Description:</label>
+                            <textarea id="recipe-description"
+                                rows="3"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label
+                                for="recipe-instructions">Instructions:</label>
+                            <textarea id="recipe-instructions" rows="5"
+                                required></textarea>
+                        </div>
+
+                        <button type="submit">Add Recipe</button>
+                    </form>
+                </div>
+
+                <div class="recipes-list">
+                    <h3>Existing Recipes</h3>
+                    <div class="search-bar">
+                        <input type="text" id="recipe-search"
+                            placeholder="Search recipes...">
                     </div>
-
-                    <button type="submit">Add Recipe</button>
-                </form>
-            </div>
-
-            <div class="recipes-list">
-                <h3>Existing Recipes</h3>
-                <div class="search-bar">
-                    <input type="text" id="recipe-search" placeholder="Search recipes...">
+                    <div id="recipes-container">
+                        <!-- Recipes will be loaded here -->
+                    </div>
                 </div>
-                <div id="recipes-container">
-                    <!-- Recipes will be loaded here -->
-                </div>
-            </div>
-        </section>
-    </main>
+            </section>
+        </main>
 
-    <footer>
-        <p>&copy; 2024 Cocktail Database</p>
-    </footer>
+        <footer>
+            <p>&copy; 2024 Cocktail Database</p>
+        </footer>
 
-    <script type="module" src="js/api.js"></script>
-    <script type="module" src="js/recipes.js"></script>
-</body>
+        <script type="module" src="js/api.js"></script>
+        <script type="module" src="js/recipes.js"></script>
+    </body>
 
 </html>

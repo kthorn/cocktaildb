@@ -12,9 +12,24 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    // Load recipes and units on page load
+    let availableIngredients = [];
+
+    // Load recipes, units, and ingredients on page load
     loadRecipes();
-    loadUnits();
+    Promise.all([loadUnits(), loadIngredients()]).then(() => {
+        // Add one ingredient row by default
+        addIngredientInput();
+    });
+
+    // Load available ingredients
+    async function loadIngredients() {
+        try {
+            availableIngredients = await api.getIngredients();
+            console.log('Loaded ingredients:', availableIngredients);
+        } catch (error) {
+            console.error('Error loading ingredients:', error);
+        }
+    }
 
     // Handle form submission
     recipeForm.addEventListener('submit', async (e) => {
@@ -24,8 +39,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const ingredientInputs = ingredientsList.querySelectorAll('.ingredient-input');
 
         ingredientInputs.forEach(input => {
+            const ingredientName = input.querySelector('.ingredient-name').value;
+            const ingredient = availableIngredients.find(ing => ing.name === ingredientName);
+            
+            if (!ingredient) {
+                throw new Error(`Ingredient "${ingredientName}" not found`);
+            }
+
             ingredients.push({
-                name: input.querySelector('.ingredient-name').value,
+                ingredient_id: ingredient.id,
                 amount: parseFloat(input.querySelector('.ingredient-amount').value),
                 unit: input.querySelector('.ingredient-unit').value
             });
@@ -42,16 +64,19 @@ document.addEventListener('DOMContentLoaded', () => {
             if (recipeForm.dataset.mode === 'edit') {
                 await api.updateRecipe(recipeForm.dataset.id, recipeData);
             } else {
-                await api.createRecipe(recipeData);
+                const response = await api.createRecipe(recipeData);
+                console.log('Recipe created:', response);
             }
             recipeForm.reset();
             ingredientsList.innerHTML = '';
             delete recipeForm.dataset.mode;
             delete recipeForm.dataset.id;
+            // Add one ingredient row by default after reset
+            addIngredientInput();
             loadRecipes();
         } catch (error) {
             console.error('Error saving recipe:', error);
-            alert('Failed to save recipe. Please try again.');
+            alert(`Failed to save recipe: ${error.message || 'Please try again.'}`);
         }
     });
 
@@ -104,26 +129,68 @@ document.addEventListener('DOMContentLoaded', () => {
         const div = document.createElement('div');
         div.className = 'ingredient-input';
         div.innerHTML = `
-            <div class="form-group">
-                <input type="text" class="ingredient-name" placeholder="Ingredient name" required>
-            </div>
-            <div class="form-group">
-                <input type="number" class="ingredient-amount" placeholder="Amount" step="0.1" required>
-            </div>
-            <div class="form-group">
-                <select class="ingredient-unit" required>
-                    <option value="">Select unit</option>
-                    ${window.availableUnits?.map(unit =>
+            <div class="ingredient-fields">
+                <div class="form-group">
+                    <input type="number" class="ingredient-amount" placeholder="Amount" step="1" required>
+                </div>
+                <div class="form-group">
+                    <select class="ingredient-unit" required>
+                        <option value="">Select unit</option>
+                        ${window.availableUnits?.map(unit =>
             `<option value="${unit.name}">${unit.name} (${unit.abbreviation})</option>`
         ).join('')}
-                </select>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <div class="ingredient-search-container">
+                        <input type="text" class="ingredient-search" placeholder="Search ingredients...">
+                        <select class="ingredient-name" required>
+                            <option value="">Select ingredient</option>
+                            ${availableIngredients.map(ingredient =>
+            `<option value="${ingredient.name}">${ingredient.name}</option>`
+        ).join('')}
+                        </select>
+                    </div>
+                </div>
+                <button type="button" class="remove-ingredient">Remove</button>
             </div>
-            <button type="button" class="remove-ingredient">Remove</button>
         `;
 
         // Add remove button functionality
         div.querySelector('.remove-ingredient').addEventListener('click', () => {
             div.remove();
+        });
+
+        // Add ingredient search functionality
+        const searchInput = div.querySelector('.ingredient-search');
+        const selectElement = div.querySelector('.ingredient-name');
+        
+        searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const options = selectElement.options;
+            
+            for (let i = 1; i < options.length; i++) {
+                const optionText = options[i].text.toLowerCase();
+                if (optionText.includes(searchTerm)) {
+                    options[i].style.display = '';
+                } else {
+                    options[i].style.display = 'none';
+                }
+            }
+            
+            // If search term matches exactly one option, select it
+            const visibleOptions = Array.from(options).slice(1).filter(opt => 
+                opt.style.display !== 'none'
+            );
+            
+            if (visibleOptions.length === 1) {
+                selectElement.value = visibleOptions[0].value;
+            }
+        });
+
+        // Sync select value to search input when changed manually
+        selectElement.addEventListener('change', () => {
+            searchInput.value = selectElement.options[selectElement.selectedIndex].text;
         });
 
         ingredientsList.appendChild(div);
@@ -164,6 +231,9 @@ document.addEventListener('DOMContentLoaded', () => {
             recipesContainer.appendChild(card);
         });
     }
+
+    // Make loadRecipes accessible to outside functions
+    window.loadRecipes = loadRecipes;
 });
 
 // Edit recipe
@@ -192,6 +262,8 @@ async function editRecipe(id) {
             lastInput.querySelector('.ingredient-name').value = ingredient.name;
             lastInput.querySelector('.ingredient-amount').value = ingredient.amount;
             lastInput.querySelector('.ingredient-unit').value = ingredient.unit;
+            // Also set the search input value
+            lastInput.querySelector('.ingredient-search').value = ingredient.name;
         });
 
         // Change form to update mode
@@ -214,7 +286,7 @@ async function deleteRecipe(id) {
 
     try {
         await api.deleteRecipe(id);
-        loadRecipes();
+        window.loadRecipes();
     } catch (error) {
         console.error('Error deleting recipe:', error);
         alert('Failed to delete recipe. Please try again.');

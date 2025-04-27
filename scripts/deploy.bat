@@ -1,6 +1,13 @@
 @echo off
 setlocal enabledelayedexpansion
 
+REM Check for no-build flag
+set NO_BUILD=0
+if "%1"=="--no-build" (
+    set NO_BUILD=1
+    echo Skipping SAM build and deploy steps...
+)
+
 REM Check if we're in the right mamba environment
 echo Checking mamba environment...
 call conda info --envs | findstr "cocktaildb-312" > nul
@@ -23,31 +30,35 @@ REM Define stack name
 set STACK_NAME=cocktail-db-prod
 set REGION=us-east-1
 
-echo Building application with SAM...
-sam build --template-file template.yaml --region %REGION%
+if %NO_BUILD%==0 (
+    echo Building application with SAM...
+    sam build --template-file template.yaml --region %REGION%
 
-if %ERRORLEVEL% neq 0 (
-    echo Error building with SAM
-    exit /b %ERRORLEVEL%
+    if %ERRORLEVEL% neq 0 (
+        echo Error building with SAM
+        exit /b %ERRORLEVEL%
+    )
+
+    echo Deploying with SAM to production environment...
+    sam deploy ^
+        --template-file .aws-sam\build\template.yaml ^
+        --stack-name %STACK_NAME% ^
+        --parameter-overrides Environment=prod ^
+        --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM ^
+        --no-fail-on-empty-changeset ^
+        --resolve-s3 ^
+        --on-failure DELETE ^
+        --region %REGION% 
+
+    if %ERRORLEVEL% neq 0 (
+        echo Error deploying with SAM
+        exit /b %ERRORLEVEL%
+    )
+
+    echo Deployment complete!
+) else (
+    echo Skipped SAM build and deploy steps
 )
-
-echo Deploying with SAM to production environment...
-sam deploy ^
-    --template-file .aws-sam\build\template.yaml ^
-    --stack-name %STACK_NAME% ^
-    --parameter-overrides Environment=prod ^
-    --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM ^
-    --no-fail-on-empty-changeset ^
-    --resolve-s3 ^
-    --on-failure DELETE ^
-    --region %REGION% 
-
-if %ERRORLEVEL% neq 0 (
-    echo Error deploying with SAM
-    exit /b %ERRORLEVEL%
-)
-
-echo Deployment complete!
 
 REM Get website bucket name from CloudFormation outputs
 echo Getting S3 bucket name...

@@ -62,6 +62,31 @@ section {
     margin-bottom: 1rem;
 }
 
+.ingredient-fields {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.ingredient-fields .form-group {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.ingredient-fields .form-group:first-child {
+    flex: 0 0 100px;
+}
+
+.ingredient-fields .form-group:nth-child(2) {
+    flex: 0 0 150px;
+}
+
+.ingredient-fields .remove-ingredient {
+    flex: 0 0 auto;
+    margin-top: 0.5rem;
+}
+
 label {
     display: block;
     margin-bottom: 0.5rem;
@@ -168,6 +193,54 @@ footer {
     margin-top: 2rem;
 }
 
+/* Notification styles */
+.notification {
+    padding: 12px 15px;
+    margin-bottom: 20px;
+    border-radius: 5px;
+    color: white;
+    font-weight: 500;
+    position: relative;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    animation: slideIn 0.3s ease-out;
+}
+
+.notification.success {
+    background-color: #4CAF50;
+}
+
+.notification.error {
+    background-color: #F44336;
+}
+
+.notification.info {
+    background-color: #2196F3;
+}
+
+.notification.fade-out {
+    animation: fadeOut 0.5s ease-out forwards;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
     nav ul {
@@ -177,4 +250,19 @@ footer {
     .quick-stats {
         grid-template-columns: 1fr;
     }
+}
+
+/* Ingredient search styles */
+.ingredient-search-container {
+    position: relative;
+    width: 100%;
+}
+
+.ingredient-search-container input {
+    width: 100%;
+    margin-bottom: 0.25rem;
+}
+
+.ingredient-search-container select {
+    width: 100%;
 }

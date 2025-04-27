@@ -56,12 +56,12 @@ class CocktailAPI {
     // Recipes API
     async getRecipes() {
         const response = await fetch(`${this.baseUrl}/recipes`);
-        return await response.json();
+        return this.handleResponse(response);
     }
 
     async getRecipe(id) {
         const response = await fetch(`${this.baseUrl}/recipes/${id}`);
-        return await response.json();
+        return this.handleResponse(response);
     }
 
     async createRecipe(recipeData) {
@@ -72,7 +72,7 @@ class CocktailAPI {
             },
             body: JSON.stringify(recipeData),
         });
-        return await response.json();
+        return this.handleResponse(response);
     }
 
     async updateRecipe(id, recipeData) {
@@ -83,14 +83,14 @@ class CocktailAPI {
             },
             body: JSON.stringify(recipeData),
         });
-        return await response.json();
+        return this.handleResponse(response);
     }
 
     async deleteRecipe(id) {
         const response = await fetch(`${this.baseUrl}/recipes/${id}`, {
             method: 'DELETE',
         });
-        return await response.json();
+        return this.handleResponse(response);
     }
 
     // Units API

@@ -5,8 +5,6 @@ import time
 from botocore.exceptions import ClientError
 
 import boto3
-from sqlalchemy import create_engine, text
-from sqlalchemy.dialects.postgresql import dialect as postgresql_dialect
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -110,7 +108,6 @@ def initialize_database():
 
         # Create tables
         print("Creating tables...")
-        dialect = postgresql_dialect()
         for table in Base.metadata.tables.values():
             print(f"Creating table: {table.name}")
             print(f"Table columns: {[c.name for c in table.columns]}")
