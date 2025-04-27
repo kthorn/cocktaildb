@@ -16,6 +16,14 @@ from db import Database  # Relative import
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+# CORS headers for all responses
+CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+    'Access-Control-Allow-Credentials': 'true'
+}
+
 # Retry decorator for database operations
 @retry(
     stop=stop_after_attempt(3),
@@ -43,6 +51,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         http_method = event.get("httpMethod", "GET")
         path = event.get("path", "")
         logger.info(f"HTTP Method: {http_method}, Path: {path}")
+        
+        # Handle OPTIONS method for CORS preflight
+        if http_method == "OPTIONS":
+            logger.info("Handling OPTIONS request for CORS preflight")
+            return {
+                "statusCode": 200,
+                "headers": CORS_HEADERS,
+                "body": json.dumps({})
+            }
 
         # Initialize database with retry
         logger.info("Initializing database connection...")
@@ -56,6 +73,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             logger.error(f"Failed to connect to database after retries: {str(e)}")
             return {
                 "statusCode": 500,
+                "headers": CORS_HEADERS,
                 "body": json.dumps({"error": "Database connection failed"}),
             }
 
@@ -74,6 +92,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
                     response = {
                         "statusCode": 200,
+                        "headers": CORS_HEADERS,
                         "body": json.dumps(
                             [
                                 {
@@ -94,6 +113,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     logger.error(f"Error querying ingredients: {str(e)}")
                     return {
                         "statusCode": 500,
+                        "headers": CORS_HEADERS,
                         "body": json.dumps(
                             {"error": f"Database query failed: {str(e)}"}
                         ),
@@ -106,6 +126,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 logger.info(f"Ingredient created with ID: {ingredient.id}")
                 return {
                     "statusCode": 201,
+                    "headers": CORS_HEADERS,
                     "body": json.dumps(
                         {
                             "id": ingredient.id,
@@ -126,6 +147,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     logger.info(f"Ingredient {ingredient_id} updated successfully")
                     return {
                         "statusCode": 200,
+                        "headers": CORS_HEADERS,
                         "body": json.dumps(
                             {
                                 "id": ingredient.id,
@@ -139,6 +161,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     logger.warning(f"Ingredient {ingredient_id} not found")
                     return {
                         "statusCode": 404,
+                        "headers": CORS_HEADERS,
                         "body": json.dumps({"error": "Ingredient not found"}),
                     }
             elif http_method == "DELETE":
@@ -149,11 +172,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
                 if success:
                     logger.info(f"Ingredient {ingredient_id} deleted successfully")
-                    return {"statusCode": 204, "body": ""}
+                    return {"statusCode": 204, "headers": CORS_HEADERS, "body": ""}
                 else:
                     logger.warning(f"Ingredient {ingredient_id} not found")
                     return {
                         "statusCode": 404,
+                        "headers": CORS_HEADERS,
                         "body": json.dumps({"error": "Ingredient not found"}),
                     }
 
@@ -172,6 +196,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
                     response = {
                         "statusCode": 200,
+                        "headers": CORS_HEADERS,
                         "body": json.dumps(
                             [
                                 {
@@ -202,6 +227,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     logger.error(f"Error querying recipes: {str(e)}")
                     return {
                         "statusCode": 500,
+                        "headers": CORS_HEADERS,
                         "body": json.dumps(
                             {"error": f"Database query failed: {str(e)}"}
                         ),
@@ -214,6 +240,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 logger.info(f"Recipe created with ID: {recipe.id}")
                 return {
                     "statusCode": 201,
+                    "headers": CORS_HEADERS,
                     "body": json.dumps(
                         {
                             "id": recipe.id,
@@ -235,6 +262,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     logger.info(f"Recipe {recipe_id} updated successfully")
                     return {
                         "statusCode": 200,
+                        "headers": CORS_HEADERS,
                         "body": json.dumps(
                             {
                                 "id": recipe.id,
@@ -249,6 +277,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     logger.warning(f"Recipe {recipe_id} not found")
                     return {
                         "statusCode": 404,
+                        "headers": CORS_HEADERS,
                         "body": json.dumps({"error": "Recipe not found"}),
                     }
             elif http_method == "DELETE":
@@ -259,11 +288,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
                 if success:
                     logger.info(f"Recipe {recipe_id} deleted successfully")
-                    return {"statusCode": 204, "body": ""}
+                    return {"statusCode": 204, "headers": CORS_HEADERS, "body": ""}
                 else:
                     logger.warning(f"Recipe {recipe_id} not found")
                     return {
                         "statusCode": 404,
+                        "headers": CORS_HEADERS,
                         "body": json.dumps({"error": "Recipe not found"}),
                     }
 
@@ -276,6 +306,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     units = db.get_units()
                     response = {
                         "statusCode": 200,
+                        "headers": CORS_HEADERS,
                         "body": json.dumps(
                             [
                                 {
@@ -292,6 +323,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     logger.error(f"Error querying units: {str(e)}")
                     return {
                         "statusCode": 500,
+                        "headers": CORS_HEADERS,
                         "body": json.dumps(
                             {"error": f"Database query failed: {str(e)}"}
                         ),
@@ -308,6 +340,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     db.session.commit()
                     return {
                         "statusCode": 201,
+                        "headers": CORS_HEADERS,
                         "body": json.dumps(
                             {
                                 "id": new_unit.id,
@@ -321,6 +354,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     logger.error(f"Error creating unit: {str(e)}")
                     return {
                         "statusCode": 500,
+                        "headers": CORS_HEADERS,
                         "body": json.dumps(
                             {"error": f"Failed to create unit: {str(e)}"}
                         ),
@@ -332,13 +366,22 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             logger.info("Cocktail endpoints not implemented yet")
             return {
                 "statusCode": 501,
+                "headers": CORS_HEADERS,
                 "body": json.dumps({"error": "Not implemented yet"}),
             }
 
         else:
             logger.warning(f"Unrecognized path: {path}")
-            return {"statusCode": 404, "body": json.dumps({"error": "Not found"})}
+            return {
+                "statusCode": 404, 
+                "headers": CORS_HEADERS, 
+                "body": json.dumps({"error": "Not found"})
+            }
 
     except Exception as e:
         logger.error(f"Error in lambda_handler: {str(e)}", exc_info=True)
-        return {"statusCode": 500, "body": json.dumps({"error": str(e)})} 
+        return {
+            "statusCode": 500, 
+            "headers": CORS_HEADERS, 
+            "body": json.dumps({"error": str(e)})
+        } 

@@ -14,9 +14,9 @@ Globals:
   
   Api:
     Cors:
-      AllowMethods: '''GET,POST,PUT,DELETE,OPTIONS'''
-      AllowHeaders: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
-      AllowOrigin: '''*'''
+      AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      AllowOrigin: "'*'"
 
 Resources:
   # VPC and Network Configuration
@@ -451,6 +451,12 @@ Resources:
             RestApiId: !Ref CocktailAPI
             Path: /ingredients
             Method: delete
+        OptionsIngredients:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ingredients
+            Method: options
         GetRecipes:
           Type: Api
           Properties:
@@ -475,6 +481,12 @@ Resources:
             RestApiId: !Ref CocktailAPI
             Path: /recipes
             Method: delete
+        OptionsRecipes:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes
+            Method: options
         GetUnits:
           Type: Api
           Properties:
@@ -499,6 +511,12 @@ Resources:
             RestApiId: !Ref CocktailAPI
             Path: /units
             Method: delete
+        OptionsUnits:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /units
+            Method: options
 
   # S3 bucket for deployment artifacts
   DeploymentBucket:
