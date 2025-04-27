@@ -143,7 +143,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="form-group">
                     <div class="ingredient-search-container">
-                        <input type="text" class="ingredient-search" placeholder="Search ingredients...">
+                        <input type="text" class="ingredient-search" placeholder="Search ingredients..." autocomplete="off">
+                        <div class="autocomplete-dropdown"></div>
                         <select class="ingredient-name" required>
                             <option value="">Select ingredient</option>
                             ${availableIngredients.map(ingredient =>
@@ -164,31 +165,137 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add ingredient search functionality
         const searchInput = div.querySelector('.ingredient-search');
         const selectElement = div.querySelector('.ingredient-name');
+        const autocompleteDropdown = div.querySelector('.autocomplete-dropdown');
+        let activeIndex = -1;
         
-        searchInput.addEventListener('input', (e) => {
-            const searchTerm = e.target.value.toLowerCase();
-            const options = selectElement.options;
+        // Function to update the autocomplete dropdown
+        function updateAutocomplete() {
+            const searchTerm = searchInput.value.toLowerCase();
             
-            for (let i = 1; i < options.length; i++) {
-                const optionText = options[i].text.toLowerCase();
-                if (optionText.includes(searchTerm)) {
-                    options[i].style.display = '';
-                } else {
-                    options[i].style.display = 'none';
-                }
+            // Clear the dropdown
+            autocompleteDropdown.innerHTML = '';
+            
+            if (searchTerm.length === 0) {
+                autocompleteDropdown.style.display = 'none';
+                return;
             }
             
-            // If search term matches exactly one option, select it
-            const visibleOptions = Array.from(options).slice(1).filter(opt => 
-                opt.style.display !== 'none'
+            // Find matching ingredients
+            const matches = availableIngredients.filter(ingredient => 
+                ingredient.name.toLowerCase().includes(searchTerm)
             );
             
-            if (visibleOptions.length === 1) {
-                selectElement.value = visibleOptions[0].value;
+            if (matches.length === 0) {
+                autocompleteDropdown.style.display = 'none';
+                return;
+            }
+            
+            // Add matches to dropdown
+            matches.forEach((ingredient, index) => {
+                const item = document.createElement('div');
+                item.className = 'autocomplete-item';
+                item.textContent = ingredient.name;
+                
+                // Highlight the matching part
+                const highlightedText = ingredient.name.replace(
+                    new RegExp(searchTerm, 'gi'),
+                    match => `<strong>${match}</strong>`
+                );
+                item.innerHTML = highlightedText;
+                
+                item.addEventListener('click', () => {
+                    searchInput.value = ingredient.name;
+                    selectElement.value = ingredient.name;
+                    autocompleteDropdown.style.display = 'none';
+                });
+                
+                item.addEventListener('mouseenter', () => {
+                    setActiveItem(index);
+                });
+                
+                autocompleteDropdown.appendChild(item);
+            });
+            
+            // Show the dropdown
+            autocompleteDropdown.style.display = 'block';
+            activeIndex = -1;
+        }
+        
+        // Function to set the active item
+        function setActiveItem(index) {
+            const items = autocompleteDropdown.querySelectorAll('.autocomplete-item');
+            
+            // Remove active class from all items
+            items.forEach(item => item.classList.remove('active'));
+            
+            // Set active class on the selected item
+            if (index >= 0 && index < items.length) {
+                activeIndex = index;
+                items[index].classList.add('active');
+                // Ensure the active item is in view
+                items[index].scrollIntoView({ block: 'nearest' });
+            }
+        }
+        
+        // Function to select the current active item
+        function selectActiveItem() {
+            const items = autocompleteDropdown.querySelectorAll('.autocomplete-item');
+            if (activeIndex >= 0 && activeIndex < items.length) {
+                const selectedValue = items[activeIndex].textContent;
+                searchInput.value = selectedValue;
+                selectElement.value = selectedValue;
+                autocompleteDropdown.style.display = 'none';
+            }
+        }
+        
+        // Input event listener
+        searchInput.addEventListener('input', updateAutocomplete);
+        
+        // Focus event listener
+        searchInput.addEventListener('focus', updateAutocomplete);
+        
+        // Blur event listener
+        searchInput.addEventListener('blur', (e) => {
+            // Delay hiding to allow click events on dropdown items
+            setTimeout(() => {
+                autocompleteDropdown.style.display = 'none';
+            }, 200);
+        });
+        
+        // Keyboard navigation
+        searchInput.addEventListener('keydown', (e) => {
+            const items = autocompleteDropdown.querySelectorAll('.autocomplete-item');
+            
+            // Down arrow
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setActiveItem(Math.min(activeIndex + 1, items.length - 1));
+            }
+            // Up arrow
+            else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setActiveItem(Math.max(activeIndex - 1, 0));
+            }
+            // Enter
+            else if (e.key === 'Enter' && activeIndex >= 0) {
+                e.preventDefault();
+                selectActiveItem();
+            }
+            // Tab
+            else if (e.key === 'Tab' && items.length > 0) {
+                if (activeIndex === -1) {
+                    setActiveItem(0);
+                } else {
+                    selectActiveItem();
+                }
+            }
+            // Escape
+            else if (e.key === 'Escape') {
+                autocompleteDropdown.style.display = 'none';
             }
         });
 
-        // Sync select value to search input when changed manually
+        // Sync select value when changed manually
         selectElement.addEventListener('change', () => {
             searchInput.value = selectElement.options[selectElement.selectedIndex].text;
         });
