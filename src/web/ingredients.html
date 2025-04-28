@@ -1,81 +1,176 @@
 <!DOCTYPE html>
 <html lang="en">
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ingredients - Cocktail Database</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="shortcut icon" href="/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <meta name="apple-mobile-web-app-title" content="CocktailDB" />
-    <link rel="manifest" href="/site.webmanifest" />
-</head>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Ingredients - Cocktail Database</title>
+        <link rel="stylesheet" href="styles.css">
+        <link rel="icon" type="image/png" href="/favicon-96x96.png"
+            sizes="96x96" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180"
+            href="/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-title" content="CocktailDB" />
+        <link rel="manifest" href="/site.webmanifest" />
+        <style>
+        .form-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .form-row .form-group {
+            flex: 1;
+        }
+        .ingredient-search-container {
+            position: relative;
+        }
+        .autocomplete-dropdown {
+            position: absolute;
+            width: 100%;
+            max-height: 200px;
+            overflow-y: auto;
+            background-color: white;
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: none;
+        }
+        .autocomplete-item {
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+        .autocomplete-item:hover, .autocomplete-item.active {
+            background-color: #f2f2f2;
+        }
+        .loading-indicator {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: none;
+        }
+        .loading-indicator.active {
+            display: block;
+        }
+        .loading-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .search-status {
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 4px;
+            display: none;
+        }
+        .search-status.active {
+            display: block;
+        }
+    </style>
+    </head>
 
-<body>
-    <header>
-        <h1>Cocktail Database</h1>
-        <nav>
-            <ul>
-                <li><a href="index.html">Home</a></li>
-                <li><a href="ingredients.html">Ingredients</a></li>
-                <li><a href="recipes.html">Recipes</a></li>
-            </ul>
-        </nav>
-    </header>
+    <body>
+        <header>
+            <h1>Cocktail Database</h1>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="ingredients.html">Ingredients</a></li>
+                    <li><a href="recipes.html">Recipes</a></li>
+                </ul>
+            </nav>
+        </header>
 
-    <main>
-        <section class="ingredients-section">
-            <h2>Manage Ingredients</h2>
+        <main>
+            <section class="ingredients-section">
+                <h2>Manage Ingredients</h2>
 
-            <div class="ingredient-form">
-                <h3>Add New Ingredient</h3>
-                <form id="ingredient-form">
-                    <div class="form-group">
-                        <label for="ingredient-name">Name:</label>
-                        <input type="text" id="ingredient-name" required>
-                    </div>
+                <div class="ingredient-form">
+                    <h3>Add New Ingredient</h3>
+                    <form id="ingredient-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="ingredient-name">Name:</label>
+                                <input type="text" id="ingredient-name"
+                                    required>
+                            </div>
 
-                    <div class="form-group">
-                        <label for="ingredient-category">Category:</label>
-                        <select id="ingredient-category" required>
-                            <option value="">Select a category</option>
-                            <option value="spirit">Spirit</option>
-                            <option value="mixer">Mixer</option>
-                            <option value="garnish">Garnish</option>
-                            <option value="other">Other</option>
-                        </select>
-                    </div>
+                            <div class="form-group">
+                                <label for="ingredient-parent">Parent:</label>
+                                <div class="ingredient-search-container">
+                                    <input type="text"
+                                        id="ingredient-parent-search"
+                                        placeholder="Search parent ingredient..."
+                                        autocomplete="off">
+                                    <div class="loading-indicator"
+                                        id="parent-loading-indicator">
+                                        <div class="loading-spinner"></div>
+                                    </div>
+                                    <div class="search-status"
+                                        id="parent-search-status">Loading
+                                        ingredients...</div>
+                                    <div class="autocomplete-dropdown"
+                                        id="parent-autocomplete-dropdown"></div>
+                                    <select id="ingredient-parent"
+                                        style="display: none;">
+                                        <option value>None</option>
+                                        <!-- Parent options will be populated via JS -->
+                                    </select>
+                                </div>
+                            </div>
 
-                    <div class="form-group">
-                        <label for="ingredient-description">Description:</label>
-                        <textarea id="ingredient-description" rows="3"></textarea>
-                    </div>
+                            <div class="form-group">
+                                <label
+                                    for="ingredient-category">Category:</label>
+                                <select id="ingredient-category" required>
+                                    <option value>Select a category</option>
+                                    <option value="spirit">Spirit</option>
+                                    <option value="mixer">Mixer</option>
+                                    <option value="garnish">Garnish</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                        </div>
 
-                    <button type="submit">Add Ingredient</button>
-                </form>
-            </div>
+                        <div class="form-group">
+                            <label
+                                for="ingredient-description">Description:</label>
+                            <textarea id="ingredient-description"
+                                rows="3"></textarea>
+                        </div>
 
-            <div class="ingredients-list">
-                <h3>Existing Ingredients</h3>
-                <div class="search-bar">
-                    <input type="text" id="ingredient-search" placeholder="Search ingredients...">
+                        <button type="submit">Add Ingredient</button>
+                    </form>
                 </div>
-                <div id="ingredients-container">
-                    <!-- Ingredients will be loaded here -->
+
+                <div class="ingredients-list">
+                    <h3>Existing Ingredients</h3>
+                    <div class="search-bar">
+                        <input type="text" id="ingredient-search"
+                            placeholder="Search ingredients...">
+                    </div>
+                    <div id="ingredients-container">
+                        <!-- Ingredients will be loaded here -->
+                    </div>
                 </div>
-            </div>
-        </section>
-    </main>
+            </section>
+        </main>
 
-    <footer>
-        <p>&copy; 2024 Cocktail Database</p>
-    </footer>
+        <footer>
+            <p>&copy; 2024 Cocktail Database</p>
+        </footer>
 
-    <script type="module" src="js/api.js"></script>
-    <script type="module" src="js/ingredients.js"></script>
-</body>
+        <script type="module" src="js/api.js"></script>
+        <script type="module" src="js/ingredients.js"></script>
+    </body>
 
 </html>
