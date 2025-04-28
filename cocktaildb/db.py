@@ -1,12 +1,8 @@
 import json
 import logging
 import os
-
-import boto3
-from schema import Base, Ingredient, Recipe, RecipeIngredient, Unit, initialize_models
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import scoped_session, sessionmaker
-from sqlalchemy.pool import QueuePool
+import sqlite3
+from typing import Dict, List, Optional, Any, Union, Tuple, cast
 
 # Configure logging
 logger = logging.getLogger()
@@ -19,322 +15,594 @@ _METADATA_INITIALIZED = False
 
 class Database:
     def __init__(self):
-        """Initialize the database connection"""
-        global _METADATA_INITIALIZED
-        logger.info("Initializing Database class")
-        self.Ingredient = Ingredient
-        self.Unit = Unit
-        self.Recipe = Recipe
-        self.RecipeIngredient = RecipeIngredient
-
+        """Initialize the database connection to SQLite on EFS"""
+        logger.info("Initializing Database class with SQLite on EFS")
         try:
-            self.engine = self._get_db_engine()
+            # Get the EFS mount path from environment variable
+            self.efs_path = os.environ.get("EFS_MOUNT_PATH", "/mnt/efs")
+            self.db_name = os.environ.get("DB_NAME", "cocktaildb.db")
+            self.db_path = os.path.join(self.efs_path, self.db_name)
 
-            # Use scoped_session for thread safety
-            self.session_factory = sessionmaker(bind=self.engine)
-            self.Session = scoped_session(self.session_factory)
-            self.session = self.Session()
+            # Ensure EFS directory exists
+            os.makedirs(self.efs_path, exist_ok=True)
 
-            # Initialize models and create tables if they don't exist
-            if not _METADATA_INITIALIZED:
-                logger.info("Initializing metadata and creating tables if needed")
-                initialize_models(self.engine)
-                Base.metadata.create_all(self.engine)
-                _METADATA_INITIALIZED = True
-                logger.info("Metadata initialization complete")
-            else:
-                logger.info("Using cached metadata, skipping table creation check")
-
-            logger.info("Database initialization complete")
+            # Test the connection
+            self._test_connection()
+            logger.info(
+                f"Database initialization complete using SQLite at {self.db_path}"
+            )
         except Exception as e:
             logger.error(f"Error initializing database: {str(e)}", exc_info=True)
             raise
 
-    def _get_db_engine(self):
-        """Get the database engine using Secrets Manager and RDS Data API"""
-        logger.info("Getting database engine")
+    def _test_connection(self):
+        """Test the database connection"""
+        logger.info("Testing database connection...")
+        retry_count = 0
+        max_retries = 3
+        last_error = None
 
-        try:
-            client = boto3.client("secretsmanager")
-            secret_arn = os.environ.get("DB_SECRET_ARN")
-            db_name = os.environ.get("DB_NAME")
-            db_cluster_arn = os.environ.get("DB_CLUSTER_ARN")
-
-            # Validate required environment variables
-            if not secret_arn or not db_name or not db_cluster_arn:
-                raise ValueError(
-                    "Missing required environment variables: DB_SECRET_ARN, DB_NAME, or DB_CLUSTER_ARN"
-                )
-
-            # Get database credentials from Secrets Manager
-            secret_response = client.get_secret_value(SecretId=secret_arn)
-            secret = json.loads(secret_response["SecretString"])
-            username = secret["username"]
-            password = secret["password"]
-
-            # Get the database endpoint from the cluster ARN
-            cluster_parts = db_cluster_arn.split(":")
-            region = cluster_parts[3]
-            account_id = cluster_parts[4]
-            cluster_name = cluster_parts[-1]
-
-            # RDS client to get the endpoint
+        while retry_count < max_retries:
             try:
-                rds_client = boto3.client("rds", region_name=region)
-                logger.info("Created RDS client")
-                response = rds_client.describe_db_clusters(
-                    DBClusterIdentifier=cluster_name
-                )
-                logger.info("Successfully retrieved cluster information")
-                endpoint = response["DBClusters"][0]["Endpoint"]
-                port = response["DBClusters"][0]["Port"]
-                logger.info(f"Database endpoint: {endpoint}")
-                logger.info(f"Database port: {port}")
+                self.execute_query("SELECT 1")
+                logger.info("Successfully connected to database")
+                return
             except Exception as e:
-                logger.error(
-                    f"Error getting cluster information: {str(e)}", exc_info=True
+                last_error = e
+                retry_count += 1
+                logger.warning(
+                    f"Connection attempt {retry_count} failed: {str(e)}. "
+                    f"{'Retrying...' if retry_count < max_retries else 'Max retries reached.'}"
                 )
-                raise
+                if retry_count < max_retries:
+                    import time
 
-            # Enhanced connection parameters for better performance
-            connect_args = {
-                "timeout": 30,  # Increase timeout from 10 to 30 seconds
-                "application_name": "CocktailDB-API",
-                "tcp_keepalive": True,
-                # Using only parameters supported by pg8000
-                # "connect_timeout": 15,  # Not supported by pg8000
-                "ssl_context": True,  # Enable SSL connection
-            }
+                    time.sleep(2**retry_count)  # 2, 4, 8 seconds
 
-            # Create a connection string with explicit parameters
-            connection_string = (
-                f"postgresql+pg8000://{username}:{password}@{endpoint}:{port}/{db_name}"
-            )
-            logger.info(
-                f"Attempting to connect with connection string: postgresql+pg8000://{username}:****@{endpoint}:{port}/{db_name}"
-            )
+        logger.error(
+            f"Failed to connect to database after {max_retries} attempts: {str(last_error)}",
+            exc_info=True,
+        )
+        raise last_error or Exception(
+            "Failed to connect to database after multiple attempts"
+        )
 
-            # Create a connection to the RDS database
-            # Using QueuePool for connection pooling in Lambda
-            logger.info("Creating database engine with connection pooling")
-            engine = create_engine(
-                connection_string,
-                poolclass=QueuePool,  # Use connection pooling
-                pool_size=3,  # Reduce pool size for Lambda
-                max_overflow=5,  # Reduce max overflow for Lambda
-                pool_timeout=30,  # Connection request timeout
-                pool_recycle=300,  # Recycle connections after 5 minutes (more frequent in Lambda)
-                pool_pre_ping=True,  # Verify connections before use
-                connect_args=connect_args,
-                echo=(
-                    os.environ.get("SQL_DEBUG", "false").lower() == "true"
-                ),  # Only enable SQL echo in debug mode
-            )
-            logger.info("Database engine created successfully")
+    def _get_connection(self):
+        """Get a SQLite connection with proper settings"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row  # Return rows as dictionaries
+        return conn
 
-            # Test the connection - with retry logic
-            logger.info("Testing database connection...")
-            retry_count = 0
-            max_retries = 3
-            last_error = None
+    def execute_query(
+        self, sql: str, parameters: Optional[Union[Dict[str, Any], Tuple]] = None
+    ) -> Union[List[Dict[str, Any]], Dict[str, int]]:
+        """Execute a SQL query using SQLite"""
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
 
-            while retry_count < max_retries:
-                try:
-                    with engine.connect() as conn:
-                        conn.execute(text("SELECT 1"))
-                        logger.info(
-                            "Successfully connected to database and executed test query"
-                        )
-                        return engine
-                except Exception as e:
-                    last_error = e
-                    retry_count += 1
-                    logger.warning(
-                        f"Connection attempt {retry_count} failed: {str(e)}. "
-                        f"{'Retrying...' if retry_count < max_retries else 'Max retries reached.'}"
-                    )
-                    if retry_count < max_retries:
-                        # Add exponential backoff before retrying
-                        import time
+            if parameters:
+                cursor.execute(sql, parameters)
+            else:
+                cursor.execute(sql)
 
-                        time.sleep(2**retry_count)  # 2, 4, 8 seconds
-
-            # If we've exhausted retries, log the error and raise
-            logger.error(
-                f"Failed to connect to database after {max_retries} attempts: {str(last_error)}",
-                exc_info=True,
-            )
-            raise last_error or Exception(
-                "Failed to connect to database after multiple attempts"
-            )
-
+            if sql.strip().upper().startswith(("SELECT", "WITH")):
+                # For SELECT queries, return results
+                rows = cursor.fetchall()
+                result = [dict(row) for row in rows]
+                return result
+            else:
+                # For non-SELECT queries, commit and return affected rows
+                conn.commit()
+                return {"rowCount": cursor.rowcount}
         except Exception as e:
-            logger.error(f"Error getting database engine: {str(e)}", exc_info=True)
-
-            # If the environment variable is set, use a SQLite fallback for local development/testing
-            if os.environ.get("USE_SQLITE_FALLBACK", "false").lower() == "true":
-                logger.warning("Using SQLite fallback database")
-                sqlite_path = os.environ.get("SQLITE_PATH", "cocktaildb.db")
-                engine = create_engine(f"sqlite:///{sqlite_path}")
-                Base.metadata.create_all(engine)
-                return engine
-
+            if conn:
+                conn.rollback()
+            logger.error(f"Error executing query: {str(e)}")
             raise
+        finally:
+            if conn:
+                conn.close()
 
-    def __del__(self):
-        """Clean up resources when the object is deleted"""
-        if hasattr(self, "session") and self.session:
-            self.session.close()
+    def execute_transaction(self, queries: List[Dict[str, Any]]) -> None:
+        """Execute multiple queries in a transaction"""
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
 
-    def close(self):
-        """Explicitly close the session"""
-        if hasattr(self, "session") and self.session:
-            self.session.close()
+            for query in queries:
+                sql = query.get("sql")
+                params = query.get("parameters", {})
+                if sql is not None:  # Handle case where sql might be None
+                    cursor.execute(sql, params)
+                else:
+                    logger.warning("Skipping query with None SQL statement")
 
-    def create_ingredient(self, data):
+            conn.commit()
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            logger.error(f"Error executing transaction: {str(e)}")
+            raise
+        finally:
+            if conn:
+                conn.close()
+
+    def create_ingredient(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new ingredient"""
         try:
-            ingredient = Ingredient(
-                name=data.get("name"),
-                category=data.get("category"),
-                description=data.get("description"),
+            # SQLite doesn't have a direct equivalent to Postgres' add_ingredient function
+            # We'll implement the path generation logic here
+            parent_path = None
+            if data.get("parent_id"):
+                # Get parent's path
+                parent = cast(
+                    List[Dict[str, Any]],
+                    self.execute_query(
+                        "SELECT path FROM ingredients WHERE id = :parent_id",
+                        {"parent_id": data.get("parent_id")},
+                    ),
+                )
+                if not parent:
+                    raise ValueError(
+                        f"Parent ingredient with ID {data.get('parent_id')} does not exist"
+                    )
+                parent_path = parent[0]["path"]
+
+            # Insert the ingredient first
+            self.execute_query(
+                """
+                INSERT INTO ingredients (name, category, description, parent_id)
+                VALUES (:name, :category, :description, :parent_id)
+                """,
+                {
+                    "name": data.get("name"),
+                    "category": data.get("category"),
+                    "description": data.get("description"),
+                    "parent_id": data.get("parent_id"),
+                },
             )
-            self.session.add(ingredient)
-            self.session.commit()
-            return ingredient
+
+            # Get the last inserted ID
+            id_result = cast(
+                List[Dict[str, Any]],
+                self.execute_query("SELECT last_insert_rowid() as id"),
+            )
+            new_id = id_result[0]["id"]
+
+            # Generate the path
+            if parent_path:
+                path = f"{parent_path}{new_id}/"
+            else:
+                path = f"/{new_id}/"
+
+            # Update the path
+            self.execute_query(
+                "UPDATE ingredients SET path = :path WHERE id = :id",
+                {"path": path, "id": new_id},
+            )
+
+            # Fetch the created ingredient
+            ingredient = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id, name, category, description, parent_id, path FROM ingredients WHERE id = :id",
+                    {"id": new_id},
+                ),
+            )
+            return ingredient[0]
         except Exception as e:
-            self.session.rollback()
             logger.error(f"Error creating ingredient: {str(e)}")
             raise
 
-    def update_ingredient(self, ingredient_id, data):
+    def update_ingredient(
+        self, ingredient_id: int, data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Update an existing ingredient"""
         try:
-            ingredient = (
-                self.session.query(Ingredient)
-                .filter(Ingredient.id == ingredient_id)
-                .first()
+            # Check if changing parent_id, as this affects the path
+            if "parent_id" in data:
+                old_ingredient = cast(
+                    List[Dict[str, Any]],
+                    self.execute_query(
+                        "SELECT parent_id, path FROM ingredients WHERE id = :id",
+                        {"id": ingredient_id},
+                    ),
+                )
+
+                if not old_ingredient:
+                    return None
+
+                old_parent_id = old_ingredient[0]["parent_id"]
+                old_path = old_ingredient[0]["path"]
+                new_parent_id = data.get("parent_id")
+
+                # Check for circular reference
+                if new_parent_id:
+                    # Cannot be its own parent
+                    if int(new_parent_id) == ingredient_id:
+                        raise ValueError("Ingredient cannot be its own parent")
+
+                    # Check if new parent exists
+                    parent = cast(
+                        List[Dict[str, Any]],
+                        self.execute_query(
+                            "SELECT path FROM ingredients WHERE id = :id",
+                            {"id": new_parent_id},
+                        ),
+                    )
+                    if not parent:
+                        raise ValueError(
+                            f"Parent ingredient with ID {new_parent_id} does not exist"
+                        )
+
+                    # Check if new parent is not a descendant
+                    descendants = self.get_ingredient_descendants(ingredient_id)
+                    if any(d["id"] == new_parent_id for d in descendants):
+                        raise ValueError(
+                            "Cannot create circular reference in hierarchy"
+                        )
+
+                    # Calculate new path
+                    new_path = f"{parent[0]['path']}{ingredient_id}/"
+                else:
+                    # Root level ingredient
+                    new_path = f"/{ingredient_id}/"
+
+                # Update ingredient with new path
+                self.execute_query(
+                    """
+                    UPDATE ingredients 
+                    SET name = COALESCE(:name, name),
+                        category = COALESCE(:category, category),
+                        description = COALESCE(:description, description),
+                        parent_id = :parent_id,
+                        path = :path
+                    WHERE id = :id
+                    """,
+                    {
+                        "id": ingredient_id,
+                        "name": data.get("name"),
+                        "category": data.get("category"),
+                        "description": data.get("description"),
+                        "parent_id": new_parent_id,
+                        "path": new_path,
+                    },
+                )
+
+                # Update paths of descendants
+                descendants = self.get_ingredient_descendants(ingredient_id)
+                for descendant in descendants:
+                    # Replace old path prefix with new path prefix
+                    descendant_path = descendant["path"]
+                    new_descendant_path = descendant_path.replace(old_path, new_path)
+
+                    self.execute_query(
+                        "UPDATE ingredients SET path = :path WHERE id = :id",
+                        {"path": new_descendant_path, "id": descendant["id"]},
+                    )
+            else:
+                # Simple update without changing the hierarchy
+                self.execute_query(
+                    """
+                    UPDATE ingredients 
+                    SET name = COALESCE(:name, name),
+                        category = COALESCE(:category, category),
+                        description = COALESCE(:description, description)
+                    WHERE id = :id
+                    """,
+                    {
+                        "id": ingredient_id,
+                        "name": data.get("name"),
+                        "category": data.get("category"),
+                        "description": data.get("description"),
+                    },
+                )
+
+            # Fetch the updated ingredient
+            result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id, name, category, description, parent_id, path FROM ingredients WHERE id = :id",
+                    {"id": ingredient_id},
+                ),
             )
-            if ingredient:
-                ingredient.name = data.get("name", ingredient.name)
-                ingredient.category = data.get("category", ingredient.category)
-                ingredient.description = data.get("description", ingredient.description)
-                self.session.commit()
-            return ingredient
+            if result:
+                return result[0]
+            return None
         except Exception as e:
-            self.session.rollback()
             logger.error(f"Error updating ingredient {ingredient_id}: {str(e)}")
             raise
 
-    def delete_ingredient(self, ingredient_id):
+    def delete_ingredient(self, ingredient_id: int) -> bool:
         """Delete an ingredient"""
         try:
-            ingredient = (
-                self.session.query(Ingredient)
-                .filter(Ingredient.id == ingredient_id)
-                .first()
+            # Check if ingredient exists
+            ingredient = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id FROM ingredients WHERE id = :id", {"id": ingredient_id}
+                ),
             )
-            if ingredient:
-                self.session.delete(ingredient)
-                self.session.commit()
-                return True
-            return False
+            if not ingredient:
+                return False
+
+            # Check if it has children
+            children = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id FROM ingredients WHERE parent_id = :parent_id",
+                    {"parent_id": ingredient_id},
+                ),
+            )
+            if children:
+                raise ValueError("Cannot delete ingredient with child ingredients")
+
+            # Check if it's used in recipes
+            used_in_recipes = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT recipe_id FROM recipe_ingredients WHERE ingredient_id = :ingredient_id LIMIT 1",
+                    {"ingredient_id": ingredient_id},
+                ),
+            )
+            if used_in_recipes:
+                raise ValueError("Cannot delete ingredient used in recipes")
+
+            # Delete the ingredient
+            self.execute_query(
+                "DELETE FROM ingredients WHERE id = :id", {"id": ingredient_id}
+            )
+            return True
         except Exception as e:
-            self.session.rollback()
             logger.error(f"Error deleting ingredient {ingredient_id}: {str(e)}")
             raise
 
-    def create_recipe(self, data):
-        """Create a new recipe with its ingredients"""
+    def get_ingredients(self) -> List[Dict[str, Any]]:
+        """Get all ingredients"""
         try:
-            # Create the recipe
-            recipe = Recipe(
-                name=data.get("name"),
-                instructions=data.get("instructions"),
-                description=data.get("description"),
-                image_url=data.get("image_url"),
+            result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id, name, category, description, parent_id, path FROM ingredients ORDER BY path"
+                ),
             )
-            self.session.add(recipe)
-            self.session.flush()  # Flush to get the recipe ID
+            return result
+        except Exception as e:
+            logger.error(f"Error getting ingredients: {str(e)}")
+            raise
 
-            # Add recipe ingredients if provided
+    def get_ingredient(self, ingredient_id: int) -> Optional[Dict[str, Any]]:
+        """Get a single ingredient by ID"""
+        try:
+            result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id, name, category, description, parent_id, path FROM ingredients WHERE id = :id",
+                    {"id": ingredient_id},
+                ),
+            )
+            if result:
+                return result[0]
+            return None
+        except Exception as e:
+            logger.error(f"Error getting ingredient {ingredient_id}: {str(e)}")
+            raise
+
+    def get_ingredient_descendants(self, ingredient_id: int) -> List[Dict[str, Any]]:
+        """Get all descendants of an ingredient"""
+        try:
+            # Get the ingredient's path
+            ingredient = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT path FROM ingredients WHERE id = :id", {"id": ingredient_id}
+                ),
+            )
+            if not ingredient:
+                return []
+
+            path = ingredient[0]["path"]
+
+            # Get all ingredients where path starts with this path but is not this path
+            result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    """
+                SELECT id, name, category, description, parent_id, path,
+                       (LENGTH(path) - LENGTH(REPLACE(path, '/', '')) - 1) as level
+                FROM ingredients 
+                WHERE path LIKE :path_pattern AND id != :id
+                ORDER BY path
+                """,
+                    {"path_pattern": f"{path}%", "id": ingredient_id},
+                ),
+            )
+            return result
+        except Exception as e:
+            logger.error(
+                f"Error getting descendants for ingredient {ingredient_id}: {str(e)}"
+            )
+            raise
+
+    def get_ingredient_ancestors(self, ingredient_id: int) -> List[Dict[str, Any]]:
+        """Get all ancestors of an ingredient"""
+        try:
+            # Get the ingredient's path
+            ingredient = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT path FROM ingredients WHERE id = :id", {"id": ingredient_id}
+                ),
+            )
+            if not ingredient:
+                return []
+
+            path = ingredient[0]["path"]
+
+            # Parse the path to get ancestor IDs
+            ancestor_ids = []
+            parts = path.strip("/").split("/")
+            for part in parts:
+                if part and part.isdigit():
+                    ancestor_ids.append(int(part))
+
+            # Remove the ingredient itself
+            if ancestor_ids and ancestor_ids[-1] == ingredient_id:
+                ancestor_ids.pop()
+
+            if not ancestor_ids:
+                return []
+
+            # Get all ancestors
+            placeholders = ", ".join("?" for _ in ancestor_ids)
+            result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    f"""
+                SELECT id, name, category, description, parent_id, path,
+                       (LENGTH(path) - LENGTH(REPLACE(path, '/', '')) - 1) as level
+                FROM ingredients 
+                WHERE id IN ({placeholders})
+                ORDER BY path
+                """,
+                    tuple(ancestor_ids),
+                ),
+            )
+            return result
+        except Exception as e:
+            logger.error(
+                f"Error getting ancestors for ingredient {ingredient_id}: {str(e)}"
+            )
+            raise
+
+    def create_recipe(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new recipe with its ingredients"""
+        conn = None
+        try:
+            conn = self._get_connection()
+            conn.execute("BEGIN TRANSACTION")
+            cursor = conn.cursor()
+
+            # Create the recipe
+            cursor.execute(
+                """
+                INSERT INTO recipes (name, instructions, description, image_url)
+                VALUES (:name, :instructions, :description, :image_url)
+                """,
+                {
+                    "name": data["name"],
+                    "instructions": data.get("instructions"),
+                    "description": data.get("description"),
+                    "image_url": data.get("image_url"),
+                },
+            )
+
+            # Get the recipe ID
+            recipe_id = cursor.lastrowid
+            if recipe_id is None:
+                raise ValueError("Failed to get recipe ID after insertion")
+
+            # Add recipe ingredients
             if "ingredients" in data:
-                for ingredient_data in data["ingredients"]:
-                    recipe_ingredient = RecipeIngredient(
-                        recipe_id=recipe.id,
-                        ingredient_id=ingredient_data["ingredient_id"],
-                        unit_id=ingredient_data.get("unit_id"),
-                        amount=ingredient_data.get("amount"),
+                for ingredient in data["ingredients"]:
+                    cursor.execute(
+                        """
+                        INSERT INTO recipe_ingredients (recipe_id, ingredient_id, unit_id, amount)
+                        VALUES (:recipe_id, :ingredient_id, :unit_id, :amount)
+                        """,
+                        {
+                            "recipe_id": recipe_id,
+                            "ingredient_id": ingredient["ingredient_id"],
+                            "unit_id": ingredient.get("unit_id"),
+                            "amount": ingredient.get("amount"),
+                        },
                     )
-                    self.session.add(recipe_ingredient)
 
-            self.session.commit()
+            # Commit the transaction
+            conn.commit()
+
+            # Return the created recipe
+            recipe = self.get_recipe(recipe_id)
+            if not recipe:
+                raise ValueError("Failed to retrieve created recipe")
             return recipe
         except Exception as e:
-            self.session.rollback()
+            if conn:
+                conn.rollback()
             logger.error(f"Error creating recipe: {str(e)}")
             raise
+        finally:
+            if conn:
+                conn.close()
 
-    def update_recipe(self, recipe_id, data):
-        """Update an existing recipe and its ingredients"""
+    def get_recipes(self) -> List[Dict[str, Any]]:
+        """Get all recipes with their ingredients"""
         try:
-            recipe = self.session.query(Recipe).filter(Recipe.id == recipe_id).first()
-            if recipe:
-                # Update basic recipe information
-                recipe.name = data.get("name", recipe.name)
-                recipe.instructions = data.get("instructions", recipe.instructions)
-                recipe.description = data.get("description", recipe.description)
-                recipe.image_url = data.get("image_url", recipe.image_url)
+            recipes_result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id, name, instructions, description, image_url FROM recipes"
+                ),
+            )
 
-                # Update ingredients if provided
-                if "ingredients" in data:
-                    # Remove existing ingredients
-                    self.session.query(RecipeIngredient).filter(
-                        RecipeIngredient.recipe_id == recipe_id
-                    ).delete()
+            for recipe in recipes_result:
+                recipe["ingredients"] = self._get_recipe_ingredients(recipe["id"])
 
-                    # Add new ingredients
-                    for ingredient_data in data["ingredients"]:
-                        recipe_ingredient = RecipeIngredient(
-                            recipe_id=recipe.id,
-                            ingredient_id=ingredient_data["ingredient_id"],
-                            unit_id=ingredient_data.get("unit_id"),
-                            amount=ingredient_data.get("amount"),
-                        )
-                        self.session.add(recipe_ingredient)
-
-                self.session.commit()
-            return recipe
+            return recipes_result
         except Exception as e:
-            self.session.rollback()
-            logger.error(f"Error updating recipe {recipe_id}: {str(e)}")
+            logger.error(f"Error getting recipes: {str(e)}")
             raise
 
-    def delete_recipe(self, recipe_id):
-        """Delete a recipe and its associated ingredients"""
+    def get_recipe(self, recipe_id: int) -> Optional[Dict[str, Any]]:
+        """Get a single recipe by ID with its ingredients"""
         try:
-            recipe = self.session.query(Recipe).filter(Recipe.id == recipe_id).first()
-            if recipe:
-                # Delete associated recipe ingredients first
-                self.session.query(RecipeIngredient).filter(
-                    RecipeIngredient.recipe_id == recipe_id
-                ).delete()
-
-                # Delete the recipe
-                self.session.delete(recipe)
-                self.session.commit()
-                return True
-            return False
+            result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id, name, instructions, description, image_url FROM recipes WHERE id = :id",
+                    {"id": recipe_id},
+                ),
+            )
+            if result:
+                recipe = result[0]
+                recipe["ingredients"] = self._get_recipe_ingredients(recipe_id)
+                return recipe
+            return None
         except Exception as e:
-            self.session.rollback()
-            logger.error(f"Error deleting recipe {recipe_id}: {str(e)}")
+            logger.error(f"Error getting recipe {recipe_id}: {str(e)}")
             raise
 
-    def get_units(self):
+    def _get_recipe_ingredients(self, recipe_id: int) -> List[Dict[str, Any]]:
+        """Helper method to get ingredients for a recipe"""
+        result = cast(
+            List[Dict[str, Any]],
+            self.execute_query(
+                """
+            SELECT ri.id, ri.amount, ri.ingredient_id, i.name as ingredient_name,
+                   ri.unit_id, u.name as unit_name, u.abbreviation as unit_abbreviation
+            FROM recipe_ingredients ri
+            JOIN ingredients i ON ri.ingredient_id = i.id
+            LEFT JOIN units u ON ri.unit_id = u.id
+            WHERE ri.recipe_id = :recipe_id
+            """,
+                {"recipe_id": recipe_id},
+            ),
+        )
+        return result
+
+    def get_units(self) -> List[Dict[str, Any]]:
         """Get all measurement units"""
         try:
-            units = self.session.query(Unit).all()
-            return units
+            result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id, name, abbreviation FROM units ORDER BY name"
+                ),
+            )
+            return result
         except Exception as e:
             logger.error(f"Error getting units: {str(e)}")
             raise

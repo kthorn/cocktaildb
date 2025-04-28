@@ -1,6 +1,42 @@
-# Cocktail Database
+# CocktailDB
 
-A full-stack web application for managing and exploring cocktail recipes.
+A serverless cocktail database application with SQLite on AWS Lambda.
+
+## Database Architecture
+
+This project uses a SQLite database stored on an Amazon EFS volume that is mounted to Lambda functions. The database is automatically created and initialized during stack deployment.
+
+### Database Initialization Process
+
+1. During deployment, the CloudFormation stack creates an EFS file system that will store the SQLite database
+2. The `SchemaDeployFunction` Lambda:
+   - Writes the schema.sql file to the EFS volume
+   - Creates a new SQLite database on the EFS volume
+   - Runs the SQL statements to initialize the database schema
+3. The `DBInitLambda` function is provided as a utility to manually reinitialize the database if needed
+
+### Database Access
+
+The main `CocktailLambda` function handles API requests and interacts with the SQLite database on the EFS volume.
+
+## Development
+
+### Modifying the Database Schema
+
+1. Edit the `cocktaildb/schema.sql` file with your schema changes
+2. Redeploy the stack to apply the changes
+   - By default, existing databases are not overwritten during updates
+   - To force recreation of the database, set the `ForceInit` parameter to "true" in the `SchemaDeployResource`
+
+### Manual Database Operations
+
+You can manually reinitialize the database using the `DBInitLambda` function:
+
+```bash
+# Force reinitialization of the database
+aws lambda invoke --function-name <stack-name>-db-init \
+  --payload '{"force": true}' output.txt
+```
 
 ## Architecture
 

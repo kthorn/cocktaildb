@@ -449,6 +449,40 @@ Resources:
             Path: /units
             Method: options
 
+
+  # Custom resource to create sqlite db on EFS
+  SchemaDeployFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: 
+      - MountTarget
+      - EFSAccessPoint
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-schema-deploy
+      CodeUri: schema-deploy/
+      Handler: deploy.lambda_handler
+      Timeout: 60
+      Environment:
+        Variables:
+          DB_NAME: !Ref DatabaseName
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PublicSubnet
+      FileSystemConfigs:
+        - Arn: !GetAtt EFSAccessPoint.Arn
+          LocalMountPath: /mnt/efs
+      Policies:
+        - VPCAccessPolicy: {}
+        - Statement:
+            - Effect: Allow
+              Action:
+                - elasticfilesystem:ClientMount
+                - elasticfilesystem:ClientWrite
+                - elasticfilesystem:ClientRootAccess
+              Resource: !GetAtt CocktailEFS.Arn
+
+
   # S3 bucket for deployment artifacts
   DeploymentBucket:
     Type: AWS::S3::Bucket

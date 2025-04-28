@@ -5,9 +5,8 @@ from typing import Any, Dict
 
 from db import Database
 
-logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 
 # CORS headers for all responses
 CORS_HEADERS = {
@@ -43,412 +42,236 @@ def get_database():
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """
-    Lambda function to handle cocktail and ingredient operations
-    """
+    """AWS Lambda handler for the CocktailDB API"""
+    start_time = time.time()
+    logger.info(f"Received event: {json.dumps(event)}")
+
+    # Get path and HTTP method
+    path = event.get("path", "").rstrip("/")
+    http_method = event.get("httpMethod", "")
+    query_params = event.get("queryStringParameters", {}) or {}
+
+    # Get database connection
+    db = get_database()
+
     try:
-        start_time = time.time()
-        logger.info(f"Lambda handler started with event: {json.dumps(event)}")
-
-        # Parse the HTTP method and path from the event
-        http_method = event.get("httpMethod", "GET")
-        path = event.get("path", "")
-        logger.info(f"HTTP Method: {http_method}, Path: {path}")
-
-        # Handle OPTIONS method for CORS preflight
-        if http_method == "OPTIONS":
-            logger.info("Handling OPTIONS request for CORS preflight")
-            return {"statusCode": 200, "headers": CORS_HEADERS, "body": json.dumps({})}
-
-        # Initialize database with connection pooling
-        logger.info("Initializing database connection...")
-        db_init_start = time.time()
-
-        try:
-            db = get_database()
-            db_init_duration = time.time() - db_init_start
-            logger.info(f"Database connection initialized in {db_init_duration:.2f}s")
-        except Exception as e:
-            logger.error(f"Failed to connect to database after retries: {str(e)}")
-            return {
-                "statusCode": 500,
-                "headers": CORS_HEADERS,
-                "body": json.dumps({"error": "Database connection failed"}),
-            }
-
-        # Handle ingredients endpoints
+        # Handle ingredient endpoints
         if path.startswith("/ingredients"):
-            # Check if this is a request for a specific ingredient
-            path_parts = path.split("/")
-            if len(path_parts) > 2 and path_parts[2].isdigit():
-                ingredient_id = int(path_parts[2])
-                if http_method == "GET":
-                    logger.info(f"Querying for ingredient with ID: {ingredient_id}")
+            ingredient_id = path.split("/")[-1] if len(path.split("/")) > 2 else None
+
+            if http_method == "POST":
+                logger.info("Creating new ingredient...")
+                try:
+                    body = json.loads(event.get("body", "{}"))
+                    ingredient = db.create_ingredient(body)
+                    return {
+                        "statusCode": 201,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps(ingredient),
+                    }
+                except Exception as e:
+                    logger.error(f"Error creating ingredient: {str(e)}")
+                    return {
+                        "statusCode": 400,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": str(e)}),
+                    }
+
+            elif http_method == "PUT" and ingredient_id:
+                logger.info(f"Updating ingredient {ingredient_id}...")
+                try:
+                    body = json.loads(event.get("body", "{}"))
+                    ingredient = db.update_ingredient(int(ingredient_id), body)
+                    if ingredient:
+                        return {
+                            "statusCode": 200,
+                            "headers": CORS_HEADERS,
+                            "body": json.dumps(ingredient),
+                        }
+                    return {
+                        "statusCode": 404,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": "Ingredient not found"}),
+                    }
+                except Exception as e:
+                    logger.error(f"Error updating ingredient: {str(e)}")
+                    return {
+                        "statusCode": 400,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": str(e)}),
+                    }
+
+            elif http_method == "DELETE" and ingredient_id:
+                logger.info(f"Deleting ingredient {ingredient_id}...")
+                try:
+                    if db.delete_ingredient(int(ingredient_id)):
+                        return {
+                            "statusCode": 204,
+                            "headers": CORS_HEADERS,
+                            "body": "",
+                        }
+                    return {
+                        "statusCode": 404,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": "Ingredient not found"}),
+                    }
+                except Exception as e:
+                    logger.error(f"Error deleting ingredient: {str(e)}")
+                    return {
+                        "statusCode": 400,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": str(e)}),
+                    }
+
+            elif http_method == "GET":
+                if ingredient_id:
+                    logger.info(f"Getting ingredient {ingredient_id}...")
                     try:
-                        ingredient = db.session.query(db.Ingredient).get(ingredient_id)
+                        ingredient = db.get_ingredient(int(ingredient_id))
                         if ingredient:
+                            # Check if we need to include hierarchy information
+                            include_descendants = (
+                                query_params.get("descendants") == "true"
+                            )
+                            include_ancestors = query_params.get("ancestors") == "true"
+
+                            if include_descendants:
+                                ingredient["descendants"] = (
+                                    db.get_ingredient_descendants(int(ingredient_id))
+                                )
+                            if include_ancestors:
+                                ingredient["ancestors"] = db.get_ingredient_ancestors(
+                                    int(ingredient_id)
+                                )
+
                             return {
                                 "statusCode": 200,
                                 "headers": CORS_HEADERS,
-                                "body": json.dumps(
-                                    {
-                                        "id": ingredient.id,
-                                        "name": ingredient.name,
-                                        "category": ingredient.category,
-                                        "description": ingredient.description,
-                                        "parent_id": ingredient.parent_id,
-                                    }
-                                ),
+                                "body": json.dumps(ingredient),
                             }
-                        else:
-                            return {
-                                "statusCode": 404,
-                                "headers": CORS_HEADERS,
-                                "body": json.dumps({"error": "Ingredient not found"}),
-                            }
+                        return {
+                            "statusCode": 404,
+                            "headers": CORS_HEADERS,
+                            "body": json.dumps({"error": "Ingredient not found"}),
+                        }
                     except Exception as e:
-                        logger.error(f"Error querying ingredient: {str(e)}")
+                        logger.error(f"Error getting ingredient: {str(e)}")
                         return {
                             "statusCode": 500,
                             "headers": CORS_HEADERS,
-                            "body": json.dumps(
-                                {"error": f"Database query failed: {str(e)}"}
-                            ),
+                            "body": json.dumps({"error": str(e)}),
                         }
-            elif http_method == "GET":
-                logger.info("Querying for all ingredients...")
-                query_start = time.time()
-                try:
-                    ingredients = db.session.query(db.Ingredient).all()
-                    query_duration = time.time() - query_start
-                    logger.info(
-                        f"Query completed in {query_duration:.2f}s. Found {len(ingredients)} ingredients."
-                    )
-
-                    response = {
-                        "statusCode": 200,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(
-                            [
-                                {
-                                    "id": i.id,
-                                    "name": i.name,
-                                    "category": i.category,
-                                    "description": i.description,
-                                    "parent_id": i.parent_id,
-                                }
-                                for i in ingredients
-                            ]
-                        ),
-                    }
-                    logger.info(
-                        f"Total execution time: {time.time() - start_time:.2f}s"
-                    )
-                    return response
-                except Exception as e:
-                    logger.error(f"Error querying ingredients: {str(e)}")
-                    return {
-                        "statusCode": 500,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(
-                            {"error": f"Database query failed: {str(e)}"}
-                        ),
-                    }
-            elif http_method == "POST":
-                # Create new ingredient
-                logger.info("Creating new ingredient...")
-                body = json.loads(event.get("body", "{}"))
-                try:
-                    ingredient = db.create_ingredient(body)
-                    logger.info(f"Ingredient created with ID: {ingredient.id}")
-                    return {
-                        "statusCode": 201,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(
-                            {
-                                "id": ingredient.id,
-                                "name": ingredient.name,
-                                "category": ingredient.category,
-                                "description": ingredient.description,
-                                "parent_id": ingredient.parent_id,
-                                "message": "Ingredient created successfully",
-                            }
-                        ),
-                    }
-                except Exception as e:
-                    db.session.rollback()
-                    logger.error(f"Error creating ingredient: {str(e)}")
-
-                    # Check for duplicate ingredient error
-                    error_str = str(e)
-                    if (
-                        "duplicate key value violates unique constraint" in error_str
-                        and "ingredients_name_key" in error_str
-                    ):
-                        # Extract the duplicate name from the error message
-                        import re
-
-                        name_match = re.search(
-                            r"Key \(name\)=\((.+?)\) already exists", error_str
-                        )
-                        ingredient_name = (
-                            name_match.group(1) if name_match else "ingredient"
-                        )
-
+                else:
+                    logger.info("Getting all ingredients...")
+                    try:
+                        ingredients = db.get_ingredients()
                         return {
-                            "statusCode": 409,  # Conflict status code
+                            "statusCode": 200,
                             "headers": CORS_HEADERS,
-                            "body": json.dumps(
-                                {
-                                    "error": f"An ingredient with the name '{ingredient_name}' already exists"
-                                }
-                            ),
+                            "body": json.dumps(ingredients),
                         }
-                    else:
+                    except Exception as e:
+                        logger.error(f"Error getting ingredients: {str(e)}")
                         return {
                             "statusCode": 500,
                             "headers": CORS_HEADERS,
-                            "body": json.dumps(
-                                {"error": f"Failed to create ingredient: {str(e)}"}
-                            ),
+                            "body": json.dumps({"error": str(e)}),
                         }
-            elif http_method == "PUT":
-                # Update ingredient
-                ingredient_id = int(event.get("pathParameters", {}).get("id", 0))
-                logger.info(f"Updating ingredient with ID: {ingredient_id}")
-                body = json.loads(event.get("body", "{}"))
-                ingredient = db.update_ingredient(ingredient_id, body)
-                if ingredient:
-                    logger.info(f"Ingredient {ingredient_id} updated successfully")
-                    return {
-                        "statusCode": 200,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(
-                            {
-                                "id": ingredient.id,
-                                "name": ingredient.name,
-                                "category": ingredient.category,
-                                "description": ingredient.description,
-                                "parent_id": ingredient.parent_id,
-                            }
-                        ),
-                    }
-                else:
-                    logger.warning(f"Ingredient {ingredient_id} not found")
-                    return {
-                        "statusCode": 404,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": "Ingredient not found"}),
-                    }
-            elif http_method == "DELETE":
-                # Delete ingredient
-                ingredient_id = int(event.get("pathParameters", {}).get("id", 0))
-                logger.info(f"Deleting ingredient with ID: {ingredient_id}")
-                success = db.delete_ingredient(ingredient_id)
-                if success:
-                    logger.info(f"Ingredient {ingredient_id} deleted successfully")
-                    return {"statusCode": 204, "headers": CORS_HEADERS, "body": ""}
-                else:
-                    logger.warning(f"Ingredient {ingredient_id} not found")
-                    return {
-                        "statusCode": 404,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": "Ingredient not found"}),
-                    }
 
         # Handle recipe endpoints
         elif path.startswith("/recipes"):
-            if http_method == "GET":
-                logger.info("Querying for all recipes...")
-                query_start = time.time()
-                try:
-                    recipes = db.session.query(db.Recipe).all()
-                    query_duration = time.time() - query_start
-                    logger.info(
-                        f"Query completed in {query_duration:.2f}s. Found {len(recipes)} recipes."
-                    )
+            recipe_id = path.split("/")[-1] if len(path.split("/")) > 2 else None
 
-                    response = {
-                        "statusCode": 200,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(
-                            [
-                                {
-                                    "id": r.id,
-                                    "name": r.name,
-                                    "instructions": r.instructions,
-                                    "description": r.description,
-                                    "image_url": r.image_url,
-                                    "ingredients": [
-                                        {
-                                            "id": ri.id,
-                                            "name": ri.ingredient.name,
-                                            "amount": ri.amount,
-                                            "unit": ri.unit.name if ri.unit else None,
-                                        }
-                                        for ri in r.ingredients
-                                    ],
-                                }
-                                for r in recipes
-                            ]
-                        ),
-                    }
-                    logger.info(
-                        f"Total execution time: {time.time() - start_time:.2f}s"
-                    )
-                    return response
-                except Exception as e:
-                    logger.error(f"Error querying recipes: {str(e)}")
-                    return {
-                        "statusCode": 500,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(
-                            {"error": f"Database query failed: {str(e)}"}
-                        ),
-                    }
-            elif http_method == "POST":
-                # Create new recipe
+            if http_method == "POST":
                 logger.info("Creating new recipe...")
-                body = json.loads(event.get("body", "{}"))
-                recipe = db.create_recipe(body)
-                logger.info(f"Recipe created with ID: {recipe.id}")
-                return {
-                    "statusCode": 201,
-                    "headers": CORS_HEADERS,
-                    "body": json.dumps(
-                        {
-                            "id": recipe.id,
-                            "name": recipe.name,
-                            "instructions": recipe.instructions,
-                            "description": recipe.description,
-                            "image_url": recipe.image_url,
-                        }
-                    ),
-                }
-            elif http_method == "PUT":
-                # Update recipe
-                recipe_id = int(event.get("pathParameters", {}).get("id", 0))
-                logger.info(f"Updating recipe with ID: {recipe_id}")
-                body = json.loads(event.get("body", "{}"))
-                recipe = db.update_recipe(recipe_id, body)
-                if recipe:
-                    logger.info(f"Recipe {recipe_id} updated successfully")
-                    return {
-                        "statusCode": 200,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(
-                            {
-                                "id": recipe.id,
-                                "name": recipe.name,
-                                "instructions": recipe.instructions,
-                                "description": recipe.description,
-                                "image_url": recipe.image_url,
-                            }
-                        ),
-                    }
-                else:
-                    logger.warning(f"Recipe {recipe_id} not found")
-                    return {
-                        "statusCode": 404,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": "Recipe not found"}),
-                    }
-            elif http_method == "DELETE":
-                # Delete recipe
-                recipe_id = int(event.get("pathParameters", {}).get("id", 0))
-                logger.info(f"Deleting recipe with ID: {recipe_id}")
-                success = db.delete_recipe(recipe_id)
-                if success:
-                    logger.info(f"Recipe {recipe_id} deleted successfully")
-                    return {"statusCode": 204, "headers": CORS_HEADERS, "body": ""}
-                else:
-                    logger.warning(f"Recipe {recipe_id} not found")
-                    return {
-                        "statusCode": 404,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": "Recipe not found"}),
-                    }
-
-        # Handle units endpoints
-        elif path.startswith("/units"):
-            if http_method == "GET":
-                logger.info("Querying for all units...")
                 try:
-                    units = db.session.query(db.Unit).all()
-                    response = {
-                        "statusCode": 200,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(
-                            [
-                                {
-                                    "id": u.id,
-                                    "name": u.name,
-                                    "abbreviation": u.abbreviation,
-                                }
-                                for u in units
-                            ]
-                        ),
-                    }
-                    return response
-                except Exception as e:
-                    logger.error(f"Error querying units: {str(e)}")
-                    return {
-                        "statusCode": 500,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(
-                            {"error": f"Database query failed: {str(e)}"}
-                        ),
-                    }
-            elif http_method == "POST":
-                # Create new unit
-                logger.info("Creating new unit...")
-                body = json.loads(event.get("body", "{}"))
-                try:
-                    new_unit = db.Unit(
-                        name=body.get("name"), abbreviation=body.get("abbreviation")
-                    )
-                    db.session.add(new_unit)
-                    db.session.commit()
+                    body = json.loads(event.get("body", "{}"))
+                    recipe = db.create_recipe(body)
                     return {
                         "statusCode": 201,
                         "headers": CORS_HEADERS,
-                        "body": json.dumps(
-                            {
-                                "id": new_unit.id,
-                                "name": new_unit.name,
-                                "abbreviation": new_unit.abbreviation,
-                            }
-                        ),
+                        "body": json.dumps(recipe),
                     }
                 except Exception as e:
-                    db.session.rollback()
-                    logger.error(f"Error creating unit: {str(e)}")
+                    logger.error(f"Error creating recipe: {str(e)}")
+                    return {
+                        "statusCode": 400,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": str(e)}),
+                    }
+
+            elif http_method == "GET":
+                if recipe_id:
+                    logger.info(f"Getting recipe {recipe_id}...")
+                    try:
+                        recipe = db.get_recipe(int(recipe_id))
+                        if recipe:
+                            return {
+                                "statusCode": 200,
+                                "headers": CORS_HEADERS,
+                                "body": json.dumps(recipe),
+                            }
+                        return {
+                            "statusCode": 404,
+                            "headers": CORS_HEADERS,
+                            "body": json.dumps({"error": "Recipe not found"}),
+                        }
+                    except Exception as e:
+                        logger.error(f"Error getting recipe: {str(e)}")
+                        return {
+                            "statusCode": 500,
+                            "headers": CORS_HEADERS,
+                            "body": json.dumps({"error": str(e)}),
+                        }
+                else:
+                    logger.info("Getting all recipes...")
+                    try:
+                        recipes = db.get_recipes()
+                        return {
+                            "statusCode": 200,
+                            "headers": CORS_HEADERS,
+                            "body": json.dumps(recipes),
+                        }
+                    except Exception as e:
+                        logger.error(f"Error getting recipes: {str(e)}")
+                        return {
+                            "statusCode": 500,
+                            "headers": CORS_HEADERS,
+                            "body": json.dumps({"error": str(e)}),
+                        }
+
+        # Handle units endpoint
+        elif path == "/units":
+            if http_method == "GET":
+                logger.info("Getting all units...")
+                try:
+                    units = db.get_units()
+                    return {
+                        "statusCode": 200,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps(units),
+                    }
+                except Exception as e:
+                    logger.error(f"Error getting units: {str(e)}")
                     return {
                         "statusCode": 500,
                         "headers": CORS_HEADERS,
-                        "body": json.dumps(
-                            {"error": f"Failed to create unit: {str(e)}"}
-                        ),
+                        "body": json.dumps({"error": str(e)}),
                     }
-        else:
-            logger.warning(f"Unrecognized path: {path}")
-            return {
-                "statusCode": 404,
-                "headers": CORS_HEADERS,
-                "body": json.dumps({"error": "Not found"}),
-            }
+
+        # Handle unknown endpoints
+        return {
+            "statusCode": 404,
+            "headers": CORS_HEADERS,
+            "body": json.dumps({"error": "Endpoint not found"}),
+        }
 
     except Exception as e:
-        logger.error(f"Error in lambda_handler: {str(e)}", exc_info=True)
+        logger.error(f"Unhandled error: {str(e)}", exc_info=True)
         return {
             "statusCode": 500,
             "headers": CORS_HEADERS,
-            "body": json.dumps({"error": str(e)}),
+            "body": json.dumps({"error": "Internal server error"}),
         }
-
-    # Default return for any unforeseen code paths
-    return {
-        "statusCode": 500,
-        "headers": CORS_HEADERS,
-        "body": json.dumps({"error": "An unexpected error occurred"}),
-    }
+    finally:
+        logger.info(f"Total execution time: {time.time() - start_time:.2f}s")
