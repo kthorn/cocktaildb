@@ -3,7 +3,7 @@ import logging
 import time
 from typing import Any, Dict
 
-from db import Database 
+from db import Database
 
 logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 logger = logging.getLogger()
@@ -78,7 +78,44 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         # Handle ingredients endpoints
         if path.startswith("/ingredients"):
-            if http_method == "GET":
+            # Check if this is a request for a specific ingredient
+            path_parts = path.split("/")
+            if len(path_parts) > 2 and path_parts[2].isdigit():
+                ingredient_id = int(path_parts[2])
+                if http_method == "GET":
+                    logger.info(f"Querying for ingredient with ID: {ingredient_id}")
+                    try:
+                        ingredient = db.session.query(db.Ingredient).get(ingredient_id)
+                        if ingredient:
+                            return {
+                                "statusCode": 200,
+                                "headers": CORS_HEADERS,
+                                "body": json.dumps(
+                                    {
+                                        "id": ingredient.id,
+                                        "name": ingredient.name,
+                                        "category": ingredient.category,
+                                        "description": ingredient.description,
+                                        "parent_id": ingredient.parent_id,
+                                    }
+                                ),
+                            }
+                        else:
+                            return {
+                                "statusCode": 404,
+                                "headers": CORS_HEADERS,
+                                "body": json.dumps({"error": "Ingredient not found"}),
+                            }
+                    except Exception as e:
+                        logger.error(f"Error querying ingredient: {str(e)}")
+                        return {
+                            "statusCode": 500,
+                            "headers": CORS_HEADERS,
+                            "body": json.dumps(
+                                {"error": f"Database query failed: {str(e)}"}
+                            ),
+                        }
+            elif http_method == "GET":
                 logger.info("Querying for all ingredients...")
                 query_start = time.time()
                 try:
@@ -98,6 +135,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                                     "name": i.name,
                                     "category": i.category,
                                     "description": i.description,
+                                    "parent_id": i.parent_id,
                                 }
                                 for i in ingredients
                             ]
@@ -132,6 +170,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                                 "name": ingredient.name,
                                 "category": ingredient.category,
                                 "description": ingredient.description,
+                                "parent_id": ingredient.parent_id,
                                 "message": "Ingredient created successfully",
                             }
                         ),
@@ -190,6 +229,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                                 "name": ingredient.name,
                                 "category": ingredient.category,
                                 "description": ingredient.description,
+                                "parent_id": ingredient.parent_id,
                             }
                         ),
                     }

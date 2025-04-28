@@ -1,4 +1,4 @@
-from sqlalchemy import MetaData
+from sqlalchemy import MetaData, Column, Integer, String, Text, Float, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.automap import automap_base
 
@@ -13,7 +13,15 @@ Base = automap_base(metadata=metadata)
 class Ingredient(Base):
     __tablename__ = "ingredients"
 
-    # We only need to define relationships, not columns (they'll be reflected)
+    # Explicitly define all columns
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False, unique=True)
+    category = Column(String(50))
+    description = Column(Text)
+    parent_id = Column(Integer, ForeignKey("ingredients.id"))
+    path = Column(String(255))
+
+    # Define relationships
     children = relationship(
         "Ingredient",
         backref="parent",
@@ -63,20 +71,38 @@ class Ingredient(Base):
 
 class Unit(Base):
     __tablename__ = "units"
-    # Columns will be reflected
+
+    # Explicitly define all columns
+    id = Column(Integer, primary_key=True)
+    name = Column(String(50), nullable=False, unique=True)
+    abbreviation = Column(String(10))
 
 
 class Recipe(Base):
     __tablename__ = "recipes"
 
-    # Define relationships that will be available after reflection
+    # Explicitly define all columns
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    instructions = Column(Text)
+    description = Column(Text)
+    image_url = Column(String(255))
+
+    # Define relationships
     recipe_ingredients = relationship("RecipeIngredient", back_populates="recipe")
 
 
 class RecipeIngredient(Base):
     __tablename__ = "recipe_ingredients"
 
-    # Define relationships that will be available after reflection
+    # Explicitly define all columns
+    id = Column(Integer, primary_key=True)
+    recipe_id = Column(Integer, ForeignKey("recipes.id"), nullable=False)
+    ingredient_id = Column(Integer, ForeignKey("ingredients.id"), nullable=False)
+    unit_id = Column(Integer, ForeignKey("units.id"))
+    amount = Column(Float)
+
+    # Define relationships
     recipe = relationship("Recipe", back_populates="recipe_ingredients")
     ingredient = relationship("Ingredient")
     unit = relationship("Unit")

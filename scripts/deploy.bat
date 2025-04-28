@@ -108,7 +108,7 @@ echo Setting up database environment variables...
 
 REM Get DB Cluster ARN
 set DB_CLUSTER_ARN=
-for /f "tokens=*" %%i in ('aws rds describe-db-clusters --query "DBClusters[?DBClusterIdentifier=='%STACK_NAME%'].DBClusterArn" --output text --region %REGION%') do (
+for /f "tokens=*" %%i in ('aws rds describe-db-clusters --query "DBClusters[?contains(DBClusterIdentifier, '%STACK_NAME%')].DBClusterArn" --output text --region %REGION%') do (
     set DB_CLUSTER_ARN=%%i
 )
 echo DB_CLUSTER_ARN=!DB_CLUSTER_ARN!

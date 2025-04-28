@@ -3,7 +3,7 @@ import logging
 import os
 
 import boto3
-from schema import Base, Ingredient, Recipe, RecipeIngredient, Unit
+from schema import Base, Ingredient, Recipe, RecipeIngredient, Unit, initialize_models
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.pool import QueuePool
@@ -35,9 +35,10 @@ class Database:
             self.Session = scoped_session(self.session_factory)
             self.session = self.Session()
 
-            # Create tables if they don't exist, but only if metadata isn't initialized
+            # Initialize models and create tables if they don't exist
             if not _METADATA_INITIALIZED:
                 logger.info("Initializing metadata and creating tables if needed")
+                initialize_models(self.engine)
                 Base.metadata.create_all(self.engine)
                 _METADATA_INITIALIZED = True
                 logger.info("Metadata initialization complete")
