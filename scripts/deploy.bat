@@ -103,41 +103,6 @@ if not "!DISTRIBUTION_ID!"=="" (
     echo Warning: Could not retrieve CloudFront distribution ID
 )
 
-REM Get required environment variables for database initialization
-echo Setting up database environment variables...
-
-REM Get DB Cluster ARN
-set DB_CLUSTER_ARN=
-for /f "tokens=*" %%i in ('aws rds describe-db-clusters --query "DBClusters[?contains(DBClusterIdentifier, '%STACK_NAME%')].DBClusterArn" --output text --region %REGION%') do (
-    set DB_CLUSTER_ARN=%%i
-)
-echo DB_CLUSTER_ARN=!DB_CLUSTER_ARN!
-
-REM Get Secret ARN for database credentials 
-set DB_SECRET_ARN=
-for /f "tokens=*" %%i in ('aws secretsmanager list-secrets --query "SecretList[?Name=='%STACK_NAME%-db-creds'].ARN" --output text --region %REGION%') do (
-    set DB_SECRET_ARN=%%i
-)
-echo DB_SECRET_ARN=!DB_SECRET_ARN!
-
-REM Set database name
-set DB_NAME=cocktaildb
-echo DB_NAME=!DB_NAME!
-
-REM Export environment variables for use with initialize_db.py
-set DB_CLUSTER_ARN=!DB_CLUSTER_ARN!
-set DB_SECRET_ARN=!DB_SECRET_ARN!
-set DB_NAME=!DB_NAME!
-
-REM Also set for future command windows
-setx DB_CLUSTER_ARN "!DB_CLUSTER_ARN!"
-setx DB_SECRET_ARN "!DB_SECRET_ARN!"
-setx DB_NAME "!DB_NAME!"
-
-echo Environment variables set for database initialization
-echo To run the database initialization script:
-echo python scripts/initialize_db.py
-
 echo Getting CloudFormation outputs...
 aws cloudformation describe-stacks --stack-name %STACK_NAME% --query "Stacks[0].Outputs" --output table --region %REGION%
 
