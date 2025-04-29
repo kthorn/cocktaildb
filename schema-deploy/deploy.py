@@ -91,7 +91,10 @@ def lambda_handler(event, context):
                 )
             else:
                 # If database exists and this is an update, delete it first
-                if os.path.exists(db_path) and event["RequestType"] == "Update":
+                if os.path.exists(db_path) and event["RequestType"] in [
+                    "Update",
+                    "Create",
+                ]:
                     try:
                         os.remove(db_path)
                         logger.info(f"Removed existing database at {db_path}")
