@@ -218,12 +218,11 @@ class Database:
                 cursor = conn.cursor()
                 cursor.execute(
                     """
-                    INSERT INTO ingredients (name, category, description, parent_id)
-                    VALUES (:name, :category, :description, :parent_id)
+                    INSERT INTO ingredients (name, description, parent_id)
+                    VALUES (:name, :description, :parent_id)
                     """,
                     {
                         "name": data.get("name"),
-                        "category": data.get("category"),
                         "description": data.get("description"),
                         "parent_id": data.get("parent_id"),
                     },
@@ -250,7 +249,7 @@ class Database:
                 ingredient = cast(
                     List[Dict[str, Any]],
                     self.execute_query(
-                        "SELECT id, name, category, description, parent_id, path FROM ingredients WHERE id = :id",
+                        "SELECT id, name, description, parent_id, path FROM ingredients WHERE id = :id",
                         {"id": new_id},
                     ),
                 )
@@ -326,7 +325,6 @@ class Database:
                     """
                     UPDATE ingredients 
                     SET name = COALESCE(:name, name),
-                        category = COALESCE(:category, category),
                         description = COALESCE(:description, description),
                         parent_id = :parent_id,
                         path = :path
@@ -335,7 +333,6 @@ class Database:
                     {
                         "id": ingredient_id,
                         "name": data.get("name"),
-                        "category": data.get("category"),
                         "description": data.get("description"),
                         "parent_id": new_parent_id,
                         "path": new_path,
@@ -359,14 +356,12 @@ class Database:
                     """
                     UPDATE ingredients 
                     SET name = COALESCE(:name, name),
-                        category = COALESCE(:category, category),
                         description = COALESCE(:description, description)
                     WHERE id = :id
                     """,
                     {
                         "id": ingredient_id,
                         "name": data.get("name"),
-                        "category": data.get("category"),
                         "description": data.get("description"),
                     },
                 )
@@ -375,7 +370,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, category, description, parent_id, path FROM ingredients WHERE id = :id",
+                    "SELECT id, name, description, parent_id, path FROM ingredients WHERE id = :id",
                     {"id": ingredient_id},
                 ),
             )
@@ -437,7 +432,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, category, description, parent_id, path FROM ingredients ORDER BY path"
+                    "SELECT id, name, description, parent_id, path FROM ingredients ORDER BY path"
                 ),
             )
             return result
@@ -451,7 +446,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, category, description, parent_id, path FROM ingredients WHERE id = :id",
+                    "SELECT id, name, description, parent_id, path FROM ingredients WHERE id = :id",
                     {"id": ingredient_id},
                 ),
             )
@@ -482,7 +477,7 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                SELECT id, name, category, description, parent_id, path,
+                SELECT id, name, description, parent_id, path,
                        (LENGTH(path) - LENGTH(REPLACE(path, '/', '')) - 1) as level
                 FROM ingredients 
                 WHERE path LIKE :path_pattern AND id != :id
@@ -533,7 +528,7 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     f"""
-                SELECT id, name, category, description, parent_id, path,
+                SELECT id, name, description, parent_id, path,
                        (LENGTH(path) - LENGTH(REPLACE(path, '/', '')) - 1) as level
                 FROM ingredients 
                 WHERE id IN ({placeholders})

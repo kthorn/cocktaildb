@@ -13,7 +13,6 @@ window.editIngredient = async function(id) {
 
         // Populate form with ingredient data
         document.getElementById('ingredient-name').value = ingredient.name;
-        document.getElementById('ingredient-category').value = ingredient.category;
         document.getElementById('ingredient-description').value = ingredient.description || '';
         
         // Set parent ingredient if it exists
@@ -88,7 +87,6 @@ window.loadIngredients = async function() {
                 card.className = 'ingredient-card';
                 card.innerHTML = `
                     <h4>${ingredient.name}</h4>
-                    <p><strong>Category:</strong> ${ingredient.category}</p>
                     <p>${ingredient.description || 'No description'}</p>
                     <div class="card-actions">
                         <button onclick="editIngredient(${ingredient.id})">Edit</button>
@@ -155,7 +153,6 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
 
         const name = document.getElementById('ingredient-name').value;
-        const category = document.getElementById('ingredient-category').value;
         const description = document.getElementById('ingredient-description').value;
         
         // Find parent ingredient id based on the search input value
@@ -174,7 +171,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const ingredientData = {
             name,
-            category,
             description,
             parent_id: parentId
         };
@@ -259,7 +255,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             card.innerHTML = `
                 <h4>${ingredient.name}</h4>
-                <p><strong>Category:</strong> ${ingredient.category}</p>
                 ${parentInfo}
                 <p>${ingredient.description || 'No description'}</p>
                 <div class="card-actions">
