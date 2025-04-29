@@ -32,10 +32,9 @@ The main `CocktailLambda` function handles API requests and interacts with the S
 
 You can manually reinitialize the database using the `DBInitLambda` function:
 
-```bash
+```powershell
 # Force reinitialization of the database
-aws lambda invoke --function-name <stack-name>-db-init \
-  --payload '{"force": true}' output.txt
+aws lambda invoke --function-name cocktail-db-prod-schema-deploy --payload "{\"RequestType\": \"Create\", \"StackId\": \"arn:aws:cloudformation:us-east-1:123456789012:stack/cocktaildb/12345678-1234-1234-1234-123456789012\", \"RequestId\": \"12345678-1234-1234-1234-123456789012\", \"LogicalResourceId\": \"SchemaDeployResource\", \"ResourceProperties\": {\"DBName\": \"cocktaildb\", \"ForceInit\": \"true\"}}" --cli-binary-format raw-in-base64-out output.txt
 ```
 
 ## Architecture

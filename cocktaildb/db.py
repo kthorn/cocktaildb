@@ -2,6 +2,8 @@ import json
 import logging
 import os
 import sqlite3
+import time
+import functools
 from typing import Dict, List, Optional, Any, Union, Tuple, cast
 
 # Configure logging
@@ -13,6 +15,43 @@ db_path = "/mnt/efs/cocktaildb.db"
 
 # Global metadata cache to prevent repeated reflection
 _METADATA_INITIALIZED = False
+
+
+def retry_on_db_locked(max_retries=3, initial_backoff=0.1):
+    """Decorator to retry operations when database is locked"""
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_error = None
+            backoff = initial_backoff
+
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except sqlite3.OperationalError as e:
+                    if "database is locked" in str(e):
+                        last_error = e
+                        logger.warning(
+                            f"Database locked on attempt {attempt + 1}/{max_retries}. "
+                            f"Retrying in {backoff:.2f}s..."
+                        )
+                        time.sleep(backoff)
+                        backoff *= 2  # Exponential backoff
+                    else:
+                        # Other SQLite operational error, don't retry
+                        raise
+
+            logger.error(
+                f"Database still locked after {max_retries} attempts: {str(last_error)}"
+            )
+            raise last_error or sqlite3.OperationalError(
+                "Database still locked after multiple attempts"
+            )
+
+        return wrapper
+
+    return decorator
 
 
 class Database:
@@ -70,10 +109,25 @@ class Database:
 
     def _get_connection(self):
         """Get a SQLite connection with proper settings"""
-        conn = sqlite3.connect(self.db_path)
+        # Set longer timeout for waiting on locks (30 seconds)
+        conn = sqlite3.connect(
+            self.db_path,
+            timeout=10.0,  # Wait up to 10 seconds for the lock
+            isolation_level=None,  # Enable autocommit mode, explicit transactions still work
+        )
+
+        # Set busy timeout to handle cases where the database is locked
+        conn.execute("PRAGMA busy_timeout = 10000")  # 10 seconds in milliseconds
+
+        # Optimize for concurrent access
+        conn.execute(
+            "PRAGMA journal_mode = WAL"
+        )  # Write-Ahead Logging for better concurrency
+
         conn.row_factory = sqlite3.Row  # Return rows as dictionaries
         return conn
 
+    @retry_on_db_locked()
     def execute_query(
         self, sql: str, parameters: Optional[Union[Dict[str, Any], Tuple]] = None
     ) -> Union[List[Dict[str, Any]], Dict[str, int]]:
@@ -106,11 +160,15 @@ class Database:
             if conn:
                 conn.close()
 
+    @retry_on_db_locked()
     def execute_transaction(self, queries: List[Dict[str, Any]]) -> None:
         """Execute multiple queries in a transaction"""
         conn = None
         try:
             conn = self._get_connection()
+            conn.execute(
+                "BEGIN IMMEDIATE"
+            )  # Get lock immediately instead of on first write
             cursor = conn.cursor()
 
             for query in queries:
@@ -131,6 +189,7 @@ class Database:
             if conn:
                 conn.close()
 
+    @retry_on_db_locked()
     def create_ingredient(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new ingredient"""
         try:
@@ -153,48 +212,61 @@ class Database:
                 parent_path = parent[0]["path"]
 
             # Insert the ingredient first
-            cursor = self._get_connection().cursor()
-            cursor.execute(
-                """
-                INSERT INTO ingredients (name, category, description, parent_id)
-                VALUES (:name, :category, :description, :parent_id)
-                """,
-                {
-                    "name": data.get("name"),
-                    "category": data.get("category"),
-                    "description": data.get("description"),
-                    "parent_id": data.get("parent_id"),
-                },
-            )
-            new_id = cursor.lastrowid
-            if new_id is None:
-                raise ValueError("Failed to get ingredient ID after insertion")
+            conn = None
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO ingredients (name, category, description, parent_id)
+                    VALUES (:name, :category, :description, :parent_id)
+                    """,
+                    {
+                        "name": data.get("name"),
+                        "category": data.get("category"),
+                        "description": data.get("description"),
+                        "parent_id": data.get("parent_id"),
+                    },
+                )
+                new_id = cursor.lastrowid
+                if new_id is None:
+                    raise ValueError("Failed to get ingredient ID after insertion")
 
-            # Generate the path
-            if parent_path:
-                path = f"{parent_path}{new_id}/"
-            else:
-                path = f"/{new_id}/"
+                # Generate the path
+                if parent_path:
+                    path = f"{parent_path}{new_id}/"
+                else:
+                    path = f"/{new_id}/"
 
-            # Update the path
-            self.execute_query(
-                "UPDATE ingredients SET path = :path WHERE id = :id",
-                {"path": path, "id": new_id},
-            )
+                # Update the path
+                cursor.execute(
+                    "UPDATE ingredients SET path = :path WHERE id = :id",
+                    {"path": path, "id": new_id},
+                )
 
-            # Fetch the created ingredient
-            ingredient = cast(
-                List[Dict[str, Any]],
-                self.execute_query(
-                    "SELECT id, name, category, description, parent_id, path FROM ingredients WHERE id = :id",
-                    {"id": new_id},
-                ),
-            )
-            return ingredient[0]
+                conn.commit()
+
+                # Fetch the created ingredient
+                ingredient = cast(
+                    List[Dict[str, Any]],
+                    self.execute_query(
+                        "SELECT id, name, category, description, parent_id, path FROM ingredients WHERE id = :id",
+                        {"id": new_id},
+                    ),
+                )
+                return ingredient[0]
+            except Exception as e:
+                if conn:
+                    conn.rollback()
+                raise
+            finally:
+                if conn:
+                    conn.close()
         except Exception as e:
             logger.error(f"Error creating ingredient: {str(e)}")
             raise
 
+    @retry_on_db_locked()
     def update_ingredient(
         self, ingredient_id: int, data: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
@@ -314,6 +386,7 @@ class Database:
             logger.error(f"Error updating ingredient {ingredient_id}: {str(e)}")
             raise
 
+    @retry_on_db_locked()
     def delete_ingredient(self, ingredient_id: int) -> bool:
         """Delete an ingredient"""
         try:
@@ -476,12 +549,13 @@ class Database:
             )
             raise
 
+    @retry_on_db_locked()
     def create_recipe(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new recipe with its ingredients"""
         conn = None
         try:
             conn = self._get_connection()
-            conn.execute("BEGIN TRANSACTION")
+            conn.execute("BEGIN IMMEDIATE")  # Get lock immediately
             cursor = conn.cursor()
 
             # Create the recipe
@@ -521,6 +595,8 @@ class Database:
 
             # Commit the transaction
             conn.commit()
+            conn.close()
+            conn = None
 
             # Return the created recipe
             recipe = self.get_recipe(recipe_id)
