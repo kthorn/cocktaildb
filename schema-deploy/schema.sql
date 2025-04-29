@@ -8,7 +8,6 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE ingredients (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name VARCHAR(100) NOT NULL UNIQUE,
-  category VARCHAR(50),
   description TEXT,
   parent_id INTEGER,
   path VARCHAR(255),
@@ -45,3 +44,20 @@ CREATE INDEX idx_ingredients_parent_id ON ingredients(parent_id);
 CREATE INDEX idx_ingredients_path ON ingredients(path);
 CREATE INDEX idx_recipe_ingredients_recipe_id ON recipe_ingredients(recipe_id);
 CREATE INDEX idx_recipe_ingredients_ingredient_id ON recipe_ingredients(ingredient_id);
+
+-- Insert common measurement units
+INSERT INTO units (name, abbreviation) VALUES
+  ('Ounce', 'oz'),
+  ('Tablespoon', 'tbsp'),
+  ('Teaspoon', 'tsp'),
+  ('Barspoon', 'bsp'),
+  ('Dash', 'dash');
+
+-- Insert base ingredients
+INSERT INTO ingredients (name, description, path) VALUES
+  ('Whiskey', 'A spirit distilled from fermented grain mash', 'Whiskey'),
+  ('Rum', 'A spirit distilled from sugarcane byproducts', 'Rum'),
+  ('Vodka', 'A spirit distilled from fermented grains or potatoes', 'Vodka'),
+  ('Gin', 'A spirit distilled from juniper berries', 'Gin'),
+  ('Brandy', 'A spirit distilled from wine or fruit', 'Brandy'),
+  ('Juice', '', 'Juice');

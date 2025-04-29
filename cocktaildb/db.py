@@ -667,6 +667,41 @@ class Database:
         )
         return result
 
+    def generate_full_name(self, ingredient_id: int) -> str:
+        """Generate a full name for an ingredient based on its hierarchy.
+
+        The full name will be in the format: name [parent_name;parent_parent_name;...;root_name]
+
+        Args:
+            ingredient_id: The ID of the ingredient to generate the full name for
+
+        Returns:
+            str: The full name of the ingredient
+        """
+        try:
+            # Get the ingredient and its ancestors
+            ingredient = self.get_ingredient(ingredient_id)
+            if not ingredient:
+                return ""
+
+            # Start with the ingredient's name
+            full_name = ingredient["name"]
+
+            # Get all ancestors
+            ancestors = self.get_ingredient_ancestors(ingredient_id)
+
+            # If there are ancestors, add them to the full name
+            if ancestors:
+                ancestor_names = [ancestor["name"] for ancestor in ancestors]
+                full_name = f"{full_name} [{';'.join(ancestor_names)}]"
+
+            return full_name
+        except Exception as e:
+            logger.error(
+                f"Error generating full name for ingredient {ingredient_id}: {str(e)}"
+            )
+            raise
+
     def get_units(self) -> List[Dict[str, Any]]:
         """Get all measurement units"""
         try:
