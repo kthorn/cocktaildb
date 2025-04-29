@@ -77,6 +77,34 @@ if "!BUCKET_NAME!"=="" (
 
 echo Found bucket name: !BUCKET_NAME!
 
+REM Get API endpoint URL from CloudFormation outputs
+echo Getting API endpoint URL...
+set API_URL=
+set AWS_CMD=aws cloudformation describe-stacks --stack-name %STACK_NAME% --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" --output text --region %REGION%
+for /f "tokens=*" %%i in ('%AWS_CMD%') do (
+    set API_URL=%%i
+)
+
+REM Verify we got a valid API URL
+if "!API_URL!"=="" (
+    echo Warning: Could not retrieve API URL from CloudFormation outputs
+) else (
+    echo Found API URL: !API_URL!
+    
+    REM Update config.js with the current API URL
+    echo Updating config.js with current API URL...
+    (
+        echo // API Configuration
+        echo const config = {
+        echo     apiUrl: '!API_URL!'
+        echo };
+        echo.
+        echo // Export the configuration
+        echo export default config; 
+    ) > src\web\js\config.js
+    echo config.js updated successfully
+)
+
 REM Upload web content to S3 after deployment
 echo Uploading web content to S3 bucket: !BUCKET_NAME!
 aws s3 sync src\web\ s3://!BUCKET_NAME!/ --delete --region %REGION%

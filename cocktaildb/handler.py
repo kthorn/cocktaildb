@@ -55,6 +55,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     db = get_database()
 
     try:
+        # Handle OPTIONS method for CORS preflight requests
+        if http_method == "OPTIONS":
+            logger.info("Handling OPTIONS preflight request")
+            return {"statusCode": 200, "headers": CORS_HEADERS, "body": ""}
+
         # Handle ingredient endpoints
         if path.startswith("/ingredients"):
             ingredient_id = path.split("/")[-1] if len(path.split("/")) > 2 else None
