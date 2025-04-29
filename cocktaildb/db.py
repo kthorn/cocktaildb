@@ -8,6 +8,8 @@ from typing import Dict, List, Optional, Any, Union, Tuple, cast
 logger = logging.getLogger()
 logger.setLevel(logging.WARNING)
 
+db_path = "/mnt/efs/cocktaildb.db"
+
 
 # Global metadata cache to prevent repeated reflection
 _METADATA_INITIALIZED = False
@@ -18,13 +20,7 @@ class Database:
         """Initialize the database connection to SQLite on EFS"""
         logger.info("Initializing Database class with SQLite on EFS")
         try:
-            # Get the EFS mount path from environment variable
-            self.efs_path = os.environ.get("EFS_MOUNT_PATH", "/mnt/efs")
-            self.db_name = os.environ.get("DB_NAME", "cocktaildb.db")
-            self.db_path = os.path.join(self.efs_path, self.db_name)
-
-            # Ensure EFS directory exists
-            os.makedirs(self.efs_path, exist_ok=True)
+            self.db_path = db_path
 
             # Test the connection
             self._test_connection()
@@ -44,9 +40,14 @@ class Database:
 
         while retry_count < max_retries:
             try:
-                self.execute_query("SELECT 1")
-                logger.info("Successfully connected to database")
-                return
+                # Actually open the connection to ensure database exists
+                conn = self._get_connection()
+                try:
+                    conn.execute("SELECT * from ingredients limit 1")
+                    logger.info("Successfully connected to database")
+                    return
+                finally:
+                    conn.close()
             except Exception as e:
                 last_error = e
                 retry_count += 1
@@ -152,7 +153,8 @@ class Database:
                 parent_path = parent[0]["path"]
 
             # Insert the ingredient first
-            self.execute_query(
+            cursor = self._get_connection().cursor()
+            cursor.execute(
                 """
                 INSERT INTO ingredients (name, category, description, parent_id)
                 VALUES (:name, :category, :description, :parent_id)
@@ -164,13 +166,9 @@ class Database:
                     "parent_id": data.get("parent_id"),
                 },
             )
-
-            # Get the last inserted ID
-            id_result = cast(
-                List[Dict[str, Any]],
-                self.execute_query("SELECT last_insert_rowid() as id"),
-            )
-            new_id = id_result[0]["id"]
+            new_id = cursor.lastrowid
+            if new_id is None:
+                raise ValueError("Failed to get ingredient ID after insertion")
 
             # Generate the path
             if parent_path:

@@ -27,7 +27,7 @@ def get_database():
     current_time = time.time()
 
     # If DB instance exists and is less than 5 minutes old, reuse it
-    if _DB_INSTANCE is not None and current_time - _DB_INIT_TIME < 300:
+    if _DB_INSTANCE is not None and current_time - _DB_INIT_TIME < 5:
         logger.info(
             f"Reusing existing database connection (age: {current_time - _DB_INIT_TIME:.2f}s)"
         )
