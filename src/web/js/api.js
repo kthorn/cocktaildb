@@ -41,6 +41,9 @@ class CocktailAPI {
     }
 
     async createIngredient(ingredientData) {
+        if (!this.isAuthenticated()) {
+            throw new Error('Authentication required. Please log in to create ingredients.');
+        }
         const response = await fetch(
             `${this.baseUrl}/ingredients`,
             this.getFetchOptions('POST', ingredientData)
@@ -49,6 +52,9 @@ class CocktailAPI {
     }
 
     async updateIngredient(id, ingredientData) {
+        if (!this.isAuthenticated()) {
+            throw new Error('Authentication required. Please log in to update ingredients.');
+        }
         const response = await fetch(
             `${this.baseUrl}/ingredients/${id}`,
             this.getFetchOptions('PUT', ingredientData)
@@ -57,6 +63,9 @@ class CocktailAPI {
     }
 
     async deleteIngredient(id) {
+        if (!this.isAuthenticated()) {
+            throw new Error('Authentication required. Please log in to delete ingredients.');
+        }
         const response = await fetch(
             `${this.baseUrl}/ingredients/${id}`,
             this.getFetchOptions('DELETE')

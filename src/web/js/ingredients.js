@@ -2,6 +2,12 @@ import { api } from './api.js';
 
 // Define these functions in the global scope so they can be accessed from HTML
 window.editIngredient = async function(id) {
+    // Check authentication first
+    if (!api.isAuthenticated()) {
+        alert('Please log in to edit ingredients.');
+        return;
+    }
+
     const form = document.getElementById('ingredient-form');
     if (!form) {
         console.error('Ingredient form not found');
@@ -42,6 +48,12 @@ window.editIngredient = async function(id) {
 };
 
 window.deleteIngredient = async function(id) {
+    // Check authentication first
+    if (!api.isAuthenticated()) {
+        alert('Please log in to delete ingredients.');
+        return;
+    }
+
     if (!confirm('Are you sure you want to delete this ingredient?')) {
         return;
     }
@@ -151,6 +163,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Handle form submission
     ingredientForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+
+        // Check authentication first
+        if (!api.isAuthenticated()) {
+            alert('Please log in to create or edit ingredients.');
+            return;
+        }
 
         const name = document.getElementById('ingredient-name').value;
         const description = document.getElementById('ingredient-description').value;
