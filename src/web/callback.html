@@ -21,53 +21,19 @@
             try {
                 // Get the tokens from the URL hash
                 const params = parseHashParams();
-                console.log('Parsed parameters:', params);
-                
                 if (params.access_token) {
                     // Store tokens in localStorage
                     localStorage.setItem('token', params.access_token);
-                    console.log('Access token stored in localStorage', params.access_token);
-                    
                     if (params.id_token) {
                         localStorage.setItem('id_token', params.id_token);
-                        console.log('ID token stored in localStorage');
-                        
                         // Parse the ID token to get user info
                         const payloadBase64 = params.id_token.split('.')[1];
-                        const payload = JSON.parse(atob(payloadBase64));
-                        console.log('ID token payload:', payload);
-                        
-                        // Check token expiry and log it for debugging
-                        if (payload.exp) {
-                            const expDate = new Date(payload.exp * 1000);
-                            const isExpired = payload.exp * 1000 < Date.now();
-                            console.log(`ID token expires: ${expDate}, isExpired: ${isExpired}`);
-                        }
-                        
+                        const payload = JSON.parse(atob(payloadBase64));                       
                         // Store username (preferred_username or email or sub)
                         const username = payload.preferred_username || payload.email || payload.sub;
                         localStorage.setItem('username', username);
-                        console.log('Username stored:', username);
-                    }
-                    
-                    // Also log access token info
-                    try {
-                        const accessPayloadBase64 = params.access_token.split('.')[1];
-                        const accessPayload = JSON.parse(atob(accessPayloadBase64));
-                        console.log('Access token payload:', accessPayload);
-                        
-                        // Check token expiry and log it for debugging
-                        if (accessPayload.exp) {
-                            const expDate = new Date(accessPayload.exp * 1000);
-                            const isExpired = accessPayload.exp * 1000 < Date.now();
-                            console.log(`Access token expires: ${expDate}, isExpired: ${isExpired}`);
-                        }
-                    } catch (error) {
-                        console.error('Error parsing access token:', error);
-                    }
-                    
+                    }                   
                     document.getElementById('status').textContent = 'Login successful. Redirecting...';
-                    
                     // Redirect back to the main page
                     setTimeout(() => {
                         window.location.href = 'index.html';

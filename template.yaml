@@ -579,9 +579,9 @@ Resources:
       SupportedIdentityProviders:
         - COGNITO
       CallbackURLs:
-        - !Sub https://${CloudFrontDistribution.DomainName}/callback
+        - !Sub https://${CloudFrontDistribution.DomainName}/callback.html
       LogoutURLs:
-        - !Sub https://${CloudFrontDistribution.DomainName}/logout
+        - !Sub https://${CloudFrontDistribution.DomainName}/logout.html
       AllowedOAuthFlows:
         - code
         - implicit
@@ -599,9 +599,31 @@ Resources:
       Domain: !Sub ${AWS::StackName}-auth
       UserPoolId: !Ref CognitoUserPool
 
+  # IAM Role for API Gateway CloudWatch Logging
+  ApiGatewayCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+
+  # Configure API Gateway Account to use the logging role
+  ApiGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
+
   # API Gateway for backend endpoints - Create API after Lambda functions
   CocktailAPI:
     Type: AWS::Serverless::Api
+    DependsOn: # Ensure the account role is configured before the API/Stage is created
+      - ApiGatewayAccount
     Properties:
       Name: !Sub ${AWS::StackName}-api
       StageName: api
@@ -614,6 +636,14 @@ Resources:
           CognitoAuthorizer:
             UserPoolArn: !GetAtt CognitoUserPool.Arn
         AddDefaultAuthorizerToCorsPreflight: false
+      # --- Add MethodSettings for Stage Logging ---
+      MethodSettings:
+        - ResourcePath: '/*' # Apply to all paths
+          HttpMethod: '*'    # Apply to all methods
+          LoggingLevel: INFO # Options: OFF, ERROR, INFO
+          DataTraceEnabled: true # Log full request/response data
+          MetricsEnabled: true # Enable CloudWatch Metrics
+      # ------------------------------------------
       GatewayResponses:
         DEFAULT_4XX:
           ResponseParameters:

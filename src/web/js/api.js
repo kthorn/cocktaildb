@@ -29,22 +29,12 @@ class CocktailAPI {
         const idToken = localStorage.getItem('id_token');
         if (idToken) {
             options.headers['Authorization'] = `Bearer ${idToken}`;
-            console.log(`Using ID token (Bearer) for ${method} request`);
-        } else {
-            console.warn('No ID token found in localStorage for Authorization header');
-            // Optionally, attempt access token as a fallback if ID token is missing
-            // const accessToken = localStorage.getItem('token');
-            // if (accessToken) {
-            //     options.headers['Authorization'] = `Bearer ${accessToken}`;
-            //     console.warn('Falling back to Access token as ID token was missing');
-            // }
         }
 
         if (body) {
             options.body = JSON.stringify(body);
         }
 
-        // console.log('Fetch options:', JSON.stringify(options)); // Keep this commented unless debugging
         return options;
     }
 

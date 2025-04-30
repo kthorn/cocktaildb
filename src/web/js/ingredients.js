@@ -80,7 +80,6 @@ window.loadIngredients = async function() {
         if (searchStatus) searchStatus.classList.add('active');
         
         window.availableIngredients = await api.getIngredients();
-        console.log('Loaded ingredients:', window.availableIngredients);
         
         // Call displayIngredients if it exists in window or current scope
         if (typeof window.displayIngredients === 'function') {
