@@ -72,18 +72,51 @@ for /f "tokens=*" %%i in ('%AWS_CMD%') do (
     set API_URL=%%i
 )
 
+REM Get Cognito User Pool ID
+echo Getting Cognito User Pool ID...
+set USER_POOL_ID=
+set AWS_CMD=aws cloudformation describe-stacks --stack-name %STACK_NAME% --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --region %REGION%
+for /f "tokens=*" %%i in ('%AWS_CMD%') do (
+    set USER_POOL_ID=%%i
+)
+
+REM Get Cognito User Pool Client ID
+echo Getting Cognito User Pool Client ID...
+set CLIENT_ID=
+set AWS_CMD=aws cloudformation describe-stacks --stack-name %STACK_NAME% --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text --region %REGION%
+for /f "tokens=*" %%i in ('%AWS_CMD%') do (
+    set CLIENT_ID=%%i
+)
+
+REM Get Cognito Domain URL
+echo Getting Cognito Domain URL...
+set COGNITO_DOMAIN=
+set AWS_CMD=aws cloudformation describe-stacks --stack-name %STACK_NAME% --query "Stacks[0].Outputs[?OutputKey=='CognitoDomainURL'].OutputValue" --output text --region %REGION%
+for /f "tokens=*" %%i in ('%AWS_CMD%') do (
+    set COGNITO_DOMAIN=%%i
+)
+
 REM Verify we got a valid API URL
 if "!API_URL!"=="" (
     echo Warning: Could not retrieve API URL from CloudFormation outputs
 ) else (
     echo Found API URL: !API_URL!
     
-    REM Update config.js with the current API URL
-    echo Updating config.js with current API URL...
+    REM Update config.js with the current API URL and Cognito information
+    echo Updating config.js with current API URL and Cognito information...
     (
-        echo // API Configuration
+        echo // Configuration for the Cocktail Database application
         echo const config = {
-        echo     apiUrl: '!API_URL!'
+        echo     // API endpoint
+        echo     apiUrl: '!API_URL!',
+        echo.
+        echo     // Cognito configuration
+        echo     userPoolId: '!USER_POOL_ID!',
+        echo     clientId: '!CLIENT_ID!',
+        echo     cognitoDomain: '!COGNITO_DOMAIN!',
+        echo.
+        echo     // General settings
+        echo     appName: 'Cocktail Database'
         echo };
         echo.
         echo // Export the configuration

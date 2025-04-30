@@ -1,4 +1,5 @@
 import { api } from './api.js';
+import { initAuth } from './auth.js';
 
 // Define these functions in the global scope so they can be accessed from HTML
 window.editIngredient = async function(id) {
@@ -143,6 +144,9 @@ function showNotification(message, type = 'info') {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize authentication
+    initAuth();
+    
     const ingredientForm = document.getElementById('ingredient-form');
     const ingredientsContainer = document.getElementById('ingredients-container');
     const searchInput = document.getElementById('ingredient-search');

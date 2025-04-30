@@ -1,11 +1,341 @@
 import { api } from './api.js';
+import { initAuth, isAuthenticated } from './auth.js';
+import config from './config.js';
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize authentication
+    initAuth();
+    
     const recipeForm = document.getElementById('recipe-form');
     const recipesContainer = document.getElementById('recipes-container');
     const searchInput = document.getElementById('recipe-search');
     const addIngredientBtn = document.getElementById('add-ingredient');
     const ingredientsList = document.getElementById('ingredients-list');
+
+    // Add debug button
+    const debugSection = document.createElement('div');
+    debugSection.innerHTML = `
+        <div style="margin-top: 20px; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+            <h4>Debug Tools</h4>
+            <div>
+                <button id="check-token-btn">Check Authentication Token</button>
+                <button id="test-api-btn" style="margin-left: 10px;">Test API Request</button>
+                <button id="validate-token-btn" style="margin-left: 10px;">Validate Token Parameters</button>
+                <button id="test-post-btn" style="margin-left: 10px;">Test POST Request</button>
+                <button id="test-auth-btn" style="margin-left: 10px;">Test Auth Endpoint</button>
+            </div>
+            <div style="margin-top: 10px;">
+                <button id="force-logout-btn">Force Logout & Re-Login</button>
+            </div>
+            <div id="token-info" style="margin-top: 10px; font-family: monospace; white-space: pre-wrap; word-break: break-all;"></div>
+        </div>
+    `;
+    document.querySelector('main').appendChild(debugSection);
+
+    // Add event listener for the debug button
+    document.getElementById('check-token-btn').addEventListener('click', () => {
+        const tokenInfo = document.getElementById('token-info');
+        const token = localStorage.getItem('token');
+        
+        if (!token) {
+            tokenInfo.innerHTML = 'No token found in localStorage';
+            return;
+        }
+        
+        try {
+            // For JWT tokens, try to decode and check expiration
+            const parts = token.split('.');
+            if (parts.length === 3) {
+                // It's likely a JWT token
+                const payload = JSON.parse(atob(parts[1]));
+                const expDate = payload.exp ? new Date(payload.exp * 1000) : 'Not found';
+                const isExpired = payload.exp ? (payload.exp * 1000 < Date.now()) : 'Unknown';
+                
+                tokenInfo.innerHTML = `Token found!\nType: JWT\nExpires: ${expDate}\nExpired: ${isExpired}\n\nPayload: ${JSON.stringify(payload, null, 2)}`;
+            } else {
+                // Not a JWT token or can't be parsed
+                tokenInfo.innerHTML = `Token found, but not a standard JWT format:\n${token}`;
+            }
+        } catch (error) {
+            tokenInfo.innerHTML = `Token found, but error parsing it: ${error.message}\n${token}`;
+        }
+    });
+
+    // Add test API request button
+    document.getElementById('test-api-btn').addEventListener('click', async () => {
+        const tokenInfo = document.getElementById('token-info');
+        tokenInfo.innerHTML = 'Testing API request with different auth methods...';
+        
+        const token = localStorage.getItem('token');
+        if (!token) {
+            tokenInfo.innerHTML = 'No token found to test with';
+            return;
+        }
+        
+        // Try multiple authentication methods
+        const results = [];
+        const authMethods = [
+            { name: "No auth", headers: {} },
+            { name: "Bearer token", headers: { 'Authorization': `Bearer ${token}` } },
+            { name: "Raw token", headers: { 'Authorization': token } },
+            { name: "ID token instead", headers: { 'Authorization': `Bearer ${localStorage.getItem('id_token') || 'not-found'}` } }
+        ];
+        
+        for (const method of authMethods) {
+            try {
+                // Make a simple API request with the specific auth method
+                const options = {
+                    method: 'GET',
+                    mode: 'cors',
+                    credentials: 'omit',  // Must be 'omit' for a server with wildcard CORS origin
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...method.headers
+                    }
+                };
+                
+                const response = await fetch(`${config.apiUrl}/recipes`, options);
+                let responseText = '';
+                
+                try {
+                    const responseData = await response.json();
+                    responseText = JSON.stringify(responseData).substring(0, 200) + 
+                        (JSON.stringify(responseData).length > 200 ? '...' : '');
+                } catch (e) {
+                    responseText = 'Could not parse JSON response';
+                }
+                
+                results.push(`Method: ${method.name}
+Status: ${response.status}
+Response: ${responseText}`);
+            } catch (error) {
+                results.push(`Method: ${method.name}
+Error: ${error.message}`);
+            }
+        }
+        
+        tokenInfo.innerHTML = `API Test Results:\n\n${results.join('\n\n')}`;
+    });
+
+    // Add token validation button
+    document.getElementById('validate-token-btn').addEventListener('click', () => {
+        const tokenInfo = document.getElementById('token-info');
+        const token = localStorage.getItem('token');
+        
+        if (!token) {
+            tokenInfo.innerHTML = 'No token found in localStorage';
+            return;
+        }
+        
+        try {
+            // Parse the token
+            const parts = token.split('.');
+            if (parts.length !== 3) {
+                tokenInfo.innerHTML = 'Token is not a valid JWT format (need 3 parts)';
+                return;
+            }
+            
+            const payload = JSON.parse(atob(parts[1]));
+            
+            // Validate against expected Cognito parameters
+            const errors = [];
+            const warnings = [];
+            
+            // Check expiration
+            if (payload.exp) {
+                const expTime = payload.exp * 1000;
+                const now = Date.now();
+                const expDate = new Date(expTime);
+                
+                if (expTime < now) {
+                    errors.push(`TOKEN EXPIRED: Expired on ${expDate}`);
+                } else {
+                    const minutesLeft = Math.round((expTime - now) / (60 * 1000));
+                    if (minutesLeft < 30) {
+                        warnings.push(`Token expires soon: ${minutesLeft} minutes left`);
+                    }
+                }
+            } else {
+                warnings.push('Token has no expiration claim');
+            }
+            
+            // Check issuer
+            const expectedIssuer = `https://cognito-idp.${config.region || 'us-east-1'}.amazonaws.com/${config.userPoolId}`;
+            if (payload.iss !== expectedIssuer) {
+                errors.push(`Issuer mismatch: Got "${payload.iss}", expected "${expectedIssuer}"`);
+            }
+            
+            // Check client ID
+            if (payload.client_id && payload.client_id !== config.clientId) {
+                errors.push(`Client ID mismatch: Got "${payload.client_id}", expected "${config.clientId}"`);
+            }
+            if (payload.aud && payload.aud !== config.clientId) {
+                errors.push(`Audience mismatch: Got "${payload.aud}", expected "${config.clientId}"`);
+            }
+            
+            // Build results
+            let results = `Token validation results:\n\n`;
+            if (errors.length > 0) {
+                results += `ERRORS (${errors.length}):\n${errors.map(e => `- ${e}`).join('\n')}\n\n`;
+            }
+            if (warnings.length > 0) {
+                results += `WARNINGS (${warnings.length}):\n${warnings.map(w => `- ${w}`).join('\n')}\n\n`;
+            }
+            
+            if (errors.length === 0 && warnings.length === 0) {
+                results += `✅ Token appears valid based on basic checks\n\n`;
+            }
+            
+            results += `Token payload:\n${JSON.stringify(payload, null, 2)}`;
+            tokenInfo.innerHTML = results;
+            
+        } catch (error) {
+            tokenInfo.innerHTML = `Error validating token: ${error.message}`;
+        }
+    });
+
+    // Add event listener for the POST test button
+    document.getElementById('test-post-btn').addEventListener('click', async () => {
+        const tokenInfo = document.getElementById('token-info');
+        tokenInfo.innerHTML = 'Testing POST request...';
+        
+        const token = localStorage.getItem('token');
+        if (!token) {
+            tokenInfo.innerHTML = 'No token found to test with';
+            return;
+        }
+        
+        // Try multiple authentication methods for POST
+        const results = [];
+        const authMethods = [
+            { name: "Bearer token", headers: { 'Authorization': `Bearer ${token}` } },
+            { name: "Bearer ID token", headers: { 'Authorization': `Bearer ${localStorage.getItem('id_token') || 'not-found'}` } }
+        ];
+        
+        // Create a very simple recipe for testing
+        const testRecipe = {
+            name: "Test Recipe " + new Date().toISOString(),
+            description: "Test recipe created via debug tool",
+            instructions: "This is a test",
+            ingredients: []
+        };
+        
+        for (const method of authMethods) {
+            try {
+                // Make a POST request with the specific auth method
+                const options = {
+                    method: 'POST',
+                    mode: 'cors',
+                    credentials: 'omit',  // Must be 'omit' for a server with wildcard CORS origin
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...method.headers
+                    },
+                    body: JSON.stringify(testRecipe)
+                };
+                
+                // Show the exact request being sent
+                console.log(`Testing POST with ${method.name}:`, options);
+                
+                const response = await fetch(`${config.apiUrl}/recipes`, options);
+                let responseText = '';
+                let statusText = `${response.status} ${response.statusText}`;
+                
+                try {
+                    const responseData = await response.json();
+                    responseText = JSON.stringify(responseData).substring(0, 200) + 
+                        (JSON.stringify(responseData).length > 200 ? '...' : '');
+                } catch (e) {
+                    responseText = 'Could not parse JSON response';
+                }
+                
+                results.push(`Method: ${method.name}
+Status: ${statusText}
+Response: ${responseText}`);
+            } catch (error) {
+                results.push(`Method: ${method.name}
+Error: ${error.message}`);
+            }
+        }
+        
+        tokenInfo.innerHTML = `POST Test Results:\n\n${results.join('\n\n')}`;
+    });
+
+    // Add a test for auth endpoint
+    document.getElementById('test-auth-btn').addEventListener('click', async () => {
+        const tokenInfo = document.getElementById('token-info');
+        tokenInfo.innerHTML = 'Testing Auth endpoint...';
+        
+        try {
+            // Test with ID token
+            const idToken = localStorage.getItem('id_token');
+            const accessToken = localStorage.getItem('token');
+            
+            const results = [];
+            
+            // Test with ID token
+            if (idToken) {
+                try {
+                    const options = {
+                        method: 'GET',
+                        mode: 'cors',
+                        credentials: 'omit',
+                        headers: {
+                            'Authorization': `Bearer ${idToken}`
+                        }
+                    };
+                    
+                    const response = await fetch(`${config.apiUrl}/auth`, options);
+                    const data = await response.json();
+                    
+                    results.push(`ID Token Test:
+Status: ${response.status}
+Response: ${JSON.stringify(data)}`);
+                } catch (error) {
+                    results.push(`ID Token Test Error: ${error.message}`);
+                }
+            }
+            
+            // Test with access token
+            if (accessToken) {
+                try {
+                    const options = {
+                        method: 'GET',
+                        mode: 'cors',
+                        credentials: 'omit',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`
+                        }
+                    };
+                    
+                    const response = await fetch(`${config.apiUrl}/auth`, options);
+                    const data = await response.json();
+                    
+                    results.push(`Access Token Test:
+Status: ${response.status}
+Response: ${JSON.stringify(data)}`);
+                } catch (error) {
+                    results.push(`Access Token Test Error: ${error.message}`);
+                }
+            }
+            
+            tokenInfo.innerHTML = `Auth Endpoint Test Results:\n\n${results.join('\n\n')}`;
+            
+        } catch (error) {
+            tokenInfo.innerHTML = `Auth Test Error: ${error.message}`;
+        }
+    });
+
+    // Force logout and re-login button
+    document.getElementById('force-logout-btn').addEventListener('click', () => {
+        // Clear token from localStorage
+        localStorage.removeItem('token');
+        localStorage.removeItem('id_token');
+        localStorage.removeItem('username');
+        
+        // Redirect to login immediately
+        window.location.href = `${config.cognitoDomain}/login?client_id=${config.clientId}&response_type=token&scope=email+openid+profile&redirect_uri=${encodeURIComponent(window.location.origin + '/callback.html')}`;
+    });
 
     if (!recipeForm || !recipesContainer || !searchInput || !addIngredientBtn || !ingredientsList) {
         console.error('Required elements not found in the DOM');
@@ -36,7 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
 
         // Check authentication first
-        if (!api.isAuthenticated()) {
+        if (!isAuthenticated()) {
             alert('Please log in to create or edit recipes.');
             return;
         }
@@ -380,7 +710,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // Edit recipe
 async function editRecipe(id) {
     // Check authentication first
-    if (!api.isAuthenticated()) {
+    if (!isAuthenticated()) {
         alert('Please log in to edit recipes.');
         return;
     }
@@ -441,7 +771,7 @@ async function editRecipe(id) {
 // Delete recipe
 async function deleteRecipe(id) {
     // Check authentication first
-    if (!api.isAuthenticated()) {
+    if (!isAuthenticated()) {
         alert('Please log in to delete recipes.');
         return;
     }

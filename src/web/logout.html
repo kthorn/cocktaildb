@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Logging out...</title>
+        <link rel="stylesheet" href="styles.css">
+        <script type="module">
+        document.addEventListener('DOMContentLoaded', () => {
+            // Clear all auth-related data from localStorage
+            localStorage.removeItem('token');
+            localStorage.removeItem('id_token');
+            localStorage.removeItem('username');
+            
+            document.getElementById('status').textContent = 'Logout successful. Redirecting...';
+            
+            // Redirect back to the main page
+            setTimeout(() => {
+                window.location.href = 'index.html';
+            }, 1500);
+        });
+    </script>
+    </head>
+    <body>
+        <div id="container" class="login-callback">
+            <h1>Logging Out</h1>
+            <p id="status">Processing logout...</p>
+        </div>
+    </body>
+</html>

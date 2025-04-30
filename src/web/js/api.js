@@ -1,4 +1,5 @@
 import config from './config.js';
+import { isAuthenticated } from './auth.js';
 
 class CocktailAPI {
     constructor(baseUrl = '') {
@@ -18,14 +19,32 @@ class CocktailAPI {
         const options = {
             method,
             mode: 'cors',
-            credentials: 'omit',
+            credentials: 'omit',  // Must be 'omit' for a server with wildcard CORS origin
             headers: {
                 'Content-Type': 'application/json',
             },
         };
+
+        // Always use the ID Token - API Gateway Authorizer expects this
+        const idToken = localStorage.getItem('id_token');
+        if (idToken) {
+            options.headers['Authorization'] = `Bearer ${idToken}`;
+            console.log(`Using ID token (Bearer) for ${method} request`);
+        } else {
+            console.warn('No ID token found in localStorage for Authorization header');
+            // Optionally, attempt access token as a fallback if ID token is missing
+            // const accessToken = localStorage.getItem('token');
+            // if (accessToken) {
+            //     options.headers['Authorization'] = `Bearer ${accessToken}`;
+            //     console.warn('Falling back to Access token as ID token was missing');
+            // }
+        }
+
         if (body) {
             options.body = JSON.stringify(body);
         }
+
+        // console.log('Fetch options:', JSON.stringify(options)); // Keep this commented unless debugging
         return options;
     }
 
@@ -41,9 +60,16 @@ class CocktailAPI {
     }
 
     async createIngredient(ingredientData) {
-        if (!this.isAuthenticated()) {
+        if (!isAuthenticated()) {
             throw new Error('Authentication required. Please log in to create ingredients.');
         }
+        
+        // Ensure we have a valid token
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('No authentication token found. Please log in again.');
+        }
+        
         const response = await fetch(
             `${this.baseUrl}/ingredients`,
             this.getFetchOptions('POST', ingredientData)
@@ -52,9 +78,16 @@ class CocktailAPI {
     }
 
     async updateIngredient(id, ingredientData) {
-        if (!this.isAuthenticated()) {
+        if (!isAuthenticated()) {
             throw new Error('Authentication required. Please log in to update ingredients.');
         }
+        
+        // Ensure we have a valid token
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('No authentication token found. Please log in again.');
+        }
+        
         const response = await fetch(
             `${this.baseUrl}/ingredients/${id}`,
             this.getFetchOptions('PUT', ingredientData)
@@ -63,9 +96,16 @@ class CocktailAPI {
     }
 
     async deleteIngredient(id) {
-        if (!this.isAuthenticated()) {
+        if (!isAuthenticated()) {
             throw new Error('Authentication required. Please log in to delete ingredients.');
         }
+        
+        // Ensure we have a valid token
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('No authentication token found. Please log in again.');
+        }
+        
         const response = await fetch(
             `${this.baseUrl}/ingredients/${id}`,
             this.getFetchOptions('DELETE')
@@ -85,9 +125,16 @@ class CocktailAPI {
     }
 
     async createRecipe(recipeData) {
-        if (!this.isAuthenticated()) {
+        if (!isAuthenticated()) {
             throw new Error('Authentication required. Please log in to create recipes.');
         }
+        
+        // Ensure we have a valid token
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('No authentication token found. Please log in again.');
+        }
+        
         const response = await fetch(
             `${this.baseUrl}/recipes`,
             this.getFetchOptions('POST', recipeData)
@@ -96,9 +143,16 @@ class CocktailAPI {
     }
 
     async updateRecipe(id, recipeData) {
-        if (!this.isAuthenticated()) {
+        if (!isAuthenticated()) {
             throw new Error('Authentication required. Please log in to update recipes.');
         }
+        
+        // Ensure we have a valid token
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('No authentication token found. Please log in again.');
+        }
+        
         const response = await fetch(
             `${this.baseUrl}/recipes/${id}`,
             this.getFetchOptions('PUT', recipeData)
@@ -107,9 +161,16 @@ class CocktailAPI {
     }
 
     async deleteRecipe(id) {
-        if (!this.isAuthenticated()) {
+        if (!isAuthenticated()) {
             throw new Error('Authentication required. Please log in to delete recipes.');
         }
+        
+        // Ensure we have a valid token
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('No authentication token found. Please log in again.');
+        }
+        
         const response = await fetch(
             `${this.baseUrl}/recipes/${id}`,
             this.getFetchOptions('DELETE')
@@ -141,7 +202,7 @@ class CocktailAPI {
 
     // Helper to check if user is authenticated
     isAuthenticated() {
-        return localStorage.getItem('token') !== null;
+        return isAuthenticated();
     }
 }
 

@@ -1,55 +1,65 @@
 <!DOCTYPE html>
 <html lang="en">
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cocktail Database</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="shortcut icon" href="/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <meta name="apple-mobile-web-app-title" content="CocktailDB" />
-    <link rel="manifest" href="/site.webmanifest" />
-</head>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Cocktail Database</title>
+        <link rel="stylesheet" href="styles.css">
+        <link rel="icon" type="image/png" href="/favicon-96x96.png"
+            sizes="96x96" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180"
+            href="/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-title" content="CocktailDB" />
+        <link rel="manifest" href="/site.webmanifest" />
+    </head>
 
-<body>
-    <header>
-        <h1>Cocktail Database</h1>
-        <nav>
-            <ul>
-                <li><a href="index.html">Home</a></li>
-                <li><a href="ingredients.html">Ingredients</a></li>
-                <li><a href="recipes.html">Recipes</a></li>
-            </ul>
-        </nav>
-    </header>
+    <body>
+        <header>
+            <h1>Cocktail Database</h1>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="ingredients.html">Ingredients</a></li>
+                    <li><a href="recipes.html">Recipes</a></li>
+                </ul>
+                <div class="auth-controls">
+                    <span id="user-info" class="hidden">
+                        <span id="username">Not logged in</span>
+                        <button id="logout-btn">Logout</button>
+                    </span>
+                    <button id="login-btn">Login</button>
+                </div>
+            </nav>
+        </header>
 
-    <main>
-        <section class="welcome">
-            <h2>Welcome to the Cocktail Database</h2>
-            <p>Manage your cocktail ingredients and recipes in one place.</p>
-        </section>
+        <main>
+            <section class="welcome">
+                <h2>Welcome to the Cocktail Database</h2>
+                <p>Manage your cocktail ingredients and recipes in one
+                    place.</p>
+            </section>
 
-        <section class="quick-stats">
-            <div class="stat-card">
-                <h3>Total Ingredients</h3>
-                <p id="total-ingredients">Loading...</p>
-            </div>
-            <div class="stat-card">
-                <h3>Total Recipes</h3>
-                <p id="total-recipes">Loading...</p>
-            </div>
-        </section>
-    </main>
+            <section class="quick-stats">
+                <div class="stat-card">
+                    <h3>Total Ingredients</h3>
+                    <p id="total-ingredients">Loading...</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Total Recipes</h3>
+                    <p id="total-recipes">Loading...</p>
+                </div>
+            </section>
+        </main>
 
-    <footer>
-        <p>&copy; 2025 Kurt Thorn</p>
-    </footer>
+        <footer>
+            <p>&copy; 2025 Kurt Thorn</p>
+        </footer>
 
-    <script type="module" src="js/api.js"></script>
-    <script type="module" src="js/index.js"></script>
-</body>
+        <script type="module" src="js/api.js"></script>
+        <script type="module" src="js/index.js"></script>
+    </body>
 
 </html>

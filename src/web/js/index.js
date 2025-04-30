@@ -1,9 +1,13 @@
 import { api } from './api.js';
+import { initAuth } from './auth.js';
 
 // Wait for the DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', () => {
     // Fetch and display statistics
     fetchStatistics();
+    
+    // Initialize authentication UI
+    initAuth();
 });
 
 async function fetchStatistics() {

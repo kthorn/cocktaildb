@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Logging in...</title>
+        <link rel="stylesheet" href="styles.css">
+        <script type="module">
+        // Parse the URL hash fragment
+        function parseHashParams() {
+            const hash = window.location.hash.substring(1);
+            console.log('Raw hash:', hash);
+            return hash.split('&').reduce((params, param) => {
+                const [key, value] = param.split('=');
+                params[key] = decodeURIComponent(value);
+                return params;
+            }, {});
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                // Get the tokens from the URL hash
+                const params = parseHashParams();
+                console.log('Parsed parameters:', params);
+                
+                if (params.access_token) {
+                    // Store tokens in localStorage
+                    localStorage.setItem('token', params.access_token);
+                    console.log('Access token stored in localStorage', params.access_token);
+                    
+                    if (params.id_token) {
+                        localStorage.setItem('id_token', params.id_token);
+                        console.log('ID token stored in localStorage');
+                        
+                        // Parse the ID token to get user info
+                        const payloadBase64 = params.id_token.split('.')[1];
+                        const payload = JSON.parse(atob(payloadBase64));
+                        console.log('ID token payload:', payload);
+                        
+                        // Check token expiry and log it for debugging
+                        if (payload.exp) {
+                            const expDate = new Date(payload.exp * 1000);
+                            const isExpired = payload.exp * 1000 < Date.now();
+                            console.log(`ID token expires: ${expDate}, isExpired: ${isExpired}`);
+                        }
+                        
+                        // Store username (preferred_username or email or sub)
+                        const username = payload.preferred_username || payload.email || payload.sub;
+                        localStorage.setItem('username', username);
+                        console.log('Username stored:', username);
+                    }
+                    
+                    // Also log access token info
+                    try {
+                        const accessPayloadBase64 = params.access_token.split('.')[1];
+                        const accessPayload = JSON.parse(atob(accessPayloadBase64));
+                        console.log('Access token payload:', accessPayload);
+                        
+                        // Check token expiry and log it for debugging
+                        if (accessPayload.exp) {
+                            const expDate = new Date(accessPayload.exp * 1000);
+                            const isExpired = accessPayload.exp * 1000 < Date.now();
+                            console.log(`Access token expires: ${expDate}, isExpired: ${isExpired}`);
+                        }
+                    } catch (error) {
+                        console.error('Error parsing access token:', error);
+                    }
+                    
+                    document.getElementById('status').textContent = 'Login successful. Redirecting...';
+                    
+                    // Redirect back to the main page
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 1500);
+                } else {
+                    throw new Error('No access token found in the response');
+                }
+            } catch (error) {
+                console.error('Error processing authentication response:', error);
+                document.getElementById('status').textContent = 'Login failed. Please try again.';
+                
+                // Add a button to try again
+                const button = document.createElement('button');
+                button.textContent = 'Back to Home';
+                button.addEventListener('click', () => {
+                    window.location.href = 'index.html';
+                });
+                document.getElementById('container').appendChild(button);
+            }
+        });
+    </script>
+    </head>
+    <body>
+        <div id="container" class="login-callback">
+            <h1>Authentication</h1>
+            <p id="status">Processing login...</p>
+        </div>
+    </body>
+</html>

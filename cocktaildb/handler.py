@@ -3,10 +3,9 @@ import logging
 import time
 import os
 import boto3
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from db import Database
-from auth import get_user_from_event
 
 logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger()
@@ -79,57 +78,83 @@ def get_database():
     return _DB_INSTANCE
 
 
-def get_authenticated_user(event: Dict) -> Optional[Dict]:
-    """Get the authenticated user from the event, if available"""
-    if not USER_POOL_ID or not APP_CLIENT_ID:
-        logger.warning("Cognito is not configured. Authentication is disabled.")
-        return None
-
-    return get_user_from_event(event, REGION, USER_POOL_ID, APP_CLIENT_ID)
-
-
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """AWS Lambda handler for the CocktailDB API"""
     start_time = time.time()
     logger.info(f"Received event: {json.dumps(event)}")
 
-    # Get path and HTTP method
     path = event.get("path", "").rstrip("/")
     http_method = event.get("httpMethod", "")
     query_params = event.get("queryStringParameters", {}) or {}
 
-    # Handle OPTIONS method for CORS preflight requests
     if http_method == "OPTIONS":
         logger.info("Handling OPTIONS preflight request")
         return {"statusCode": 200, "headers": CORS_HEADERS, "body": ""}
 
-    # Get database connection
     db = get_database()
 
-    # For write operations, require authentication
-    requires_auth = http_method in ["POST", "PUT", "DELETE"]
+    # Determine if auth is required by the API Gateway authorizer having run
+    # (claims will be present if authorizer succeeded)
+    authorizer_claims = (
+        event.get("requestContext", {}).get("authorizer", {}).get("claims")
+    )
+    user_id = None
+    username = None
+    email = None
+    groups = []
 
-    # Authenticate user (if Cognito is configured)
-    user = get_authenticated_user(event) if requires_auth else None
-    user_id = user.get("user_id") if user else None
+    if authorizer_claims:
+        logger.info(f"Authorizer claims found: {json.dumps(authorizer_claims)}")
+        user_id = authorizer_claims.get("sub")
+        # Cognito provides username in different claims depending on token type/config
+        username = authorizer_claims.get("username") or authorizer_claims.get(
+            "cognito:username"
+        )
+        email = authorizer_claims.get("email")
+        groups = authorizer_claims.get("cognito:groups", [])
+        logger.info(
+            f"Authenticated via API Gateway Authorizer. User: {username} (ID: {user_id})"
+        )
+    else:
+        # Check if the route *should* have been protected
+        # Note: This logic might need adjustment if some POST/PUT/DELETE are public
+        is_write_operation = http_method in ["POST", "PUT", "DELETE"]
+        # The /auth endpoint also requires auth based on template.yaml
+        requires_auth_route = is_write_operation or path == "/auth"
 
-    if requires_auth:
-        logger.info(f"Authenticated user: {user_id if user else 'Anonymous'}")
-        # Check if authentication is required but user is not authenticated
-        if not user:
-            logger.warning("Authentication required but user is not authenticated")
+        if requires_auth_route:
+            # This should ideally not happen if API Gateway authorizer is configured correctly
+            logger.warning(
+                "Authorizer claims missing on a route that should be protected!"
+            )
             return {
                 "statusCode": 401,
                 "headers": CORS_HEADERS,
                 "body": json.dumps(
-                    {
-                        "authenticated": False,
-                        "message": "Authentication required for this operation",
-                    }
+                    {"error": "Unauthorized - Authorizer claims missing"}
                 ),
             }
-    else:
-        logger.info("Anonymous access allowed for this request")
+        else:
+            logger.info(
+                "Anonymous access allowed for this request (no authorizer claims found)."
+            )
+
+    # Ensure user_id is present for required routes *after* checking claims
+    is_write_operation = http_method in ["POST", "PUT", "DELETE"]
+    requires_auth_route = is_write_operation or path == "/auth"
+    if requires_auth_route and not user_id:
+        # This case covers if claims were present but 'sub' was missing (unlikely)
+        # Or if logic above determined auth was required but claims were missing
+        logger.error(
+            "Authentication required but no valid user ID found after checking authorizer context."
+        )
+        return {
+            "statusCode": 401,
+            "headers": CORS_HEADERS,
+            "body": json.dumps(
+                {"error": "Unauthorized - User ID missing after auth check"}
+            ),
+        }
 
     try:
         # Handle ingredient endpoints
@@ -341,9 +366,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Handle auth endpoint
         elif path.startswith("/auth"):
             logger.info("Handling auth request...")
-
+            # If we reached here and requires_auth_route was true, user_id must be present
             if http_method == "GET":
-                if user:
+                if user_id:
                     return {
                         "statusCode": 200,
                         "headers": CORS_HEADERS,
@@ -351,21 +376,21 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                             {
                                 "authenticated": True,
                                 "user": {
-                                    "id": user.get("user_id"),
-                                    "username": user.get("username"),
-                                    "email": user.get("email"),
-                                    "groups": user.get("groups", []),
+                                    "id": user_id,
+                                    "username": username,
+                                    "email": email,
+                                    "groups": groups,
                                 },
                             }
                         ),
                     }
                 else:
+                    # This state should theoretically not be reached due to checks above
+                    logger.error("Reached /auth GET endpoint without a valid user_id.")
                     return {
                         "statusCode": 401,
                         "headers": CORS_HEADERS,
-                        "body": json.dumps(
-                            {"authenticated": False, "message": "Not authenticated"}
-                        ),
+                        "body": json.dumps({"error": "Unauthorized - User ID missing"}),
                     }
 
         # Handle not found
