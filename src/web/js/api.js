@@ -76,6 +76,9 @@ class CocktailAPI {
     }
 
     async createRecipe(recipeData) {
+        if (!this.isAuthenticated()) {
+            throw new Error('Authentication required. Please log in to create recipes.');
+        }
         const response = await fetch(
             `${this.baseUrl}/recipes`,
             this.getFetchOptions('POST', recipeData)
@@ -84,6 +87,9 @@ class CocktailAPI {
     }
 
     async updateRecipe(id, recipeData) {
+        if (!this.isAuthenticated()) {
+            throw new Error('Authentication required. Please log in to update recipes.');
+        }
         const response = await fetch(
             `${this.baseUrl}/recipes/${id}`,
             this.getFetchOptions('PUT', recipeData)
@@ -92,6 +98,9 @@ class CocktailAPI {
     }
 
     async deleteRecipe(id) {
+        if (!this.isAuthenticated()) {
+            throw new Error('Authentication required. Please log in to delete recipes.');
+        }
         const response = await fetch(
             `${this.baseUrl}/recipes/${id}`,
             this.getFetchOptions('DELETE')
@@ -119,6 +128,11 @@ class CocktailAPI {
             this.getFetchOptions()
         );
         return this.handleResponse(response);
+    }
+
+    // Helper to check if user is authenticated
+    isAuthenticated() {
+        return localStorage.getItem('token') !== null;
     }
 }
 

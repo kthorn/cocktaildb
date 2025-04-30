@@ -35,6 +35,12 @@ document.addEventListener('DOMContentLoaded', () => {
     recipeForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
+        // Check authentication first
+        if (!api.isAuthenticated()) {
+            alert('Please log in to create or edit recipes.');
+            return;
+        }
+
         const ingredients = [];
         const ingredientInputs = ingredientsList.querySelectorAll('.ingredient-input');
 
@@ -373,6 +379,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Edit recipe
 async function editRecipe(id) {
+    // Check authentication first
+    if (!api.isAuthenticated()) {
+        alert('Please log in to edit recipes.');
+        return;
+    }
+
     const form = document.getElementById('recipe-form');
     if (!form) {
         console.error('Recipe form not found');
@@ -428,6 +440,12 @@ async function editRecipe(id) {
 
 // Delete recipe
 async function deleteRecipe(id) {
+    // Check authentication first
+    if (!api.isAuthenticated()) {
+        alert('Please log in to delete recipes.');
+        return;
+    }
+
     if (!confirm('Are you sure you want to delete this recipe?')) {
         return;
     }

@@ -8,11 +8,7 @@ Parameters:
     Default: cocktaildb
   CognitoAdvancedSecurity:
     Type: String
-    Default: OFF
-    AllowedValues:
-      - ON
-      - OFF
-      - AUDIT
+    Default: "OFF"
   UserPoolName:
     Type: String
     Default: CocktailDB-UserPool
@@ -546,31 +542,23 @@ Resources:
     Type: AWS::Cognito::UserPool
     Properties:
       UserPoolName: !Ref UserPoolName
-      UsernameAttributes:
+      AliasAttributes:
         - email
-      AutoVerifiedAttributes:
-        - email
-      MfaConfiguration: OFF
-      VerificationMessageTemplate:
-        DefaultEmailOption: CONFIRM_WITH_CODE
-      EmailVerificationMessage: "Your verification code is {####}"
-      EmailVerificationSubject: "Your CocktailDB verification code"
+        - preferred_username
+      AutoVerifiedAttributes: []
+      MfaConfiguration: "OFF"
       AdminCreateUserConfig:
-        AllowAdminCreateUserOnly: false
+        AllowAdminCreateUserOnly: true
       Policies:
         PasswordPolicy:
-          MinimumLength: 8
-          RequireLowercase: true
-          RequireNumbers: true
+          MinimumLength: 6
+          RequireLowercase: false
+          RequireNumbers: false
           RequireSymbols: false
-          RequireUppercase: true
+          RequireUppercase: false
       UserPoolAddOns:
-        AdvancedSecurityMode: !Ref CognitoAdvancedSecurity
+        AdvancedSecurityMode: "OFF"
       Schema:
-        - Name: email
-          AttributeDataType: String
-          Mutable: true
-          Required: true
         - Name: name
           AttributeDataType: String
           Mutable: true
@@ -622,11 +610,23 @@ Resources:
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
         AllowOrigin: "'*'"
       Auth:
-        DefaultAuthorizer: NONE
         Authorizers:
           CognitoAuthorizer:
             UserPoolArn: !GetAtt CognitoUserPool.Arn
         AddDefaultAuthorizerToCorsPreflight: false
+      GatewayResponses:
+        DEFAULT_4XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
+              Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        DEFAULT_5XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
+              Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
 
 Outputs:
   VpcId:
