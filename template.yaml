@@ -6,6 +6,16 @@ Parameters:
   DatabaseName:
     Type: String
     Default: cocktaildb
+  CognitoAdvancedSecurity:
+    Type: String
+    Default: OFF
+    AllowedValues:
+      - ON
+      - OFF
+      - AUDIT
+  UserPoolName:
+    Type: String
+    Default: CocktailDB-UserPool
 
 Globals:
   Function:
@@ -16,7 +26,7 @@ Globals:
   Api:
     Cors:
       AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
       AllowOrigin: "'*'"
 
 Resources:
@@ -316,6 +326,8 @@ Resources:
     DependsOn: 
       - MountTarget
       - EFSAccessPoint
+      - CognitoUserPool
+      - CognitoUserPoolClient
     Properties:
       FunctionName: !Sub ${AWS::StackName}-api-handler
       CodeUri: cocktaildb/
@@ -325,6 +337,8 @@ Resources:
         Variables:
           DB_NAME: !Ref DatabaseName
           S3_BUCKET: !Ref CocktailBucket
+          USER_POOL_ID: !Ref CognitoUserPool
+          APP_CLIENT_ID: !Ref CognitoUserPoolClient
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -370,18 +384,24 @@ Resources:
             RestApiId: !Ref CocktailAPI
             Path: /ingredients
             Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
         PutIngredient:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
             Path: /ingredients
             Method: put
+            Auth:
+              Authorizer: CognitoAuthorizer
         DeleteIngredient:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
             Path: /ingredients
             Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
         OptionsIngredients:
           Type: Api
           Properties:
@@ -400,18 +420,24 @@ Resources:
             RestApiId: !Ref CocktailAPI
             Path: /recipes
             Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
         PutRecipe:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
             Path: /recipes
             Method: put
+            Auth:
+              Authorizer: CognitoAuthorizer
         DeleteRecipe:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
             Path: /recipes
             Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
         OptionsRecipes:
           Type: Api
           Properties:
@@ -430,23 +456,44 @@ Resources:
             RestApiId: !Ref CocktailAPI
             Path: /units
             Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
         PutUnit:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
             Path: /units
             Method: put
+            Auth:
+              Authorizer: CognitoAuthorizer
         DeleteUnit:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
             Path: /units
             Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
         OptionsUnits:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
             Path: /units
+            Method: options
+        # Auth test endpoint
+        GetAuth:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /auth
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+        OptionsAuth:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /auth
             Method: options
 
 
@@ -494,6 +541,76 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
 
+  # Cognito User Pool for Authentication
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Ref UserPoolName
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      MfaConfiguration: OFF
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_CODE
+      EmailVerificationMessage: "Your verification code is {####}"
+      EmailVerificationSubject: "Your CocktailDB verification code"
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: true
+      UserPoolAddOns:
+        AdvancedSecurityMode: !Ref CognitoAdvancedSecurity
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+        - Name: name
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+
+  # Cognito User Pool Client
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      ClientName: cocktaildb-client
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_PASSWORD_AUTH
+      PreventUserExistenceErrors: ENABLED
+      SupportedIdentityProviders:
+        - COGNITO
+      CallbackURLs:
+        - !Sub https://${CloudFrontDistribution.DomainName}/callback
+      LogoutURLs:
+        - !Sub https://${CloudFrontDistribution.DomainName}/logout
+      AllowedOAuthFlows:
+        - code
+        - implicit
+      AllowedOAuthScopes:
+        - phone
+        - email
+        - openid
+        - profile
+      AllowedOAuthFlowsUserPoolClient: true
+
+  # Cognito Domain for Hosted UI
+  CognitoDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub ${AWS::StackName}-auth
+      UserPoolId: !Ref CognitoUserPool
+
   # API Gateway for backend endpoints - Create API after Lambda functions
   CocktailAPI:
     Type: AWS::Serverless::Api
@@ -502,10 +619,14 @@ Resources:
       StageName: api
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
         AllowOrigin: "'*'"
       Auth:
         DefaultAuthorizer: NONE
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt CognitoUserPool.Arn
+        AddDefaultAuthorizerToCorsPreflight: false
 
 Outputs:
   VpcId:
@@ -547,4 +668,16 @@ Outputs:
   ApiEndpoint:
     Description: API Gateway Endpoint URL
     Value: !Sub https://${CocktailAPI}.execute-api.${AWS::Region}.amazonaws.com/api
+
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref CognitoUserPool
+    
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref CognitoUserPoolClient
+    
+  CognitoDomainURL:
+    Description: Cognito Domain URL for hosted UI
+    Value: !Sub https://${AWS::StackName}-auth.auth.${AWS::Region}.amazoncognito.com
 
