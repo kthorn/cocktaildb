@@ -145,8 +145,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                                     db.get_ingredient_descendants(int(ingredient_id))
                                 )
                             if include_ancestors:
-                                ingredient["ancestors"] = db.get_ingredient_ancestors(
-                                    int(ingredient_id)
+                                ingredient["ancestors"] = (
+                                    db.get_ingredient_ancestors_by_path(
+                                        ingredient["path"]
+                                    )
                                 )
 
                             return {

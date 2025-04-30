@@ -51,13 +51,15 @@ INSERT INTO units (name, abbreviation) VALUES
   ('Tablespoon', 'tbsp'),
   ('Teaspoon', 'tsp'),
   ('Barspoon', 'bsp'),
-  ('Dash', 'dash');
+  ('Dash', 'dash'),
+  ('Each', 'each'),
+  ('Drop', 'drop');
 
 -- Insert base ingredients
 INSERT INTO ingredients (name, description, path) VALUES
-  ('Whiskey', 'A spirit distilled from fermented grain mash', 'Whiskey'),
-  ('Rum', 'A spirit distilled from sugarcane byproducts', 'Rum'),
-  ('Vodka', 'A spirit distilled from fermented grains or potatoes', 'Vodka'),
-  ('Gin', 'A spirit distilled from juniper berries', 'Gin'),
-  ('Brandy', 'A spirit distilled from wine or fruit', 'Brandy'),
-  ('Juice', '', 'Juice');
+  ('Whiskey', 'A spirit distilled from fermented grain mash', '/1/'),
+  ('Rum', 'A spirit distilled from sugarcane byproducts', '/2/'),
+  ('Vodka', 'A spirit distilled from fermented grains or potatoes', '/3/'),
+  ('Gin', 'A spirit distilled from juniper berries', '/4/'),
+  ('Brandy', 'A spirit distilled from wine or fruit', '/5/'),
+  ('Juice', '', '/6/');

@@ -493,32 +493,24 @@ class Database:
             )
             raise
 
-    def get_ingredient_ancestors(self, ingredient_id: int) -> List[Dict[str, Any]]:
-        """Get all ancestors of an ingredient"""
+    def get_ingredient_ancestors_by_path(self, path: str) -> List[Dict[str, Any]]:
+        """Get all ancestors of an ingredient using its path
+
+        Args:
+            path: The path of the ingredient
+
+        Returns:
+            List of ancestor ingredients ordered from root to leaf
+        """
         try:
-            # Get the ingredient's path
-            ingredient = cast(
-                List[Dict[str, Any]],
-                self.execute_query(
-                    "SELECT path FROM ingredients WHERE id = :id", {"id": ingredient_id}
-                ),
-            )
-            if not ingredient:
-                return []
-
-            path = ingredient[0]["path"]
-
             # Parse the path to get ancestor IDs
             ancestor_ids = []
             parts = path.strip("/").split("/")
-            for part in parts:
+
+            # Extract all IDs except the last one (which is the ingredient itself)
+            for part in parts[:-1]:  # Skip the last part which is the ingredient itself
                 if part and part.isdigit():
                     ancestor_ids.append(int(part))
-
-            # Remove the ingredient itself
-            if ancestor_ids and ancestor_ids[-1] == ingredient_id:
-                ancestor_ids.pop()
-
             if not ancestor_ids:
                 return []
 
@@ -540,7 +532,7 @@ class Database:
             return result
         except Exception as e:
             logger.error(
-                f"Error getting ancestors for ingredient {ingredient_id}: {str(e)}"
+                f"Error getting ancestors for ingredient with path {path}: {str(e)}"
             )
             raise
 
@@ -651,7 +643,8 @@ class Database:
             self.execute_query(
                 """
             SELECT ri.id, ri.amount, ri.ingredient_id, i.name as ingredient_name,
-                   ri.unit_id, u.name as unit_name, u.abbreviation as unit_abbreviation
+                   ri.unit_id, u.name as unit_name, u.abbreviation as unit_abbreviation,
+                   i.path as ingredient_path
             FROM recipe_ingredients ri
             JOIN ingredients i ON ri.ingredient_id = i.id
             LEFT JOIN units u ON ri.unit_id = u.id
@@ -660,42 +653,21 @@ class Database:
                 {"recipe_id": recipe_id},
             ),
         )
-        return result
-
-    def generate_full_name(self, ingredient_id: int) -> str:
-        """Generate a full name for an ingredient based on its hierarchy.
-
-        The full name will be in the format: name [parent_name;parent_parent_name;...;root_name]
-
-        Args:
-            ingredient_id: The ID of the ingredient to generate the full name for
-
-        Returns:
-            str: The full name of the ingredient
-        """
-        try:
-            # Get the ingredient and its ancestors
-            ingredient = self.get_ingredient(ingredient_id)
-            if not ingredient:
-                return ""
-
-            # Start with the ingredient's name
-            full_name = ingredient["name"]
-
-            # Get all ancestors
-            ancestors = self.get_ingredient_ancestors(ingredient_id)
-
-            # If there are ancestors, add them to the full name
+        # Add full_name for each ingredient
+        for ingredient in result:
+            ingredient_path = ingredient["ingredient_path"]
+            # Get ancestors using the path directly
+            ancestors = self.get_ingredient_ancestors_by_path(ingredient_path)
+            # Generate full name
             if ancestors:
-                ancestor_names = [ancestor["name"] for ancestor in ancestors]
-                full_name = f"{full_name} [{';'.join(ancestor_names)}]"
+                ancestor_names = [ancestor["name"] for ancestor in reversed(ancestors)]
+                ingredient["full_name"] = (
+                    f"{ingredient['ingredient_name']} [{';'.join(ancestor_names)}]"
+                )
+            else:
+                ingredient["full_name"] = ingredient["ingredient_name"]
 
-            return full_name
-        except Exception as e:
-            logger.error(
-                f"Error generating full name for ingredient {ingredient_id}: {str(e)}"
-            )
-            raise
+        return result
 
     def get_units(self) -> List[Dict[str, Any]]:
         """Get all measurement units"""

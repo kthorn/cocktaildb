@@ -148,10 +148,10 @@ document.addEventListener('DOMContentLoaded', () => {
         div.innerHTML = `
             <div class="ingredient-fields">
                 <div class="form-group">
-                    <input type="number" class="ingredient-amount" placeholder="Amount" step="0.01" min="0" required>
+                    <input type="number" class="ingredient-amount" name="ingredient-amount" placeholder="Amount" step="0.25" min="0" required>
                 </div>
                 <div class="form-group">
-                    <select class="ingredient-unit" required>
+                    <select class="ingredient-unit" name="ingredient-unit" required>
                         <option value="">Select unit</option>
                         ${window.availableUnits?.map(unit =>
             `<option value="${unit.name}">${unit.name} (${unit.abbreviation})</option>`
@@ -160,9 +160,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="form-group">
                     <div class="ingredient-search-container">
-                        <input type="text" class="ingredient-search" placeholder="Search ingredients..." autocomplete="off">
+                        <input type="text" class="ingredient-search" name="ingredient-search" placeholder="Search ingredients..." autocomplete="off">
                         <div class="autocomplete-dropdown"></div>
-                        <select class="ingredient-name" required>
+                        <select class="ingredient-name" name="ingredient-name" required>
                             <option value="">Select ingredient</option>
                             ${availableIngredients.map(ingredient =>
             `<option value="${ingredient.name}">${ingredient.name}</option>`
@@ -183,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const searchInput = div.querySelector('.ingredient-search');
         const selectElement = div.querySelector('.ingredient-name');
         const autocompleteDropdown = div.querySelector('.autocomplete-dropdown');
-        let activeIndex = -1;
+        let activeIndex = -1; 
         
         // Function to update the autocomplete dropdown
         function updateAutocomplete() {
@@ -332,6 +332,10 @@ document.addEventListener('DOMContentLoaded', () => {
         recipes.forEach(recipe => {
             const card = document.createElement('div');
             card.className = 'recipe-card';
+            
+            // For debugging - log recipe ingredients to console
+            console.log('Recipe ingredients:', recipe.ingredients);
+            
             card.innerHTML = `
                 <h4>${recipe.name}</h4>
                 <p>${recipe.description || 'No description'}</p>
@@ -340,8 +344,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     <ul>
                         ${recipe.ingredients.map(ing => {
                             // Format with proper spaces between amount, unit and ingredient name
-                            const unitDisplay = ing.unit ? `${ing.unit} ` : '';
-                            return `<li>${ing.amount} ${unitDisplay}${ing.name}</li>`;
+                            const unitDisplay = ing.unit_name ? `${ing.unit_name} ` : '';
+                            
+                            // Try multiple possible property names for ingredient full name
+                            // in order of preference
+                            const ingredientName = ing.full_name || ing.ingredient_name || ing.name || 'Unknown ingredient';
+                            
+                            return `<li>${ing.amount} ${unitDisplay}${ingredientName}</li>`;
                         }).join('')}
                     </ul>
                 </div>
@@ -387,20 +396,20 @@ async function editRecipe(id) {
             const lastInput = ingredientsList.lastElementChild;
             
             // Set ingredient selection
-            lastInput.querySelector('.ingredient-name').value = ingredient.name;
-            lastInput.querySelector('.ingredient-search').value = ingredient.name;
+            lastInput.querySelector('.ingredient-name').value = ingredient.ingredient_name;
+            lastInput.querySelector('.ingredient-search').value = ingredient.ingredient_name;
             
             // Set amount and unit
             lastInput.querySelector('.ingredient-amount').value = ingredient.amount;
             
             // Set the unit by name if available
-            if (ingredient.unit && window.availableUnits) {
+            if (ingredient.unit_name && window.availableUnits) {
                 const unitSelect = lastInput.querySelector('.ingredient-unit');
-                const matchingUnit = window.availableUnits.find(u => u.name === ingredient.unit);
+                const matchingUnit = window.availableUnits.find(u => u.name === ingredient.unit_name);
                 if (matchingUnit) {
                     unitSelect.value = matchingUnit.name;
                 } else {
-                    console.warn(`Unit "${ingredient.unit}" not found in available units`);
+                    console.warn(`Unit "${ingredient.unit_name}" not found in available units`);
                 }
             }
         });
