@@ -680,3 +680,119 @@ class Database:
         except Exception as e:
             logger.error(f"Error getting units: {str(e)}")
             raise
+
+    @retry_on_db_locked()
+    def delete_recipe(self, recipe_id: int) -> bool:
+        """Delete a recipe and its ingredients"""
+        conn = None
+        try:
+            conn = self._get_connection()
+            conn.execute("BEGIN IMMEDIATE")  # Get lock immediately
+            cursor = conn.cursor()
+
+            # Check if recipe exists
+            recipe = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id FROM recipes WHERE id = :id", {"id": recipe_id}
+                ),
+            )
+            if not recipe:
+                return False
+
+            # Delete recipe ingredients first (due to foreign key constraint)
+            cursor.execute(
+                "DELETE FROM recipe_ingredients WHERE recipe_id = :recipe_id",
+                {"recipe_id": recipe_id},
+            )
+
+            # Delete the recipe
+            cursor.execute("DELETE FROM recipes WHERE id = :id", {"id": recipe_id})
+
+            # Commit the transaction
+            conn.commit()
+            return True
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            logger.error(f"Error deleting recipe {recipe_id}: {str(e)}")
+            raise
+        finally:
+            if conn:
+                conn.close()
+
+    @retry_on_db_locked()
+    def update_recipe(
+        self, recipe_id: int, data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Update an existing recipe"""
+        conn = None
+        try:
+            # Check if recipe exists first
+            existing = self.execute_query(
+                "SELECT id FROM recipes WHERE id = :id", {"id": recipe_id}
+            )
+            if not existing:
+                return None
+
+            conn = self._get_connection()
+            conn.execute("BEGIN IMMEDIATE")
+            cursor = conn.cursor()
+
+            # Update the main recipe details
+            cursor.execute(
+                """
+                UPDATE recipes
+                SET name = COALESCE(:name, name),
+                    instructions = COALESCE(:instructions, instructions),
+                    description = COALESCE(:description, description),
+                    image_url = COALESCE(:image_url, image_url)
+                WHERE id = :id
+                """,
+                {
+                    "id": recipe_id,
+                    "name": data.get("name"),
+                    "instructions": data.get("instructions"),
+                    "description": data.get("description"),
+                    "image_url": data.get("image_url"),
+                },
+            )
+
+            # Update ingredients if provided
+            if "ingredients" in data:
+                # Delete existing ingredients for this recipe
+                cursor.execute(
+                    "DELETE FROM recipe_ingredients WHERE recipe_id = :recipe_id",
+                    {"recipe_id": recipe_id},
+                )
+
+                # Insert new ingredients
+                for ingredient in data["ingredients"]:
+                    cursor.execute(
+                        """
+                        INSERT INTO recipe_ingredients (recipe_id, ingredient_id, unit_id, amount)
+                        VALUES (:recipe_id, :ingredient_id, :unit_id, :amount)
+                        """,
+                        {
+                            "recipe_id": recipe_id,
+                            "ingredient_id": ingredient["ingredient_id"],
+                            "unit_id": ingredient.get("unit_id"),
+                            "amount": ingredient.get("amount"),
+                        },
+                    )
+
+            conn.commit()
+            conn.close()
+            conn = None  # Ensure it's not closed again in finally if commit succeeded
+
+            # Fetch and return the updated recipe
+            return self.get_recipe(recipe_id)
+
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            logger.error(f"Error updating recipe {recipe_id}: {str(e)}")
+            raise
+        finally:
+            if conn:
+                conn.close()

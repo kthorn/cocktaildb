@@ -364,11 +364,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p>${recipe.instructions}</p>
                 </div>
                 <div class="card-actions">
-                    <button onclick="editRecipe(${recipe.id})">Edit</button>
-                    <button onclick="deleteRecipe(${recipe.id})">Delete</button>
+                    <button class="edit-recipe" data-id="${recipe.id}">Edit</button>
+                    <button class="delete-recipe" data-id="${recipe.id}">Delete</button>
                 </div>
             `;
             recipesContainer.appendChild(card);
+
+            // Add event listeners for the buttons
+            card.querySelector('.delete-recipe').addEventListener('click', () => deleteRecipe(recipe.id));
+            card.querySelector('.edit-recipe').addEventListener('click', () => editRecipe(recipe.id));
         });
     }
 

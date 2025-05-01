@@ -422,7 +422,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
-            Path: /recipes
+            Path: /recipes/{recipeId}
             Method: put
             Auth:
               Authorizer: CognitoAuthorizer
@@ -430,7 +430,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
-            Path: /recipes
+            Path: /recipes/{recipeId}
             Method: delete
             Auth:
               Authorizer: CognitoAuthorizer
@@ -490,6 +490,18 @@ Resources:
           Properties:
             RestApiId: !Ref CocktailAPI
             Path: /auth
+            Method: options
+        GetRecipeItem:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}
+            Method: get
+        OptionsRecipeItem:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}
             Method: options
 
 

@@ -284,9 +284,18 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         # Handle recipe endpoints
         elif path.startswith("/recipes"):
-            recipe_id = path.split("/")[-1] if len(path.split("/")) > 2 else None
+            # Use pathParameters provided by API Gateway, safely handling None
+            path_params = event.get(
+                "pathParameters"
+            )  # Get pathParameters, could be None
+            recipe_id = (
+                path_params.get("recipeId") if path_params else None
+            )  # Only call .get() if path_params is a dict
+            # recipe_id = event.get("pathParameters", {}).get("recipeId") # Old potentially unsafe method
 
-            if http_method == "POST":
+            if (
+                http_method == "POST" and not recipe_id
+            ):  # POST is only for the collection path
                 logger.info("Creating new recipe...")
                 try:
                     body = json.loads(event.get("body", "{}"))
@@ -305,7 +314,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     }
 
             elif http_method == "GET":
-                if recipe_id:
+                if recipe_id:  # GET specific recipe using path param
                     logger.info(f"Getting recipe {recipe_id}...")
                     try:
                         recipe = db.get_recipe(int(recipe_id))
@@ -327,7 +336,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                             "headers": CORS_HEADERS,
                             "body": json.dumps({"error": str(e)}),
                         }
-                else:
+                else:  # GET all recipes (collection path)
                     logger.info("Getting all recipes...")
                     try:
                         recipes = db.get_recipes()
@@ -343,6 +352,52 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                             "headers": CORS_HEADERS,
                             "body": json.dumps({"error": str(e)}),
                         }
+
+            elif http_method == "DELETE" and recipe_id:
+                logger.info(f"Deleting recipe {recipe_id}...")
+                try:
+                    if db.delete_recipe(int(recipe_id)):
+                        return {
+                            "statusCode": 204,
+                            "headers": CORS_HEADERS,
+                            "body": "",
+                        }
+                    return {
+                        "statusCode": 404,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": "Recipe not found"}),
+                    }
+                except Exception as e:
+                    logger.error(f"Error deleting recipe: {str(e)}")
+                    return {
+                        "statusCode": 400,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": str(e)}),
+                    }
+
+            elif http_method == "PUT" and recipe_id:
+                logger.info(f"Updating recipe {recipe_id}...")
+                try:
+                    body = json.loads(event.get("body", "{}"))
+                    recipe = db.update_recipe(int(recipe_id), body)
+                    if recipe:
+                        return {
+                            "statusCode": 200,
+                            "headers": CORS_HEADERS,
+                            "body": json.dumps(recipe),
+                        }
+                    return {
+                        "statusCode": 404,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": "Recipe not found"}),
+                    }
+                except Exception as e:
+                    logger.error(f"Error updating recipe: {str(e)}")
+                    return {
+                        "statusCode": 400,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": str(e)}),
+                    }
 
         # Handle units endpoint
         elif path == "/units":

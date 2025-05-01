@@ -7,6 +7,11 @@ class CocktailAPI {
     }
 
     async handleResponse(response) {
+        // Check for 204 No Content before trying to parse JSON
+        if (response.status === 204) {
+            return null; // Or return {}; depending on what the caller expects
+        }
+
         const data = await response.json();
         if (response.status >= 400) {
             throw new Error(data.error || 'An error occurred');
