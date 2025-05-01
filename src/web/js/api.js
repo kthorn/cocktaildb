@@ -27,10 +27,20 @@ class CocktailAPI {
 
         // Always use the ID Token - API Gateway Authorizer expects this
         const idToken = localStorage.getItem('id_token');
+        if (method !== 'GET') {
+            // Require authentication for non-GET requests
+            if (!isAuthenticated()) {
+                throw new Error('Authentication required. Please log in to create ingredients.');
+            }            
+            // Ensure we have a valid token
+            const token = localStorage.getItem('token');
+            if (!token) {
+                throw new Error('No authentication token found. Please log in again.');
+            }
+        }
         if (idToken) {
             options.headers['Authorization'] = `Bearer ${idToken}`;
         }
-
         if (body) {
             options.body = JSON.stringify(body);
         }
@@ -49,17 +59,7 @@ class CocktailAPI {
         return this.handleResponse(response);
     }
 
-    async createIngredient(ingredientData) {
-        if (!isAuthenticated()) {
-            throw new Error('Authentication required. Please log in to create ingredients.');
-        }
-        
-        // Ensure we have a valid token
-        const token = localStorage.getItem('token');
-        if (!token) {
-            throw new Error('No authentication token found. Please log in again.');
-        }
-        
+    async createIngredient(ingredientData) {        
         const response = await fetch(
             `${this.baseUrl}/ingredients`,
             this.getFetchOptions('POST', ingredientData)
@@ -68,16 +68,6 @@ class CocktailAPI {
     }
 
     async updateIngredient(id, ingredientData) {
-        if (!isAuthenticated()) {
-            throw new Error('Authentication required. Please log in to update ingredients.');
-        }
-        
-        // Ensure we have a valid token
-        const token = localStorage.getItem('token');
-        if (!token) {
-            throw new Error('No authentication token found. Please log in again.');
-        }
-        
         const response = await fetch(
             `${this.baseUrl}/ingredients/${id}`,
             this.getFetchOptions('PUT', ingredientData)
@@ -86,16 +76,6 @@ class CocktailAPI {
     }
 
     async deleteIngredient(id) {
-        if (!isAuthenticated()) {
-            throw new Error('Authentication required. Please log in to delete ingredients.');
-        }
-        
-        // Ensure we have a valid token
-        const token = localStorage.getItem('token');
-        if (!token) {
-            throw new Error('No authentication token found. Please log in again.');
-        }
-        
         const response = await fetch(
             `${this.baseUrl}/ingredients/${id}`,
             this.getFetchOptions('DELETE')
@@ -115,16 +95,6 @@ class CocktailAPI {
     }
 
     async createRecipe(recipeData) {
-        if (!isAuthenticated()) {
-            throw new Error('Authentication required. Please log in to create recipes.');
-        }
-        
-        // Ensure we have a valid token
-        const token = localStorage.getItem('token');
-        if (!token) {
-            throw new Error('No authentication token found. Please log in again.');
-        }
-        
         const response = await fetch(
             `${this.baseUrl}/recipes`,
             this.getFetchOptions('POST', recipeData)
@@ -133,16 +103,6 @@ class CocktailAPI {
     }
 
     async updateRecipe(id, recipeData) {
-        if (!isAuthenticated()) {
-            throw new Error('Authentication required. Please log in to update recipes.');
-        }
-        
-        // Ensure we have a valid token
-        const token = localStorage.getItem('token');
-        if (!token) {
-            throw new Error('No authentication token found. Please log in again.');
-        }
-        
         const response = await fetch(
             `${this.baseUrl}/recipes/${id}`,
             this.getFetchOptions('PUT', recipeData)
@@ -151,16 +111,6 @@ class CocktailAPI {
     }
 
     async deleteRecipe(id) {
-        if (!isAuthenticated()) {
-            throw new Error('Authentication required. Please log in to delete recipes.');
-        }
-        
-        // Ensure we have a valid token
-        const token = localStorage.getItem('token');
-        if (!token) {
-            throw new Error('No authentication token found. Please log in again.');
-        }
-        
         const response = await fetch(
             `${this.baseUrl}/recipes/${id}`,
             this.getFetchOptions('DELETE')
