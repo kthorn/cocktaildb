@@ -6,10 +6,9 @@ export function initAuth() {
     const loginButton = document.getElementById('login-btn');
     const logoutButton = document.getElementById('logout-btn');
     const userInfo = document.getElementById('user-info');
-    const username = document.getElementById('username');
     
     // Check if elements exist (they should be on every page)
-    if (!loginButton || !logoutButton || !userInfo || !username) {
+    if (!loginButton || !logoutButton || !userInfo) {
         console.error('Auth UI elements not found in the DOM');
         return;
     }

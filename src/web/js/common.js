@@ -14,7 +14,6 @@ function loadHeader() {
       </ul>
       <div class="auth-controls">
         <span id="user-info" class="hidden">
-          <span id="username">Not logged in</span>
           <button id="logout-btn">Logout</button>
         </span>
         <button id="login-btn">Login</button>
