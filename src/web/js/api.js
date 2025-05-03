@@ -11,12 +11,31 @@ class CocktailAPI {
         if (response.status === 204) {
             return null; // Or return {}; depending on what the caller expects
         }
-
-        const data = await response.json();
-        if (response.status >= 400) {
-            throw new Error(data.error || 'An error occurred');
+        
+        // Handle 404 not found errors more gracefully
+        if (response.status === 404) {
+            // For ratings endpoint specifically, just return an empty array
+            if (response.url.includes('/ratings/')) {
+                return [];
+            }
+            // For other 404s, provide the error but with a clearer message
+            const errorObj = { error: `Resource not found: ${response.url}` };
+            throw new Error(errorObj.error);
         }
-        return data;
+
+        try {
+            const data = await response.json();
+            if (response.status >= 400) {
+                throw new Error(data.error || `API error: ${response.status}`);
+            }
+            return data;
+        } catch (e) {
+            // If we can't parse JSON (e.g., HTML error page returned)
+            if (e instanceof SyntaxError) {
+                throw new Error(`API returned invalid JSON: ${response.status} ${response.statusText}`);
+            }
+            throw e;
+        }
     }
 
     // Common fetch options for all requests
@@ -143,6 +162,61 @@ class CocktailAPI {
             this.getFetchOptions()
         );
         return this.handleResponse(response);
+    }
+    
+    // Ratings API
+    async getRatings(recipeId) {
+        try {
+            // Ensure recipeId is defined and build a proper URL
+            if (!recipeId) {
+                console.error('Recipe ID is required for getRatings');
+                return [];
+            }
+
+            // For debugging - log the full URL we're requesting
+            const url = `${this.baseUrl}/ratings/${recipeId}`;
+            console.log('Fetching ratings from:', url);
+            
+            const response = await fetch(
+                url,
+                this.getFetchOptions()
+            );
+            
+            // The handleResponse method now handles 404s for ratings
+            return this.handleResponse(response);
+        } catch (error) {
+            console.error(`Error getting ratings for recipe ${recipeId}:`, error);
+            return []; // Return empty array on error
+        }
+    }
+    
+    async setRating(recipeId, ratingData) {
+        try {
+            // Use POST for new ratings, PUT for updating existing ones
+            // The backend will handle both the same way
+            const method = ratingData.isUpdate ? 'PUT' : 'POST';
+            const response = await fetch(
+                `${this.baseUrl}/ratings/${recipeId}`,
+                this.getFetchOptions(method, ratingData)
+            );
+            return this.handleResponse(response);
+        } catch (error) {
+            console.error(`Error setting rating for recipe ${recipeId}:`, error);
+            throw error;
+        }
+    }
+    
+    async deleteRating(recipeId) {
+        try {
+            const response = await fetch(
+                `${this.baseUrl}/ratings/${recipeId}`,
+                this.getFetchOptions('DELETE')
+            );
+            return this.handleResponse(response);
+        } catch (error) {
+            console.error(`Error deleting rating for recipe ${recipeId}:`, error);
+            throw error;
+        }
     }
 
     // Helper to check if user is authenticated

@@ -448,6 +448,102 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         "body": json.dumps({"error": "Unauthorized - User ID missing"}),
                     }
 
+        # Handle ratings endpoints
+        elif path.startswith("/ratings"):
+            # Extract recipe_id from path parameters if present
+            path_params = event.get("pathParameters")
+            recipe_id = path_params.get("recipeId") if path_params else None
+
+            # Fallback to manual path parsing if API Gateway doesn't provide pathParameters
+            if not recipe_id:
+                path_parts = path.split("/")
+                if len(path_parts) > 2:  # /ratings/{recipeId}
+                    recipe_id = path_parts[2]
+
+            if http_method == "GET" and recipe_id:
+                logger.info(f"Getting ratings for recipe {recipe_id}...")
+                try:
+                    ratings = db.get_recipe_ratings(int(recipe_id))
+                    return {
+                        "statusCode": 200,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps(ratings),
+                    }
+                except Exception as e:
+                    logger.error(f"Error getting ratings: {str(e)}")
+                    return {
+                        "statusCode": 500,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": str(e)}),
+                    }
+
+            elif http_method in ["POST", "PUT"] and recipe_id:
+                logger.info(f"Setting rating for recipe {recipe_id}...")
+                # These routes require authentication
+                if not user_id:
+                    return {
+                        "statusCode": 401,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps(
+                            {"error": "Authentication required to set ratings"}
+                        ),
+                    }
+
+                try:
+                    body = json.loads(event.get("body", "{}"))
+                    body["cognito_user_id"] = user_id
+                    body["cognito_username"] = username
+                    body["recipe_id"] = int(recipe_id)
+
+                    result = db.set_rating(body)
+                    status_code = 200 if http_method == "PUT" else 201
+                    return {
+                        "statusCode": status_code,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps(result),
+                    }
+                except Exception as e:
+                    logger.error(f"Error setting rating: {str(e)}")
+                    return {
+                        "statusCode": 400,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": str(e)}),
+                    }
+
+            elif http_method == "DELETE" and recipe_id:
+                logger.info(f"Deleting rating for recipe {recipe_id}...")
+                # This route requires authentication
+                if not user_id:
+                    return {
+                        "statusCode": 401,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps(
+                            {"error": "Authentication required to delete ratings"}
+                        ),
+                    }
+
+                try:
+                    db.delete_rating(int(recipe_id), user_id)
+                    return {
+                        "statusCode": 204,
+                        "headers": CORS_HEADERS,
+                        "body": "",
+                    }
+                except Exception as e:
+                    logger.error(f"Error deleting rating: {str(e)}")
+                    return {
+                        "statusCode": 400,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": str(e)}),
+                    }
+
+            elif http_method == "OPTIONS":
+                return {
+                    "statusCode": 200,
+                    "headers": CORS_HEADERS,
+                    "body": "",
+                }
+
         # Handle not found
         return {
             "statusCode": 404,

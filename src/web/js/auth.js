@@ -48,10 +48,32 @@ export function isAuthenticated() {
 
 // Get user information
 export function getUserInfo() {
+    const token = localStorage.getItem('token');
+    const idToken = localStorage.getItem('id_token');
+    const username = localStorage.getItem('username');
+    
+    let cognitoUserId = null;
+    
+    // Try to extract user ID from the ID token if available
+    if (idToken) {
+        try {
+            // JWT tokens are in the format header.payload.signature
+            const parts = idToken.split('.');
+            if (parts.length === 3) {
+                // Decode the payload (middle part)
+                const payload = JSON.parse(atob(parts[1]));
+                cognitoUserId = payload.sub; // 'sub' claim contains the Cognito user ID
+            }
+        } catch (e) {
+            console.error('Error parsing ID token:', e);
+        }
+    }
+    
     return {
-        token: localStorage.getItem('token'),
-        idToken: localStorage.getItem('id_token'),
-        username: localStorage.getItem('username')
+        token,
+        idToken,
+        username,
+        cognitoUserId
     };
 }
 

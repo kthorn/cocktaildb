@@ -40,7 +40,7 @@ CREATE TABLE ratings (
   rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
   comment TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (recipe_id) REFERENCES recipes(id),
+  FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
   UNIQUE(cognito_user_id, recipe_id)
 );
 
@@ -53,7 +53,7 @@ CREATE TABLE recipe_tags (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   recipe_id INTEGER NOT NULL,
   tag_id INTEGER NOT NULL,
-  FOREIGN KEY (recipe_id) REFERENCES recipes(id),
+  FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
   FOREIGN KEY (tag_id) REFERENCES tags(id),
   UNIQUE(recipe_id, tag_id)
 );
@@ -64,7 +64,7 @@ CREATE TABLE recipe_ingredients (
   ingredient_id INTEGER NOT NULL,
   unit_id INTEGER,
   amount REAL,
-  FOREIGN KEY (recipe_id) REFERENCES recipes(id),
+  FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
   FOREIGN KEY (ingredient_id) REFERENCES ingredients(id),
   FOREIGN KEY (unit_id) REFERENCES units(id)
 );

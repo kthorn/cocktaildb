@@ -1,6 +1,7 @@
 // Recipe card component for displaying cocktail recipes
 import { api } from './api.js';
-import { isAuthenticated } from './auth.js';
+import { isAuthenticated, getUserInfo } from './auth.js';
+import { generateStarRating, createInteractiveRating } from './common.js';
 
 /**
  * Creates and returns a recipe card element for the given recipe
@@ -16,9 +17,11 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
     // Only show action buttons if user is authenticated and showActions is true
     const shouldShowActions = showActions && isAuthenticated();
     
+    // Start with the basic recipe details
     card.innerHTML = `
         <h4>${recipe.name}</h4>
         <p>${recipe.description || 'No description'}</p>
+        <div id="rating-container-${recipe.id}"></div>
         <div class="ingredients">
             <h5>Ingredients</h5>
             <ul>
@@ -45,6 +48,40 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
         ` : ''}
     `;
 
+    // Add rating component
+    const ratingContainer = card.querySelector(`#rating-container-${recipe.id}`);
+    if (ratingContainer) {
+        if (isAuthenticated()) {
+            // Add interactive rating for logged in users
+            // First, check if user has already rated this recipe
+            try {
+                fetchUserRating(recipe.id).then(userRating => {
+                    const interactiveRating = createInteractiveRating(
+                        recipe.id,
+                        userRating ? userRating.rating : 0,
+                        recipe.avg_rating || 0,
+                        recipe.rating_count || 0,
+                        submitRating
+                    );
+                    ratingContainer.appendChild(interactiveRating);
+                }).catch(error => {
+                    // Fallback to just showing the average if there's an error
+                    console.error('Error fetching user rating:', error);
+                    const staticRating = generateStarRating(recipe.avg_rating || 0, recipe.rating_count || 0);
+                    ratingContainer.innerHTML = staticRating;
+                });
+            } catch (error) {
+                console.error('Error setting up rating component:', error);
+                const staticRating = generateStarRating(recipe.avg_rating || 0, recipe.rating_count || 0);
+                ratingContainer.innerHTML = staticRating;
+            }
+        } else {
+            // Show static rating for non-logged in users
+            const staticRating = generateStarRating(recipe.avg_rating || 0, recipe.rating_count || 0);
+            ratingContainer.innerHTML = staticRating;
+        }
+    }
+
     // Add event listeners for action buttons if they exist
     if (shouldShowActions) {
         const deleteBtn = card.querySelector('.delete-recipe');
@@ -68,6 +105,134 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
     }
 
     return card;
+}
+
+/**
+ * Fetch the user's rating for a recipe
+ * @param {number} recipeId - The recipe ID
+ * @returns {Promise<Object|null>} The user's rating or null if not rated
+ */
+async function fetchUserRating(recipeId) {
+    try {
+        console.log(`Fetching ratings for recipe ID: ${recipeId}`);
+        const ratings = await api.getRatings(recipeId);
+        console.log(`Received ratings:`, ratings);
+        
+        const userInfo = getUserInfo();
+        console.log(`User info:`, userInfo);
+        
+        if (!userInfo || !userInfo.token || !userInfo.cognitoUserId) {
+            console.log('No valid user info found, cannot fetch rating');
+            return null;
+        }
+        
+        // If ratings is empty or not an array, return null
+        if (!ratings || !Array.isArray(ratings) || ratings.length === 0) {
+            console.log('No ratings found for this recipe');
+            return null;
+        }
+        
+        // Find the rating by this user
+        const userRating = ratings.find(r => r.cognito_user_id === userInfo.cognitoUserId);
+        console.log(`User rating found:`, userRating || 'None');
+        return userRating || null;
+    } catch (error) {
+        console.error('Error fetching user rating:', error);
+        return null;
+    }
+}
+
+/**
+ * Submit a rating for a recipe
+ * @param {number} recipeId - The recipe ID
+ * @param {number} rating - The rating value (1-5)
+ */
+async function submitRating(recipeId, rating) {
+    try {
+        // Check authentication
+        if (!isAuthenticated()) {
+            alert('Please log in to rate recipes.');
+            return;
+        }
+        
+        // Get user info
+        const userInfo = getUserInfo();
+        if (!userInfo || !userInfo.cognitoUserId) {
+            console.error('Unable to get user information');
+            return;
+        }
+        
+        // Submit the rating with required fields
+        const ratingData = { 
+            rating: rating,
+            comment: '' // Optional comment field
+        };
+        
+        console.log(`Submitting rating ${rating} for recipe ${recipeId}`);
+        const response = await api.setRating(recipeId, ratingData);
+        console.log('Rating submitted successfully:', response);
+        
+        // Show success notification
+        const container = document.querySelector(`.star-rating[data-recipe-id="${recipeId}"]`);
+        if (container) {
+            const notification = document.createElement('span');
+            notification.className = 'rating-notification';
+            notification.textContent = 'Rating saved!';
+            container.appendChild(notification);
+            
+            // Remove notification after animation
+            setTimeout(() => {
+                notification.remove();
+            }, 2500);
+        }
+        
+        // Refresh the recipe to show updated average rating
+        refreshRecipeAfterRating(recipeId, response);
+        
+    } catch (error) {
+        console.error('Error submitting rating:', error);
+        alert(`Failed to submit rating: ${error.message || 'Please try again.'}`);
+    }
+}
+
+/**
+ * Refresh a recipe card after a rating is submitted
+ * @param {number} recipeId - The recipe ID
+ * @param {Object} ratingResponse - The API response from submitting the rating
+ */
+async function refreshRecipeAfterRating(recipeId, ratingResponse) {
+    try {
+        // Fetch the latest recipe data to get updated avg_rating
+        const recipe = await api.getRecipe(recipeId);
+        
+        // Find the recipe card
+        const recipeCard = document.querySelector(`.recipe-card[data-id="${recipeId}"]`);
+        if (!recipeCard) {
+            console.log(`Recipe card for ID ${recipeId} not found for refresh`);
+            return;
+        }
+        
+        // Re-render just the rating component
+        const ratingContainer = recipeCard.querySelector(`#rating-container-${recipeId}`);
+        if (ratingContainer) {
+            // Use the submitted rating as the user's current rating
+            const interactiveRating = createInteractiveRating(
+                recipeId,
+                ratingResponse?.rating || 0,
+                recipe.avg_rating || 0,
+                recipe.rating_count || 0,
+                submitRating
+            );
+            
+            // Clear and replace
+            ratingContainer.innerHTML = '';
+            ratingContainer.appendChild(interactiveRating);
+        }
+        
+        console.log(`Recipe ${recipeId} refreshed with new rating data`);
+    } catch (error) {
+        console.error('Error refreshing recipe after rating:', error);
+    }
 }
 
 /**

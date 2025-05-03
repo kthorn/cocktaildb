@@ -603,7 +603,7 @@ class Database:
             recipes_result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, instructions, description, image_url FROM recipes"
+                    "SELECT id, name, instructions, description, image_url, avg_rating, rating_count FROM recipes"
                 ),
             )
 
@@ -621,7 +621,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, instructions, description, image_url FROM recipes WHERE id = :id",
+                    "SELECT id, name, instructions, description, image_url, avg_rating, rating_count FROM recipes WHERE id = :id",
                     {"id": recipe_id},
                 ),
             )
@@ -700,12 +700,8 @@ class Database:
             if not recipe:
                 return False
 
-            # Delete recipe ingredients first (due to foreign key constraint)
-            cursor.execute(
-                "DELETE FROM recipe_ingredients WHERE recipe_id = :recipe_id",
-                {"recipe_id": recipe_id},
-            )
-
+            # Note: We don't need to explicitly delete recipe_ingredients, ratings, or tags
+            # because the ON DELETE CASCADE constraint will handle this automatically
             # Delete the recipe
             cursor.execute("DELETE FROM recipes WHERE id = :id", {"id": recipe_id})
 
@@ -792,6 +788,195 @@ class Database:
             if conn:
                 conn.rollback()
             logger.error(f"Error updating recipe {recipe_id}: {str(e)}")
+            raise
+        finally:
+            if conn:
+                conn.close()
+
+    @retry_on_db_locked()
+    def get_recipe_ratings(self, recipe_id: int) -> List[Dict[str, Any]]:
+        """Get all ratings for a recipe"""
+        try:
+            result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    """
+                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating, comment, 
+                           datetime(created_at, 'localtime') as created_at
+                    FROM ratings 
+                    WHERE recipe_id = :recipe_id
+                    ORDER BY created_at DESC
+                    """,
+                    {"recipe_id": recipe_id},
+                ),
+            )
+            return result
+        except Exception as e:
+            logger.error(f"Error getting ratings for recipe {recipe_id}: {str(e)}")
+            raise
+
+    @retry_on_db_locked()
+    def set_rating(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Set (add or update) a rating for a recipe"""
+        conn = None
+        try:
+            # Check required fields
+            if not data.get("cognito_user_id"):
+                raise ValueError("User ID is required")
+            if not data.get("cognito_username"):
+                raise ValueError("Username is required")
+            if not data.get("recipe_id"):
+                raise ValueError("Recipe ID is required")
+            if "rating" not in data or not (1 <= data["rating"] <= 5):
+                raise ValueError("Rating must be between 1 and 5")
+
+            # Check if recipe exists
+            recipe = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id FROM recipes WHERE id = :id", {"id": data["recipe_id"]}
+                ),
+            )
+            if not recipe:
+                raise ValueError(f"Recipe with ID {data['recipe_id']} does not exist")
+
+            # Check if user already rated this recipe
+            existing_rating = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    """
+                    SELECT id FROM ratings
+                    WHERE cognito_user_id = :user_id AND recipe_id = :recipe_id
+                    """,
+                    {
+                        "user_id": data["cognito_user_id"],
+                        "recipe_id": data["recipe_id"],
+                    },
+                ),
+            )
+
+            conn = self._get_connection()
+            conn.execute("BEGIN IMMEDIATE")
+            cursor = conn.cursor()
+
+            rating_id = None
+            if existing_rating:
+                # Update existing rating
+                rating_id = existing_rating[0]["id"]
+                cursor.execute(
+                    """
+                    UPDATE ratings
+                    SET rating = :rating,
+                        comment = COALESCE(:comment, comment)
+                    WHERE cognito_user_id = :user_id AND recipe_id = :recipe_id
+                    """,
+                    {
+                        "user_id": data["cognito_user_id"],
+                        "recipe_id": data["recipe_id"],
+                        "rating": data["rating"],
+                        "comment": data.get("comment"),
+                    },
+                )
+            else:
+                # Insert new rating
+                cursor.execute(
+                    """
+                    INSERT INTO ratings (cognito_user_id, cognito_username, recipe_id, rating, comment)
+                    VALUES (:cognito_user_id, :cognito_username, :recipe_id, :rating, :comment)
+                    """,
+                    {
+                        "cognito_user_id": data["cognito_user_id"],
+                        "cognito_username": data["cognito_username"],
+                        "recipe_id": data["recipe_id"],
+                        "rating": data["rating"],
+                        "comment": data.get("comment", ""),
+                    },
+                )
+                rating_id = cursor.lastrowid
+                if rating_id is None:
+                    raise ValueError("Failed to get rating ID after insertion")
+
+            conn.commit()
+            conn.close()
+            conn = None
+
+            # Fetch the created/updated rating
+            rating = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    """
+                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating, comment,
+                           datetime(created_at, 'localtime') as created_at
+                    FROM ratings
+                    WHERE id = :id
+                    """,
+                    {"id": rating_id},
+                ),
+            )
+
+            # Also fetch the updated average rating and count
+            recipe_updated = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT avg_rating, rating_count FROM recipes WHERE id = :id",
+                    {"id": data["recipe_id"]},
+                ),
+            )
+
+            if rating and recipe_updated:
+                result = rating[0]
+                result["avg_rating"] = recipe_updated[0]["avg_rating"]
+                result["rating_count"] = recipe_updated[0]["rating_count"]
+                return result
+            return {}
+
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            logger.error(f"Error setting rating: {str(e)}")
+            raise
+        finally:
+            if conn:
+                conn.close()
+
+    @retry_on_db_locked()
+    def delete_rating(self, recipe_id: int, user_id: str) -> bool:
+        """Delete a rating for a recipe by a specific user"""
+        conn = None
+        try:
+            # Check if the rating exists
+            existing_rating = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    """
+                    SELECT id FROM ratings
+                    WHERE cognito_user_id = :user_id AND recipe_id = :recipe_id
+                    """,
+                    {"user_id": user_id, "recipe_id": recipe_id},
+                ),
+            )
+            if not existing_rating:
+                raise ValueError("Rating not found for this user and recipe")
+
+            conn = self._get_connection()
+            conn.execute("BEGIN IMMEDIATE")
+            cursor = conn.cursor()
+
+            # Delete the rating
+            cursor.execute(
+                """
+                DELETE FROM ratings
+                WHERE cognito_user_id = :user_id AND recipe_id = :recipe_id
+                """,
+                {"user_id": user_id, "recipe_id": recipe_id},
+            )
+
+            conn.commit()
+            return True
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            logger.error(f"Error deleting rating for recipe {recipe_id}: {str(e)}")
             raise
         finally:
             if conn:
