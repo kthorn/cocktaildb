@@ -1,5 +1,6 @@
 import { api } from './api.js';
 import { initAuth, isAuthenticated } from './auth.js';
+import { displayRecipes } from './recipeCard.js';
 import config from './config.js';
 
 // Declare function in global scope
@@ -157,7 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadRecipes() {
         try {
             const recipes = await api.getRecipes();
-            displayRecipes(recipes);
+            displayRecipes(recipes, recipesContainer, true, loadRecipes);
         } catch (error) {
             console.error('Error loading recipes:', error);
             recipesContainer.innerHTML = '<p>Error loading recipes. Please try again later.</p>';
@@ -354,53 +355,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ingredientsList.appendChild(div);
     };
 
-    // Display recipes in the container
-    function displayRecipes(recipes) {
-        recipesContainer.innerHTML = '';
-
-        if (recipes.length === 0) {
-            recipesContainer.innerHTML = '<p>No recipes found.</p>';
-            return;
-        }
-
-        recipes.forEach(recipe => {
-            const card = document.createElement('div');
-            card.className = 'recipe-card';            
-            card.innerHTML = `
-                <h4>${recipe.name}</h4>
-                <p>${recipe.description || 'No description'}</p>
-                <div class="ingredients">
-                    <h5>Ingredients</h5>
-                    <ul>
-                        ${recipe.ingredients.map(ing => {
-                            // Format with proper spaces between amount, unit and ingredient name
-                            const unitDisplay = ing.unit_name ? `${ing.unit_name} ` : '';
-                            
-                            // Try multiple possible property names for ingredient full name
-                            // in order of preference
-                            const ingredientName = ing.full_name || ing.ingredient_name || ing.name || 'Unknown ingredient';
-                            
-                            return `<li>${ing.amount} ${unitDisplay}${ingredientName}</li>`;
-                        }).join('')}
-                    </ul>
-                </div>
-                <div class="instructions">
-                    <h5>Instructions</h5>
-                    <p>${recipe.instructions}</p>
-                </div>
-                <div class="card-actions">
-                    <button class="edit-recipe" data-id="${recipe.id}">Edit</button>
-                    <button class="delete-recipe" data-id="${recipe.id}">Delete</button>
-                </div>
-            `;
-            recipesContainer.appendChild(card);
-
-            // Add event listeners for the buttons
-            card.querySelector('.delete-recipe').addEventListener('click', () => deleteRecipe(recipe.id));
-            card.querySelector('.edit-recipe').addEventListener('click', () => editRecipe(recipe.id));
-        });
-    }
-
     // Make loadRecipes accessible to outside functions
     window.loadRecipes = loadRecipes;
 });
@@ -498,6 +452,9 @@ async function editRecipe(id) {
         form.classList.remove('loading');
     }
 }
+
+// Make the editRecipe function globally available
+window.editRecipe = editRecipe;
 
 // Delete recipe
 async function deleteRecipe(id) {
