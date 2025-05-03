@@ -17,23 +17,7 @@
     </head>
 
     <body>
-        <header>
-            <h1>Cocktail Database</h1>
-            <nav>
-                <ul>
-                    <li><a href="index.html">Home</a></li>
-                    <li><a href="ingredients.html">Ingredients</a></li>
-                    <li><a href="recipes.html">Recipes</a></li>
-                </ul>
-                <div class="auth-controls">
-                    <span id="user-info" class="hidden">
-                        <span id="username">Not logged in</span>
-                        <button id="logout-btn">Logout</button>
-                    </span>
-                    <button id="login-btn">Login</button>
-                </div>
-            </nav>
-        </header>
+        <!-- Header will be loaded by common.js -->
 
         <main>
             <section class="recipes-section">
@@ -90,6 +74,7 @@
             <p>&copy; 2024 Cocktail Database</p>
         </footer>
 
+        <script type="module" src="js/common.js"></script>
         <script type="module" src="js/api.js"></script>
         <script type="module" src="js/recipes.js"></script>
     </body>

@@ -2,6 +2,7 @@ import { api } from './api.js';
 import { initAuth, isAuthenticated } from './auth.js';
 import { displayRecipes } from './recipeCard.js';
 import config from './config.js';
+import { loadHeader } from './common.js';
 
 // Declare function in global scope
 let addIngredientInput;

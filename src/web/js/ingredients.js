@@ -1,5 +1,6 @@
 import { api } from './api.js';
 import { initAuth } from './auth.js';
+import { loadHeader } from './common.js';
 
 // Define these functions in the global scope so they can be accessed from HTML
 window.editIngredient = async function(id) {
