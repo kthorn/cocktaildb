@@ -42,15 +42,27 @@
                     place.</p>
             </section>
 
-            <section class="quick-stats">
-                <div class="stat-card">
-                    <h3>Total Ingredients</h3>
-                    <p id="total-ingredients">Loading...</p>
+            <section class="recipe-carousel">
+                <div class="carousel-container">
+                    <button id="prev-recipe"
+                        class="carousel-arrow">&larr;</button>
+                    <div id="recipe-display" class="carousel-content">
+                        <!-- Recipe card will be displayed here -->
+                        <div class="loading-placeholder">
+                            <p>Loading recipe...</p>
+                        </div>
+                    </div>
+                    <button id="next-recipe"
+                        class="carousel-arrow">&rarr;</button>
                 </div>
-                <div class="stat-card">
-                    <h3>Total Recipes</h3>
-                    <p id="total-recipes">Loading...</p>
-                </div>
+            </section>
+
+            <section class="stats-footer">
+                <p class="stats-text">
+                    Database contains <span id="total-ingredients">...</span>
+                    ingredients and
+                    <span id="total-recipes">...</span> recipes
+                </p>
             </section>
         </main>
 
@@ -59,6 +71,7 @@
         </footer>
 
         <script type="module" src="js/api.js"></script>
+        <script type="module" src="js/recipeCard.js"></script>
         <script type="module" src="js/index.js"></script>
     </body>
 
