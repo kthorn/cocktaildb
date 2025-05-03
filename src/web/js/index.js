@@ -1,5 +1,5 @@
 import { loadHeader } from './common.js';
-import { fetchRecipes, fetchIngredients } from './api.js';
+import { api } from './api.js';
 import { createRecipeCard } from './recipeCard.js';
 
 let currentRecipeIndex = 0;
@@ -8,8 +8,8 @@ let recipes = [];
 // Update stats display
 async function updateStats() {
     try {
-        const ingredients = await fetchIngredients();
-        const recipesData = await fetchRecipes();
+        const ingredients = await api.getIngredients();
+        const recipesData = await api.getRecipes();
         
         document.getElementById('total-ingredients').textContent = ingredients.length;
         document.getElementById('total-recipes').textContent = recipesData.length;
@@ -21,7 +21,7 @@ async function updateStats() {
 // Load and display a recipe
 async function loadRecipes() {
     try {
-        recipes = await fetchRecipes();
+        recipes = await api.getRecipes();
         if (recipes.length > 0) {
             displayRecipe(currentRecipeIndex);
         } else {

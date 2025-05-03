@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { initAuth } from './auth.js';
+import { initAuth, isAuthenticated } from './auth.js';
 import { loadHeader } from './common.js';
 
 // Define these functions in the global scope so they can be accessed from HTML
@@ -144,8 +144,8 @@ function showNotification(message, type = 'info') {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize authentication
-    initAuth();
+    // Authentication is now initialized in common.js
+    // initAuth(); // Remove this line
     
     const ingredientForm = document.getElementById('ingredient-form');
     const ingredientsContainer = document.getElementById('ingredients-container');
@@ -275,14 +275,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             
-            card.innerHTML = `
-                <h4>${ingredient.name}</h4>
-                ${parentInfo}
-                <p>${ingredient.description || 'No description'}</p>
+            // Only show action buttons if user is authenticated
+            const actionButtons = isAuthenticated() ? `
                 <div class="card-actions">
                     <button onclick="editIngredient(${ingredient.id})">Edit</button>
                     <button onclick="deleteIngredient(${ingredient.id})">Delete</button>
                 </div>
+            ` : '';
+            
+            card.innerHTML = `
+                <h4>${ingredient.name}</h4>
+                ${parentInfo}
+                <p>${ingredient.description || 'No description'}</p>
+                ${actionButtons}
             `;
             ingredientsContainer.appendChild(card);
         });

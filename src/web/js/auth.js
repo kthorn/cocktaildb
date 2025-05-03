@@ -33,12 +33,10 @@ export function initAuth() {
         if (isAuthenticated()) {
             // User is logged in
             loginButton.classList.add('hidden');
-            logoutButton.classList.remove('hidden');
-            userInfo.classList.add('hidden');
+            userInfo.classList.remove('hidden');
         } else {
             // User is logged out
             loginButton.classList.remove('hidden');
-            logoutButton.classList.add('hidden');
             userInfo.classList.add('hidden');
         }
     }

@@ -30,14 +30,15 @@ function loadHeader() {
     // If no header exists, insert at the beginning of the body
     document.body.insertBefore(header, document.body.firstChild);
   }
-  
-  // Initialize authentication after header is loaded
-  initAuth();
 }
 
 // Initialize common components when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
   loadHeader();
+  // Initialize authentication AFTER header is loaded to ensure elements exist
+  setTimeout(() => {
+    initAuth();
+  }, 0);
 });
 
 export { loadHeader }; 

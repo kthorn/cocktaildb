@@ -13,6 +13,9 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
     const card = document.createElement('div');
     card.className = 'recipe-card';
     
+    // Only show action buttons if user is authenticated and showActions is true
+    const shouldShowActions = showActions && isAuthenticated();
+    
     card.innerHTML = `
         <h4>${recipe.name}</h4>
         <p>${recipe.description || 'No description'}</p>
@@ -34,7 +37,7 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
             <h5>Instructions</h5>
             <p>${recipe.instructions}</p>
         </div>
-        ${showActions ? `
+        ${shouldShowActions ? `
         <div class="card-actions">
             <button class="edit-recipe" data-id="${recipe.id}">Edit</button>
             <button class="delete-recipe" data-id="${recipe.id}">Delete</button>
@@ -43,7 +46,7 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
     `;
 
     // Add event listeners for action buttons if they exist
-    if (showActions) {
+    if (shouldShowActions) {
         const deleteBtn = card.querySelector('.delete-recipe');
         const editBtn = card.querySelector('.edit-recipe');
         

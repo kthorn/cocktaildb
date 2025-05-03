@@ -8,8 +8,8 @@ import { loadHeader } from './common.js';
 let addIngredientInput;
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize authentication
-    initAuth();
+    // Authentication is now initialized in common.js
+    // initAuth(); // Remove this line
     
     const recipeForm = document.getElementById('recipe-form');
     const recipesContainer = document.getElementById('recipes-container');
