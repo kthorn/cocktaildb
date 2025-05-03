@@ -41,4 +41,22 @@ document.addEventListener('DOMContentLoaded', () => {
   }, 0);
 });
 
-export { loadHeader }; 
+export { loadHeader };
+
+// Function to load common head elements
+export function loadCommonHead() {
+    const headContent = `
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="styles.css">
+        <link rel="icon" type="image/png" href="img/favicon-96x96.png" sizes="96x96" />
+        <link rel="icon" type="image/svg+xml" href="img/favicon.svg" />
+        <link rel="shortcut icon" href="img/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180" href="img/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-title" content="CocktailDB" />
+        <link rel="manifest" href="site.webmanifest" />
+    `;
+    
+    // Insert the common head elements
+    document.head.insertAdjacentHTML('beforeend', headContent);
+} 

@@ -1,8 +1,14 @@
+import { loadHeader, loadCommonHead } from './common.js';
 import { api } from './api.js';
 import { initAuth, isAuthenticated } from './auth.js';
 import { displayRecipes } from './recipeCard.js';
 import config from './config.js';
-import { loadHeader } from './common.js';
+
+// Load common head elements
+loadCommonHead();
+
+// Load the header
+loadHeader();
 
 // Declare function in global scope
 let addIngredientInput;
