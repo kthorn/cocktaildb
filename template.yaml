@@ -17,7 +17,7 @@ Globals:
   Function:
     Runtime: python3.12
     Timeout: 60
-    MemorySize: 256
+    MemorySize: 1024
   
   Api:
     Cors:
