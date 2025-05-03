@@ -19,9 +19,12 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
     
     // Start with the basic recipe details
     card.innerHTML = `
-        <h4>${recipe.name}</h4>
+        <h4 class="recipe-title">${recipe.name}</h4>
+        <div class="recipe-meta">
+            <div class="recipe-tags"></div>
+            <div id="rating-container-${recipe.id}" class="recipe-rating"></div>
+        </div>
         <p>${recipe.description || 'No description'}</p>
-        <div id="rating-container-${recipe.id}"></div>
         <div class="ingredients">
             <h5>Ingredients</h5>
             <ul>
@@ -40,6 +43,12 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
             <h5>Instructions</h5>
             <p>${recipe.instructions}</p>
         </div>
+        ${recipe.source ? `
+        <div class="recipe-source">
+            <h5>Source</h5>
+            <p>${recipe.source_url ? `<a href="${recipe.source_url}" target="_blank" rel="noopener noreferrer">${recipe.source}</a>` : recipe.source}</p>
+        </div>
+        ` : ''}
         ${shouldShowActions ? `
         <div class="card-actions">
             <button class="edit-recipe" data-id="${recipe.id}">Edit</button>

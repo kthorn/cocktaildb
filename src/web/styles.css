@@ -141,7 +141,7 @@ textarea {
 }
 
 button {
-    background-color: #3498db;
+    background-color: #A61816;
     color: white;
     border: none;
     padding: 0.5rem 1rem;
@@ -152,7 +152,7 @@ button {
 }
 
 button:hover {
-    background-color: #2980b9;
+    background-color: #8A1412;
 }
 
 /* List styles */
@@ -210,26 +210,26 @@ button:hover {
 .recipe-card .ingredients h5,
 .recipe-card .instructions h5 {
     font-size: 1.1rem;
-    color: #3498db;
+    color: #A61816;
     margin-bottom: 0.5rem;
     font-weight: 600;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .recipe-card .ingredients ul {
-    list-style-type: none;
-    padding-left: 0;
+    list-style-type: disc;
+    padding-left: 1.5rem;
+    margin-top: 0.5rem;
 }
 
 .recipe-card .ingredients ul li {
-    padding: 0.3rem 0;
-    border-bottom: 1px dotted #eee;
-    display: flex;
-    align-items: baseline;
-    line-height: 1.6;
+    padding: 0.15rem 0;
+    border-bottom: none;
+    display: list-item;
+    line-height: 1.4;
 }
 
-/* Remove the bullet point ::before element */
+/* Remove the previous ::before styling */
 .recipe-card .ingredients ul li::before {
     content: none;
 }
@@ -566,7 +566,7 @@ footer {
 
 .carousel-arrow {
     font-size: 2rem;
-    background: #3498db;
+    background: #A61816;
     color: white;
     border: none;
     border-radius: 50%;
@@ -582,7 +582,7 @@ footer {
 }
 
 .carousel-arrow:hover {
-    background-color: #2980b9;
+    background-color: #8A1412;
     transform: scale(1.1);
 }
 
@@ -629,7 +629,7 @@ footer {
 
 .stats-text span {
     font-weight: bold;
-    color: #3498db;
+    color: #A61816;
 }
 
 /* Carousel Recipe Card Styling */
@@ -772,4 +772,42 @@ footer {
 @keyframes fadeOut {
     from { opacity: 1; }
     to { opacity: 0; visibility: hidden; }
+}
+
+/* Recipe Card Styling - consolidated and updated */
+.recipe-card h4.recipe-title {
+    margin-bottom: 0.75rem;
+    color: #2c3e50;
+    font-size: 1.4rem;
+    font-weight: 600;
+    font-family: Georgia, 'Times New Roman', Times, serif;
+    text-align: center;
+    padding-bottom: 0.5rem;
+    position: relative;
+}
+
+.recipe-card h4.recipe-title::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40%;
+    height: 2px;
+    background-color: #A61816;
+}
+
+.recipe-card .recipe-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.recipe-card .recipe-rating {
+    text-align: right;
+}
+
+.recipe-card .recipe-tags {
+    flex: 1;
 }

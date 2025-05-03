@@ -546,14 +546,16 @@ class Database:
             # Create the recipe
             cursor.execute(
                 """
-                INSERT INTO recipes (name, instructions, description, image_url)
-                VALUES (:name, :instructions, :description, :image_url)
+                INSERT INTO recipes (name, instructions, description, image_url, source, source_url)
+                VALUES (:name, :instructions, :description, :image_url, :source, :source_url)
                 """,
                 {
                     "name": data["name"],
                     "instructions": data.get("instructions"),
                     "description": data.get("description"),
                     "image_url": data.get("image_url"),
+                    "source": data.get("source"),
+                    "source_url": data.get("source_url"),
                 },
             )
 
@@ -603,7 +605,7 @@ class Database:
             recipes_result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, instructions, description, image_url, avg_rating, rating_count FROM recipes"
+                    "SELECT id, name, instructions, description, image_url, source, source_url, avg_rating, rating_count FROM recipes"
                 ),
             )
 
@@ -621,7 +623,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, instructions, description, image_url, avg_rating, rating_count FROM recipes WHERE id = :id",
+                    "SELECT id, name, instructions, description, image_url, source, source_url, avg_rating, rating_count FROM recipes WHERE id = :id",
                     {"id": recipe_id},
                 ),
             )
@@ -742,7 +744,9 @@ class Database:
                 SET name = COALESCE(:name, name),
                     instructions = COALESCE(:instructions, instructions),
                     description = COALESCE(:description, description),
-                    image_url = COALESCE(:image_url, image_url)
+                    image_url = COALESCE(:image_url, image_url),
+                    source = COALESCE(:source, source),
+                    source_url = COALESCE(:source_url, source_url)
                 WHERE id = :id
                 """,
                 {
@@ -751,6 +755,8 @@ class Database:
                     "instructions": data.get("instructions"),
                     "description": data.get("description"),
                     "image_url": data.get("image_url"),
+                    "source": data.get("source"),
+                    "source_url": data.get("source_url"),
                 },
             )
 

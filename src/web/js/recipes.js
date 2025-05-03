@@ -115,6 +115,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 name: recipeName,
                 description: document.getElementById('recipe-description').value.trim(),
                 instructions: recipeInstructions,
+                source: document.getElementById('recipe-source').value.trim(),
+                source_url: formatSourceUrl(document.getElementById('recipe-source-url').value.trim()),
                 ingredients: ingredients
             };
 
@@ -138,6 +140,19 @@ document.addEventListener('DOMContentLoaded', () => {
             alert(`Failed to save recipe: ${error.message || 'Please try again.'}`);
         }
     });
+
+    // Format source URL to ensure it has proper http/https prefix
+    function formatSourceUrl(url) {
+        if (!url) return '';
+        
+        // If URL already has http/https protocol, return it as is
+        if (url.match(/^https?:\/\//i)) {
+            return url;
+        }
+        
+        // Otherwise, add https:// prefix
+        return `https://${url}`;
+    }
 
     // Handle adding new ingredient input
     addIngredientBtn.addEventListener('click', () => {
@@ -394,6 +409,8 @@ async function editRecipe(id) {
         document.getElementById('recipe-name').value = recipe.name || '';
         document.getElementById('recipe-description').value = recipe.description || '';
         document.getElementById('recipe-instructions').value = recipe.instructions || '';
+        document.getElementById('recipe-source').value = recipe.source || '';
+        document.getElementById('recipe-source-url').value = recipe.source_url || '';
 
         // Clear and repopulate ingredients
         ingredientsList.innerHTML = '';
