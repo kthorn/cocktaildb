@@ -2,6 +2,9 @@ import { api } from './api.js';
 import { initAuth, isAuthenticated } from './auth.js';
 import config from './config.js';
 
+// Declare function in global scope
+let addIngredientInput;
+
 document.addEventListener('DOMContentLoaded', () => {
     // Initialize authentication
     initAuth();
@@ -45,54 +48,76 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const ingredients = [];
-        const ingredientInputs = ingredientsList.querySelectorAll('.ingredient-input');
-
-        ingredientInputs.forEach(input => {
-            const ingredientName = input.querySelector('.ingredient-name').value;
-            const ingredientUnitName = input.querySelector('.ingredient-unit').value;
-            const amountInput = input.querySelector('.ingredient-amount');
-            const amount = parseFloat(amountInput.value);
-            
-            // Find the ingredient by name
-            const ingredient = availableIngredients.find(ing => ing.name === ingredientName);
-            if (!ingredient) {
-                throw new Error(`Ingredient "${ingredientName}" not found`);
-            }
-
-            // Find the unit by name
-            const unit = window.availableUnits.find(u => u.name === ingredientUnitName);
-            if (!ingredientUnitName) {
-                throw new Error(`Please select a unit for "${ingredientName}"`);
-            }
-            if (!unit) {
-                throw new Error(`Unit "${ingredientUnitName}" not found`);
-            }
-
-            if (amount < 0) {
-                throw new Error(`Amount for "${ingredientName}" cannot be negative`);
-            }
-
-            ingredients.push({
-                ingredient_id: ingredient.id,
-                amount: amount,
-                unit_id: unit.id  // Send unit_id instead of unit name
-            });
-        });
-
-        const recipeData = {
-            name: document.getElementById('recipe-name').value,
-            description: document.getElementById('recipe-description').value,
-            instructions: document.getElementById('recipe-instructions').value,
-            ingredients: ingredients
-        };
-
         try {
+            const ingredients = [];
+            const ingredientInputs = ingredientsList.querySelectorAll('.ingredient-input');
+
+            if (ingredientInputs.length === 0) {
+                throw new Error('Please add at least one ingredient');
+            }
+
+            const recipeName = document.getElementById('recipe-name').value.trim();
+            if (!recipeName) {
+                throw new Error('Recipe name is required');
+            }
+
+            const recipeInstructions = document.getElementById('recipe-instructions').value.trim();
+            if (!recipeInstructions) {
+                throw new Error('Recipe instructions are required');
+            }
+
+            ingredientInputs.forEach(input => {
+                const ingredientName = input.querySelector('.ingredient-name').value;
+                const ingredientUnitName = input.querySelector('.ingredient-unit').value;
+                const amountInput = input.querySelector('.ingredient-amount');
+                const amount = parseFloat(amountInput.value);
+                
+                if (!ingredientName) {
+                    throw new Error('Please select an ingredient');
+                }
+
+                if (!ingredientUnitName) {
+                    throw new Error(`Please select a unit for "${ingredientName}"`);
+                }
+
+                if (isNaN(amount) || amount <= 0) {
+                    throw new Error(`Amount for "${ingredientName}" must be a positive number`);
+                }
+                
+                // Find the ingredient by name
+                const ingredient = availableIngredients.find(ing => ing.name === ingredientName);
+                if (!ingredient) {
+                    throw new Error(`Ingredient "${ingredientName}" not found`);
+                }
+
+                // Find the unit by name
+                const unit = window.availableUnits?.find(u => u.name === ingredientUnitName);
+                if (!unit) {
+                    throw new Error(`Unit "${ingredientUnitName}" not found`);
+                }
+
+                ingredients.push({
+                    ingredient_id: ingredient.id,
+                    amount: amount,
+                    unit_id: unit.id  // Send unit_id instead of unit name
+                });
+            });
+
+            const recipeData = {
+                name: recipeName,
+                description: document.getElementById('recipe-description').value.trim(),
+                instructions: recipeInstructions,
+                ingredients: ingredients
+            };
+
             if (recipeForm.dataset.mode === 'edit') {
                 await api.updateRecipe(recipeForm.dataset.id, recipeData);
+                alert('Recipe updated successfully!');
             } else {
-                const response = await api.createRecipe(recipeData);
+                await api.createRecipe(recipeData);
+                alert('Recipe created successfully!');
             }
+            
             recipeForm.reset();
             ingredientsList.innerHTML = '';
             delete recipeForm.dataset.mode;
@@ -150,8 +175,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Add new ingredient input to the form
-    function addIngredientInput() {
+    // Define addIngredientInput as a global function (assigned to the variable declared at the top)
+    addIngredientInput = function() {
         const div = document.createElement('div');
         div.className = 'ingredient-input';
         div.innerHTML = `
@@ -162,9 +187,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="form-group">
                     <select class="ingredient-unit" name="ingredient-unit" required>
                         <option value="">Select unit</option>
-                        ${window.availableUnits?.map(unit =>
+                        ${window.availableUnits ? window.availableUnits.map(unit =>
             `<option value="${unit.name}">${unit.name} (${unit.abbreviation})</option>`
-        ).join('')}
+        ).join('') : ''}
                     </select>
                 </div>
                 <div class="form-group">
@@ -173,9 +198,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="autocomplete-dropdown"></div>
                         <select class="ingredient-name" name="ingredient-name" required>
                             <option value="">Select ingredient</option>
-                            ${availableIngredients.map(ingredient =>
+                            ${availableIngredients && availableIngredients.length > 0 ? availableIngredients.map(ingredient =>
             `<option value="${ingredient.name}">${ingredient.name}</option>`
-        ).join('')}
+        ).join('') : ''}
                         </select>
                     </div>
                 </div>
@@ -207,9 +232,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             // Find matching ingredients
-            const matches = availableIngredients.filter(ingredient => 
+            const matches = availableIngredients ? availableIngredients.filter(ingredient => 
                 ingredient.name.toLowerCase().includes(searchTerm)
-            );
+            ) : [];
             
             if (matches.length === 0) {
                 autocompleteDropdown.style.display = 'none';
@@ -327,7 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         ingredientsList.appendChild(div);
-    }
+    };
 
     // Display recipes in the container
     function displayRecipes(recipes) {
@@ -389,45 +414,75 @@ async function editRecipe(id) {
     }
 
     const form = document.getElementById('recipe-form');
-    if (!form) {
-        console.error('Recipe form not found');
+    const ingredientsList = document.getElementById('ingredients-list');
+    if (!form || !ingredientsList) {
+        console.error('Required form elements not found');
         return;
     }
 
     try {
+        // Show loading state
+        form.classList.add('loading');
+        
         const recipe = await api.getRecipe(id);
+        if (!recipe) {
+            throw new Error('Recipe not found');
+        }
 
         // Populate form with recipe data
-        document.getElementById('recipe-name').value = recipe.name;
+        document.getElementById('recipe-name').value = recipe.name || '';
         document.getElementById('recipe-description').value = recipe.description || '';
-        document.getElementById('recipe-instructions').value = recipe.instructions;
+        document.getElementById('recipe-instructions').value = recipe.instructions || '';
 
         // Clear and repopulate ingredients
-        const ingredientsList = document.getElementById('ingredients-list');
         ingredientsList.innerHTML = '';
 
-        recipe.ingredients.forEach(ingredient => {
+        // Check if ingredients exist
+        if (!recipe.ingredients || recipe.ingredients.length === 0) {
+            // Add at least one empty ingredient row
             addIngredientInput();
-            const lastInput = ingredientsList.lastElementChild;
-            
-            // Set ingredient selection
-            lastInput.querySelector('.ingredient-name').value = ingredient.ingredient_name;
-            lastInput.querySelector('.ingredient-search').value = ingredient.ingredient_name;
-            
-            // Set amount and unit
-            lastInput.querySelector('.ingredient-amount').value = ingredient.amount;
-            
-            // Set the unit by name if available
-            if (ingredient.unit_name && window.availableUnits) {
-                const unitSelect = lastInput.querySelector('.ingredient-unit');
-                const matchingUnit = window.availableUnits.find(u => u.name === ingredient.unit_name);
-                if (matchingUnit) {
-                    unitSelect.value = matchingUnit.name;
-                } else {
-                    console.warn(`Unit "${ingredient.unit_name}" not found in available units`);
+        } else {
+            recipe.ingredients.forEach(ingredient => {
+                addIngredientInput();
+                const lastInput = ingredientsList.lastElementChild;
+                
+                if (!lastInput) {
+                    console.error('Failed to add ingredient input');
+                    return;
                 }
-            }
-        });
+                
+                // Set ingredient selection
+                const nameSelect = lastInput.querySelector('.ingredient-name');
+                const searchInput = lastInput.querySelector('.ingredient-search');
+                
+                if (nameSelect && ingredient.ingredient_name) {
+                    nameSelect.value = ingredient.ingredient_name;
+                }
+                
+                if (searchInput && ingredient.ingredient_name) {
+                    searchInput.value = ingredient.ingredient_name;
+                }
+                
+                // Set amount and unit
+                const amountInput = lastInput.querySelector('.ingredient-amount');
+                if (amountInput && ingredient.amount !== undefined) {
+                    amountInput.value = ingredient.amount;
+                }
+                
+                // Set the unit by name if available
+                if (ingredient.unit_name && window.availableUnits) {
+                    const unitSelect = lastInput.querySelector('.ingredient-unit');
+                    if (unitSelect) {
+                        const matchingUnit = window.availableUnits.find(u => u.name === ingredient.unit_name);
+                        if (matchingUnit) {
+                            unitSelect.value = matchingUnit.name;
+                        } else {
+                            console.warn(`Unit "${ingredient.unit_name}" not found in available units`);
+                        }
+                    }
+                }
+            });
+        }
 
         // Change form to update mode
         form.dataset.mode = 'edit';
@@ -437,7 +492,10 @@ async function editRecipe(id) {
         form.scrollIntoView({ behavior: 'smooth' });
     } catch (error) {
         console.error('Error loading recipe:', error);
-        alert('Failed to load recipe. Please try again.');
+        alert(`Failed to load recipe: ${error.message || 'Please try again.'}`);
+    } finally {
+        // Remove loading state
+        form.classList.remove('loading');
     }
 }
 
@@ -455,9 +513,10 @@ async function deleteRecipe(id) {
 
     try {
         await api.deleteRecipe(id);
+        alert('Recipe deleted successfully!');
         window.loadRecipes();
     } catch (error) {
         console.error('Error deleting recipe:', error);
-        alert('Failed to delete recipe. Please try again.');
+        alert(`Failed to delete recipe: ${error.message || 'Please try again.'}`);
     }
 } 
