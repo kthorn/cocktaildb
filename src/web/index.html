@@ -3,6 +3,13 @@
 
     <head>
         <title>Cocktail Database</title>
+        <!-- Prevent FOUC (Flash of Unstyled Content) -->
+        <style>
+            body { visibility: hidden; }
+        </style>
+        <!-- Direct CSS link to prevent FOUC -->
+        <link rel="stylesheet" href="styles.css"
+            onload="document.body.style.visibility=''">
         <!-- Common head elements will be loaded by common.js -->
     </head>
 

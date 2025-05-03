@@ -3,6 +3,13 @@
 
     <head>
         <title>Recipes - Cocktail Database</title>
+        <!-- Prevent FOUC (Flash of Unstyled Content) -->
+        <style>
+            body { visibility: hidden; }
+        </style>
+        <!-- Direct CSS link to prevent FOUC -->
+        <link rel="stylesheet" href="styles.css"
+            onload="document.body.style.visibility=''">
         <!-- Common head elements will be loaded by common.js -->
     </head>
 
@@ -43,7 +50,7 @@
 
                         <div class="form-group">
                             <label for="recipe-source-url">Source URL:</label>
-                            <input type="url" id="recipe-source-url"
+                            <input type="text" id="recipe-source-url"
                                 placeholder="https://example.com/recipe">
                         </div>
 
