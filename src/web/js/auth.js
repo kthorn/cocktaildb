@@ -33,13 +33,13 @@ export function initAuth() {
         if (isAuthenticated()) {
             // User is logged in
             loginButton.classList.add('hidden');
-            userInfo.classList.remove('hidden');
-            username.textContent = getUserInfo().username;
+            logoutButton.classList.remove('hidden');
+            userInfo.classList.add('hidden');
         } else {
             // User is logged out
             loginButton.classList.remove('hidden');
+            logoutButton.classList.add('hidden');
             userInfo.classList.add('hidden');
-            username.textContent = 'Not logged in';
         }
     }
 }
