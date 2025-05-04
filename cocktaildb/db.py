@@ -11,8 +11,83 @@ logger.setLevel(logging.INFO)
 db_path = "/mnt/efs/cocktaildb.db"
 
 
-# Global metadata cache to prevent repeated reflection
-_METADATA_INITIALIZED = False
+# --- Helper Functions --- #
+
+
+def extract_all_ingredient_ids(ingredients_list: List[Dict[str, Any]]) -> set[int]:
+    """Extracts all unique ingredient IDs (direct and ancestors) from a list of ingredient data.
+
+    Args:
+        ingredients_list: List of dicts, each must contain 'ingredient_id' and 'ingredient_path'.
+
+    Returns:
+        A set of all unique integer ingredient IDs found.
+    """
+    all_needed_ids = set()
+    unique_paths = set()  # Keep track of paths to avoid redundant parsing
+
+    for ing in ingredients_list:
+        # Add direct ID
+        direct_id = ing.get("ingredient_id")
+        if direct_id is not None:
+            all_needed_ids.add(direct_id)
+
+        # Collect unique paths containing ancestors
+        path = ing.get("ingredient_path")
+        if (
+            path and path != f"/{direct_id}/"
+        ):  # Only consider paths with actual ancestors
+            unique_paths.add(path)
+
+    # Parse unique paths to add ancestor IDs
+    for path in unique_paths:
+        parts = path.strip("/").split("/")
+        # Add all numeric parts
+        for part in parts:
+            if part.isdigit():
+                all_needed_ids.add(int(part))
+
+    return all_needed_ids
+
+
+def assemble_ingredient_full_names(
+    ingredients_list: List[Dict[str, Any]], ingredient_names_map: Dict[int, str]
+) -> None:
+    """Helper to assemble the 'full_name' for a list of ingredients using a pre-fetched name map.
+
+    Modifies the dictionaries in ingredients_list in-place.
+    """
+    for ingredient in ingredients_list:
+        ingredient_id = ingredient["ingredient_id"]
+        ingredient_path = ingredient.get("ingredient_path")  # Use .get for safety
+        # Fallback to ingredient_name field if base name isn't in the map (shouldn't happen ideally)
+        base_name = ingredient_names_map.get(
+            ingredient_id, ingredient.get("ingredient_name", "Unknown")
+        )
+
+        ancestor_names = []
+        if ingredient_path:
+            parts = ingredient_path.strip("/").split("/")
+            # Iterate through ancestor IDs in the path (from root towards leaf)
+            for part in parts[:-1]:
+                if part.isdigit():
+                    ancestor_id = int(part)
+                    # Look up the name in our pre-fetched map
+                    ancestor_name = ingredient_names_map.get(ancestor_id)
+                    if ancestor_name:
+                        ancestor_names.append(ancestor_name)
+
+        # Construct full name (e.g., "Lime Juice [Lime;Citrus]")
+        if ancestor_names:
+            # Reverse the order to match original logic [parent; grandparent]
+            ingredient["full_name"] = (
+                f"{base_name} [{';'.join(reversed(ancestor_names))}]"
+            )
+        else:
+            ingredient["full_name"] = base_name
+
+
+# --- End Helper Functions --- #
 
 
 def retry_on_db_locked(max_retries=3, initial_backoff=0.1):
@@ -263,7 +338,6 @@ class Database:
             logger.error(f"Error creating ingredient: {str(e)}")
             raise
 
-    @retry_on_db_locked()
     def update_ingredient(
         self, ingredient_id: int, data: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
@@ -281,8 +355,6 @@ class Database:
 
                 if not old_ingredient:
                     return None
-
-                old_parent_id = old_ingredient[0]["parent_id"]
                 old_path = old_ingredient[0]["path"]
                 new_parent_id = data.get("parent_id")
 
@@ -379,7 +451,6 @@ class Database:
             logger.error(f"Error updating ingredient {ingredient_id}: {str(e)}")
             raise
 
-    @retry_on_db_locked()
     def delete_ingredient(self, ingredient_id: int) -> bool:
         """Delete an ingredient"""
         try:
@@ -491,49 +562,6 @@ class Database:
             )
             raise
 
-    def get_ingredient_ancestors_by_path(self, path: str) -> List[Dict[str, Any]]:
-        """Get all ancestors of an ingredient using its path
-
-        Args:
-            path: The path of the ingredient
-
-        Returns:
-            List of ancestor ingredients ordered from root to leaf
-        """
-        try:
-            # Parse the path to get ancestor IDs
-            ancestor_ids = []
-            parts = path.strip("/").split("/")
-
-            # Extract all IDs except the last one (which is the ingredient itself)
-            for part in parts[:-1]:  # Skip the last part which is the ingredient itself
-                if part and part.isdigit():
-                    ancestor_ids.append(int(part))
-            if not ancestor_ids:
-                return []
-
-            # Get all ancestors
-            placeholders = ", ".join("?" for _ in ancestor_ids)
-            result = cast(
-                List[Dict[str, Any]],
-                self.execute_query(
-                    f"""
-                SELECT id, name, description, parent_id, path,
-                       (LENGTH(path) - LENGTH(REPLACE(path, '/', '')) - 1) as level
-                FROM ingredients 
-                WHERE id IN ({placeholders})
-                ORDER BY path
-                """,
-                    tuple(ancestor_ids),
-                ),
-            )
-            return result
-        except Exception as e:
-            logger.error(
-                f"Error getting ancestors for ingredient with path {path}: {str(e)}"
-            )
-            raise
-
     @retry_on_db_locked()
     def create_recipe(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new recipe with its ingredients"""
@@ -602,16 +630,106 @@ class Database:
     def get_recipes(self) -> List[Dict[str, Any]]:
         """Get all recipes with their ingredients"""
         try:
+            start_time = time.time()
+            # 1. Get all recipes
+            recipes_start = time.time()
             recipes_result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, instructions, description, image_url, source, source_url, avg_rating, rating_count FROM recipes"
+                    """
+                    SELECT id, name, instructions, description, image_url, source, source_url, avg_rating, rating_count
+                    FROM recipes
+                    ORDER BY id
+                    """
                 ),
             )
-
+            recipes_end = time.time()
+            logger.info(
+                f"get_recipes: Fetched {len(recipes_result)} recipes in {recipes_end - recipes_start:.3f}s"
+            )
+            if not recipes_result:
+                return []
+            # 2. Fetch all recipe ingredients across all recipes
+            recipe_ids = [recipe["id"] for recipe in recipes_result]
+            recipe_ids_str = ",".join("?" for _ in recipe_ids)
+            ingredients_start = time.time()
+            all_recipe_ingredients_list = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    f"""
+                    SELECT ri.recipe_id, ri.id as recipe_ingredient_id, ri.amount, ri.ingredient_id, i.name as ingredient_name,
+                           ri.unit_id, u.name as unit_name, u.abbreviation as unit_abbreviation,
+                           i.path as ingredient_path
+                    FROM recipe_ingredients ri
+                    JOIN ingredients i ON ri.ingredient_id = i.id
+                    LEFT JOIN units u ON ri.unit_id = u.id
+                    WHERE ri.recipe_id IN ({recipe_ids_str})
+                    """,
+                    tuple(recipe_ids),
+                ),
+            )
+            ingredients_end = time.time()
+            logger.info(
+                f"get_recipes: Fetched {len(all_recipe_ingredients_list)} recipe ingredient entries in {ingredients_end - ingredients_start:.3f}s"
+            )
+            # 3. Identify all necessary ingredient IDs (direct + ancestors) using the helper
+            ids_start = time.time()
+            all_needed_ingredient_ids = extract_all_ingredient_ids(
+                all_recipe_ingredients_list
+            )
+            ids_end = time.time()
+            logger.info(
+                f"get_recipes: Identified {len(all_needed_ingredient_ids)} unique ingredient IDs in {ids_end - ids_start:.3f}s"
+            )
+            # 4. Fetch names for all needed ingredients in one query
+            fetch_names_start = time.time()
+            ingredient_names_map = {}
+            if all_needed_ingredient_ids:
+                placeholders = ",".join("?" for _ in all_needed_ingredient_ids)
+                names_result = cast(
+                    List[Dict[str, Any]],
+                    self.execute_query(
+                        f"SELECT id, name FROM ingredients WHERE id IN ({placeholders})",
+                        tuple(all_needed_ingredient_ids),
+                    ),
+                )
+                ingredient_names_map = {row["id"]: row["name"] for row in names_result}
+            fetch_names_end = time.time()
+            logger.info(
+                f"get_recipes: Fetched {len(ingredient_names_map)} ingredient names in {fetch_names_end - fetch_names_start:.3f}s"
+            )
+            # 5. Assemble full names using the helper method
+            assemble_names_start = time.time()
+            assemble_ingredient_full_names(
+                all_recipe_ingredients_list, ingredient_names_map
+            )
+            assemble_names_end = time.time()
+            logger.info(
+                f"get_recipes: Assembled full names in {assemble_names_end - assemble_names_start:.3f}s"
+            )
+            # 6. Group ingredients by recipe
+            grouping_start = time.time()
+            recipe_ingredients_grouped = {recipe_id: [] for recipe_id in recipe_ids}
+            for ing_data in all_recipe_ingredients_list:
+                recipe_id = ing_data["recipe_id"]
+                # Use the actual recipe_ingredient_id as 'id' for consistency if needed frontend
+                ing_data["id"] = ing_data["recipe_ingredient_id"]
+                recipe_ingredients_grouped[recipe_id].append(ing_data)
+            grouping_end = time.time()
+            logger.info(
+                f"get_recipes: Grouped ingredients in {grouping_end - grouping_start:.3f}s"
+            )
+            # 7. Combine recipes with their assembled ingredients
+            combine_start = time.time()
             for recipe in recipes_result:
-                recipe["ingredients"] = self._get_recipe_ingredients(recipe["id"])
+                recipe["ingredients"] = recipe_ingredients_grouped.get(recipe["id"], [])
+            combine_end = time.time()
+            logger.info(
+                f"get_recipes: Combined recipes and ingredients in {combine_end - combine_start:.3f}s"
+            )
 
+            total_time = time.time() - start_time
+            logger.info(f"get_recipes: Total execution time: {total_time:.3f}s")
             return recipes_result
         except Exception as e:
             logger.error(f"Error getting recipes: {str(e)}")
@@ -637,37 +755,47 @@ class Database:
             raise
 
     def _get_recipe_ingredients(self, recipe_id: int) -> List[Dict[str, Any]]:
-        """Helper method to get ingredients for a recipe"""
-        result = cast(
+        """Helper method to get ingredients for a recipe, optimized for ancestor lookup"""
+        # Fetch direct ingredients for the recipe
+        direct_ingredients = cast(
             List[Dict[str, Any]],
             self.execute_query(
                 """
-            SELECT ri.id, ri.amount, ri.ingredient_id, i.name as ingredient_name,
-                   ri.unit_id, u.name as unit_name, u.abbreviation as unit_abbreviation,
-                   i.path as ingredient_path
-            FROM recipe_ingredients ri
-            JOIN ingredients i ON ri.ingredient_id = i.id
-            LEFT JOIN units u ON ri.unit_id = u.id
-            WHERE ri.recipe_id = :recipe_id
-            """,
+                SELECT ri.id, ri.amount, ri.ingredient_id, i.name as ingredient_name,
+                       ri.unit_id, u.name as unit_name, u.abbreviation as unit_abbreviation,
+                       i.path as ingredient_path
+                FROM recipe_ingredients ri
+                JOIN ingredients i ON ri.ingredient_id = i.id
+                LEFT JOIN units u ON ri.unit_id = u.id
+                WHERE ri.recipe_id = :recipe_id
+                """,
                 {"recipe_id": recipe_id},
             ),
         )
-        # Add full_name for each ingredient
-        for ingredient in result:
-            ingredient_path = ingredient["ingredient_path"]
-            # Get ancestors using the path directly
-            ancestors = self.get_ingredient_ancestors_by_path(ingredient_path)
-            # Generate full name
-            if ancestors:
-                ancestor_names = [ancestor["name"] for ancestor in reversed(ancestors)]
-                ingredient["full_name"] = (
-                    f"{ingredient['ingredient_name']} [{';'.join(ancestor_names)}]"
-                )
-            else:
-                ingredient["full_name"] = ingredient["ingredient_name"]
 
-        return result
+        if not direct_ingredients:
+            return []
+
+        # Identify all necessary ingredient IDs (direct + ancestors) using the helper
+        all_needed_ids = extract_all_ingredient_ids(direct_ingredients)
+
+        # Fetch names for all needed ingredients in one query
+        ingredient_names = {}
+        if all_needed_ids:
+            placeholders = ",".join("?" for _ in all_needed_ids)
+            names_result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    f"SELECT id, name FROM ingredients WHERE id IN ({placeholders})",
+                    tuple(all_needed_ids),
+                ),
+            )
+            ingredient_names = {row["id"]: row["name"] for row in names_result}
+
+        # Assemble full_name for each ingredient using the helper method
+        assemble_ingredient_full_names(direct_ingredients, ingredient_names)
+
+        return direct_ingredients
 
     def get_units(self) -> List[Dict[str, Any]]:
         """Get all measurement units"""

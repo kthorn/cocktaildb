@@ -8,10 +8,9 @@ let recipes = [];
 async function updateStats() {
     try {
         const ingredients = await api.getIngredients();
-        const recipesData = await api.getRecipes();
         
         document.getElementById('total-ingredients').textContent = ingredients.length;
-        document.getElementById('total-recipes').textContent = recipesData.length;
+        document.getElementById('total-recipes').textContent = recipes.length;
     } catch (error) {
         console.error('Error updating stats:', error);
     }
@@ -26,6 +25,7 @@ async function loadRecipes() {
         } else {
             document.getElementById('recipe-display').innerHTML = '<p>No recipes found.</p>';
         }
+        updateStats();
     } catch (error) {
         console.error('Error loading recipes:', error);
         document.getElementById('recipe-display').innerHTML = '<p>Error loading recipes.</p>';
@@ -61,5 +61,4 @@ document.getElementById('next-recipe').addEventListener('click', () => {
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     loadRecipes();
-    updateStats();
 }); 
