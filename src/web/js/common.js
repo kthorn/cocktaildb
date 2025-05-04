@@ -41,6 +41,7 @@ export function loadHeader() {
         <li><a href="index.html">Home</a></li>
         <li><a href="ingredients.html">Add / Edit Ingredients</a></li>
         <li><a href="recipes.html">Add / Edit Recipes</a></li>
+        <li><a href="search.html">Search Recipes</a></li>
       </ul>
       <div class="auth-controls">
         <span id="user-info" class="hidden">

@@ -142,6 +142,45 @@ class CocktailAPI {
         return this.handleResponse(response);
     }
 
+    // Search recipes with various criteria
+    async searchRecipes(searchQuery) {
+        // Build query string from the search parameters
+        const queryParams = new URLSearchParams();
+        
+        // Add search filters to query params
+        if (searchQuery.name) {
+            queryParams.append('name', searchQuery.name);
+        }
+        
+        if (searchQuery.rating) {
+            queryParams.append('min_rating', searchQuery.rating);
+        }
+        
+        if (searchQuery.tags && searchQuery.tags.length > 0) {
+            // For multiple tags, append each one
+            searchQuery.tags.forEach(tag => {
+                queryParams.append('tags', tag);
+            });
+        }
+        
+        // Handle ingredient queries as a comma-separated list of ID:OPERATOR pairs
+        if (searchQuery.ingredients && searchQuery.ingredients.length > 0) {
+            const ingredientParams = searchQuery.ingredients.map(ing => 
+                `${ing.id}:${ing.operator}`
+            ).join(',');
+            
+            queryParams.append('ingredients', ingredientParams);
+        }
+        
+        // Build the URL with query string
+        const queryString = queryParams.toString();
+        const url = `${this.baseUrl}/recipes?search=true${queryString ? `&${queryString}` : ''}`;
+        
+        // Always use GET for recipe searches
+        const response = await fetch(url, this.getFetchOptions());
+        return this.handleResponse(response);
+    }
+
     // Units API
     async getUnits() {
         const response = await fetch(`${this.baseUrl}/units`, this.getFetchOptions());

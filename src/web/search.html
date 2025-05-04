@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <title>Search Recipes - Cocktail Database</title>
+        <!-- Prevent FOUC (Flash of Unstyled Content) with common.js fallback -->
+    </head>
+
+    <body>
+        <!-- Header will be loaded by common.js -->
+
+        <main>
+            <section class="section-title">
+                <h2>Search Recipes</h2>
+                <p>Find cocktails by name, rating, ingredients, and more.</p>
+            </section>
+
+            <section class="form-container">
+                <form id="recipe-search-form" class="form-stack">
+                    <div class="form-group">
+                        <label for="name-search">Recipe Name</label>
+                        <input type="text" id="name-search" name="name-search"
+                            placeholder="Search by recipe name">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Rating</label>
+                        <div class="input-group">
+                            <label>
+                                <input type="radio" name="rating-filter"
+                                    value="all" checked>
+                                Any rating
+                            </label>
+                            <label>
+                                <input type="radio" name="rating-filter"
+                                    value="4+">
+                                4+ stars
+                            </label>
+                            <label>
+                                <input type="radio" name="rating-filter"
+                                    value="3+">
+                                3+ stars
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="tags-search">Tags</label>
+                        <input type="text" id="tags-search" name="tags-search"
+                            placeholder="Enter tags (comma separated)">
+                    </div>
+
+                    <div class="form-group ingredient-search-container">
+                        <label>Ingredients</label>
+                        <div id="ingredient-query-builder">
+                            <div class="item-row">
+                                <select
+                                    class="logical-operator item-row-field-fixed">
+                                    <option value="MUST">Must contain</option>
+                                    <option value="MUST_NOT">Must NOT
+                                        contain</option>
+                                </select>
+                                <div
+                                    class="ingredient-search-wrapper item-row-field-expand">
+                                    <input type="text" class="ingredient-search"
+                                        placeholder="Search for ingredient">
+                                    <input type="hidden" class="ingredient-id">
+                                    <div class="autocomplete-dropdown"></div>
+                                    <div class="search-status">Loading
+                                        ingredients...</div>
+                                </div>
+                                <button type="button"
+                                    class="remove-row btn-circle btn-danger">✕</button>
+                            </div>
+                            <div class="add-row-wrapper">
+                                <button type="button" id="add-ingredient-row"
+                                    class="btn-success">
+                                    Add Another Ingredient
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" id="search-button"
+                            class="btn-primary">Search</button>
+                        <button type="reset" id="reset-button"
+                            class="btn-secondary">Reset</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="results-section">
+                <h3>Results</h3>
+                <div id="search-results-container">
+                    <!-- Results will be displayed here -->
+                    <div class="loading-placeholder hidden">
+                        <p>Searching...</p>
+                    </div>
+                    <div class="empty-message">
+                        <p>Enter search criteria and click Search to find
+                            recipes.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer will be loaded by common.js -->
+
+        <script type="module" src="js/common.js"></script>
+        <script type="module" src="js/api.js"></script>
+        <script type="module" src="js/recipeCard.js"></script>
+        <script type="module" src="js/search.js"></script>
+    </body>
+
+</html>

@@ -288,11 +288,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             path_params = event.get(
                 "pathParameters"
             )  # Get pathParameters, could be None
-            recipe_id = (
-                path_params.get("recipeId") if path_params else None
-            )  # Only call .get() if path_params is a dict
-            # recipe_id = event.get("pathParameters", {}).get("recipeId") # Old potentially unsafe method
-
+            recipe_id = path_params.get("recipeId") if path_params else None
             if (
                 http_method == "POST" and not recipe_id
             ):  # POST is only for the collection path
@@ -336,22 +332,84 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                             "headers": CORS_HEADERS,
                             "body": json.dumps({"error": str(e)}),
                         }
-                else:  # GET all recipes (collection path)
-                    logger.info("Getting all recipes...")
-                    try:
-                        recipes = db.get_recipes()
-                        return {
-                            "statusCode": 200,
-                            "headers": CORS_HEADERS,
-                            "body": json.dumps(recipes),
-                        }
-                    except Exception as e:
-                        logger.error(f"Error getting recipes: {str(e)}")
-                        return {
-                            "statusCode": 500,
-                            "headers": CORS_HEADERS,
-                            "body": json.dumps({"error": str(e)}),
-                        }
+                else:  # Search request or collection path (get all recipes)
+                    # Check if this is a search request
+                    if query_params and query_params.get("search") == "true":
+                        logger.info("Searching recipes...")
+                        try:
+                            search_params = {}
+                            # Extract query parameters
+                            if "name" in query_params:
+                                search_params["name"] = query_params.get("name")
+                            if "min_rating" in query_params:
+                                search_params["min_rating"] = float(
+                                    query_params.get("min_rating")
+                                )
+                            # Handle tags (can be multiple)
+                            if "tags" in query_params:
+                                tags = query_params.get("tags")
+                                if isinstance(tags, list):
+                                    search_params["tags"] = tags
+                                else:
+                                    search_params["tags"] = [tags]
+
+                            # Handle ingredient queries through query parameters
+                            # Format: ingredients=ID:OPERATOR,ID:OPERATOR,...
+                            # Example: ingredients=12:MUST,34:MUST_NOT
+                            if "ingredients" in query_params:
+                                ingredients_param = query_params.get("ingredients")
+                                if ingredients_param:
+                                    ingredients = []
+                                    ingredient_parts = ingredients_param.split(",")
+
+                                    for part in ingredient_parts:
+                                        if ":" in part:
+                                            id_op = part.split(":")
+                                            if len(id_op) == 2 and id_op[0].isdigit():
+                                                # Only accept MUST or MUST_NOT operators
+                                                operator = id_op[1]
+                                                if operator in ["MUST", "MUST_NOT"]:
+                                                    ingredients.append(
+                                                        {
+                                                            "id": int(id_op[0]),
+                                                            "operator": operator,
+                                                        }
+                                                    )
+
+                                    if ingredients:
+                                        search_params["ingredients"] = ingredients
+
+                            # Perform the search
+                            recipes = db.search_recipes(search_params)
+
+                            return {
+                                "statusCode": 200,
+                                "headers": CORS_HEADERS,
+                                "body": json.dumps(recipes),
+                            }
+                        except Exception as e:
+                            logger.error(f"Error searching recipes: {str(e)}")
+                            return {
+                                "statusCode": 500,
+                                "headers": CORS_HEADERS,
+                                "body": json.dumps({"error": str(e)}),
+                            }
+                    else:
+                        logger.info("Getting all recipes...")
+                        try:
+                            recipes = db.get_recipes()
+                            return {
+                                "statusCode": 200,
+                                "headers": CORS_HEADERS,
+                                "body": json.dumps(recipes),
+                            }
+                        except Exception as e:
+                            logger.error(f"Error getting recipes: {str(e)}")
+                            return {
+                                "statusCode": 500,
+                                "headers": CORS_HEADERS,
+                                "body": json.dumps({"error": str(e)}),
+                            }
 
             elif http_method == "DELETE" and recipe_id:
                 logger.info(f"Deleting recipe {recipe_id}...")
@@ -398,6 +456,21 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         "headers": CORS_HEADERS,
                         "body": json.dumps({"error": str(e)}),
                     }
+
+            elif http_method == "OPTIONS":
+                return {
+                    "statusCode": 200,
+                    "headers": CORS_HEADERS,
+                    "body": "",
+                }
+            else:
+                return {
+                    "statusCode": 405,
+                    "headers": CORS_HEADERS,
+                    "body": json.dumps(
+                        {"error": "Method not allowed. Use GET for recipe search."}
+                    ),
+                }
 
         # Handle units endpoint
         elif path == "/units":

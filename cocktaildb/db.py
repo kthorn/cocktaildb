@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Any, Union, Tuple, cast
 
 # Configure logging
 logger = logging.getLogger()
-logger.setLevel(logging.WARNING)
+logger.setLevel(logging.INFO)
 
 db_path = "/mnt/efs/cocktaildb.db"
 
@@ -987,3 +987,141 @@ class Database:
         finally:
             if conn:
                 conn.close()
+
+    @retry_on_db_locked()
+    def search_recipes(self, search_params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Search recipes with various criteria including ingredient queries
+
+        Args:
+            search_params: Dictionary containing search parameters:
+                - name: Search recipe names (string)
+                - min_rating: Minimum average rating (float)
+                - tags: List of tags to search for (List[str])
+                - ingredients: List of ingredient conditions (List[Dict])
+                    Each condition has:
+                    - id: Ingredient ID
+                    - operator: MUST or MUST_NOT
+
+        Returns:
+            List of matching recipes with their ingredients
+        """
+        try:
+            # Start building the query
+            query = """
+            WITH recipe_data AS (
+                SELECT id, name, instructions, description, image_url, source, source_url, avg_rating, rating_count
+                FROM recipes
+                WHERE 1=1
+            """
+            params = {}
+            # Add name search condition if provided
+            if search_params.get("name"):
+                query += " AND name LIKE :name"
+                params["name"] = f"%{search_params['name']}%"
+            # Add minimum rating condition if provided
+            if search_params.get("min_rating"):
+                query += " AND avg_rating >= :min_rating"
+                params["min_rating"] = float(search_params["min_rating"])
+            # Close the recipes CTE
+            query += ")"
+
+            # Handle ingredient filtering with different logical operators
+            if (
+                search_params.get("ingredients")
+                and len(search_params["ingredients"]) > 0
+            ):
+                # Create separate CTEs for different ingredient operators
+                must_ingredients = [
+                    i for i in search_params["ingredients"] if i["operator"] == "MUST"
+                ]
+                must_not_ingredients = [
+                    i
+                    for i in search_params["ingredients"]
+                    if i["operator"] == "MUST_NOT"
+                ]
+                # For MUST ingredients: recipes must contain ALL of these ingredients
+                if must_ingredients:
+                    query += (
+                        """
+                    , must_matches AS (
+                        SELECT recipe_id, COUNT(*) as match_count
+                        FROM recipe_ingredients
+                        WHERE ingredient_id IN ("""
+                        + ",".join(
+                            f":must_ing_{i}" for i in range(len(must_ingredients))
+                        )
+                        + """)
+                        GROUP BY recipe_id
+                        HAVING match_count = :must_ing_count
+                    )
+                    """
+                    )
+                    params["must_ing_count"] = len(must_ingredients)
+                    for i, ingredient in enumerate(must_ingredients):
+                        params[f"must_ing_{i}"] = ingredient["id"]
+                # For MUST_NOT ingredients: recipes must contain NONE of these ingredients
+                if must_not_ingredients:
+                    query += (
+                        """
+                    , must_not_matches AS (
+                        SELECT r.id as recipe_id
+                        FROM recipe_data r
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM recipe_ingredients ri
+                            WHERE ri.recipe_id = r.id
+                            AND ri.ingredient_id IN ("""
+                        + ",".join(
+                            f":must_not_ing_{i}"
+                            for i in range(len(must_not_ingredients))
+                        )
+                        + """)
+                        )
+                    )
+                    """
+                    )
+                    for i, ingredient in enumerate(must_not_ingredients):
+                        params[f"must_not_ing_{i}"] = ingredient["id"]
+                # Build the final query combining all conditions
+                query += """
+                SELECT r.*
+                FROM recipe_data r
+                """
+                # Join with MUST ingredients if provided
+                if must_ingredients:
+                    query += " INNER JOIN must_matches mm ON r.id = mm.recipe_id"
+                # Join with MUST_NOT ingredients if provided
+                if must_not_ingredients:
+                    query += " INNER JOIN must_not_matches mnm ON r.id = mnm.recipe_id"
+                # Order by rating
+                query += " ORDER BY r.avg_rating DESC"
+
+            else:
+                # Simple query without ingredient filtering
+                query += "SELECT * FROM recipe_data ORDER BY avg_rating DESC"
+
+            # Execute the query
+            # Log the final query with parameter placeholders
+            logger.info(f"Executing search query: {query}")
+
+            # Log the query with actual parameter values for debugging
+            debug_query = query
+            for param_name, param_value in params.items():
+                placeholder = f":{param_name}"
+                if placeholder in debug_query:
+                    debug_query = debug_query.replace(placeholder, str(param_value))
+
+            logger.debug(f"Search query with params: {debug_query}")
+            recipes_result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(query, params),
+            )
+
+            # Fetch ingredients for each recipe
+            for recipe in recipes_result:
+                recipe["ingredients"] = self._get_recipe_ingredients(recipe["id"])
+
+            return recipes_result
+
+        except Exception as e:
+            logger.error(f"Error searching recipes: {str(e)}")
+            raise

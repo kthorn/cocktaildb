@@ -613,9 +613,13 @@ footer {
     align-items: center;
     min-height: 300px;
     width: 100%;
-    background-color: #f8f9fa;
+    background-color: #f9f9fa;
     border-radius: 8px;
     border: 2px dashed #dee2e6;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 10;
 }
 
 .loading-placeholder p {
@@ -853,4 +857,187 @@ footer {
 }
 .search-status.active {
     display: block;
+}
+
+/* Search page styles */
+.section-title h2 {
+    color: #2c3e50;
+    margin-bottom: 1rem;
+}
+
+/* Form container - use the existing section styling */
+.form-container {
+    margin-bottom: 2rem;
+}
+
+/* Generic button variations */
+.btn-primary {
+    background-color: #2c3e50;
+    padding: 0.75rem 1.5rem;
+}
+
+.btn-primary:hover {
+    background-color: #1a2530;
+}
+
+.btn-secondary {
+    background-color: #7f8c8d;
+    padding: 0.75rem 1.5rem;
+}
+
+.btn-secondary:hover {
+    background-color: #666e6f;
+}
+
+.btn-success {
+    background-color: #4CAF50;
+}
+
+.btn-success:hover {
+    background-color: #388E3C;
+}
+
+.btn-danger {
+    background-color: #f44336;
+}
+
+.btn-danger:hover {
+    background-color: #d32f2f;
+}
+
+/* Input groups and filters */
+.input-group {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.input-group label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: normal;
+    cursor: pointer;
+}
+
+/* Item row styling for any multi-row inputs */
+.item-row {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px dashed #eee;
+}
+
+.item-row-field-fixed {
+    flex: 0 0 180px;
+}
+
+.item-row-field-expand {
+    flex: 1;
+    position: relative;
+}
+
+.btn-circle {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 16px;
+    padding: 0;
+}
+
+/* Action buttons container */
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+/* Results section */
+.results-section {
+    min-height: 200px;
+}
+
+.results-section h3 {
+    color: #2c3e50;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 0.5rem;
+}
+
+#search-results-container {
+    position: relative;
+    min-height: 300px;
+}
+
+/* Empty or no results message */
+.empty-message {
+    text-align: center;
+    padding: 2rem;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    color: #666;
+    position: relative;
+    z-index: 5;
+}
+
+/* Grid containers for cards */
+.cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+
+@media (max-width: 768px) {
+    .cards-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .item-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+    
+    .item-row-field-fixed {
+        flex: 1;
+        width: 100%;
+    }
+    
+    .btn-circle {
+        align-self: flex-end;
+    }
+    
+    .input-group {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+/* Button with icon */
+.btn-icon {
+    display: inline-block;
+    margin-right: 5px;
+    font-weight: bold;
+    font-size: 16px;
+}
+
+#add-ingredient-row {
+    margin-bottom: 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.add-row-wrapper {
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
 }
