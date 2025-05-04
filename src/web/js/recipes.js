@@ -1,22 +1,12 @@
-import { loadHeader, loadCommonHead } from './common.js';
 import { api } from './api.js';
-import { initAuth, isAuthenticated } from './auth.js';
+import { isAuthenticated } from './auth.js';
 import { displayRecipes } from './recipeCard.js';
-import config from './config.js';
 
-// Load common head elements
-loadCommonHead();
-
-// Load the header
-loadHeader();
 
 // Declare function in global scope
 let addIngredientInput;
 
-document.addEventListener('DOMContentLoaded', () => {
-    // Authentication is now initialized in common.js
-    // initAuth(); // Remove this line
-    
+document.addEventListener('DOMContentLoaded', () => {  
     const recipeForm = document.getElementById('recipe-form');
     const recipesContainer = document.getElementById('recipes-container');
     const searchInput = document.getElementById('recipe-search');

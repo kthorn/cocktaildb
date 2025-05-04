@@ -1,8 +1,38 @@
 // Common components for the cocktail database
 import { initAuth } from './auth.js';
 
-// Load header component into the page
-function loadHeader() {
+/**
+ * Loads common head elements into the document
+ * This includes meta tags, icons, CSS with FOUC prevention
+ */
+export function loadCommonHead() {
+    const headContent = `
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <!-- Direct CSS link with FOUC prevention -->
+        <style>
+            body { visibility: hidden; }
+        </style>
+        <link rel="stylesheet" href="styles.css"
+            onload="document.body.style.visibility=''"
+            onerror="document.body.style.visibility=''">
+        <!-- Favicon and app icons -->
+        <link rel="icon" type="image/png" href="img/favicon-96x96.png" sizes="96x96" />
+        <link rel="icon" type="image/svg+xml" href="img/favicon.svg" />
+        <link rel="shortcut icon" href="img/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180" href="img/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-title" content="CocktailDB" />
+        <link rel="manifest" href="site.webmanifest" />
+    `;
+    
+    // Insert the common head elements
+    document.head.insertAdjacentHTML('beforeend', headContent);
+}
+
+/**
+ * Loads header component into the page
+ */
+export function loadHeader() {
   const header = document.createElement('header');
   header.innerHTML = `
     <h1>Cocktail Database</h1>
@@ -31,13 +61,41 @@ function loadHeader() {
   }
 }
 
+/**
+ * Loads footer component into the page
+ */
+export function loadFooter() {
+  const footer = document.createElement('footer');
+  footer.innerHTML = `
+    <p>&copy; ${new Date().getFullYear()} Kurt Thorn</p>
+    <style>
+        body { visibility: visible !important; }
+    </style>
+  `;
+  
+  // Find the existing footer and replace it
+  const existingFooter = document.querySelector('footer');
+  if (existingFooter) {
+    existingFooter.replaceWith(footer);
+  } else {
+    // If no footer exists, append it to the body
+    document.body.appendChild(footer);
+  }
+}
+
 // Initialize common components when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+  // Load the common head elements first
+  loadCommonHead();
+  
+  // Then load the header
   loadHeader();
-  // Initialize authentication AFTER header is loaded to ensure elements exist
-  setTimeout(() => {
-    initAuth();
-  }, 0);
+  
+  // Load the footer
+  loadFooter();
+  
+  // Initialize authentication
+  initAuth();
 });
 
 /**
@@ -147,24 +205,4 @@ export function createInteractiveRating(recipeId, currentRating, avgRating, coun
   container.appendChild(stats);
   
   return container;
-}
-
-export { loadHeader };
-
-// Function to load common head elements
-export function loadCommonHead() {
-    const headContent = `
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <!-- CSS is now loaded directly in HTML to prevent FOUC -->
-        <link rel="icon" type="image/png" href="img/favicon-96x96.png" sizes="96x96" />
-        <link rel="icon" type="image/svg+xml" href="img/favicon.svg" />
-        <link rel="shortcut icon" href="img/favicon.ico" />
-        <link rel="apple-touch-icon" sizes="180x180" href="img/apple-touch-icon.png" />
-        <meta name="apple-mobile-web-app-title" content="CocktailDB" />
-        <link rel="manifest" href="site.webmanifest" />
-    `;
-    
-    // Insert the common head elements
-    document.head.insertAdjacentHTML('beforeend', headContent);
 } 

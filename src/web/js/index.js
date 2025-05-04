@@ -1,15 +1,8 @@
-import { loadHeader, loadCommonHead } from './common.js';
 import { api } from './api.js';
 import { createRecipeCard } from './recipeCard.js';
 
 let currentRecipeIndex = 0;
 let recipes = [];
-
-// Load common head elements
-loadCommonHead();
-
-// Load the header
-loadHeader();
 
 // Update stats display
 async function updateStats() {

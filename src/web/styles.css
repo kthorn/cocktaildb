@@ -342,6 +342,7 @@ footer {
 
 .notification.fade-out {
     animation: fadeOut 0.5s ease-out forwards;
+    visibility: hidden;
 }
 
 @keyframes slideIn {
@@ -356,12 +357,13 @@ footer {
 }
 
 @keyframes fadeOut {
-    from {
-        opacity: 1;
-    }
-    to {
-        opacity: 0;
-    }
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+/* Add a new class for elements that should be hidden after fading out */
+.fade-out-hidden {
+    visibility: hidden;
 }
 
 /* Responsive design */
@@ -654,8 +656,8 @@ footer {
 }
 
 @keyframes fadeOut {
-    from { opacity: 1; transform: translateY(0); }
-    to { opacity: 0; transform: translateY(-20px); }
+    from { opacity: 1; }
+    to { opacity: 0; }
 }
 
 /* Responsive adjustments */
@@ -771,7 +773,7 @@ footer {
 
 @keyframes fadeOut {
     from { opacity: 1; }
-    to { opacity: 0; visibility: hidden; }
+    to { opacity: 0; }
 }
 
 /* Recipe Card Styling - consolidated and updated */

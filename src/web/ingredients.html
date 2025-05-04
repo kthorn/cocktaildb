@@ -3,13 +3,6 @@
 
     <head>
         <title>Ingredients - Cocktail Database</title>
-        <!-- Prevent FOUC (Flash of Unstyled Content) -->
-        <style>
-            body { visibility: hidden; }
-        </style>
-        <!-- Direct CSS link to prevent FOUC -->
-        <link rel="stylesheet" href="styles.css"
-            onload="document.body.style.visibility=''">
         <!-- Common head elements will be loaded by common.js -->
         <style>
         .form-row {
@@ -140,10 +133,6 @@
                 </div>
             </section>
         </main>
-
-        <footer>
-            <p>&copy; 2024 Cocktail Database</p>
-        </footer>
 
         <script type="module" src="js/common.js"></script>
         <script type="module" src="js/api.js"></script>

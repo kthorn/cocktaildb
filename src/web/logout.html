@@ -4,12 +4,13 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Logging out...</title>
-        <!-- Prevent FOUC (Flash of Unstyled Content) -->
+        <!-- Prevent FOUC (Flash of Unstyled Content) with common.js fallback -->
         <style>
             body { visibility: hidden; }
         </style>
         <link rel="stylesheet" href="styles.css"
-            onload="document.body.style.visibility=''">
+            onload="document.body.style.visibility=''"
+            onerror="document.body.style.visibility=''">
         <script type="module">
         document.addEventListener('DOMContentLoaded', () => {
             // Clear all auth-related data from localStorage
@@ -31,5 +32,6 @@
             <h1>Logging Out</h1>
             <p id="status">Processing logout...</p>
         </div>
+        <script type="module" src="js/common.js"></script>
     </body>
 </html>
