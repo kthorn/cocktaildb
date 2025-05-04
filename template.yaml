@@ -503,6 +503,43 @@ Resources:
             RestApiId: !Ref CocktailAPI
             Path: /recipes/{recipeId}
             Method: options
+        # Rating endpoints
+        GetRatings:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ratings/{recipeId}
+            Method: get
+        PostRating:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ratings/{recipeId}
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+        PutRating:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ratings/{recipeId}
+            Method: put
+            Auth:
+              Authorizer: CognitoAuthorizer
+        DeleteRating:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ratings/{recipeId}
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
+        OptionsRatings:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ratings/{recipeId}
+            Method: options
 
 
   # Custom resource to create sqlite db on EFS
