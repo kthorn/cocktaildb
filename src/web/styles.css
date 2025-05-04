@@ -140,6 +140,15 @@ textarea {
     resize: vertical;
 }
 
+.form-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+.form-row .form-group {
+    flex: 1;
+}
+
 button {
     background-color: #A61816;
     color: white;
@@ -812,4 +821,36 @@ footer {
 
 .recipe-card .recipe-tags {
     flex: 1;
+}
+
+.loading-indicator {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: none;
+}
+.loading-indicator.active {
+    display: block;
+}
+.loading-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+.search-status {
+    font-size: 0.8em;
+    color: #666;
+    margin-top: 4px;
+    display: none;
+}
+.search-status.active {
+    display: block;
 }

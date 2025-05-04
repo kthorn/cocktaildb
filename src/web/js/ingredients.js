@@ -436,9 +436,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             // Tab
             else if (e.key === 'Tab' && items.length > 0) {
+                e.preventDefault(); // Prevent default tab behavior
                 if (activeParentIndex === -1) {
+                    // If no item is selected, select the first one
                     setActiveParentItem(0);
                 } else {
+                    // If an item is already selected, select it
                     selectActiveParentItem();
                 }
             }
