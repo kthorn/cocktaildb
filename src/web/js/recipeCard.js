@@ -4,6 +4,57 @@ import { isAuthenticated, getUserInfo } from './auth.js';
 import { generateStarRating, createInteractiveRating } from './common.js';
 
 /**
+ * Formats a number into a string, converting decimals to common fractions if close.
+ * @param {number} amount - The numeric amount to format
+ * @returns {string} The formatted amount string
+ */
+function formatAmount(amount) {
+    if (typeof amount !== 'number' || isNaN(amount)) {
+        return String(amount); // Return as string if not a valid number
+    }
+
+    const tolerance = 0.01;
+    const integerPart = Math.floor(amount);
+    const fractionalPart = amount - integerPart;
+
+    if (fractionalPart < tolerance) {
+        return String(integerPart); // Whole number
+    }
+
+    const fractions = {
+        '1/8': 1/8, '1/4': 1/4, '1/3': 1/3, '3/8': 3/8, '1/2': 1/2, 
+        '5/8': 5/8, '2/3': 2/3, '3/4': 3/4, '7/8': 7/8
+    };
+
+    let bestMatch = null;
+    let minDiff = tolerance;
+
+    for (const [fractionStr, fractionVal] of Object.entries(fractions)) {
+        const diff = Math.abs(fractionalPart - fractionVal);
+        if (diff < minDiff) {
+            minDiff = diff;
+            bestMatch = fractionStr;
+        }
+    }
+    
+    // Check if the remainder is close to 1 (e.g. 0.995 should be next integer)
+    if (1 - fractionalPart < tolerance) {
+        return String(integerPart + 1);
+    }
+
+    if (bestMatch) {
+        if (integerPart > 0) {
+            return `${integerPart} ${bestMatch}`; // Mixed number
+        } else {
+            return bestMatch; // Just the fraction
+        }
+    } else {
+        // Fallback: Round to 2 decimal places if no close fraction found
+        return amount.toFixed(2).replace(/\.?0+$/, ''); // Remove trailing zeros
+    }
+}
+
+/**
  * Creates and returns a recipe card element for the given recipe
  * @param {Object} recipe - Recipe data
  * @param {boolean} showActions - Whether to show edit/delete buttons
@@ -35,7 +86,7 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
                     // Try multiple possible property names for ingredient full name
                     const ingredientName = ing.full_name || ing.ingredient_name || ing.name || 'Unknown ingredient';
                     
-                    return `<li>${ing.amount} ${unitDisplay}${ingredientName}</li>`;
+                    return `<li>${formatAmount(ing.amount)} ${unitDisplay}${ingredientName}</li>`;
                 }).join('')}
             </ul>
         </div>

@@ -8,6 +8,13 @@ if "%1"=="--no-build" (
     echo Skipping SAM build and deploy steps...
 )
 
+REM Check for hosted zone ID environment variable or use a default value
+if "%HOSTED_ZONE_ID%"=="" (
+    echo WARNING: HOSTED_ZONE_ID environment variable not set.
+    echo Please set the HOSTED_ZONE_ID environment variable before running this script.
+    exit /b 1
+)
+
 call mamba activate cocktaildb-312
 
 REM Change to project root directory
@@ -30,7 +37,7 @@ if %NO_BUILD%==0 (
     sam deploy ^
         --template-file .aws-sam\build\template.yaml ^
         --stack-name %STACK_NAME% ^
-        --parameter-overrides Environment=prod ^
+        --parameter-overrides Environment=prod HostedZoneId=%HOSTED_ZONE_ID% ^
         --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM ^
         --no-fail-on-empty-changeset ^
         --resolve-s3 ^
