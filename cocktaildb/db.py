@@ -999,7 +999,7 @@ class Database:
                 - tags: List of tags to search for (List[str])
                 - ingredients: List of ingredient conditions (List[Dict])
                     Each condition has:
-                    - id: Ingredient ID
+                    - id: Ingredient ID (will search for this ID in the path)
                     - operator: MUST or MUST_NOT
 
         Returns:
@@ -1039,48 +1039,58 @@ class Database:
                     for i in search_params["ingredients"]
                     if i["operator"] == "MUST_NOT"
                 ]
-                # For MUST ingredients: recipes must contain ALL of these ingredients
+                # For MUST ingredients: recipes must contain at least one ingredient from each category
                 if must_ingredients:
-                    query += (
-                        """
+                    query += """
                     , must_matches AS (
-                        SELECT recipe_id, COUNT(*) as match_count
-                        FROM recipe_ingredients
-                        WHERE ingredient_id IN ("""
-                        + ",".join(
-                            f":must_ing_{i}" for i in range(len(must_ingredients))
-                        )
-                        + """)
+                        SELECT recipe_id, COUNT(DISTINCT must_group) as match_count
+                        FROM (
+                    """
+                    for i, ingredient in enumerate(must_ingredients):
+                        if i > 0:
+                            query += " UNION ALL "
+                        query += f"""
+                            SELECT ri.recipe_id, {i} as must_group
+                            FROM recipe_ingredients ri 
+                            JOIN ingredients i ON ri.ingredient_id = i.id
+                            WHERE i.path LIKE :must_ing_path_{i}
+                        """
+                        # Use '%/ID/%' to match the ID in the path
+                        params[f"must_ing_path_{i}"] = f"%/{ingredient['id']}/%"
+
+                    query += """
+                        ) must_groups
                         GROUP BY recipe_id
                         HAVING match_count = :must_ing_count
                     )
                     """
-                    )
                     params["must_ing_count"] = len(must_ingredients)
-                    for i, ingredient in enumerate(must_ingredients):
-                        params[f"must_ing_{i}"] = ingredient["id"]
-                # For MUST_NOT ingredients: recipes must contain NONE of these ingredients
+
+                # For MUST_NOT ingredients: recipes must contain NONE of these ingredients or their children
                 if must_not_ingredients:
-                    query += (
-                        """
+                    query += """
                     , must_not_matches AS (
                         SELECT r.id as recipe_id
                         FROM recipe_data r
                         WHERE NOT EXISTS (
-                            SELECT 1 FROM recipe_ingredients ri
+                            SELECT 1 
+                            FROM recipe_ingredients ri
+                            JOIN ingredients i ON ri.ingredient_id = i.id
                             WHERE ri.recipe_id = r.id
-                            AND ri.ingredient_id IN ("""
-                        + ",".join(
-                            f":must_not_ing_{i}"
-                            for i in range(len(must_not_ingredients))
-                        )
-                        + """)
+                            AND (
+                    """
+                    for i, ingredient in enumerate(must_not_ingredients):
+                        if i > 0:
+                            query += " OR "
+                        query += f"i.path LIKE :must_not_ing_path_{i}"
+                        params[f"must_not_ing_path_{i}"] = f"%/{ingredient['id']}/%"
+
+                    query += """
+                            )
                         )
                     )
                     """
-                    )
-                    for i, ingredient in enumerate(must_not_ingredients):
-                        params[f"must_not_ing_{i}"] = ingredient["id"]
+
                 # Build the final query combining all conditions
                 query += """
                 SELECT r.*
