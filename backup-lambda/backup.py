@@ -103,11 +103,3 @@ def lambda_handler(event, context):
         "statusCode": 200,
         "body": f"Backup {s3_key} created successfully and old backups cleaned.",
     }
-
-
-# For local testing (requires AWS credentials and EFS locally mounted or simulated)
-# if __name__ == '__main__':
-#    os.environ['BACKUP_BUCKET'] = 'your-test-backup-bucket'
-#    # Create a dummy DB if needed for testing
-#    # if not os.path.exists(SOURCE_DB_PATH): ... create db ...
-#    lambda_handler({}, {})
