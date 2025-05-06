@@ -7,54 +7,68 @@ PRAGMA foreign_keys = ON;
 -- Table Definitions
 CREATE TABLE ingredients (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name VARCHAR(100) NOT NULL UNIQUE,
+  name TEXT COLLATE NOCASE NOT NULL UNIQUE,
   description TEXT,
   parent_id INTEGER,
-  path VARCHAR(255),
+  path TEXT,
   FOREIGN KEY (parent_id) REFERENCES ingredients(id)
 );
 
 CREATE TABLE units (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name VARCHAR(50) NOT NULL UNIQUE,
-  abbreviation VARCHAR(10)
+  name TEXT COLLATE NOCASE NOT NULL UNIQUE,
+  abbreviation TEXT
 );
 
 CREATE TABLE recipes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name VARCHAR(100) NOT NULL,
+  name TEXT COLLATE NOCASE NOT NULL UNIQUE,
   instructions TEXT,
   description TEXT,
-  image_url VARCHAR(255),
-  source VARCHAR(255),
-  source_url VARCHAR(255),
+  image_url TEXT,
+  source TEXT,
+  source_url TEXT,
   avg_rating REAL DEFAULT 0,
-  rating_count INTEGER DEFAULT 0
+  rating_count INTEGER DEFAULT 0,
 );
 
 CREATE TABLE ratings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  cognito_user_id VARCHAR(36) NOT NULL,
-  cognito_username VARCHAR(128) NOT NULL,
+  cognito_user_id TEXT NOT NULL,
+  cognito_username TEXT NOT NULL,
   recipe_id INTEGER NOT NULL,
   rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
-  comment TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
   UNIQUE(cognito_user_id, recipe_id)
 );
 
-CREATE TABLE tags (
+CREATE TABLE private_tags (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name VARCHAR(50) NOT NULL UNIQUE
+  name TEXT COLLATE NOCASE NOT NULL,
+  cognito_user_id TEXT NOT NULL,
+  cognito_username TEXT NOT NULL
 );
 
-CREATE TABLE recipe_tags (
+CREATE TABLE public_tags (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT COLLATE NOCASE NOT NULL
+);
+
+CREATE TABLE recipe_private_tags (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   recipe_id INTEGER NOT NULL,
   tag_id INTEGER NOT NULL,
   FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
-  FOREIGN KEY (tag_id) REFERENCES tags(id),
+  FOREIGN KEY (tag_id) REFERENCES private_tags(id),
+  UNIQUE(recipe_id, tag_id)
+);
+
+CREATE TABLE recipe_public_tags (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  recipe_id INTEGER NOT NULL,
+  tag_id INTEGER NOT NULL,
+  FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
+  FOREIGN KEY (tag_id) REFERENCES public_tags(id),
   UNIQUE(recipe_id, tag_id)
 );
 
@@ -74,10 +88,15 @@ CREATE INDEX idx_ingredients_parent_id ON ingredients(parent_id);
 CREATE INDEX idx_ingredients_path ON ingredients(path);
 CREATE INDEX idx_recipe_ingredients_recipe_id ON recipe_ingredients(recipe_id);
 CREATE INDEX idx_recipe_ingredients_ingredient_id ON recipe_ingredients(ingredient_id);
-CREATE INDEX idx_recipe_tags_recipe_id ON recipe_tags(recipe_id);
-CREATE INDEX idx_recipe_tags_tag_id ON recipe_tags(tag_id);
+CREATE INDEX idx_recipe_private_tags_recipe_id ON recipe_private_tags(recipe_id);
+CREATE INDEX idx_recipe_private_tags_tag_id ON recipe_private_tags(tag_id);
+CREATE INDEX idx_recipe_public_tags_recipe_id ON recipe_public_tags(recipe_id);
+CREATE INDEX idx_recipe_public_tags_tag_id ON recipe_public_tags(tag_id);
 CREATE INDEX idx_ratings_cognito_user_id ON ratings(cognito_user_id);
 CREATE INDEX idx_ratings_recipe_id ON ratings(recipe_id);
+
+CREATE UNIQUE INDEX idx_public_tags ON public_tags(name);
+CREATE UNIQUE INDEX idx_private_tags ON private_tags(name, cognito_user_id);
 
 -- Create trigger to update average rating when a new rating is added
 CREATE TRIGGER update_avg_rating_insert 
@@ -135,9 +154,6 @@ INSERT INTO ingredients (name, description, path) VALUES
   ('Juice', '', '/7/');
 
 -- Insert common tags
-INSERT INTO tags (name) VALUES
+INSERT INTO public_tags (name) VALUES
   ('Tiki'),
-  ('Fruity'),
-  ('Classic'),
-  ('Modern'),
-  ('Bitter');
+  ('Classic')
