@@ -12,6 +12,12 @@ Parameters:
   UserPoolName:
     Type: String
     Default: CocktailDB-UserPool
+  DomainName:
+    Type: String
+    Default: mixology.tools
+  HostedZoneId:
+    Type: String
+    Description: ID of the existing Route 53 hosted zone for your domain (without /hostedzone/ prefix)
 
 Globals:
   Function:
@@ -79,11 +85,22 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
 
-  Subnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
+  # --- Add S3 Gateway VPC Endpoint ---
+  S3VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
     Properties:
-      SubnetId: !Ref PublicSubnet
-      RouteTableId: !Ref RouteTable
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3 # S3 service endpoint
+      RouteTableIds:
+        - !Ref RouteTable # Add this endpoint to our route table
+      PolicyDocument: # Optional: Restrict access further if needed
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: "*"
+            Action: "*" # Allow all S3 actions via the endpoint
+            Resource: "*" # Allow access to all S3 resources
+  # ------------------------------------
 
   # EFS File System
   CocktailEFS:
@@ -96,6 +113,12 @@ Resources:
       FileSystemTags:
         - Key: Name
           Value: !Sub ${AWS::StackName}-efs
+
+  Subnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref RouteTable
 
   # Security Groups for Lambda and EFS
   LambdaSecurityGroup:
@@ -191,6 +214,23 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
 
+  # S3 bucket for database backups
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AWS::StackName}-db-backups
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration: 
+        Rules:
+          - Id: ExpireOldBackups
+            Status: Enabled
+            ExpirationInDays: 30
+            # Consider NoncurrentVersionExpirationInDays if versioning is enabled
+
   # S3 bucket for website hosting
   WebsiteBucket:
     Type: AWS::S3::Bucket
@@ -218,6 +258,29 @@ Resources:
               - '*'
             MaxAge: 3600
 
+  # SSL Certificate for CloudFront
+  CloudFrontCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+      # Certificate must be in us-east-1 for CloudFront
+
+  # Route 53 Record Set for CloudFront
+  DomainRecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2 # CloudFront hosted zone ID (static value)
+        EvaluateTargetHealth: false
+
   # CloudFront Origin Access Control
   CloudFrontOAC:
     Type: AWS::CloudFront::OriginAccessControl
@@ -237,6 +300,12 @@ Resources:
       DistributionConfig:
         Enabled: true
         DefaultRootObject: index.html
+        Aliases:
+          - !Ref DomainName
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CloudFrontCertificate
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
         Origins:
           - Id: S3Origin
             DomainName: !GetAtt WebsiteBucket.RegionalDomainName
@@ -629,8 +698,10 @@ Resources:
         - COGNITO
       CallbackURLs:
         - !Sub https://${CloudFrontDistribution.DomainName}/callback.html
+        - !Sub https://${DomainName}/callback.html
       LogoutURLs:
         - !Sub https://${CloudFrontDistribution.DomainName}/logout.html
+        - !Sub https://${DomainName}/logout.html
       AllowedOAuthFlows:
         - code
         - implicit
@@ -707,6 +778,67 @@ Resources:
               Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
               Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
 
+  # Lambda Function for Nightly DB Backup
+  BackupLambda:
+    Type: AWS::Serverless::Function
+    DependsOn:
+      - MountTarget # Ensure EFS is ready
+      - BackupBucket # Ensure bucket exists
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-db-backup-handler
+      CodeUri: backup-lambda/
+      Handler: backup.lambda_handler
+      Timeout: 300 # 5 minutes, adjust if needed for large DBs
+      Environment:
+        Variables:
+          DB_PATH: /mnt/efs/cocktaildb.db # Path to the DB on EFS
+          BACKUP_BUCKET: !Ref BackupBucket
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup # Reuse existing SG for EFS access
+        SubnetIds:
+          - !Ref PublicSubnet # Needs to be in the same subnet as EFS mount target
+      FileSystemConfigs:
+        - Arn: !GetAtt EFSAccessPoint.Arn
+          LocalMountPath: /mnt/efs # Mount path for EFS
+      Policies:
+        - VPCAccessPolicy: {} # Policy for VPC access
+        - Statement:
+            - Effect: Allow # Allow EFS mount and read
+              Action:
+                - elasticfilesystem:ClientMount
+                - elasticfilesystem:ClientRead
+              Resource: !GetAtt CocktailEFS.Arn
+            - Effect: Allow # Allow writing backup to S3 and managing old backups
+              Action:
+                - s3:PutObject
+                - s3:ListBucket
+                - s3:DeleteObject
+              Resource:
+                - !Sub arn:aws:s3:::${BackupBucket}
+                - !Sub arn:aws:s3:::${BackupBucket}/*
+
+  # EventBridge Rule to trigger backup nightly (e.g., 2 AM UTC)
+  BackupSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub ${AWS::StackName}-DailyDbBackupRule
+      Description: Trigger nightly database backup
+      ScheduleExpression: "cron(0 8 * * ? *)" # Every day at 8:00 AM UTC = midnight pacific
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt BackupLambda.Arn
+          Id: "BackupLambdaTarget"
+
+  # Permission for EventBridge to invoke the Backup Lambda
+  BackupLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt BackupLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt BackupSchedule.Arn
+
 Outputs:
   VpcId:
     Description: ID of the VPC
@@ -759,4 +891,16 @@ Outputs:
   CognitoDomainURL:
     Description: Cognito Domain URL for hosted UI
     Value: !Sub https://${AWS::StackName}-auth.auth.${AWS::Region}.amazoncognito.com
+
+  CustomDomainURL:
+    Description: Website URL with custom domain
+    Value: !Sub https://${DomainName}
+
+  CertificateARN:
+    Description: ACM Certificate ARN
+    Value: !Ref CloudFrontCertificate
+
+  BackupBucketName:
+    Description: S3 bucket for database backups
+    Value: !Ref BackupBucket
 
