@@ -935,7 +935,7 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating, comment, 
+                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating, 
                            datetime(created_at, 'localtime') as created_at
                     FROM ratings 
                     WHERE recipe_id = :recipe_id
@@ -1000,30 +1000,27 @@ class Database:
                 cursor.execute(
                     """
                     UPDATE ratings
-                    SET rating = :rating,
-                        comment = COALESCE(:comment, comment)
+                    SET rating = :rating
                     WHERE cognito_user_id = :user_id AND recipe_id = :recipe_id
                     """,
                     {
                         "user_id": data["cognito_user_id"],
                         "recipe_id": data["recipe_id"],
                         "rating": data["rating"],
-                        "comment": data.get("comment"),
                     },
                 )
             else:
                 # Insert new rating
                 cursor.execute(
                     """
-                    INSERT INTO ratings (cognito_user_id, cognito_username, recipe_id, rating, comment)
-                    VALUES (:cognito_user_id, :cognito_username, :recipe_id, :rating, :comment)
+                    INSERT INTO ratings (cognito_user_id, cognito_username, recipe_id, rating)
+                    VALUES (:cognito_user_id, :cognito_username, :recipe_id, :rating)
                     """,
                     {
                         "cognito_user_id": data["cognito_user_id"],
                         "cognito_username": data["cognito_username"],
                         "recipe_id": data["recipe_id"],
                         "rating": data["rating"],
-                        "comment": data.get("comment", ""),
                     },
                 )
                 rating_id = cursor.lastrowid
@@ -1039,7 +1036,7 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating, comment,
+                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating,
                            datetime(created_at, 'localtime') as created_at
                     FROM ratings
                     WHERE id = :id
