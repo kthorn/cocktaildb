@@ -938,7 +938,6 @@ class Database:
                     SELECT id, cognito_user_id, cognito_username, recipe_id, rating
                     FROM ratings 
                     WHERE recipe_id = :recipe_id
-                    ORDER BY created_at DESC
                     """,
                     {"recipe_id": recipe_id},
                 ),
@@ -1035,7 +1034,7 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating,
+                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating
                     FROM ratings
                     WHERE id = :id
                     """,
