@@ -935,8 +935,7 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating, 
-                           datetime(created_at, 'localtime') as created_at
+                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating
                     FROM ratings 
                     WHERE recipe_id = :recipe_id
                     ORDER BY created_at DESC
@@ -1037,7 +1036,6 @@ class Database:
                 self.execute_query(
                     """
                     SELECT id, cognito_user_id, cognito_username, recipe_id, rating,
-                           datetime(created_at, 'localtime') as created_at
                     FROM ratings
                     WHERE id = :id
                     """,
