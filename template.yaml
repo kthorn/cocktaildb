@@ -455,7 +455,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
-            Path: /ingredients
+            Path: /ingredients/{ingredientId}
             Method: put
             Auth:
               Authorizer: CognitoAuthorizer
@@ -463,10 +463,22 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
-            Path: /ingredients
+            Path: /ingredients/{ingredientId}
             Method: delete
             Auth:
               Authorizer: CognitoAuthorizer
+        GetIngredientItem:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ingredients/{ingredientId}
+            Method: get
+        OptionsIngredientItem:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ingredients/{ingredientId}
+            Method: options
         OptionsIngredients:
           Type: Api
           Properties:
@@ -610,6 +622,109 @@ Resources:
             Path: /ratings/{recipeId}
             Method: options
 
+        # --- START Tag Endpoints ---
+        GetPublicTags:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /tags/public
+            Method: get
+        PostPublicTag:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /tags/public
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+        OptionsPublicTags:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /tags/public
+            Method: options
+
+        GetPrivateTags:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /tags/private
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+        PostPrivateTag:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /tags/private
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+        OptionsPrivateTags:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /tags/private
+            Method: options
+
+        PostRecipePublicTag:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}/public_tags
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+        DeleteRecipePublicTag:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}/public_tags/{tagId}
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
+        OptionsRecipePublicTags:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}/public_tags
+            Method: options
+        OptionsRecipePublicTagItem:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}/public_tags/{tagId}
+            Method: options
+            
+        PostRecipePrivateTag:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}/private_tags
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+        DeleteRecipePrivateTag:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}/private_tags/{tagId}
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
+        OptionsRecipePrivateTags:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}/private_tags
+            Method: options
+        OptionsRecipePrivateTagItem:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}/private_tags/{tagId}
+            Method: options
+        # --- END Tag Endpoints ---
 
   # Custom resource to create sqlite db on EFS
   SchemaDeployFunction:

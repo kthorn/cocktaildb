@@ -18,6 +18,40 @@ CORS_HEADERS = {
     "Access-Control-Allow-Credentials": "true",
 }
 
+
+# Helper functions for standard responses
+def _return_data(status_code: int, data: Any) -> Dict[str, Any]:
+    """Generates a response with JSON data in the body."""
+    return {
+        "statusCode": status_code,
+        "headers": CORS_HEADERS,
+        "body": json.dumps(data),
+    }
+
+
+def _return_error(status_code: int, error_message: str) -> Dict[str, Any]:
+    """Generates a response with a JSON error object."""
+    return {
+        "statusCode": status_code,
+        "headers": CORS_HEADERS,
+        "body": json.dumps({"error": error_message}),
+    }
+
+
+def _return_empty(status_code: int) -> Dict[str, Any]:
+    """Generates a response with an empty body."""
+    return {"statusCode": status_code, "headers": CORS_HEADERS, "body": ""}
+
+
+def _return_message(status_code: int, message: str) -> Dict[str, Any]:
+    """Generates a response with a JSON message object."""
+    return {
+        "statusCode": status_code,
+        "headers": CORS_HEADERS,
+        "body": json.dumps({"message": message}),
+    }
+
+
 # Global database connection - persists between Lambda invocations in the same container
 _DB_INSTANCE = None
 _DB_INIT_TIME = 0
@@ -89,7 +123,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     if http_method == "OPTIONS":
         logger.info("Handling OPTIONS preflight request")
-        return {"statusCode": 200, "headers": CORS_HEADERS, "body": ""}
+        return _return_empty(200)
 
     db = get_database()
 
@@ -127,13 +161,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             logger.warning(
                 "Authorizer claims missing on a route that should be protected!"
             )
-            return {
-                "statusCode": 401,
-                "headers": CORS_HEADERS,
-                "body": json.dumps(
-                    {"error": "Unauthorized - Authorizer claims missing"}
-                ),
-            }
+            return _return_error(401, "Unauthorized - Authorizer claims missing")
         else:
             logger.info(
                 "Anonymous access allowed for this request (no authorizer claims found)."
@@ -148,56 +176,36 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.error(
             "Authentication required but no valid user ID found after checking authorizer context."
         )
-        return {
-            "statusCode": 401,
-            "headers": CORS_HEADERS,
-            "body": json.dumps(
-                {"error": "Unauthorized - User ID missing after auth check"}
-            ),
-        }
+        return _return_error(401, "Unauthorized - User ID missing after auth check")
 
     try:
         # Handle ingredient endpoints
         if path.startswith("/ingredients"):
-            # New logic to get ingredient_id, prioritizing pathParameters
-            ingredient_id_from_param = event.get("pathParameters", {}).get(
-                "ingredientId"
-            )
-            if ingredient_id_from_param:
-                ingredient_id = ingredient_id_from_param
-            else:
-                # Fallback to path splitting if ingredientId not in pathParameters
-                path_parts = path.split(
-                    "/"
-                )  # path is event.get("path", "").rstrip("/")
+            ingredient_id = None  # Initialize
+            # Prioritize pathParameters from API Gateway
+            path_parameters_from_event = event.get("pathParameters")
+            if isinstance(path_parameters_from_event, dict):
+                ingredient_id = path_parameters_from_event.get("ingredientId")
+            # Fallback: if not found via pathParameters (or pathParameters was not a dict/None),
+            # and the path structure suggests an item ID.
+            if not ingredient_id:
+                path_parts = path.split("/")
                 if (
                     len(path_parts) == 3
                     and path_parts[1] == "ingredients"
                     and path_parts[2]
                 ):
                     ingredient_id = path_parts[2]
-                else:
-                    ingredient_id = (
-                        None  # Indicates a collection endpoint like /ingredients
-                    )
 
             if http_method == "POST":
                 logger.info("Creating new ingredient...")
                 try:
                     body = json.loads(event.get("body", "{}"))
                     ingredient = db.create_ingredient(body)
-                    return {
-                        "statusCode": 201,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(ingredient),
-                    }
+                    return _return_data(201, ingredient)
                 except Exception as e:
                     logger.error(f"Error creating ingredient: {str(e)}")
-                    return {
-                        "statusCode": 400,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": str(e)}),
-                    }
+                    return _return_error(400, str(e))
 
             elif http_method == "PUT" and ingredient_id:
                 logger.info(f"Updating ingredient {ingredient_id}...")
@@ -205,45 +213,21 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     body = json.loads(event.get("body", "{}"))
                     ingredient = db.update_ingredient(int(ingredient_id), body)
                     if ingredient:
-                        return {
-                            "statusCode": 200,
-                            "headers": CORS_HEADERS,
-                            "body": json.dumps(ingredient),
-                        }
-                    return {
-                        "statusCode": 404,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": "Ingredient not found"}),
-                    }
+                        return _return_data(200, ingredient)
+                    return _return_error(404, "Ingredient not found")
                 except Exception as e:
                     logger.error(f"Error updating ingredient: {str(e)}")
-                    return {
-                        "statusCode": 400,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": str(e)}),
-                    }
+                    return _return_error(400, str(e))
 
             elif http_method == "DELETE" and ingredient_id:
                 logger.info(f"Deleting ingredient {ingredient_id}...")
                 try:
                     if db.delete_ingredient(int(ingredient_id)):
-                        return {
-                            "statusCode": 204,
-                            "headers": CORS_HEADERS,
-                            "body": "",
-                        }
-                    return {
-                        "statusCode": 404,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": "Ingredient not found"}),
-                    }
+                        return _return_empty(204)
+                    return _return_error(404, "Ingredient not found")
                 except Exception as e:
                     logger.error(f"Error deleting ingredient: {str(e)}")
-                    return {
-                        "statusCode": 400,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": str(e)}),
-                    }
+                    return _return_error(400, str(e))
 
             elif http_method == "GET":
                 if ingredient_id:
@@ -268,39 +252,19 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                                     )
                                 )
 
-                            return {
-                                "statusCode": 200,
-                                "headers": CORS_HEADERS,
-                                "body": json.dumps(ingredient),
-                            }
-                        return {
-                            "statusCode": 404,
-                            "headers": CORS_HEADERS,
-                            "body": json.dumps({"error": "Ingredient not found"}),
-                        }
+                            return _return_data(200, ingredient)
+                        return _return_error(404, "Ingredient not found")
                     except Exception as e:
                         logger.error(f"Error getting ingredient: {str(e)}")
-                        return {
-                            "statusCode": 500,
-                            "headers": CORS_HEADERS,
-                            "body": json.dumps({"error": str(e)}),
-                        }
+                        return _return_error(500, str(e))
                 else:
                     logger.info("Getting all ingredients...")
                     try:
                         ingredients = db.get_ingredients()
-                        return {
-                            "statusCode": 200,
-                            "headers": CORS_HEADERS,
-                            "body": json.dumps(ingredients),
-                        }
+                        return _return_data(200, ingredients)
                     except Exception as e:
                         logger.error(f"Error getting ingredients: {str(e)}")
-                        return {
-                            "statusCode": 500,
-                            "headers": CORS_HEADERS,
-                            "body": json.dumps({"error": str(e)}),
-                        }
+                        return _return_error(500, str(e))
 
         # Handle recipe endpoints
         elif path.startswith("/recipes"):
@@ -316,18 +280,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 try:
                     body = json.loads(event.get("body", "{}"))
                     recipe = db.create_recipe(body)
-                    return {
-                        "statusCode": 201,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(recipe),
-                    }
+                    return _return_data(201, recipe)
                 except Exception as e:
                     logger.error(f"Error creating recipe: {str(e)}")
-                    return {
-                        "statusCode": 400,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": str(e)}),
-                    }
+                    return _return_error(400, str(e))
 
             elif http_method == "GET":
                 if recipe_id:  # GET specific recipe using path param
@@ -335,23 +291,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     try:
                         recipe = db.get_recipe(int(recipe_id))
                         if recipe:
-                            return {
-                                "statusCode": 200,
-                                "headers": CORS_HEADERS,
-                                "body": json.dumps(recipe),
-                            }
-                        return {
-                            "statusCode": 404,
-                            "headers": CORS_HEADERS,
-                            "body": json.dumps({"error": "Recipe not found"}),
-                        }
+                            return _return_data(200, recipe)
+                        return _return_error(404, "Recipe not found")
                     except Exception as e:
                         logger.error(f"Error getting recipe: {str(e)}")
-                        return {
-                            "statusCode": 500,
-                            "headers": CORS_HEADERS,
-                            "body": json.dumps({"error": str(e)}),
-                        }
+                        return _return_error(500, str(e))
                 else:  # Search request or collection path (get all recipes)
                     # Check if this is a search request
                     if query_params and query_params.get("search") == "true":
@@ -402,56 +346,28 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                             # Perform the search
                             recipes = db.search_recipes(search_params)
 
-                            return {
-                                "statusCode": 200,
-                                "headers": CORS_HEADERS,
-                                "body": json.dumps(recipes),
-                            }
+                            return _return_data(200, recipes)
                         except Exception as e:
                             logger.error(f"Error searching recipes: {str(e)}")
-                            return {
-                                "statusCode": 500,
-                                "headers": CORS_HEADERS,
-                                "body": json.dumps({"error": str(e)}),
-                            }
+                            return _return_error(500, str(e))
                     else:
                         logger.info("Getting all recipes...")
                         try:
                             recipes = db.get_recipes()
-                            return {
-                                "statusCode": 200,
-                                "headers": CORS_HEADERS,
-                                "body": json.dumps(recipes),
-                            }
+                            return _return_data(200, recipes)
                         except Exception as e:
                             logger.error(f"Error getting recipes: {str(e)}")
-                            return {
-                                "statusCode": 500,
-                                "headers": CORS_HEADERS,
-                                "body": json.dumps({"error": str(e)}),
-                            }
+                            return _return_error(500, str(e))
 
             elif http_method == "DELETE" and recipe_id:
                 logger.info(f"Deleting recipe {recipe_id}...")
                 try:
                     if db.delete_recipe(int(recipe_id)):
-                        return {
-                            "statusCode": 204,
-                            "headers": CORS_HEADERS,
-                            "body": "",
-                        }
-                    return {
-                        "statusCode": 404,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": "Recipe not found"}),
-                    }
+                        return _return_empty(204)
+                    return _return_error(404, "Recipe not found")
                 except Exception as e:
                     logger.error(f"Error deleting recipe: {str(e)}")
-                    return {
-                        "statusCode": 400,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": str(e)}),
-                    }
+                    return _return_error(400, str(e))
 
             elif http_method == "PUT" and recipe_id:
                 logger.info(f"Updating recipe {recipe_id}...")
@@ -459,38 +375,18 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     body = json.loads(event.get("body", "{}"))
                     recipe = db.update_recipe(int(recipe_id), body)
                     if recipe:
-                        return {
-                            "statusCode": 200,
-                            "headers": CORS_HEADERS,
-                            "body": json.dumps(recipe),
-                        }
-                    return {
-                        "statusCode": 404,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": "Recipe not found"}),
-                    }
+                        return _return_data(200, recipe)
+                    return _return_error(404, "Recipe not found")
                 except Exception as e:
                     logger.error(f"Error updating recipe: {str(e)}")
-                    return {
-                        "statusCode": 400,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": str(e)}),
-                    }
+                    return _return_error(400, str(e))
 
             elif http_method == "OPTIONS":
-                return {
-                    "statusCode": 200,
-                    "headers": CORS_HEADERS,
-                    "body": "",
-                }
+                return _return_empty(200)
             else:
-                return {
-                    "statusCode": 405,
-                    "headers": CORS_HEADERS,
-                    "body": json.dumps(
-                        {"error": "Method not allowed. Use GET for recipe search."}
-                    ),
-                }
+                return _return_error(
+                    405, "Method not allowed. Use GET for recipe search."
+                )
 
         # Handle units endpoint
         elif path == "/units":
@@ -498,18 +394,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 logger.info("Getting all units...")
                 try:
                     units = db.get_units()
-                    return {
-                        "statusCode": 200,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(units),
-                    }
+                    return _return_data(200, units)
                 except Exception as e:
                     logger.error(f"Error getting units: {str(e)}")
-                    return {
-                        "statusCode": 500,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": str(e)}),
-                    }
+                    return _return_error(500, str(e))
 
         # Handle auth endpoint
         elif path.startswith("/auth"):
@@ -517,29 +405,22 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             # If we reached here and requires_auth_route was true, user_id must be present
             if http_method == "GET":
                 if user_id:
-                    return {
-                        "statusCode": 200,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(
-                            {
-                                "authenticated": True,
-                                "user": {
-                                    "id": user_id,
-                                    "username": username,
-                                    "email": email,
-                                    "groups": groups,
-                                },
-                            }
-                        ),
-                    }
+                    return _return_data(
+                        200,
+                        {
+                            "authenticated": True,
+                            "user": {
+                                "id": user_id,
+                                "username": username,
+                                "email": email,
+                                "groups": groups,
+                            },
+                        },
+                    )
                 else:
                     # This state should theoretically not be reached due to checks above
                     logger.error("Reached /auth GET endpoint without a valid user_id.")
-                    return {
-                        "statusCode": 401,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": "Unauthorized - User ID missing"}),
-                    }
+                    return _return_error(401, "Unauthorized - User ID missing")
 
         # Handle ratings endpoints
         elif path.startswith("/ratings"):
@@ -557,30 +438,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 logger.info(f"Getting ratings for recipe {recipe_id}...")
                 try:
                     ratings = db.get_recipe_ratings(int(recipe_id))
-                    return {
-                        "statusCode": 200,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(ratings),
-                    }
+                    return _return_data(200, ratings)
                 except Exception as e:
                     logger.error(f"Error getting ratings: {str(e)}")
-                    return {
-                        "statusCode": 500,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": str(e)}),
-                    }
+                    return _return_error(500, str(e))
 
             elif http_method in ["POST", "PUT"] and recipe_id:
                 logger.info(f"Setting rating for recipe {recipe_id}...")
                 # These routes require authentication
                 if not user_id:
-                    return {
-                        "statusCode": 401,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(
-                            {"error": "Authentication required to set ratings"}
-                        ),
-                    }
+                    return _return_error(401, "Authentication required to set ratings")
 
                 try:
                     body = json.loads(event.get("body", "{}"))
@@ -590,52 +457,28 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
                     result = db.set_rating(body)
                     status_code = 200 if http_method == "PUT" else 201
-                    return {
-                        "statusCode": status_code,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(result),
-                    }
+                    return _return_data(status_code, result)
                 except Exception as e:
                     logger.error(f"Error setting rating: {str(e)}")
-                    return {
-                        "statusCode": 400,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": str(e)}),
-                    }
+                    return _return_error(400, str(e))
 
             elif http_method == "DELETE" and recipe_id:
                 logger.info(f"Deleting rating for recipe {recipe_id}...")
                 # This route requires authentication
                 if not user_id:
-                    return {
-                        "statusCode": 401,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(
-                            {"error": "Authentication required to delete ratings"}
-                        ),
-                    }
+                    return _return_error(
+                        401, "Authentication required to delete ratings"
+                    )
 
                 try:
                     db.delete_rating(int(recipe_id), user_id)
-                    return {
-                        "statusCode": 204,
-                        "headers": CORS_HEADERS,
-                        "body": "",
-                    }
+                    return _return_empty(204)
                 except Exception as e:
                     logger.error(f"Error deleting rating: {str(e)}")
-                    return {
-                        "statusCode": 400,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": str(e)}),
-                    }
+                    return _return_error(400, str(e))
 
             elif http_method == "OPTIONS":
-                return {
-                    "statusCode": 200,
-                    "headers": CORS_HEADERS,
-                    "body": "",
-                }
+                return _return_empty(200)
 
         # Handle tags endpoint (public)
         elif path == "/tags/public":
@@ -643,25 +486,13 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 logger.info("Getting all public tags...")
                 try:
                     tags = db.get_public_tags()
-                    return {
-                        "statusCode": 200,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(tags),
-                    }
+                    return _return_data(200, tags)
                 except Exception as e:
                     logger.error(f"Error getting public tags: {str(e)}")
-                    return {
-                        "statusCode": 500,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": str(e)}),
-                    }
+                    return _return_error(500, str(e))
             elif http_method == "POST":
                 if not user_id:  # Assuming creating public tags requires auth
-                    return {
-                        "statusCode": 401,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": "Authentication required"}),
-                    }
+                    return _return_error(401, "Authentication required")
                 logger.info("Creating new public tag...")
                 try:
                     body = json.loads(event.get("body", "{}"))
@@ -670,60 +501,32 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         raise ValueError("Tag name is required")
 
                     tag = db.create_public_tag(tag_name)
-                    return {
-                        "statusCode": 201,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(tag),
-                    }
+                    return _return_data(201, tag)
                 except ValueError as ve:
-                    return {
-                        "statusCode": 400,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": str(ve)}),
-                    }
+                    return _return_error(400, str(ve))
                 except Exception as e:
                     logger.error(f"Error creating public tag: {str(e)}")
                     # Handle specific integrity error for duplicate names if db.create_public_tag doesn't already
                     if "UNIQUE constraint failed" in str(e) or "already exists" in str(
                         e
                     ):
-                        return {
-                            "statusCode": 409,  # Conflict
-                            "headers": CORS_HEADERS,
-                            "body": json.dumps(
-                                {"error": f"Public tag '{tag_name}' already exists."}
-                            ),
-                        }
-                    return {
-                        "statusCode": 500,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": str(e)}),
-                    }
+                        return _return_error(
+                            409, f"Public tag '{tag_name}' already exists."
+                        )
+                    return _return_error(500, str(e))
 
         # Handle tags endpoint (private)
         elif path == "/tags/private":
             if not user_id:
-                return {
-                    "statusCode": 401,
-                    "headers": CORS_HEADERS,
-                    "body": json.dumps({"error": "Authentication required"}),
-                }
+                return _return_error(401, "Authentication required")
             if http_method == "GET":
                 logger.info(f"Getting private tags for user {user_id}...")
                 try:
                     tags = db.get_private_tags(user_id)
-                    return {
-                        "statusCode": 200,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(tags),
-                    }
+                    return _return_data(200, tags)
                 except Exception as e:
                     logger.error(f"Error getting private tags: {str(e)}")
-                    return {
-                        "statusCode": 500,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": str(e)}),
-                    }
+                    return _return_error(500, str(e))
             elif http_method == "POST":
                 logger.info(f"Creating new private tag for user {user_id}...")
                 try:
@@ -735,36 +538,19 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         raise ValueError("Username not found for authenticated user.")
 
                     tag = db.create_private_tag(tag_name, user_id, username)
-                    return {
-                        "statusCode": 201,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(tag),
-                    }
+                    return _return_data(201, tag)
                 except ValueError as ve:
-                    return {
-                        "statusCode": 400,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": str(ve)}),
-                    }
+                    return _return_error(400, str(ve))
                 except Exception as e:
                     logger.error(f"Error creating private tag: {str(e)}")
                     if "UNIQUE constraint failed" in str(e) or "already exists" in str(
                         e
                     ):
-                        return {
-                            "statusCode": 409,  # Conflict
-                            "headers": CORS_HEADERS,
-                            "body": json.dumps(
-                                {
-                                    "error": f"Private tag '{tag_name}' for this user already exists."
-                                }
-                            ),
-                        }
-                    return {
-                        "statusCode": 500,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": str(e)}),
-                    }
+                        return _return_error(
+                            409,
+                            f"Private tag '{tag_name}' for this user already exists.",
+                        )
+                    return _return_error(500, str(e))
 
         # Handle recipe-tag associations
         # /recipes/{recipeId}/public_tags
@@ -788,20 +574,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 tag_id_str = path_parts[3] if len(path_parts) > 3 else None
 
                 if not recipe_id_str.isdigit():
-                    return {
-                        "statusCode": 400,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": "Invalid recipe ID"}),
-                    }
+                    return _return_error(400, "Invalid recipe ID")
                 recipe_id_int = int(recipe_id_str)
 
                 # All tag association operations require authentication
                 if not user_id:
-                    return {
-                        "statusCode": 401,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps({"error": "Authentication required"}),
-                    }
+                    return _return_error(401, "Authentication required")
 
                 if (
                     http_method == "POST" and not tag_id_str
@@ -863,58 +641,33 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                                 )
                             )
                             if not private_tag_check:
-                                return {
-                                    "statusCode": 403,
-                                    "headers": CORS_HEADERS,
-                                    "body": json.dumps(
-                                        {
-                                            "error": "Private tag does not exist or does not belong to user"
-                                        }
-                                    ),
-                                }
+                                return _return_error(
+                                    403,
+                                    "Private tag does not exist or does not belong to user",
+                                )
                             success = db.add_private_tag_to_recipe(
                                 recipe_id_int, final_tag_id
                             )
 
                         if success:
-                            return {
-                                "statusCode": 201,
-                                "headers": CORS_HEADERS,
-                                "body": json.dumps(
-                                    {
-                                        "message": f"{tag_type.replace('_tags', '')} tag added to recipe"
-                                    }
-                                ),
-                            }
+                            return _return_message(
+                                201,
+                                f"{tag_type.replace('_tags', '')} tag added to recipe",
+                            )
                         else:
                             # Could be due to ON CONFLICT DO NOTHING if already exists
-                            return {
-                                "statusCode": 200,
-                                "headers": CORS_HEADERS,
-                                "body": json.dumps(
-                                    {
-                                        "message": f"{tag_type.replace('_tags', '')} tag already associated or failed to add"
-                                    }
-                                ),
-                            }
+                            return _return_message(
+                                200,
+                                f"{tag_type.replace('_tags', '')} tag already associated or failed to add",
+                            )
 
                     except ValueError as ve:
-                        return {
-                            "statusCode": 400,
-                            "headers": CORS_HEADERS,
-                            "body": json.dumps({"error": str(ve)}),
-                        }
+                        return _return_error(400, str(ve))
                     except Exception as e:
                         logger.error(
                             f"Error adding tag to recipe: {str(e)}", exc_info=True
                         )
-                        return {
-                            "statusCode": 500,
-                            "headers": CORS_HEADERS,
-                            "body": json.dumps(
-                                {"error": "Failed to add tag to recipe"}
-                            ),
-                        }
+                        return _return_error(500, "Failed to add tag to recipe")
 
                 elif (
                     http_method == "DELETE" and tag_id_str and tag_id_str.isdigit()
@@ -935,57 +688,28 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                             )
 
                         if success:
-                            return {
-                                "statusCode": 204,
-                                "headers": CORS_HEADERS,
-                                "body": "",
-                            }
+                            return _return_empty(204)
                         else:
-                            return {
-                                "statusCode": 404,
-                                "headers": CORS_HEADERS,
-                                "body": json.dumps(
-                                    {
-                                        "error": "Tag association not found or not authorized to remove"
-                                    }
-                                ),
-                            }
+                            return _return_error(
+                                404,
+                                "Tag association not found or not authorized to remove",
+                            )
                     except Exception as e:
                         logger.error(
                             f"Error removing tag from recipe: {str(e)}", exc_info=True
                         )
-                        return {
-                            "statusCode": 500,
-                            "headers": CORS_HEADERS,
-                            "body": json.dumps(
-                                {"error": "Failed to remove tag from recipe"}
-                            ),
-                        }
+                        return _return_error(500, "Failed to remove tag from recipe")
                 else:
-                    return {
-                        "statusCode": 405,
-                        "headers": CORS_HEADERS,
-                        "body": json.dumps(
-                            {
-                                "error": "Method not allowed or invalid path structure for tags"
-                            }
-                        ),
-                    }
+                    return _return_error(
+                        405, "Method not allowed or invalid path structure for tags"
+                    )
             # Fall through if not matched to more specific recipe routes like /recipes/{id} itself
 
         # Handle not found
-        return {
-            "statusCode": 404,
-            "headers": CORS_HEADERS,
-            "body": json.dumps({"error": f"Endpoint not found: {path} {http_method}"}),
-        }
+        return _return_error(404, f"Endpoint not found: {path} {http_method}")
 
     except Exception as e:
         logger.error(f"Unhandled error: {str(e)}", exc_info=True)
-        return {
-            "statusCode": 500,
-            "headers": CORS_HEADERS,
-            "body": json.dumps({"error": "Internal server error"}),
-        }
+        return _return_error(500, "Internal server error")
     finally:
         logger.info(f"Total execution time: {time.time() - start_time:.2f}s")
