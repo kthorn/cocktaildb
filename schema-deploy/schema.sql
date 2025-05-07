@@ -29,7 +29,7 @@ CREATE TABLE recipes (
   source TEXT,
   source_url TEXT,
   avg_rating REAL DEFAULT 0,
-  rating_count INTEGER DEFAULT 0,
+  rating_count INTEGER DEFAULT 0
 );
 
 CREATE TABLE ratings (
@@ -59,7 +59,7 @@ CREATE TABLE recipe_private_tags (
   recipe_id INTEGER NOT NULL,
   tag_id INTEGER NOT NULL,
   FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
-  FOREIGN KEY (tag_id) REFERENCES private_tags(id),
+  FOREIGN KEY (tag_id) REFERENCES private_tags(id) ON DELETE CASCADE,
   UNIQUE(recipe_id, tag_id)
 );
 
@@ -68,7 +68,7 @@ CREATE TABLE recipe_public_tags (
   recipe_id INTEGER NOT NULL,
   tag_id INTEGER NOT NULL,
   FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
-  FOREIGN KEY (tag_id) REFERENCES public_tags(id),
+  FOREIGN KEY (tag_id) REFERENCES public_tags(id) ON DELETE CASCADE,
   UNIQUE(recipe_id, tag_id)
 );
 
@@ -79,8 +79,8 @@ CREATE TABLE recipe_ingredients (
   unit_id INTEGER,
   amount REAL,
   FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
-  FOREIGN KEY (ingredient_id) REFERENCES ingredients(id),
-  FOREIGN KEY (unit_id) REFERENCES units(id)
+  FOREIGN KEY (ingredient_id) REFERENCES ingredients(id) ON DELETE RESTRICT,
+  FOREIGN KEY (unit_id) REFERENCES units(id) ON DELETE SET NULL
 );
 
 -- Create indexes for better performance
@@ -156,4 +156,4 @@ INSERT INTO ingredients (name, description, path) VALUES
 -- Insert common tags
 INSERT INTO public_tags (name) VALUES
   ('Tiki'),
-  ('Classic')
+  ('Classic');

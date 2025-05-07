@@ -1263,3 +1263,277 @@ class Database:
         except Exception as e:
             logger.error(f"Error searching recipes: {str(e)}")
             raise
+
+    # --- Tag Management ---
+
+    @retry_on_db_locked()
+    def create_public_tag(self, name: str) -> Dict[str, Any]:
+        """Creates a new public tag. Returns the created tag."""
+        try:
+            self.execute_query(
+                "INSERT INTO public_tags (name) VALUES (:name)", {"name": name}
+            )
+            # SQLite specific way to get last inserted ID if not returned directly
+            # For this structure, we'll re-fetch. A more robust way would depend on DB specifics or ORM.
+            tag = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id, name FROM public_tags WHERE name = :name",
+                    {"name": name},
+                ),
+            )
+            if not tag:  # Should not happen if insert succeeded
+                raise sqlite3.DatabaseError("Failed to retrieve tag after creation.")
+            return tag[0]
+        except sqlite3.IntegrityError:
+            logger.warning(f"Public tag '{name}' already exists.")
+            # If it already exists, fetch and return it
+            existing_tag = self.get_public_tag_by_name(name)
+            if existing_tag:
+                return existing_tag
+            raise  # Should not happen if integrity error was due to name conflict
+        except Exception as e:
+            logger.error(f"Error creating public tag '{name}': {str(e)}")
+            raise
+
+    @retry_on_db_locked()
+    def get_public_tag_by_name(self, name: str) -> Optional[Dict[str, Any]]:
+        """Gets a public tag by its name."""
+        try:
+            tag = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id, name FROM public_tags WHERE name = :name",
+                    {"name": name},
+                ),
+            )
+            return tag[0] if tag else None
+        except Exception as e:
+            logger.error(f"Error getting public tag by name '{name}': {str(e)}")
+            raise
+
+    @retry_on_db_locked()
+    def create_private_tag(
+        self, name: str, cognito_user_id: str, cognito_username: str
+    ) -> Dict[str, Any]:
+        """Creates a new private tag for a user. Returns the created tag."""
+        try:
+            self.execute_query(
+                """
+                INSERT INTO private_tags (name, cognito_user_id, cognito_username)
+                VALUES (:name, :cognito_user_id, :cognito_username)
+                """,
+                {
+                    "name": name,
+                    "cognito_user_id": cognito_user_id,
+                    "cognito_username": cognito_username,
+                },
+            )
+            tag = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    """
+                    SELECT id, name, cognito_user_id, cognito_username FROM private_tags 
+                    WHERE name = :name AND cognito_user_id = :cognito_user_id
+                    """,
+                    {"name": name, "cognito_user_id": cognito_user_id},
+                ),
+            )
+            if not tag:  # Should not happen
+                raise sqlite3.DatabaseError(
+                    "Failed to retrieve private tag after creation."
+                )
+            return tag[0]
+        except sqlite3.IntegrityError:
+            logger.warning(
+                f"Private tag '{name}' for user '{cognito_user_id}' already exists."
+            )
+            existing_tag = self.get_private_tag_by_name_and_user(name, cognito_user_id)
+            if existing_tag:
+                return existing_tag
+            raise
+        except Exception as e:
+            logger.error(
+                f"Error creating private tag '{name}' for user '{cognito_user_id}': {str(e)}"
+            )
+            raise
+
+    @retry_on_db_locked()
+    def get_private_tag_by_name_and_user(
+        self, name: str, cognito_user_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Gets a private tag by its name and user ID."""
+        try:
+            tag = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    """
+                    SELECT id, name, cognito_user_id, cognito_username FROM private_tags 
+                    WHERE name = :name AND cognito_user_id = :cognito_user_id
+                    """,
+                    {"name": name, "cognito_user_id": cognito_user_id},
+                ),
+            )
+            return tag[0] if tag else None
+        except Exception as e:
+            logger.error(
+                f"Error getting private tag by name '{name}' for user '{cognito_user_id}': {str(e)}"
+            )
+            raise
+
+    def get_public_tags(self) -> List[Dict[str, Any]]:
+        """Get all public tags."""
+        try:
+            return cast(
+                List[Dict[str, Any]],
+                self.execute_query("SELECT id, name FROM public_tags ORDER BY name"),
+            )
+        except Exception as e:
+            logger.error(f"Error getting public tags: {str(e)}")
+            raise
+
+    def get_private_tags(self, cognito_user_id: str) -> List[Dict[str, Any]]:
+        """Get all private tags for a specific user."""
+        try:
+            return cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    """
+                    SELECT id, name FROM private_tags 
+                    WHERE cognito_user_id = :cognito_user_id ORDER BY name
+                    """,
+                    {"cognito_user_id": cognito_user_id},
+                ),
+            )
+        except Exception as e:
+            logger.error(
+                f"Error getting private tags for user '{cognito_user_id}': {str(e)}"
+            )
+            raise
+
+    @retry_on_db_locked()
+    def add_public_tag_to_recipe(self, recipe_id: int, tag_id: int) -> bool:
+        """Associates a public tag with a recipe."""
+        try:
+            result = self.execute_query(
+                """
+                INSERT INTO recipe_public_tags (recipe_id, tag_id) 
+                VALUES (:recipe_id, :tag_id)
+                ON CONFLICT(recipe_id, tag_id) DO NOTHING
+                """,
+                {"recipe_id": recipe_id, "tag_id": tag_id},
+            )
+            return result.get("rowCount", 0) > 0
+        except Exception as e:
+            logger.error(
+                f"Error adding public tag {tag_id} to recipe {recipe_id}: {str(e)}"
+            )
+            raise
+
+    @retry_on_db_locked()
+    def add_private_tag_to_recipe(self, recipe_id: int, tag_id: int) -> bool:
+        """Associates a private tag with a recipe."""
+        try:
+            # We assume tag_id corresponds to a private tag owned by the relevant user.
+            # The check for tag ownership should happen in the handler before calling this.
+            result = self.execute_query(
+                """
+                INSERT INTO recipe_private_tags (recipe_id, tag_id)
+                VALUES (:recipe_id, :tag_id)
+                ON CONFLICT(recipe_id, tag_id) DO NOTHING
+                """,
+                {"recipe_id": recipe_id, "tag_id": tag_id},
+            )
+            return result.get("rowCount", 0) > 0
+        except Exception as e:
+            logger.error(
+                f"Error adding private tag {tag_id} to recipe {recipe_id}: {str(e)}"
+            )
+            raise
+
+    @retry_on_db_locked()
+    def remove_public_tag_from_recipe(self, recipe_id: int, tag_id: int) -> bool:
+        """Removes the association of a public tag from a recipe."""
+        try:
+            result = self.execute_query(
+                "DELETE FROM recipe_public_tags WHERE recipe_id = :recipe_id AND tag_id = :tag_id",
+                {"recipe_id": recipe_id, "tag_id": tag_id},
+            )
+            return result.get("rowCount", 0) > 0
+        except Exception as e:
+            logger.error(
+                f"Error removing public tag {tag_id} from recipe {recipe_id}: {str(e)}"
+            )
+            raise
+
+    @retry_on_db_locked()
+    def remove_private_tag_from_recipe(
+        self, recipe_id: int, tag_id: int, cognito_user_id: str
+    ) -> bool:
+        """Removes the association of a private tag from a recipe, ensuring user ownership."""
+        try:
+            # Ensure the user owns the private tag they are trying to remove from the recipe
+            result = self.execute_query(
+                """
+                DELETE FROM recipe_private_tags
+                WHERE recipe_id = :recipe_id AND tag_id = :tag_id
+                  AND EXISTS (SELECT 1 FROM private_tags pt WHERE pt.id = :tag_id AND pt.cognito_user_id = :cognito_user_id)
+                """,
+                {
+                    "recipe_id": recipe_id,
+                    "tag_id": tag_id,
+                    "cognito_user_id": cognito_user_id,
+                },
+            )
+            return result.get("rowCount", 0) > 0
+        except Exception as e:
+            logger.error(
+                f"Error removing private tag {tag_id} from recipe {recipe_id} for user {cognito_user_id}: {str(e)}"
+            )
+            raise
+
+    def _get_recipe_public_tags(self, recipe_id: int) -> List[Dict[str, Any]]:
+        """Helper method to get all public tags for a specific recipe."""
+        try:
+            return cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    """
+                    SELECT pt.id, pt.name
+                    FROM recipe_public_tags rpt
+                    JOIN public_tags pt ON rpt.tag_id = pt.id
+                    WHERE rpt.recipe_id = :recipe_id
+                    ORDER BY pt.name
+                    """,
+                    {"recipe_id": recipe_id},
+                ),
+            )
+        except Exception as e:
+            logger.error(f"Error getting public tags for recipe {recipe_id}: {str(e)}")
+            raise
+
+    def _get_recipe_private_tags(
+        self, recipe_id: int, cognito_user_id: str
+    ) -> List[Dict[str, Any]]:
+        """Helper method to get all private tags for a specific recipe by a specific user."""
+        try:
+            return cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    """
+                    SELECT pt.id, pt.name
+                    FROM recipe_private_tags rpt
+                    JOIN private_tags pt ON rpt.tag_id = pt.id
+                    WHERE rpt.recipe_id = :recipe_id AND pt.cognito_user_id = :cognito_user_id
+                    ORDER BY pt.name
+                    """,
+                    {"recipe_id": recipe_id, "cognito_user_id": cognito_user_id},
+                ),
+            )
+        except Exception as e:
+            logger.error(
+                f"Error getting private tags for recipe {recipe_id} by user {cognito_user_id}: {str(e)}"
+            )
+            raise
+
+    # --- End Tag Management ---

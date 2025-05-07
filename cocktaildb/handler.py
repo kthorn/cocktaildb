@@ -159,7 +159,27 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
         # Handle ingredient endpoints
         if path.startswith("/ingredients"):
-            ingredient_id = path.split("/")[-1] if len(path.split("/")) > 2 else None
+            # New logic to get ingredient_id, prioritizing pathParameters
+            ingredient_id_from_param = event.get("pathParameters", {}).get(
+                "ingredientId"
+            )
+            if ingredient_id_from_param:
+                ingredient_id = ingredient_id_from_param
+            else:
+                # Fallback to path splitting if ingredientId not in pathParameters
+                path_parts = path.split(
+                    "/"
+                )  # path is event.get("path", "").rstrip("/")
+                if (
+                    len(path_parts) == 3
+                    and path_parts[1] == "ingredients"
+                    and path_parts[2]
+                ):
+                    ingredient_id = path_parts[2]
+                else:
+                    ingredient_id = (
+                        None  # Indicates a collection endpoint like /ingredients
+                    )
 
             if http_method == "POST":
                 logger.info("Creating new ingredient...")
@@ -616,6 +636,342 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     "headers": CORS_HEADERS,
                     "body": "",
                 }
+
+        # Handle tags endpoint (public)
+        elif path == "/tags/public":
+            if http_method == "GET":
+                logger.info("Getting all public tags...")
+                try:
+                    tags = db.get_public_tags()
+                    return {
+                        "statusCode": 200,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps(tags),
+                    }
+                except Exception as e:
+                    logger.error(f"Error getting public tags: {str(e)}")
+                    return {
+                        "statusCode": 500,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": str(e)}),
+                    }
+            elif http_method == "POST":
+                if not user_id:  # Assuming creating public tags requires auth
+                    return {
+                        "statusCode": 401,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": "Authentication required"}),
+                    }
+                logger.info("Creating new public tag...")
+                try:
+                    body = json.loads(event.get("body", "{}"))
+                    tag_name = body.get("name")
+                    if not tag_name:
+                        raise ValueError("Tag name is required")
+
+                    tag = db.create_public_tag(tag_name)
+                    return {
+                        "statusCode": 201,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps(tag),
+                    }
+                except ValueError as ve:
+                    return {
+                        "statusCode": 400,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": str(ve)}),
+                    }
+                except Exception as e:
+                    logger.error(f"Error creating public tag: {str(e)}")
+                    # Handle specific integrity error for duplicate names if db.create_public_tag doesn't already
+                    if "UNIQUE constraint failed" in str(e) or "already exists" in str(
+                        e
+                    ):
+                        return {
+                            "statusCode": 409,  # Conflict
+                            "headers": CORS_HEADERS,
+                            "body": json.dumps(
+                                {"error": f"Public tag '{tag_name}' already exists."}
+                            ),
+                        }
+                    return {
+                        "statusCode": 500,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": str(e)}),
+                    }
+
+        # Handle tags endpoint (private)
+        elif path == "/tags/private":
+            if not user_id:
+                return {
+                    "statusCode": 401,
+                    "headers": CORS_HEADERS,
+                    "body": json.dumps({"error": "Authentication required"}),
+                }
+            if http_method == "GET":
+                logger.info(f"Getting private tags for user {user_id}...")
+                try:
+                    tags = db.get_private_tags(user_id)
+                    return {
+                        "statusCode": 200,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps(tags),
+                    }
+                except Exception as e:
+                    logger.error(f"Error getting private tags: {str(e)}")
+                    return {
+                        "statusCode": 500,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": str(e)}),
+                    }
+            elif http_method == "POST":
+                logger.info(f"Creating new private tag for user {user_id}...")
+                try:
+                    body = json.loads(event.get("body", "{}"))
+                    tag_name = body.get("name")
+                    if not tag_name:
+                        raise ValueError("Tag name is required")
+                    if not username:  # Username should be available if user_id is
+                        raise ValueError("Username not found for authenticated user.")
+
+                    tag = db.create_private_tag(tag_name, user_id, username)
+                    return {
+                        "statusCode": 201,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps(tag),
+                    }
+                except ValueError as ve:
+                    return {
+                        "statusCode": 400,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": str(ve)}),
+                    }
+                except Exception as e:
+                    logger.error(f"Error creating private tag: {str(e)}")
+                    if "UNIQUE constraint failed" in str(e) or "already exists" in str(
+                        e
+                    ):
+                        return {
+                            "statusCode": 409,  # Conflict
+                            "headers": CORS_HEADERS,
+                            "body": json.dumps(
+                                {
+                                    "error": f"Private tag '{tag_name}' for this user already exists."
+                                }
+                            ),
+                        }
+                    return {
+                        "statusCode": 500,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": str(e)}),
+                    }
+
+        # Handle recipe-tag associations
+        # /recipes/{recipeId}/public_tags
+        # /recipes/{recipeId}/public_tags/{tagId}
+        # /recipes/{recipeId}/private_tags
+        # /recipes/{recipeId}/private_tags/{tagId}
+        elif (
+            path.startswith("/recipes/") and "/tags/" in path
+        ):  # More specific than general /recipes/
+            path_parts = path.strip("/").split(
+                "/"
+            )  # recipes, recipe_id_val, tags_type, tag_id_val?
+
+            if (
+                len(path_parts) >= 3
+                and path_parts[0] == "recipes"
+                and path_parts[2].endswith("_tags")
+            ):
+                recipe_id_str = path_parts[1]
+                tag_type = path_parts[2]  # "public_tags" or "private_tags"
+                tag_id_str = path_parts[3] if len(path_parts) > 3 else None
+
+                if not recipe_id_str.isdigit():
+                    return {
+                        "statusCode": 400,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": "Invalid recipe ID"}),
+                    }
+                recipe_id_int = int(recipe_id_str)
+
+                # All tag association operations require authentication
+                if not user_id:
+                    return {
+                        "statusCode": 401,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps({"error": "Authentication required"}),
+                    }
+
+                if (
+                    http_method == "POST" and not tag_id_str
+                ):  # Add tag to recipe: POST /recipes/{id}/<type>_tags
+                    logger.info(f"Adding {tag_type} to recipe {recipe_id_int}...")
+                    try:
+                        body = json.loads(event.get("body", "{}"))
+                        tag_name_to_add = body.get("name")
+                        tag_id_to_add = body.get("id")
+
+                        if not tag_name_to_add and not tag_id_to_add:
+                            raise ValueError(
+                                "Either tag 'name' or 'id' must be provided."
+                            )
+
+                        final_tag_id = None
+                        if tag_id_to_add:
+                            final_tag_id = int(tag_id_to_add)
+                        elif tag_name_to_add:
+                            if tag_type == "public_tags":
+                                tag_obj = db.get_public_tag_by_name(tag_name_to_add)
+                                if not tag_obj:
+                                    tag_obj = db.create_public_tag(tag_name_to_add)
+                                final_tag_id = tag_obj["id"]
+                            elif tag_type == "private_tags":
+                                tag_obj = db.get_private_tag_by_name_and_user(
+                                    tag_name_to_add, user_id
+                                )
+                                if not tag_obj:
+                                    if not username:
+                                        raise ValueError(
+                                            "Username not found for private tag creation"
+                                        )
+                                    tag_obj = db.create_private_tag(
+                                        tag_name_to_add, user_id, username
+                                    )
+                                final_tag_id = tag_obj["id"]
+                            else:
+                                raise ValueError("Invalid tag type specified")
+
+                        if final_tag_id is None:
+                            raise ValueError("Could not determine tag ID to add.")
+
+                        success = False
+                        if tag_type == "public_tags":
+                            success = db.add_public_tag_to_recipe(
+                                recipe_id_int, final_tag_id
+                            )
+                        elif tag_type == "private_tags":
+                            # Ensure the private tag belongs to the user before associating
+                            private_tag_check = (
+                                db.get_private_tag_by_name_and_user(
+                                    tag_name_to_add, user_id
+                                )
+                                if tag_name_to_add
+                                else db.execute_query(
+                                    "SELECT id FROM private_tags WHERE id = :id AND cognito_user_id = :user_id",
+                                    {"id": final_tag_id, "user_id": user_id},
+                                )
+                            )
+                            if not private_tag_check:
+                                return {
+                                    "statusCode": 403,
+                                    "headers": CORS_HEADERS,
+                                    "body": json.dumps(
+                                        {
+                                            "error": "Private tag does not exist or does not belong to user"
+                                        }
+                                    ),
+                                }
+                            success = db.add_private_tag_to_recipe(
+                                recipe_id_int, final_tag_id
+                            )
+
+                        if success:
+                            return {
+                                "statusCode": 201,
+                                "headers": CORS_HEADERS,
+                                "body": json.dumps(
+                                    {
+                                        "message": f"{tag_type.replace('_tags', '')} tag added to recipe"
+                                    }
+                                ),
+                            }
+                        else:
+                            # Could be due to ON CONFLICT DO NOTHING if already exists
+                            return {
+                                "statusCode": 200,
+                                "headers": CORS_HEADERS,
+                                "body": json.dumps(
+                                    {
+                                        "message": f"{tag_type.replace('_tags', '')} tag already associated or failed to add"
+                                    }
+                                ),
+                            }
+
+                    except ValueError as ve:
+                        return {
+                            "statusCode": 400,
+                            "headers": CORS_HEADERS,
+                            "body": json.dumps({"error": str(ve)}),
+                        }
+                    except Exception as e:
+                        logger.error(
+                            f"Error adding tag to recipe: {str(e)}", exc_info=True
+                        )
+                        return {
+                            "statusCode": 500,
+                            "headers": CORS_HEADERS,
+                            "body": json.dumps(
+                                {"error": "Failed to add tag to recipe"}
+                            ),
+                        }
+
+                elif (
+                    http_method == "DELETE" and tag_id_str and tag_id_str.isdigit()
+                ):  # Remove tag from recipe: DELETE /recipes/{id}/<type>_tags/{tag_id}
+                    tag_id_int = int(tag_id_str)
+                    logger.info(
+                        f"Removing {tag_type} (ID: {tag_id_int}) from recipe {recipe_id_int}..."
+                    )
+                    try:
+                        success = False
+                        if tag_type == "public_tags":
+                            success = db.remove_public_tag_from_recipe(
+                                recipe_id_int, tag_id_int
+                            )
+                        elif tag_type == "private_tags":
+                            success = db.remove_private_tag_from_recipe(
+                                recipe_id_int, tag_id_int, user_id
+                            )
+
+                        if success:
+                            return {
+                                "statusCode": 204,
+                                "headers": CORS_HEADERS,
+                                "body": "",
+                            }
+                        else:
+                            return {
+                                "statusCode": 404,
+                                "headers": CORS_HEADERS,
+                                "body": json.dumps(
+                                    {
+                                        "error": "Tag association not found or not authorized to remove"
+                                    }
+                                ),
+                            }
+                    except Exception as e:
+                        logger.error(
+                            f"Error removing tag from recipe: {str(e)}", exc_info=True
+                        )
+                        return {
+                            "statusCode": 500,
+                            "headers": CORS_HEADERS,
+                            "body": json.dumps(
+                                {"error": "Failed to remove tag from recipe"}
+                            ),
+                        }
+                else:
+                    return {
+                        "statusCode": 405,
+                        "headers": CORS_HEADERS,
+                        "body": json.dumps(
+                            {
+                                "error": "Method not allowed or invalid path structure for tags"
+                            }
+                        ),
+                    }
+            # Fall through if not matched to more specific recipe routes like /recipes/{id} itself
 
         # Handle not found
         return {
