@@ -295,7 +295,7 @@ class Database:
                     VALUES (:name, :description, :parent_id)
                     """,
                     {
-                        "name": data.get("name"),
+                        "name": data.get("name").title() if data.get("name") else None,
                         "description": data.get("description"),
                         "parent_id": data.get("parent_id"),
                     },
@@ -578,7 +578,7 @@ class Database:
                 VALUES (:name, :instructions, :description, :image_url, :source, :source_url)
                 """,
                 {
-                    "name": data["name"],
+                    "name": data["name"].title() if data["name"] else None,
                     "instructions": data.get("instructions"),
                     "description": data.get("description"),
                     "image_url": data.get("image_url"),
