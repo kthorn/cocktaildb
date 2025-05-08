@@ -270,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (ingredient.parent_id) {
                 const parent = ingredients.find(ing => ing.id === ingredient.parent_id);
                 if (parent) {
-                    parentInfo = `<p><strong>Parent:</strong> ${parent.name}</p>`;
+                    parentInfo = `<span class="ingredient-parent-info"> (Parent: ${parent.name})</span>`;
                 }
             }
             
@@ -283,9 +283,10 @@ document.addEventListener('DOMContentLoaded', () => {
             ` : '';
             
             card.innerHTML = `
-                <h4>${ingredient.name}</h4>
-                ${parentInfo}
-                <p>${ingredient.description || 'No description'}</p>
+                <div class="ingredient-card-content">
+                    <span class="ingredient-name">${ingredient.name}</span>${parentInfo}
+                    <p class="ingredient-description">${ingredient.description || 'No description'}</p>
+                </div>
                 ${actionButtons}
             `;
             ingredientsContainer.appendChild(card);
