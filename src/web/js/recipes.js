@@ -381,17 +381,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeTagModalBtn = tagEditorModal.querySelector('.close-tag-modal-btn');
 
     let currentRecipeTags = []; // Stores tags for the recipe being edited in the modal
+    let originalRecipeTagsForEdit = []; // Stores the initial state of tags when modal opens
 
     function openTagEditorModal(recipeId, recipeName, currentTagsJson) {
         tagEditorRecipeIdInput.value = recipeId;
         tagEditorRecipeNameEl.textContent = decodeURIComponent(recipeName);
         try {
-            currentRecipeTags = JSON.parse(currentTagsJson || '[]').map(tag => (
-                typeof tag === 'string' ? { name: tag, type: 'public' } : tag
-            ));
+            const parsedTags = JSON.parse(currentTagsJson || '[]');
+            currentRecipeTags = parsedTags.map(tag => {
+                if (typeof tag === 'string') return { name: tag, type: 'public', id: undefined };
+                // Ensure structure {id?, name, type}, default type to public if missing
+                return { id: tag.id, name: tag.name, type: tag.type || 'public' };
+            });
+            // Deep copy for comparison on save
+            originalRecipeTagsForEdit = JSON.parse(JSON.stringify(currentRecipeTags)); 
         } catch (e) {
             console.error('Error parsing current tags:', e);
             currentRecipeTags = [];
+            originalRecipeTagsForEdit = [];
         }
         renderTagChipsInModal();
         tagInput.value = '';
@@ -402,6 +409,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function closeTagEditorModal() {
         tagEditorModal.style.display = 'none';
         currentRecipeTags = [];
+        originalRecipeTagsForEdit = [];
         tagInput.value = '';
     }
 
@@ -468,39 +476,106 @@ document.addEventListener('DOMContentLoaded', () => {
 
     saveTagsBtn.addEventListener('click', async () => {
         const recipeId = tagEditorRecipeIdInput.value;
-        console.log(`Saving tags for recipe ${recipeId}:`, currentRecipeTags);
-        // TODO: API call to save tags
-        alert('Tags would be saved here (see console). API call is next.');
-        
-        // For now, let's try to update the card display directly if the card is visible
-        const recipeCard = document.querySelector(`.recipe-card[data-id="${recipeId}"]`);
-        if (recipeCard) {
-            const tagsDisplay = recipeCard.querySelector('.recipe-tags .existing-tags');
-            const noTagsPlaceholder = recipeCard.querySelector('.recipe-tags .no-tags-placeholder');
-            const addTagButton = recipeCard.querySelector('.add-tag-btn');
+        const modalFinalTags = [...currentRecipeTags]; // Current state from modal
 
-            if (currentRecipeTags.length > 0) {
-                const publicTags = currentRecipeTags.filter(t => t.type === 'public').map(t => t.name);
+        saveTagsBtn.disabled = true;
+        saveTagsBtn.textContent = 'Saving...';
+
+        try {
+            const tagsToActuallyRemove = [];
+            const tagsToActuallyAdd = [];
+
+            // Determine tags to remove their old association
+            for (const originalTag of originalRecipeTagsForEdit) {
+                const stillExistsWithSameType = modalFinalTags.some(finalTag => 
+                    finalTag.id === originalTag.id && 
+                    finalTag.name.toLowerCase() === originalTag.name.toLowerCase() &&
+                    finalTag.type === originalTag.type
+                );
+                if (!stillExistsWithSameType && originalTag.id) {
+                    // If it's not in the final list with the exact same id, name, and type,
+                    // then its old association (originalTag.type) needs to be removed.
+                    tagsToActuallyRemove.push(originalTag);
+                }
+            }
+
+            // Determine tags to add their new association
+            for (const finalTag of modalFinalTags) {
+                const existedBeforeWithSameType = originalRecipeTagsForEdit.some(originalTag => 
+                    (finalTag.id && originalTag.id === finalTag.id || 
+                     !finalTag.id && originalTag.name.toLowerCase() === finalTag.name.toLowerCase()) &&
+                    originalTag.type === finalTag.type
+                );
+                if (!existedBeforeWithSameType) {
+                    // If it didn't exist before with the same type (or is brand new),
+                    // then its new association (finalTag.type) needs to be added.
+                    tagsToActuallyAdd.push(finalTag);
+                }
+            }
+
+            console.log("Original Tags:", originalRecipeTagsForEdit);
+            console.log("Final Modal Tags:", modalFinalTags);
+            console.log("API - Tags to remove association for:", tagsToActuallyRemove);
+            console.log("API - Tags to add association for:", tagsToActuallyAdd);
+
+            // Perform removals
+            for (const tag of tagsToActuallyRemove) {
+                // `tag.id` must exist for removal as per previous logic
+                await api.removeTagFromRecipe(recipeId, tag.id, tag.type); 
+                console.log(`API: Removed association - Name: ${tag.name}, ID: ${tag.id}, Type: ${tag.type}`);
+            }
+
+            // Perform additions/updates
+            for (const tag of tagsToActuallyAdd) {
+                // Backend handles tag creation by name if it doesn't exist, then associates.
+                await api.addTagToRecipe(recipeId, tag.name, tag.type);
+                console.log(`API: Added/Ensured association - Name: ${tag.name}, Type: ${tag.type}`);
+            }
+
+            // Update the local recipe card UI
+            const recipeCard = document.querySelector(`.recipe-card[data-id="${recipeId}"]`);
+            if (recipeCard) {
+                const tagsDisplay = recipeCard.querySelector('.recipe-tags .existing-tags');
+                const noTagsPlaceholder = recipeCard.querySelector('.recipe-tags .no-tags-placeholder');
+                const addTagButton = recipeCard.querySelector('.add-tag-btn');
+
+                // Public tags are displayed on the card
+                const publicTagsForDisplay = modalFinalTags.filter(t => t.type === 'public').map(t => t.name);
                 if (tagsDisplay) {
-                    tagsDisplay.textContent = publicTags.join(', ');
-                    tagsDisplay.style.display = publicTags.length > 0 ? 'inline' : 'none';
+                    tagsDisplay.textContent = publicTagsForDisplay.join(', ');
+                    tagsDisplay.style.display = publicTagsForDisplay.length > 0 ? 'inline' : 'none';
                 }
                 if (noTagsPlaceholder) {
-                    noTagsPlaceholder.style.display = publicTags.length > 0 ? 'none' : 'inline';
+                    noTagsPlaceholder.style.display = publicTagsForDisplay.length > 0 ? 'none' : 'inline';
                 }
-            } else {
-                if (tagsDisplay) tagsDisplay.style.display = 'none';
-                if (noTagsPlaceholder) noTagsPlaceholder.style.display = 'inline';
+                // Update the button's data-recipe-tags with the full state from the modal for re-opening
+                if (addTagButton) {
+                    // Fetch the latest full tag objects (with IDs for newly created tags) from server before updating data attribute
+                    // For now, we use modalFinalTags, but ideally, we'd refresh this specific recipe's tags from the backend
+                    // to get any new IDs assigned by the backend.
+                    // This is a simplification for now.
+                    const updatedRecipeData = await api.getRecipe(recipeId); // Re-fetch to get new tag IDs
+                    if (updatedRecipeData && updatedRecipeData.tags) {
+                         addTagButton.dataset.recipeTags = JSON.stringify(updatedRecipeData.tags);
+                    } else {
+                        // Fallback if re-fetch fails, use modal state (might lack new IDs)
+                        addTagButton.dataset.recipeTags = JSON.stringify(modalFinalTags);
+                    }
+                }
             }
-            // Update the button's data-recipe-tags attribute
-            if(addTagButton) {
-                addTagButton.dataset.recipeTags = JSON.stringify(currentRecipeTags);
-            }
+            
+            alert('Tags saved successfully!');
+            closeTagEditorModal();
+            // Consider a more targeted refresh if window.loadRecipes() is too heavy
+            // For example, if createRecipeCard could be called with updated recipe data for just this card.
+            // window.loadRecipes(); // This will ensure everything is up-to-date, including new tag IDs.
+        } catch (error) {
+            console.error('Error saving tags:', error);
+            alert(`Failed to save tags: ${error.message || 'An unexpected error occurred. Please check console.'} (Code: ${error.statusCode || 'N/A'})`);
+        } finally {
+            saveTagsBtn.disabled = false;
+            saveTagsBtn.textContent = 'Save Tags';
         }
-
-        closeTagEditorModal();
-        // Optionally, reload all recipes or just update the specific card via a more robust method
-        // window.loadRecipes(); // This would be too heavy, better to update card directly
     });
 
     cancelTagsBtn.addEventListener('click', closeTagEditorModal);

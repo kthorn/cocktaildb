@@ -262,6 +262,27 @@ class CocktailAPI {
     isAuthenticated() {
         return isAuthenticated();
     }
+
+    // Add a tag to a recipe
+    // jsTagType should be 'public' or 'private'
+    // The backend expects { name: tagName } in the body
+    async addTagToRecipe(recipeId, tagName, jsTagType) {
+        const apiTagType = `${jsTagType}_tags`; // Converts to 'public_tags' or 'private_tags'
+        const endpoint = `${this.baseUrl}/recipes/${recipeId}/${apiTagType}`;
+        const response = await fetch(endpoint, this.getFetchOptions('POST', { name: tagName }));
+        return this.handleResponse(response);
+    }
+
+    // Remove a tag from a recipe
+    // jsTagType should be 'public' or 'private'
+    async removeTagFromRecipe(recipeId, tagId, jsTagType) {
+        const apiTagType = `${jsTagType}_tags`;
+        const endpoint = `${this.baseUrl}/recipes/${recipeId}/${apiTagType}/${tagId}`;
+        const response = await fetch(endpoint, this.getFetchOptions('DELETE'));
+        return this.handleResponse(response);
+    }
+
+    // Get all public tags (if needed directly)
 }
 
 // Create and export the API instance
