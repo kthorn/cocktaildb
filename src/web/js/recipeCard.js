@@ -329,6 +329,248 @@ export function displayRecipes(recipes, container, showActions = true, onRecipeD
     });
 }
 
+// --- Tag Editor Modal Logic (Moved from recipes.js) ---
+let tagEditorModalElement = null;
+let tagEditorRecipeNameEl = null;
+let tagEditorRecipeIdInput = null;
+let tagInputEl = null;
+let tagChipsContainerEl = null;
+let saveTagsBtnEl = null;
+let cancelTagsBtnEl = null;
+let closeTagModalBtnEl = null;
+
+let currentRecipeTags = [];
+let originalRecipeTagsForEdit = [];
+
+const modalHtml = `
+    <div id="tag-editor-modal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <span class="close-tag-modal-btn">&times;</span>
+            <h3>Edit Tags for <span id="tag-editor-recipe-name">Recipe</span></h3>
+            <input type="hidden" id="tag-editor-recipe-id">
+            <div class="form-group">
+                <label for="tag-input">Add tags (comma-separated):</label>
+                <input type="text" id="tag-input" placeholder="e.g., easy, quick, my favorite">
+                <small>Default: Public (&#x1F30D;). Click a tag chip to toggle its privacy (&#x1F512;). Type a new tag and press Enter or comma.</small>
+            </div>
+            <div id="tag-chips-container" class="tag-chips-container">
+                <!-- Tag chips will be dynamically added here -->
+            </div>
+            <div class="form-actions">
+                <button id="save-tags-btn" class="btn-primary">Save</button>
+                <button id="cancel-tags-btn" class="btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+`;
+
+function ensureTagModal() {
+    if (!document.getElementById('tag-editor-modal')) {
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        tagEditorModalElement = document.getElementById('tag-editor-modal');
+        tagEditorRecipeNameEl = document.getElementById('tag-editor-recipe-name');
+        tagEditorRecipeIdInput = document.getElementById('tag-editor-recipe-id');
+        tagInputEl = document.getElementById('tag-input');
+        tagChipsContainerEl = document.getElementById('tag-chips-container');
+        saveTagsBtnEl = document.getElementById('save-tags-btn');
+        cancelTagsBtnEl = document.getElementById('cancel-tags-btn');
+        closeTagModalBtnEl = tagEditorModalElement.querySelector('.close-tag-modal-btn');
+
+        // Attach internal modal event listeners
+        closeTagModalBtnEl.addEventListener('click', closeTagEditorModal);
+        cancelTagsBtnEl.addEventListener('click', closeTagEditorModal);
+        saveTagsBtnEl.addEventListener('click', handleSaveTags);
+
+        tagInputEl.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                const tags = tagInputEl.value.split(',').map(t => t.trim()).filter(t => t);
+                tags.forEach(addTagToModal);
+                tagInputEl.value = '';
+            }
+        });
+        tagInputEl.addEventListener('blur', () => {
+            const tags = tagInputEl.value.split(',').map(t => t.trim()).filter(t => t);
+            if (tags.length > 0) {
+                tags.forEach(addTagToModal);
+                tagInputEl.value = '';
+            }
+        });
+    }
+}
+
+function openTagEditorModal(recipeId, recipeName, currentTagsJson) {
+    ensureTagModal(); // Ensure modal exists and listeners are attached
+
+    console.log('openTagEditorModal called with:', { recipeId, recipeName, currentTagsJson });
+
+    tagEditorRecipeIdInput.value = recipeId;
+    tagEditorRecipeNameEl.textContent = decodeURIComponent(recipeName);
+    try {
+        const parsedTags = JSON.parse(currentTagsJson || '[]');
+        currentRecipeTags = parsedTags.map(tag => {
+            if (typeof tag === 'string') return { name: tag, type: 'public', id: undefined };
+            return { id: tag.id, name: tag.name, type: tag.type || 'public' };
+        });
+        originalRecipeTagsForEdit = JSON.parse(JSON.stringify(currentRecipeTags));
+    } catch (e) {
+        console.error('Error parsing current tags:', e);
+        currentRecipeTags = [];
+        originalRecipeTagsForEdit = [];
+    }
+    renderTagChipsInModal();
+    tagInputEl.value = '';
+    tagEditorModalElement.style.display = 'block';
+    tagInputEl.focus();
+}
+
+function closeTagEditorModal() {
+    if (tagEditorModalElement) {
+        tagEditorModalElement.style.display = 'none';
+    }
+    currentRecipeTags = [];
+    originalRecipeTagsForEdit = [];
+    if (tagInputEl) {
+        tagInputEl.value = '';
+    }
+}
+
+function renderTagChipsInModal() {
+    if (!tagChipsContainerEl) return;
+    tagChipsContainerEl.innerHTML = '';
+    currentRecipeTags.forEach((tag, index) => {
+        const chip = document.createElement('div');
+        chip.classList.add('tag-chip', tag.type === 'private' ? 'tag-chip-private' : 'tag-chip-public');
+        chip.dataset.index = index;
+        chip.innerHTML = `
+            <span class="tag-icon">${tag.type === 'private' ? '&#x1F512;' : '&#x1F30D;'}</span>
+            <span class="tag-name">${tag.name}</span>
+            <button class="remove-tag-chip-btn" title="Remove tag">&times;</button>
+        `;
+        chip.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('remove-tag-chip-btn')) {
+                toggleTagPrivacy(index);
+            }
+        });
+        chip.querySelector('.remove-tag-chip-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            removeTagFromModal(index);
+        });
+        tagChipsContainerEl.appendChild(chip);
+    });
+}
+
+function addTagToModal(tagName) {
+    const trimmedName = tagName.trim();
+    if (trimmedName && !currentRecipeTags.some(t => t.name.toLowerCase() === trimmedName.toLowerCase())) {
+        currentRecipeTags.push({ name: trimmedName, type: 'public' });
+        renderTagChipsInModal();
+    }
+}
+
+function removeTagFromModal(index) {
+    currentRecipeTags.splice(index, 1);
+    renderTagChipsInModal();
+}
+
+function toggleTagPrivacy(index) {
+    const tag = currentRecipeTags[index];
+    if (tag) {
+        tag.type = tag.type === 'public' ? 'private' : 'public';
+        renderTagChipsInModal();
+    }
+}
+
+async function handleSaveTags() {
+    if (!saveTagsBtnEl || !tagEditorRecipeIdInput) return;
+
+    const recipeId = tagEditorRecipeIdInput.value;
+    const modalFinalTags = [...currentRecipeTags];
+
+    saveTagsBtnEl.disabled = true;
+    saveTagsBtnEl.textContent = 'Saving...';
+
+    try {
+        const tagsToActuallyRemove = [];
+        const tagsToActuallyAdd = [];
+
+        for (const originalTag of originalRecipeTagsForEdit) {
+            const stillExistsWithSameType = modalFinalTags.some(finalTag =>
+                finalTag.id === originalTag.id &&
+                finalTag.name.toLowerCase() === originalTag.name.toLowerCase() &&
+                finalTag.type === originalTag.type
+            );
+            if (!stillExistsWithSameType && originalTag.id) {
+                tagsToActuallyRemove.push(originalTag);
+            }
+        }
+
+        for (const finalTag of modalFinalTags) {
+            const existedBeforeWithSameType = originalRecipeTagsForEdit.some(originalTag =>
+                (finalTag.id && originalTag.id === finalTag.id ||
+                 !finalTag.id && originalTag.name.toLowerCase() === finalTag.name.toLowerCase()) &&
+                originalTag.type === finalTag.type
+            );
+            if (!existedBeforeWithSameType) {
+                tagsToActuallyAdd.push(finalTag);
+            }
+        }
+
+        for (const tag of tagsToActuallyRemove) {
+            await api.removeTagFromRecipe(recipeId, tag.id, tag.type);
+        }
+        for (const tag of tagsToActuallyAdd) {
+            await api.addTagToRecipe(recipeId, tag.name, tag.type);
+        }
+
+        // Update the specific recipe card UI
+        const recipeCardElement = document.querySelector(`.recipe-card[data-id="${recipeId}"]`);
+        if (recipeCardElement) {
+            const tagsDisplay = recipeCardElement.querySelector('.recipe-tags .existing-tags');
+            const noTagsPlaceholder = recipeCardElement.querySelector('.recipe-tags .no-tags-placeholder');
+            const addTagButtonOnCard = recipeCardElement.querySelector('.add-tag-btn');
+
+            const publicTagsForDisplay = modalFinalTags.filter(t => t.type === 'public').map(t => t.name);
+            if (tagsDisplay) {
+                tagsDisplay.textContent = publicTagsForDisplay.join(', ');
+                tagsDisplay.style.display = publicTagsForDisplay.length > 0 ? 'inline' : 'none';
+            }
+            if (noTagsPlaceholder) {
+                noTagsPlaceholder.style.display = publicTagsForDisplay.length > 0 ? 'none' : 'inline';
+            }
+            if (addTagButtonOnCard) {
+                const updatedRecipeData = await api.getRecipe(recipeId);
+                if (updatedRecipeData && updatedRecipeData.tags) {
+                    addTagButtonOnCard.dataset.recipeTags = JSON.stringify(updatedRecipeData.tags);
+                } else {
+                    addTagButtonOnCard.dataset.recipeTags = JSON.stringify(modalFinalTags);
+                }
+            }
+        }
+
+        alert('Tags saved successfully!');
+        closeTagEditorModal();
+    } catch (error) {
+        console.error('Error saving tags:', error);
+        alert(`Failed to save tags: ${error.message || 'An unexpected error occurred.'}`);
+    } finally {
+        saveTagsBtnEl.disabled = false;
+        saveTagsBtnEl.textContent = 'Save';
+    }
+}
+
+// Delegated event listener for opening the tag editor modal
+document.addEventListener('click', (e) => {
+    const addTagButton = e.target.closest('.add-tag-btn');
+    if (addTagButton) {
+        const recipeId = addTagButton.dataset.recipeId;
+        const recipeName = addTagButton.dataset.recipeName;
+        const currentTagsJson = addTagButton.dataset.recipeTags;
+        openTagEditorModal(recipeId, recipeName, currentTagsJson);
+    }
+});
+
 /**
  * Deletes a recipe by ID
  * @param {number} id - Recipe ID to delete

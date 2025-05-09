@@ -54,7 +54,7 @@ class CocktailAPI {
         if (method !== 'GET') {
             // Require authentication for non-GET requests
             if (!isAuthenticated()) {
-                throw new Error('Authentication required. Please log in to create ingredients.');
+                throw new Error('Authentication required. Please log in to perform this action.');
             }            
             // Ensure we have a valid token
             const token = localStorage.getItem('token');
@@ -72,74 +72,54 @@ class CocktailAPI {
         return options;
     }
 
+    // Private helper for making requests
+    async _request(path, method = 'GET', body = null) {
+        const url = `${this.baseUrl}${path}`;
+        const options = this.getFetchOptions(method, body);
+        const response = await fetch(url, options);
+        return this.handleResponse(response);
+    }
+
     // Ingredients API
     async getIngredients() {
-        const response = await fetch(`${this.baseUrl}/ingredients`, this.getFetchOptions());
-        return this.handleResponse(response);
+        return this._request('/ingredients');
     }
 
     async getIngredient(id) {
-        const response = await fetch(`${this.baseUrl}/ingredients/${id}`, this.getFetchOptions());
-        return this.handleResponse(response);
+        return this._request(`/ingredients/${id}`);
     }
 
     async createIngredient(ingredientData) {        
-        const response = await fetch(
-            `${this.baseUrl}/ingredients`,
-            this.getFetchOptions('POST', ingredientData)
-        );
-        return this.handleResponse(response);
+        return this._request('/ingredients', 'POST', ingredientData);
     }
 
     async updateIngredient(id, ingredientData) {
-        const response = await fetch(
-            `${this.baseUrl}/ingredients/${id}`,
-            this.getFetchOptions('PUT', ingredientData)
-        );
-        return this.handleResponse(response);
+        return this._request(`/ingredients/${id}`, 'PUT', ingredientData);
     }
 
     async deleteIngredient(id) {
-        const response = await fetch(
-            `${this.baseUrl}/ingredients/${id}`,
-            this.getFetchOptions('DELETE')
-        );
-        return this.handleResponse(response);
+        return this._request(`/ingredients/${id}`, 'DELETE');
     }
 
     // Recipes API
     async getRecipes() {
-        const response = await fetch(`${this.baseUrl}/recipes`, this.getFetchOptions());
-        return this.handleResponse(response);
+        return this._request('/recipes');
     }
 
     async getRecipe(id) {
-        const response = await fetch(`${this.baseUrl}/recipes/${id}`, this.getFetchOptions());
-        return this.handleResponse(response);
+        return this._request(`/recipes/${id}`);
     }
 
     async createRecipe(recipeData) {
-        const response = await fetch(
-            `${this.baseUrl}/recipes`,
-            this.getFetchOptions('POST', recipeData)
-        );
-        return this.handleResponse(response);
+        return this._request('/recipes', 'POST', recipeData);
     }
 
     async updateRecipe(id, recipeData) {
-        const response = await fetch(
-            `${this.baseUrl}/recipes/${id}`,
-            this.getFetchOptions('PUT', recipeData)
-        );
-        return this.handleResponse(response);
+        return this._request(`/recipes/${id}`, 'PUT', recipeData);
     }
 
     async deleteRecipe(id) {
-        const response = await fetch(
-            `${this.baseUrl}/recipes/${id}`,
-            this.getFetchOptions('DELETE')
-        );
-        return this.handleResponse(response);
+        return this._request(`/recipes/${id}`, 'DELETE');
     }
 
     // Search recipes with various criteria
@@ -183,24 +163,15 @@ class CocktailAPI {
 
     // Units API
     async getUnits() {
-        const response = await fetch(`${this.baseUrl}/units`, this.getFetchOptions());
-        return this.handleResponse(response);
+        return this._request('/units');
     }
 
     async createUnit(unitData) {
-        const response = await fetch(
-            `${this.baseUrl}/units`,
-            this.getFetchOptions('POST', unitData)
-        );
-        return this.handleResponse(response);
+        return this._request('/units', 'POST', unitData);
     }
 
     async getUnitsByType(type) {
-        const response = await fetch(
-            `${this.baseUrl}/units?type=${type}`,
-            this.getFetchOptions()
-        );
-        return this.handleResponse(response);
+        return this._request(`/units?type=${type}`);
     }
     
     // Ratings API
@@ -216,13 +187,8 @@ class CocktailAPI {
             const url = `${this.baseUrl}/ratings/${recipeId}`;
             console.log('Fetching ratings from:', url);
             
-            const response = await fetch(
-                url,
-                this.getFetchOptions()
-            );
-            
             // The handleResponse method now handles 404s for ratings
-            return this.handleResponse(response);
+            return this._request(`/ratings/${recipeId}`);
         } catch (error) {
             console.error(`Error getting ratings for recipe ${recipeId}:`, error);
             return []; // Return empty array on error
@@ -234,11 +200,7 @@ class CocktailAPI {
             // Use POST for new ratings, PUT for updating existing ones
             // The backend will handle both the same way
             const method = ratingData.isUpdate ? 'PUT' : 'POST';
-            const response = await fetch(
-                `${this.baseUrl}/ratings/${recipeId}`,
-                this.getFetchOptions(method, ratingData)
-            );
-            return this.handleResponse(response);
+            return this._request(`/ratings/${recipeId}`, method, ratingData);
         } catch (error) {
             console.error(`Error setting rating for recipe ${recipeId}:`, error);
             throw error;
@@ -247,11 +209,7 @@ class CocktailAPI {
     
     async deleteRating(recipeId) {
         try {
-            const response = await fetch(
-                `${this.baseUrl}/ratings/${recipeId}`,
-                this.getFetchOptions('DELETE')
-            );
-            return this.handleResponse(response);
+            return this._request(`/ratings/${recipeId}`, 'DELETE');
         } catch (error) {
             console.error(`Error deleting rating for recipe ${recipeId}:`, error);
             throw error;
@@ -268,18 +226,16 @@ class CocktailAPI {
     // The backend expects { name: tagName } in the body
     async addTagToRecipe(recipeId, tagName, jsTagType) {
         const apiTagType = `${jsTagType}_tags`; // Converts to 'public_tags' or 'private_tags'
-        const endpoint = `${this.baseUrl}/recipes/${recipeId}/${apiTagType}`;
-        const response = await fetch(endpoint, this.getFetchOptions('POST', { name: tagName }));
-        return this.handleResponse(response);
+        const path = `/recipes/${recipeId}/${apiTagType}`;
+        return this._request(path, 'POST', { name: tagName });
     }
 
     // Remove a tag from a recipe
     // jsTagType should be 'public' or 'private'
     async removeTagFromRecipe(recipeId, tagId, jsTagType) {
         const apiTagType = `${jsTagType}_tags`;
-        const endpoint = `${this.baseUrl}/recipes/${recipeId}/${apiTagType}/${tagId}`;
-        const response = await fetch(endpoint, this.getFetchOptions('DELETE'));
-        return this.handleResponse(response);
+        const path = `/recipes/${recipeId}/${apiTagType}/${tagId}`;
+        return this._request(path, 'DELETE');
     }
 
     // Get all public tags (if needed directly)
