@@ -14,6 +14,7 @@ window.editIngredient = async function(id) {
         console.error('Ingredient form not found');
         return;
     }
+    const submitButton = form.querySelector('button[type="submit"]');
 
     try {
         const ingredient = await api.getIngredient(id);
@@ -39,6 +40,9 @@ window.editIngredient = async function(id) {
         // Change form to update mode
         form.dataset.mode = 'edit';
         form.dataset.id = id;
+        if (submitButton) {
+            submitButton.textContent = 'Update Ingredient';
+        }
 
         // Scroll to form
         form.scrollIntoView({ behavior: 'smooth' });
@@ -210,6 +214,10 @@ document.addEventListener('DOMContentLoaded', () => {
             parentSearchInput.value = '';
             delete ingredientForm.dataset.mode;
             delete ingredientForm.dataset.id;
+            const submitButton = ingredientForm.querySelector('button[type="submit"]');
+            if (submitButton) {
+                submitButton.textContent = 'Add Ingredient';
+            }
             loadIngredients();
         } catch (error) {
             console.error('Error saving ingredient:', error);
