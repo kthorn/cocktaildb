@@ -68,6 +68,7 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
     
     // Only show action buttons if user is authenticated and showActions is true
     const shouldShowActions = showActions && isAuthenticated();
+    const shouldShowAddTagButton = isAuthenticated(); // Check if user is authenticated for add tag button
     
     const tagsExist = recipe.tags && recipe.tags.length > 0;
     const tagsHTML = tagsExist
@@ -80,11 +81,13 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
         <div class="recipe-meta">
             <div class="recipe-tags">
                 ${tagsHTML}
+                ${shouldShowAddTagButton ? `
                 <button class="add-tag-btn" 
                         data-recipe-id="${recipe.id}" 
                         data-recipe-name="${encodeURIComponent(recipe.name)}" 
                         data-recipe-tags='${JSON.stringify(recipe.tags || [])}' 
                         title="Add or edit tags">(+) Tag</button>
+                ` : ''}
             </div>
             <div id="rating-container-${recipe.id}" class="recipe-rating"></div>
         </div>
