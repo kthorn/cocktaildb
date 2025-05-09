@@ -1,5 +1,7 @@
 -- Database Schema for CocktailDB
 -- This file contains all table definitions and functions for the ingredient hierarchy
+-- It is kept to to date with the latest migrations and should represent the current state of the database
+
 
 -- Enable foreign key constraints
 PRAGMA foreign_keys = ON;
@@ -17,7 +19,8 @@ CREATE TABLE ingredients (
 CREATE TABLE units (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT COLLATE NOCASE NOT NULL UNIQUE,
-  abbreviation TEXT
+  abbreviation TEXT,
+  conversion_to_ml REAL
 );
 
 CREATE TABLE recipes (

@@ -3,6 +3,7 @@ import json
 import logging
 import urllib.request
 import sqlite3
+import boto3
 
 # Configure logging
 logger = logging.getLogger()
@@ -50,26 +51,56 @@ def lambda_handler(event, context):
     try:
         # Only process Create/Update events
         if event["RequestType"] in ["Create", "Update"]:
-            schema_file_path = os.path.join(os.path.dirname(__file__), "schema.sql")
+            schema_content = ""
             db_name = event["ResourceProperties"].get("DBName", "cocktaildb")
             db_path = f"/mnt/efs/{db_name}.db"
 
-            # Read schema from the provided file path
-            schema_content = ""
-            try:
-                # Check if file exists in Lambda package
-                if os.path.exists(schema_file_path):
-                    with open(schema_file_path, "r") as f:
-                        schema_content = f.read()
-                    logger.info(f"Successfully read schema from {schema_file_path}")
-            except Exception as e:
-                logger.error(f"Error reading schema file: {str(e)}")
-                raise ValueError(
-                    f"Could not read schema from {schema_file_path}: {str(e)}"
+            # Try to get schema from direct input
+            if "SchemaContent" in event["ResourceProperties"]:
+                schema_content = event["ResourceProperties"]["SchemaContent"]
+                logger.info("Successfully read schema from direct input SchemaContent")
+            # Try to get schema from S3
+            elif (
+                "SchemaS3Bucket" in event["ResourceProperties"]
+                and "SchemaS3Key" in event["ResourceProperties"]
+            ):
+                s3_bucket = event["ResourceProperties"]["SchemaS3Bucket"]
+                s3_key = event["ResourceProperties"]["SchemaS3Key"]
+                logger.info(
+                    f"Attempting to download schema from S3: s3://{s3_bucket}/{s3_key}"
                 )
+                try:
+                    s3 = boto3.client("s3")
+                    response = s3.get_object(Bucket=s3_bucket, Key=s3_key)
+                    schema_content = response["Body"].read().decode("utf-8")
+                    logger.info(
+                        f"Successfully downloaded schema from S3: s3://{s3_bucket}/{s3_key}"
+                    )
+                except Exception as e:
+                    logger.error(f"Error downloading schema from S3: {str(e)}")
+                    raise ValueError(
+                        f"Could not download schema from s3://{s3_bucket}/{s3_key}: {str(e)}"
+                    )
+            # Fallback to local file
+            else:
+                schema_file_path = os.path.join(os.path.dirname(__file__), "schema.sql")
+                try:
+                    # Check if file exists in Lambda package
+                    if os.path.exists(schema_file_path):
+                        with open(schema_file_path, "r") as f:
+                            schema_content = f.read()
+                        logger.info(f"Successfully read schema from {schema_file_path}")
+                except Exception as e:
+                    logger.error(f"Error reading schema file: {str(e)}")
+                    # Raise error only if this is the fallback and it fails
+                    raise ValueError(
+                        f"Could not read schema from {schema_file_path}: {str(e)}"
+                    )
 
             if not schema_content:
-                raise ValueError(f"No schema content found in {schema_file_path}")
+                raise ValueError(
+                    "No schema content found from any source (Direct, S3, or local file)"
+                )
 
             # Ensure directory exists
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -90,29 +121,23 @@ def lambda_handler(event, context):
                     f"Database already exists at {db_path}. Not reinitializing."
                 )
             else:
-                # If database exists and this is an update, delete it first
-                if os.path.exists(db_path) and event["RequestType"] in [
-                    "Update",
-                    "Create",
-                ]:
+                # If database exists and this is a Create, delete it first
+                if os.path.exists(db_path) and event["RequestType"] in ["Create"]:
                     try:
                         os.remove(db_path)
                         logger.info(f"Removed existing database at {db_path}")
                     except Exception as e:
                         logger.warning(f"Failed to remove existing database: {str(e)}")
 
-                # Create and initialize the database
-                conn = sqlite3.connect(db_path)
-                cursor = conn.cursor()
-
-                # Execute the schema SQL
-                cursor.executescript(schema_content)
-
-                # Commit changes and close connection
-                conn.commit()
-                conn.close()
-
-                logger.info(f"Successfully initialized database at {db_path}")
+            # Create and initialize the database
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            # Execute the schema SQL
+            cursor.executescript(schema_content)
+            # Commit changes and close connection
+            conn.commit()
+            conn.close()
+            logger.info(f"Successfully initialized database at {db_path}")
 
         # Always return success for Delete events
         send_response(
