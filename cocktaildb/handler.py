@@ -266,17 +266,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         logger.error(f"Error getting ingredients: {str(e)}")
                         return _return_error(500, str(e))
 
-        # /recipes/{recipeId}/public_tags
         # /recipes/{recipeId}/public_tags/{tagId}
         # /recipes/{recipeId}/private_tags
         # /recipes/{recipeId}/private_tags/{tagId}
-        elif (
-            path.startswith("/recipes/") and "/tags/" in path
+        elif path.startswith("/recipes/") and (
+            "public_tags" in path or "private_tags" in path
         ):  # More specific than general /recipes/
             path_parts = path.strip("/").split(
                 "/"
             )  # recipes, recipe_id_val, tags_type, tag_id_val?
-
             if (
                 len(path_parts) >= 3
                 and path_parts[0] == "recipes"
