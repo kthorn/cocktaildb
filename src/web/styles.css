@@ -825,6 +825,46 @@ footer {
 
 .recipe-card .recipe-tags {
     flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.recipe-card .existing-tags {
+    font-size: 0.85em;
+    color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+}
+
+.recipe-card .no-tags-placeholder {
+    font-size: 0.85em;
+    color: #888;
+    font-style: italic;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+.recipe-card .add-tag-btn {
+    font-size: 0.8em;
+    padding: 3px 8px;
+    background-color: transparent;
+    border: 1px solid #ccc;
+    border-radius: 12px;
+    cursor: pointer;
+    color: #555;
+    margin-left: 0.25rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.recipe-card .add-tag-btn:hover {
+    background-color: #e9ecef;
+    border-color: #bbb;
+    color: #333;
 }
 
 .loading-indicator {
@@ -1075,4 +1115,141 @@ footer {
     padding-top: 0;
     border-top: none;
     flex-shrink: 0;
+}
+
+/* Tag Editor Modal */
+.modal {
+    display: none; /* Hidden by default */
+    position: fixed;
+    z-index: 1050; /* High z-index */
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.5); /* Dim background */
+}
+
+.modal-content {
+    background-color: #fff;
+    margin: 10% auto;
+    padding: 25px;
+    border: 1px solid #ccc;
+    width: 90%;
+    max-width: 550px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    position: relative;
+}
+
+.modal-content h3 {
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    color: #2c3e50;
+    font-family: Georgia, 'Times New Roman', Times, serif;
+}
+
+.close-tag-modal-btn {
+    color: #888;
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 28px;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.close-tag-modal-btn:hover,
+.close-tag-modal-btn:focus {
+    color: #333;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+#tag-input {
+    margin-bottom: 0.5rem; /* Space before the small helper text */
+}
+
+.tag-chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 0.75rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    background-color: #f9f9f9;
+    min-height: 50px;
+}
+
+.tag-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.35rem 0.85rem;
+    border-radius: 16px;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s, transform 0.1s;
+    border: 1px solid transparent;
+    font-weight: 500;
+}
+
+.tag-chip:hover {
+    transform: translateY(-1px);
+}
+
+.tag-chip-public {
+    background-color: #e0f2fe; /* Light blue */
+    color: #0c4a6e; /* Darker blue for text */
+    border-color: #bae6fd;
+}
+.tag-chip-public:hover {
+    background-color: #bae6fd;
+    border-color: #7dd3fc;
+}
+
+.tag-chip-private {
+    background-color: #f3e8ff; /* Light purple */
+    color: #581c87; /* Darker purple for text */
+    border-color: #e9d5ff;
+}
+.tag-chip-private:hover {
+    background-color: #e9d5ff;
+    border-color: #c084fc;
+}
+
+.tag-chip .tag-icon {
+    margin-right: 0.4rem;
+    font-size: 1em; /* Adjusted for better visibility */
+    line-height: 1; /* Ensure proper alignment */
+}
+
+.tag-chip .remove-tag-chip-btn {
+    margin-left: 0.6rem;
+    font-size: 0.9em;
+    font-weight: bold;
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    opacity: 0.5;
+    padding: 0;
+    line-height: 1;
+}
+.tag-chip .remove-tag-chip-btn:hover {
+    opacity: 0.9;
+}
+
+.modal .form-actions {
+    margin-top: 1.5rem; /* Ensure spacing above buttons */
+    justify-content: flex-end; /* Align buttons to the right */
+}
+
+/* Ensure modal small text is styled appropriately */
+.modal-content .form-group small {
+    font-size: 0.8em;
+    color: #666;
+    display: block;
+    margin-top: 0.25rem;
 }

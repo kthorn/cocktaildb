@@ -369,6 +369,153 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Make loadRecipes accessible to outside functions
     window.loadRecipes = loadRecipes;
+
+    // --- Tag Editor Modal Logic ---
+    const tagEditorModal = document.getElementById('tag-editor-modal');
+    const tagEditorRecipeNameEl = document.getElementById('tag-editor-recipe-name');
+    const tagEditorRecipeIdInput = document.getElementById('tag-editor-recipe-id');
+    const tagInput = document.getElementById('tag-input');
+    const tagChipsContainer = document.getElementById('tag-chips-container');
+    const saveTagsBtn = document.getElementById('save-tags-btn');
+    const cancelTagsBtn = document.getElementById('cancel-tags-btn');
+    const closeTagModalBtn = tagEditorModal.querySelector('.close-tag-modal-btn');
+
+    let currentRecipeTags = []; // Stores tags for the recipe being edited in the modal
+
+    function openTagEditorModal(recipeId, recipeName, currentTagsJson) {
+        tagEditorRecipeIdInput.value = recipeId;
+        tagEditorRecipeNameEl.textContent = decodeURIComponent(recipeName);
+        try {
+            currentRecipeTags = JSON.parse(currentTagsJson || '[]').map(tag => (
+                typeof tag === 'string' ? { name: tag, type: 'public' } : tag
+            ));
+        } catch (e) {
+            console.error('Error parsing current tags:', e);
+            currentRecipeTags = [];
+        }
+        renderTagChipsInModal();
+        tagInput.value = '';
+        tagEditorModal.style.display = 'block';
+        tagInput.focus();
+    }
+
+    function closeTagEditorModal() {
+        tagEditorModal.style.display = 'none';
+        currentRecipeTags = [];
+        tagInput.value = '';
+    }
+
+    function renderTagChipsInModal() {
+        tagChipsContainer.innerHTML = '';
+        currentRecipeTags.forEach((tag, index) => {
+            const chip = document.createElement('div');
+            chip.classList.add('tag-chip', tag.type === 'private' ? 'tag-chip-private' : 'tag-chip-public');
+            chip.dataset.index = index;
+            chip.innerHTML = `
+                <span class="tag-icon">${tag.type === 'private' ? '🔒' : '🌍'}</span>
+                <span class="tag-name">${tag.name}</span>
+                <button class="remove-tag-chip-btn" title="Remove tag">&times;</button>
+            `;
+            chip.addEventListener('click', (e) => {
+                if (!e.target.classList.contains('remove-tag-chip-btn')) {
+                    toggleTagPrivacy(index);
+                }
+            });
+            chip.querySelector('.remove-tag-chip-btn').addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent chip click event
+                removeTagFromModal(index);
+            });
+            tagChipsContainer.appendChild(chip);
+        });
+    }
+
+    function addTagToModal(tagName) {
+        const trimmedName = tagName.trim();
+        if (trimmedName && !currentRecipeTags.some(t => t.name.toLowerCase() === trimmedName.toLowerCase())) {
+            currentRecipeTags.push({ name: trimmedName, type: 'public' }); // Default to public
+            renderTagChipsInModal();
+        }
+    }
+
+    function removeTagFromModal(index) {
+        currentRecipeTags.splice(index, 1);
+        renderTagChipsInModal();
+    }
+
+    function toggleTagPrivacy(index) {
+        const tag = currentRecipeTags[index];
+        if (tag) {
+            tag.type = tag.type === 'public' ? 'private' : 'public';
+            renderTagChipsInModal();
+        }
+    }
+
+    tagInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            const tags = tagInput.value.split(',').map(t => t.trim()).filter(t => t);
+            tags.forEach(addTagToModal);
+            tagInput.value = '';
+        }
+    });
+    tagInput.addEventListener('blur', () => { // Also add tags on blur if any input remains
+        const tags = tagInput.value.split(',').map(t => t.trim()).filter(t => t);
+        if (tags.length > 0) {
+            tags.forEach(addTagToModal);
+            tagInput.value = '';
+        }
+    });
+
+    saveTagsBtn.addEventListener('click', async () => {
+        const recipeId = tagEditorRecipeIdInput.value;
+        console.log(`Saving tags for recipe ${recipeId}:`, currentRecipeTags);
+        // TODO: API call to save tags
+        alert('Tags would be saved here (see console). API call is next.');
+        
+        // For now, let's try to update the card display directly if the card is visible
+        const recipeCard = document.querySelector(`.recipe-card[data-id="${recipeId}"]`);
+        if (recipeCard) {
+            const tagsDisplay = recipeCard.querySelector('.recipe-tags .existing-tags');
+            const noTagsPlaceholder = recipeCard.querySelector('.recipe-tags .no-tags-placeholder');
+            const addTagButton = recipeCard.querySelector('.add-tag-btn');
+
+            if (currentRecipeTags.length > 0) {
+                const publicTags = currentRecipeTags.filter(t => t.type === 'public').map(t => t.name);
+                if (tagsDisplay) {
+                    tagsDisplay.textContent = publicTags.join(', ');
+                    tagsDisplay.style.display = publicTags.length > 0 ? 'inline' : 'none';
+                }
+                if (noTagsPlaceholder) {
+                    noTagsPlaceholder.style.display = publicTags.length > 0 ? 'none' : 'inline';
+                }
+            } else {
+                if (tagsDisplay) tagsDisplay.style.display = 'none';
+                if (noTagsPlaceholder) noTagsPlaceholder.style.display = 'inline';
+            }
+            // Update the button's data-recipe-tags attribute
+            if(addTagButton) {
+                addTagButton.dataset.recipeTags = JSON.stringify(currentRecipeTags);
+            }
+        }
+
+        closeTagEditorModal();
+        // Optionally, reload all recipes or just update the specific card via a more robust method
+        // window.loadRecipes(); // This would be too heavy, better to update card directly
+    });
+
+    cancelTagsBtn.addEventListener('click', closeTagEditorModal);
+    closeTagModalBtn.addEventListener('click', closeTagEditorModal);
+
+    // Event delegation for opening the tag editor modal
+    document.body.addEventListener('click', (e) => {
+        const addTagButton = e.target.closest('.add-tag-btn');
+        if (addTagButton) {
+            const recipeId = addTagButton.dataset.recipeId;
+            const recipeName = addTagButton.dataset.recipeName;
+            const currentTagsJson = addTagButton.dataset.recipeTags;
+            openTagEditorModal(recipeId, recipeName, currentTagsJson);
+        }
+    });
 });
 
 // Edit recipe

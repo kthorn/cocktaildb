@@ -64,15 +64,28 @@ function formatAmount(amount) {
 export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = null) {
     const card = document.createElement('div');
     card.className = 'recipe-card';
+    card.dataset.id = recipe.id; // Add recipe ID to card for easier refresh
     
     // Only show action buttons if user is authenticated and showActions is true
     const shouldShowActions = showActions && isAuthenticated();
+    
+    const tagsExist = recipe.tags && recipe.tags.length > 0;
+    const tagsHTML = tagsExist
+        ? `<span class="existing-tags">${recipe.tags.join(', ')}</span>`
+        : '<span class="no-tags-placeholder">No tags yet</span>';
     
     // Start with the basic recipe details
     card.innerHTML = `
         <h4 class="recipe-title">${recipe.name}</h4>
         <div class="recipe-meta">
-            <div class="recipe-tags"></div>
+            <div class="recipe-tags">
+                ${tagsHTML}
+                <button class="add-tag-btn" 
+                        data-recipe-id="${recipe.id}" 
+                        data-recipe-name="${encodeURIComponent(recipe.name)}" 
+                        data-recipe-tags='${JSON.stringify(recipe.tags || [])}' 
+                        title="Add or edit tags">(+) Tag</button>
+            </div>
             <div id="rating-container-${recipe.id}" class="recipe-rating"></div>
         </div>
         <p>${recipe.description || 'No description'}</p>
@@ -265,7 +278,7 @@ async function refreshRecipeAfterRating(recipeId, ratingResponse) {
         // Fetch the latest recipe data to get updated avg_rating
         const recipe = await api.getRecipe(recipeId);
         
-        // Find the recipe card
+        // Find the recipe card using the data-id attribute
         const recipeCard = document.querySelector(`.recipe-card[data-id="${recipeId}"]`);
         if (!recipeCard) {
             console.log(`Recipe card for ID ${recipeId} not found for refresh`);

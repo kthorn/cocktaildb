@@ -73,6 +73,33 @@
         <script type="module" src="js/common.js"></script>
         <script type="module" src="js/api.js"></script>
         <script type="module" src="js/recipes.js"></script>
+
+        <!-- Tag Editor Modal (initially hidden) -->
+        <div id="tag-editor-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <span class="close-tag-modal-btn">&times;</span>
+                <h3>Edit Tags for <span
+                        id="tag-editor-recipe-name">Recipe</span></h3>
+                <input type="hidden" id="tag-editor-recipe-id">
+                <div class="form-group">
+                    <label for="tag-input">Add tags (comma-separated):</label>
+                    <input type="text" id="tag-input"
+                        placeholder="e.g., easy, quick, my favorite">
+                    <small>Default: Public (🌍). Click a tag chip to toggle its
+                        privacy (🔒). Type a new tag and press Enter or
+                        comma.</small>
+                </div>
+                <div id="tag-chips-container" class="tag-chips-container">
+                    <!-- Tag chips will be dynamically added here -->
+                </div>
+                <div class="form-actions">
+                    <button id="save-tags-btn" class="btn-primary">Save
+                        Tags</button>
+                    <button id="cancel-tags-btn"
+                        class="btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
     </body>
 
 </html>
