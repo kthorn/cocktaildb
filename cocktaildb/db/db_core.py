@@ -635,7 +635,6 @@ class Database:
             logger.info(
                 f"get_recipes: Combined recipes and ingredients in {combine_end - combine_start:.3f}s"
             )
-
             total_time = time.time() - start_time
             logger.info(f"get_recipes: Total execution time: {total_time:.3f}s")
             return recipes_result
@@ -648,9 +647,7 @@ class Database:
     ) -> Optional[Dict[str, Any]]:
         """Get a single recipe by ID with its ingredients and tags using GROUP_CONCAT for efficiency."""
         try:
-            logger.info(
-                f"Getting recipe {recipe_id} for user_id: {cognito_user_id} (GROUP_CONCAT query)"
-            )
+            logger.info(f"Getting recipe {recipe_id} for user_id: {cognito_user_id}")
             params = {"recipe_id": recipe_id, "cognito_user_id": cognito_user_id}
             rows = cast(
                 List[Dict[str, Any]],

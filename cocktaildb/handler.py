@@ -14,6 +14,11 @@ from handler_recipes import (
     handle_search_recipes,
     handle_update_recipe,
 )
+from handler_ratings import (
+    handle_delete_rating,
+    handle_get_ratings,
+    handle_set_rating,
+)
 from utils import _return_data, _return_empty, _return_error, _return_message
 
 logging.getLogger().setLevel(logging.INFO)
@@ -451,59 +456,29 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             # Extract recipe_id from path parameters if present
             path_params = event.get("pathParameters")
             recipe_id = path_params.get("recipeId") if path_params else None
-
-            # Fallback to manual path parsing if API Gateway doesn't provide pathParameters
             if not recipe_id:
+                logger.info(
+                    f"No recipe_id found in pathParameters, falling back to path: {path}"
+                )
                 path_parts = path.split("/")
                 if len(path_parts) > 2:  # /ratings/{recipeId}
                     recipe_id = path_parts[2]
-
             if http_method == "GET" and recipe_id:
-                logger.info(f"Getting ratings for recipe {recipe_id}...")
-                try:
-                    ratings = db.get_recipe_ratings(int(recipe_id))
-                    return _return_data(200, ratings)
-                except Exception as e:
-                    logger.error(f"Error getting ratings: {str(e)}")
-                    return _return_error(500, str(e))
-
+                return handle_get_ratings(logger, db, recipe_id)
             elif http_method in ["POST", "PUT"] and recipe_id:
-                logger.info(f"Setting rating for recipe {recipe_id}...")
-                # These routes require authentication
-                if not user_id:
-                    return _return_error(401, "Authentication required to set ratings")
-
-                try:
-                    body = json.loads(event.get("body", "{}"))
-                    body["cognito_user_id"] = user_id
-                    body["cognito_username"] = username
-                    body["recipe_id"] = int(recipe_id)
-
-                    result = db.set_rating(body)
-                    status_code = 200 if http_method == "PUT" else 201
-                    return _return_data(status_code, result)
-                except Exception as e:
-                    logger.error(f"Error setting rating: {str(e)}")
-                    return _return_error(400, str(e))
-
+                return handle_set_rating(
+                    logger,
+                    db,
+                    recipe_id,
+                    event,
+                    http_method,
+                    user_id,
+                    username,
+                )
             elif http_method == "DELETE" and recipe_id:
-                logger.info(f"Deleting rating for recipe {recipe_id}...")
-                # This route requires authentication
-                if not user_id:
-                    return _return_error(
-                        401, "Authentication required to delete ratings"
-                    )
-
-                try:
-                    db.delete_rating(int(recipe_id), user_id)
-                    return _return_empty(204)
-                except Exception as e:
-                    logger.error(f"Error deleting rating: {str(e)}")
-                    return _return_error(400, str(e))
-
+                return handle_delete_rating(logger, db, recipe_id, user_id)
             elif http_method == "OPTIONS":
                 return _return_empty(200)
-
         # Handle tags endpoint (public)
         elif path == "/tags/public":
             if http_method == "GET":
