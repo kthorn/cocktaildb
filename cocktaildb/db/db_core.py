@@ -4,7 +4,12 @@ import time
 import functools
 from typing import Dict, List, Optional, Any, Union, Tuple, cast
 
-from db_utils import extract_all_ingredient_ids, assemble_ingredient_full_names
+from .db_utils import extract_all_ingredient_ids, assemble_ingredient_full_names
+from .sql_queries import (
+    get_recipe_by_id_sql,
+    get_all_recipes_sql,
+    get_recipe_ingredients_by_recipe_id_sql_factory,
+)
 
 # Configure logging
 logger = logging.getLogger()
@@ -92,7 +97,6 @@ class Database:
                     import time
 
                     time.sleep(2**retry_count)  # 2, 4, 8 seconds
-
         logger.error(
             f"Failed to connect to database after {max_retries} attempts: {str(last_error)}",
             exc_info=True,
@@ -109,15 +113,12 @@ class Database:
             timeout=10.0,  # Wait up to 10 seconds for the lock
             isolation_level=None,  # Enable autocommit mode, explicit transactions still work
         )
-
         # Set busy timeout to handle cases where the database is locked
         conn.execute("PRAGMA busy_timeout = 10000")  # 10 seconds in milliseconds
-
         # Optimize for concurrent access
         conn.execute(
             "PRAGMA journal_mode = WAL"
         )  # Write-Ahead Logging for better concurrency
-
         conn.row_factory = sqlite3.Row  # Return rows as dictionaries
         return conn
 
@@ -130,12 +131,10 @@ class Database:
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
-
             if parameters:
                 cursor.execute(sql, parameters)
             else:
                 cursor.execute(sql)
-
             if sql.strip().upper().startswith(("SELECT", "WITH")):
                 # For SELECT queries, return results
                 rows = cursor.fetchall()
@@ -548,21 +547,18 @@ class Database:
             if conn:
                 conn.close()
 
-    def get_recipes(self) -> List[Dict[str, Any]]:
+    def get_recipes(
+        self, cognito_user_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """Get all recipes with their ingredients"""
         try:
             start_time = time.time()
             # 1. Get all recipes
             recipes_start = time.time()
+            params = {"cognito_user_id": cognito_user_id}
             recipes_result = cast(
                 List[Dict[str, Any]],
-                self.execute_query(
-                    """
-                    SELECT id, name, instructions, description, image_url, source, source_url, avg_rating, rating_count
-                    FROM recipes
-                    ORDER BY id
-                    """
-                ),
+                self.execute_query(get_all_recipes_sql, params),
             )
             recipes_end = time.time()
             logger.info(
@@ -572,20 +568,11 @@ class Database:
                 return []
             # 2. Fetch all recipe ingredients across all recipes
             recipe_ids = [recipe["id"] for recipe in recipes_result]
-            recipe_ids_str = ",".join("?" for _ in recipe_ids)
             ingredients_start = time.time()
             all_recipe_ingredients_list = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    f"""
-                    SELECT ri.recipe_id, ri.id as recipe_ingredient_id, ri.amount, ri.ingredient_id, i.name as ingredient_name,
-                           ri.unit_id, u.name as unit_name, u.abbreviation as unit_abbreviation,
-                           i.path as ingredient_path
-                    FROM recipe_ingredients ri
-                    JOIN ingredients i ON ri.ingredient_id = i.id
-                    LEFT JOIN units u ON ri.unit_id = u.id
-                    WHERE ri.recipe_id IN ({recipe_ids_str})
-                    """,
+                    get_recipe_ingredients_by_recipe_id_sql_factory(recipe_ids),
                     tuple(recipe_ids),
                 ),
             )
@@ -664,38 +651,11 @@ class Database:
             logger.info(
                 f"Getting recipe {recipe_id} for user_id: {cognito_user_id} (GROUP_CONCAT query)"
             )
-
-            sql = """
-                SELECT
-                    r.id, r.name, r.instructions, r.description, r.image_url, 
-                    r.source, r.source_url, r.avg_rating, r.rating_count,
-                    GROUP_CONCAT(pt.id || '|||' || pt.name, ':::') AS public_tags_data,
-                    GROUP_CONCAT(pvt.id || '|||' || pvt.name, ':::') AS private_tags_data
-                FROM
-                    recipes r
-                LEFT JOIN
-                    recipe_public_tags rpt ON r.id = rpt.recipe_id
-                LEFT JOIN
-                    public_tags pt ON rpt.tag_id = pt.id
-                LEFT JOIN
-                    recipe_private_tags rpvt ON r.id = rpvt.recipe_id
-                LEFT JOIN
-                    private_tags pvt ON rpvt.tag_id = pvt.id AND pvt.cognito_user_id = :cognito_user_id
-                WHERE r.id = :recipe_id
-                GROUP BY
-                    r.id, r.name, r.instructions, r.description, r.image_url, 
-                    r.source, r.source_url, r.avg_rating, r.rating_count;
-            """
             params = {"recipe_id": recipe_id, "cognito_user_id": cognito_user_id}
-
-            logger.debug(
-                f"Executing get_recipe SQL (GROUP_CONCAT): {sql} with params: {params}"
-            )
             rows = cast(
                 List[Dict[str, Any]],
-                self.execute_query(sql, params),
+                self.execute_query(get_recipe_by_id_sql, params),
             )
-
             if (
                 not rows or rows[0]["id"] is None
             ):  # GROUP_CONCAT might return a row with NULLs if no recipe matches WHERE
