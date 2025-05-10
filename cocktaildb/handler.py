@@ -1,55 +1,23 @@
 import json
 import logging
-import time
 import os
-import boto3
+import time
 from typing import Any, Dict
 
+import boto3
 from db import Database
+from handler_recipes import (
+    handle_create_recipe,
+    handle_delete_recipe,
+    handle_get_all_recipes,
+    handle_get_single_recipe,
+    handle_search_recipes,
+    handle_update_recipe,
+)
+from utils import _return_data, _return_empty, _return_error, _return_message
 
 logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger()
-
-# CORS headers for all responses
-CORS_HEADERS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods",
-    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-    "Access-Control-Allow-Credentials": "true",
-}
-
-
-# Helper functions for standard responses
-def _return_data(status_code: int, data: Any) -> Dict[str, Any]:
-    """Generates a response with JSON data in the body."""
-    return {
-        "statusCode": status_code,
-        "headers": CORS_HEADERS,
-        "body": json.dumps(data),
-    }
-
-
-def _return_error(status_code: int, error_message: str) -> Dict[str, Any]:
-    """Generates a response with a JSON error object."""
-    return {
-        "statusCode": status_code,
-        "headers": CORS_HEADERS,
-        "body": json.dumps({"error": error_message}),
-    }
-
-
-def _return_empty(status_code: int) -> Dict[str, Any]:
-    """Generates a response with an empty body."""
-    return {"statusCode": status_code, "headers": CORS_HEADERS, "body": ""}
-
-
-def _return_message(status_code: int, message: str) -> Dict[str, Any]:
-    """Generates a response with a JSON message object."""
-    return {
-        "statusCode": status_code,
-        "headers": CORS_HEADERS,
-        "body": json.dumps({"message": message}),
-    }
 
 
 # Global database connection - persists between Lambda invocations in the same container
@@ -418,119 +386,25 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         # Handle recipe endpoints
         elif path.startswith("/recipes"):
-            # Use pathParameters provided by API Gateway, safely handling None
-            path_params = event.get(
-                "pathParameters"
-            )  # Get pathParameters, could be None
+            # Use pathParameters provided by API Gateway, which can be None
+            path_params = event.get("pathParameters")
             recipe_id = path_params.get("recipeId") if path_params else None
-            if (
-                http_method == "POST" and not recipe_id
-            ):  # POST is only for the collection path
-                logger.info("Creating new recipe...")
-                try:
-                    body = json.loads(event.get("body", "{}"))
-                    recipe = db.create_recipe(body)
-                    return _return_data(201, recipe)
-                except Exception as e:
-                    logger.error(f"Error creating recipe: {str(e)}")
-                    return _return_error(400, str(e))
-
+            # POST without recipe_id is for creating a new recipe
+            if http_method == "POST" and not recipe_id:
+                return handle_create_recipe(logger, db, event, context)
             elif http_method == "GET":
-                if recipe_id:  # GET specific recipe using path param
-                    logger.info(f"Getting recipe {recipe_id}...")
-                    try:
-                        recipe = db.get_recipe(int(recipe_id))
-                        if recipe:
-                            return _return_data(200, recipe)
-                        return _return_error(404, "Recipe not found")
-                    except Exception as e:
-                        logger.error(f"Error getting recipe: {str(e)}")
-                        return _return_error(500, str(e))
-                else:  # Search request or collection path (get all recipes)
+                if recipe_id:
+                    return handle_get_single_recipe(logger, db, recipe_id, user_id)
+                else:
                     # Check if this is a search request
                     if query_params and query_params.get("search") == "true":
-                        logger.info("Searching recipes...")
-                        try:
-                            search_params = {}
-                            # Extract query parameters
-                            if "name" in query_params:
-                                search_params["name"] = query_params.get("name")
-                            if "min_rating" in query_params:
-                                search_params["min_rating"] = float(
-                                    query_params.get("min_rating")
-                                )
-                            # Handle tags (can be multiple)
-                            if "tags" in query_params:
-                                tags = query_params.get("tags")
-                                if isinstance(tags, list):
-                                    search_params["tags"] = tags
-                                else:
-                                    search_params["tags"] = [tags]
-
-                            # Handle ingredient queries through query parameters
-                            # Format: ingredients=ID:OPERATOR,ID:OPERATOR,...
-                            # Example: ingredients=12:MUST,34:MUST_NOT
-                            if "ingredients" in query_params:
-                                ingredients_param = query_params.get("ingredients")
-                                if ingredients_param:
-                                    ingredients = []
-                                    ingredient_parts = ingredients_param.split(",")
-
-                                    for part in ingredient_parts:
-                                        if ":" in part:
-                                            id_op = part.split(":")
-                                            if len(id_op) == 2 and id_op[0].isdigit():
-                                                # Only accept MUST or MUST_NOT operators
-                                                operator = id_op[1]
-                                                if operator in ["MUST", "MUST_NOT"]:
-                                                    ingredients.append(
-                                                        {
-                                                            "id": int(id_op[0]),
-                                                            "operator": operator,
-                                                        }
-                                                    )
-
-                                    if ingredients:
-                                        search_params["ingredients"] = ingredients
-
-                            # Perform the search
-                            recipes = db.search_recipes(search_params)
-
-                            return _return_data(200, recipes)
-                        except Exception as e:
-                            logger.error(f"Error searching recipes: {str(e)}")
-                            return _return_error(500, str(e))
+                        return handle_search_recipes(logger, db, query_params)
                     else:
-                        logger.info("Getting all recipes...")
-                        try:
-                            recipes = db.get_recipes()
-                            return _return_data(200, recipes)
-                        except Exception as e:
-                            logger.error(f"Error getting recipes: {str(e)}")
-                            return _return_error(500, str(e))
-
+                        return handle_get_all_recipes(logger, db)
             elif http_method == "DELETE" and recipe_id:
-                logger.info(f"Deleting recipe {recipe_id}...")
-                try:
-                    if db.delete_recipe(int(recipe_id)):
-                        return _return_empty(204)
-                    return _return_error(404, "Recipe not found")
-                except Exception as e:
-                    logger.error(f"Error deleting recipe: {str(e)}")
-                    return _return_error(400, str(e))
-
+                return handle_delete_recipe(logger, db, recipe_id)
             elif http_method == "PUT" and recipe_id:
-                logger.info(f"Updating recipe {recipe_id}...")
-                try:
-                    body = json.loads(event.get("body", "{}"))
-                    recipe = db.update_recipe(int(recipe_id), body)
-                    if recipe:
-                        return _return_data(200, recipe)
-                    return _return_error(404, "Recipe not found")
-                except Exception as e:
-                    logger.error(f"Error updating recipe: {str(e)}")
-                    return _return_error(400, str(e))
-
+                return handle_update_recipe(logger, db, recipe_id, event)
             elif http_method == "OPTIONS":
                 return _return_empty(200)
             else:
