@@ -2,8 +2,8 @@ get_recipe_by_id_sql = """
     SELECT
         r.id, r.name, r.instructions, r.description, r.image_url, 
         r.source, r.source_url, r.avg_rating, r.rating_count,
-        GROUP_CONCAT(DISTINCT pt.id || '|||' || pt.name, ':::') AS public_tags_data,
-        GROUP_CONCAT(DISTINCT pvt.id || '|||' || pvt.name, ':::') AS private_tags_data,
+        GROUP_CONCAT(pt.id || '|||' || pt.name, ':::') AS public_tags_data,
+        GROUP_CONCAT(pvt.id || '|||' || pvt.name, ':::') AS private_tags_data,
         ur.rating AS user_rating
     FROM
         recipes r

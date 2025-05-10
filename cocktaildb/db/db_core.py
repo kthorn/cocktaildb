@@ -1107,6 +1107,20 @@ class Database:
             if search_params.get("min_rating"):
                 query += " AND avg_rating >= :min_rating"
                 params["min_rating"] = float(search_params["min_rating"])
+            # Add tag filtering if tags are provided
+            if search_params.get("tags"):
+                tags = search_params["tags"]
+                if tags:  # Ensure tags list is not empty
+                    query += """
+                    AND EXISTS (
+                    SELECT 1
+                    FROM recipe_public_tags rpt
+                    JOIN public_tags pt ON rpt.tag_id = pt.id
+                    WHERE rpt.recipe_id = recipes.id AND pt.name IN ({})
+                    )
+                    """.format(",".join([":tag" + str(i) for i in range(len(tags))]))
+                    for i, tag_name in enumerate(tags):
+                        params["tag" + str(i)] = tag_name
             # Close the recipes CTE
             query += ")"
 
