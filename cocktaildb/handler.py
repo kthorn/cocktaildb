@@ -24,7 +24,6 @@ from utils import _return_data, _return_empty, _return_error, _return_message
 logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger()
 
-
 # Global database connection - persists between Lambda invocations in the same container
 _DB_INSTANCE = None
 _DB_INIT_TIME = 0
@@ -43,7 +42,6 @@ if not USER_POOL_ID or not APP_CLIENT_ID:
             "AWS_SAM_STACK_NAME",
             os.environ.get("AWS_LAMBDA_FUNCTION_NAME", "").rsplit("-", 1)[0],
         )
-
         if stack_name:
             response = cfn.describe_stacks(StackName=stack_name)
             if (
@@ -52,7 +50,6 @@ if not USER_POOL_ID or not APP_CLIENT_ID:
                 and "Outputs" in response["Stacks"][0]
             ):
                 outputs = response["Stacks"][0]["Outputs"]
-
                 for output in outputs:
                     if "OutputKey" in output and "OutputValue" in output:
                         if output["OutputKey"] == "UserPoolId":
@@ -69,19 +66,16 @@ def get_database():
     """Get database with connection pooling and metadata caching"""
     global _DB_INSTANCE, _DB_INIT_TIME
     current_time = time.time()
-
     # If DB instance exists and is less than 5 minutes old, reuse it
     if _DB_INSTANCE is not None and current_time - _DB_INIT_TIME < 300:
         logger.info(
             f"Reusing existing database connection (age: {current_time - _DB_INIT_TIME:.2f}s)"
         )
         return _DB_INSTANCE
-
     # Initialize a new database connection
     logger.info("Creating new database connection")
     _DB_INSTANCE = Database()
     _DB_INIT_TIME = current_time
-
     return _DB_INSTANCE
 
 

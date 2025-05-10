@@ -670,6 +670,7 @@ class Database:
                 "source_url": recipe_data["source_url"],
                 "avg_rating": recipe_data["avg_rating"],
                 "rating_count": recipe_data["rating_count"],
+                "user_rating": recipe_data["user_rating"],
                 "ingredients": [],  # To be filled next
                 "tags": [],
             }
@@ -687,7 +688,6 @@ class Database:
                         logger.warning(
                             f"Could not parse public tag_data_str '{tag_data_str}': {ve}"
                         )
-
             # Process private tags
             private_tags_str = recipe_data.get("private_tags_data")
             if (
@@ -703,10 +703,8 @@ class Database:
                         logger.warning(
                             f"Could not parse private tag_data_str '{tag_data_str}': {ve}"
                         )
-
             # Fetch ingredients separately
             recipe["ingredients"] = self._get_recipe_ingredients(recipe_id)
-
             logger.info(
                 f"Final assembled recipe {recipe_id} with tags: {recipe.get('tags')} and ingredients."
             )

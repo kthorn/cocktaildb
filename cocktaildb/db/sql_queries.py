@@ -2,8 +2,9 @@ get_recipe_by_id_sql = """
     SELECT
         r.id, r.name, r.instructions, r.description, r.image_url, 
         r.source, r.source_url, r.avg_rating, r.rating_count,
-        GROUP_CONCAT(pt.id || '|||' || pt.name, ':::') AS public_tags_data,
-        GROUP_CONCAT(pvt.id || '|||' || pvt.name, ':::') AS private_tags_data
+        GROUP_CONCAT(DISTINCT pt.id || '|||' || pt.name, ':::') AS public_tags_data,
+        GROUP_CONCAT(DISTINCT pvt.id || '|||' || pvt.name, ':::') AS private_tags_data,
+        ur.rating AS user_rating
     FROM
         recipes r
     LEFT JOIN
@@ -14,10 +15,13 @@ get_recipe_by_id_sql = """
         recipe_private_tags rpvt ON r.id = rpvt.recipe_id
     LEFT JOIN
         private_tags pvt ON rpvt.tag_id = pvt.id AND pvt.cognito_user_id = :cognito_user_id
+    LEFT JOIN
+        ratings ur ON r.id = ur.recipe_id AND ur.cognito_user_id = :cognito_user_id
     WHERE r.id = :recipe_id
     GROUP BY
         r.id, r.name, r.instructions, r.description, r.image_url, 
-        r.source, r.source_url, r.avg_rating, r.rating_count;
+        r.source, r.source_url, r.avg_rating, r.rating_count,
+        ur.rating;
 """
 get_all_recipes_sql = """
     SELECT

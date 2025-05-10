@@ -129,28 +129,15 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
     if (ratingContainer) {
         if (isAuthenticated()) {
             // Add interactive rating for logged in users
-            // First, check if user has already rated this recipe
-            try {
-                fetchUserRating(recipe.id).then(userRating => {
-                    const interactiveRating = createInteractiveRating(
-                        recipe.id,
-                        userRating ? userRating.rating : 0,
-                        recipe.avg_rating || 0,
-                        recipe.rating_count || 0,
-                        submitRating
-                    );
-                    ratingContainer.appendChild(interactiveRating);
-                }).catch(error => {
-                    // Fallback to just showing the average if there's an error
-                    console.error('Error fetching user rating:', error);
-                    const staticRating = generateStarRating(recipe.avg_rating || 0, recipe.rating_count || 0);
-                    ratingContainer.innerHTML = staticRating;
-                });
-            } catch (error) {
-                console.error('Error setting up rating component:', error);
-                const staticRating = generateStarRating(recipe.avg_rating || 0, recipe.rating_count || 0);
-                ratingContainer.innerHTML = staticRating;
-            }
+            // The recipe object now directly contains user_rating if available
+            const interactiveRating = createInteractiveRating(
+                recipe.id,
+                recipe.user_rating || 0, // Use user_rating from the recipe object
+                recipe.avg_rating || 0,
+                recipe.rating_count || 0,
+                submitRating
+            );
+            ratingContainer.appendChild(interactiveRating);
         } else {
             // Show static rating for non-logged in users
             const staticRating = generateStarRating(recipe.avg_rating || 0, recipe.rating_count || 0);
@@ -181,41 +168,6 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
     }
 
     return card;
-}
-
-/**
- * Fetch the user's rating for a recipe
- * @param {number} recipeId - The recipe ID
- * @returns {Promise<Object|null>} The user's rating or null if not rated
- */
-async function fetchUserRating(recipeId) {
-    try {
-        console.log(`Fetching ratings for recipe ID: ${recipeId}`);
-        const ratings = await api.getRatings(recipeId);
-        console.log(`Received ratings:`, ratings);
-        
-        const userInfo = getUserInfo();
-        console.log(`User info:`, userInfo);
-        
-        if (!userInfo || !userInfo.token || !userInfo.cognitoUserId) {
-            console.log('No valid user info found, cannot fetch rating');
-            return null;
-        }
-        
-        // If ratings is empty or not an array, return null
-        if (!ratings || !Array.isArray(ratings) || ratings.length === 0) {
-            console.log('No ratings found for this recipe');
-            return null;
-        }
-        
-        // Find the rating by this user
-        const userRating = ratings.find(r => r.cognito_user_id === userInfo.cognitoUserId);
-        console.log(`User rating found:`, userRating || 'None');
-        return userRating || null;
-    } catch (error) {
-        console.error('Error fetching user rating:', error);
-        return null;
-    }
 }
 
 /**
