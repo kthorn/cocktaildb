@@ -70,17 +70,17 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
     const shouldShowActions = showActions && isAuthenticated();
     const shouldShowAddTagButton = isAuthenticated(); // Check if user is authenticated for add tag button
     
-    const tagsExist = recipe.tags && recipe.tags.length > 0;
-    const tagsHTML = tagsExist
-        ? `<span class="existing-tags">${recipe.tags.join(', ')}</span>`
-        : '<span class="no-tags-placeholder">No tags yet</span>';
+    const publicTags = recipe.tags ? recipe.tags.filter(tag => tag.type === 'public') : [];
+    const publicTagNames = publicTags.map(tag => tag.name);
+    const hasPublicTags = publicTagNames.length > 0;
     
     // Start with the basic recipe details
     card.innerHTML = `
         <h4 class="recipe-title">${recipe.name}</h4>
         <div class="recipe-meta">
             <div class="recipe-tags">
-                ${tagsHTML}
+                <span class="existing-tags" style="display: ${hasPublicTags ? 'inline' : 'none'};">${publicTagNames.join(', ')}</span>
+                <span class="no-tags-placeholder" style="display: ${hasPublicTags ? 'none' : 'inline'};">No tags yet</span>
                 ${shouldShowAddTagButton ? `
                 <button class="add-tag-btn" 
                         data-recipe-id="${recipe.id}" 
@@ -534,13 +534,17 @@ async function handleSaveTags() {
             const noTagsPlaceholder = recipeCardElement.querySelector('.recipe-tags .no-tags-placeholder');
             const addTagButtonOnCard = recipeCardElement.querySelector('.add-tag-btn');
 
-            const publicTagsForDisplay = modalFinalTags.filter(t => t.type === 'public').map(t => t.name);
+            // Filter for public tags and ensure names are usable
+            const namesToDisplay = modalFinalTags
+                .filter(t => t.type === 'public' && t.name && t.name.trim() !== '')
+                .map(t => t.name.trim());
+
             if (tagsDisplay) {
-                tagsDisplay.textContent = publicTagsForDisplay.join(', ');
-                tagsDisplay.style.display = publicTagsForDisplay.length > 0 ? 'inline' : 'none';
+                tagsDisplay.textContent = namesToDisplay.join(', ');
+                tagsDisplay.style.display = namesToDisplay.length > 0 ? 'inline' : 'none';
             }
             if (noTagsPlaceholder) {
-                noTagsPlaceholder.style.display = publicTagsForDisplay.length > 0 ? 'none' : 'inline';
+                noTagsPlaceholder.style.display = namesToDisplay.length > 0 ? 'none' : 'inline';
             }
             if (addTagButtonOnCard) {
                 const updatedRecipeData = await api.getRecipe(recipeId);

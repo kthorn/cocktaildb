@@ -735,23 +735,110 @@ class Database:
             logger.error(f"Error getting recipes: {str(e)}")
             raise
 
-    def get_recipe(self, recipe_id: int) -> Optional[Dict[str, Any]]:
-        """Get a single recipe by ID with its ingredients"""
+    def get_recipe(
+        self, recipe_id: int, cognito_user_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Get a single recipe by ID with its ingredients and tags using GROUP_CONCAT for efficiency."""
         try:
-            result = cast(
-                List[Dict[str, Any]],
-                self.execute_query(
-                    "SELECT id, name, instructions, description, image_url, source, source_url, avg_rating, rating_count FROM recipes WHERE id = :id",
-                    {"id": recipe_id},
-                ),
+            logger.info(
+                f"Getting recipe {recipe_id} for user_id: {cognito_user_id} (GROUP_CONCAT query)"
             )
-            if result:
-                recipe = result[0]
-                recipe["ingredients"] = self._get_recipe_ingredients(recipe_id)
-                return recipe
-            return None
+
+            sql = """
+                SELECT
+                    r.id, r.name, r.instructions, r.description, r.image_url, 
+                    r.source, r.source_url, r.avg_rating, r.rating_count,
+                    GROUP_CONCAT(pt.id || '|||' || pt.name, ':::') AS public_tags_data,
+                    GROUP_CONCAT(pvt.id || '|||' || pvt.name, ':::') AS private_tags_data
+                FROM
+                    recipes r
+                LEFT JOIN
+                    recipe_public_tags rpt ON r.id = rpt.recipe_id
+                LEFT JOIN
+                    public_tags pt ON rpt.tag_id = pt.id
+                LEFT JOIN
+                    recipe_private_tags rpvt ON r.id = rpvt.recipe_id
+                LEFT JOIN
+                    private_tags pvt ON rpvt.tag_id = pvt.id AND pvt.cognito_user_id = :cognito_user_id
+                WHERE r.id = :recipe_id
+                GROUP BY
+                    r.id, r.name, r.instructions, r.description, r.image_url, 
+                    r.source, r.source_url, r.avg_rating, r.rating_count;
+            """
+            params = {"recipe_id": recipe_id, "cognito_user_id": cognito_user_id}
+
+            logger.debug(
+                f"Executing get_recipe SQL (GROUP_CONCAT): {sql} with params: {params}"
+            )
+            rows = cast(
+                List[Dict[str, Any]],
+                self.execute_query(sql, params),
+            )
+
+            if (
+                not rows or rows[0]["id"] is None
+            ):  # GROUP_CONCAT might return a row with NULLs if no recipe matches WHERE
+                logger.info(f"Recipe {recipe_id} not found by GROUP_CONCAT query.")
+                return None
+
+            recipe_data = rows[0]
+            recipe = {
+                "id": recipe_data["id"],
+                "name": recipe_data["name"],
+                "instructions": recipe_data["instructions"],
+                "description": recipe_data["description"],
+                "image_url": recipe_data["image_url"],
+                "source": recipe_data["source"],
+                "source_url": recipe_data["source_url"],
+                "avg_rating": recipe_data["avg_rating"],
+                "rating_count": recipe_data["rating_count"],
+                "ingredients": [],  # To be filled next
+                "tags": [],
+            }
+
+            # Process public tags
+            public_tags_str = recipe_data.get("public_tags_data")
+            if public_tags_str:
+                for tag_data_str in public_tags_str.split(":::"):
+                    try:
+                        tag_id_str, tag_name = tag_data_str.split("|||", 1)
+                        recipe["tags"].append(
+                            {"id": int(tag_id_str), "name": tag_name, "type": "public"}
+                        )
+                    except ValueError as ve:
+                        logger.warning(
+                            f"Could not parse public tag_data_str '{tag_data_str}': {ve}"
+                        )
+
+            # Process private tags
+            private_tags_str = recipe_data.get("private_tags_data")
+            if (
+                private_tags_str and cognito_user_id
+            ):  # Only process if user_id was present for the query
+                for tag_data_str in private_tags_str.split(":::"):
+                    try:
+                        tag_id_str, tag_name = tag_data_str.split("|||", 1)
+                        recipe["tags"].append(
+                            {"id": int(tag_id_str), "name": tag_name, "type": "private"}
+                        )
+                    except ValueError as ve:
+                        logger.warning(
+                            f"Could not parse private tag_data_str '{tag_data_str}': {ve}"
+                        )
+
+            # Fetch ingredients separately
+            recipe["ingredients"] = self._get_recipe_ingredients(recipe_id)
+
+            logger.info(
+                f"Final assembled recipe {recipe_id} with tags: {recipe.get('tags')} and ingredients."
+            )
+            return recipe
+
         except Exception as e:
-            logger.error(f"Error getting recipe {recipe_id}: {str(e)}")
+            logger.error(
+                f"Error getting recipe {recipe_id} (GROUP_CONCAT): {str(e)}",
+                exc_info=True,
+            )
             raise
 
     def _get_recipe_ingredients(self, recipe_id: int) -> List[Dict[str, Any]]:
