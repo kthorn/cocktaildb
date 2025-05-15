@@ -196,19 +196,26 @@ button:hover {
 .ingredient-card h4,
 .recipe-card h4 {
     margin-bottom: 0.75rem;
-    color: #2c3e50;
     font-size: 1.4rem;
     font-weight: 600;
     border-bottom: 1px solid #f0f0f0;
     padding-bottom: 0.5rem;
+    color: #2c3e50;
 }
 
+/* Consolidate common styles for these paragraph types */
 .ingredient-card p,
-.recipe-card p {
-    margin-bottom: 0.5rem;
+.recipe-card p, /* This applies to general p tags in recipe-card, not .instructions p */
+.ingredient-description {
     color: #555;
     font-style: italic;
     font-family: Georgia, 'Times New Roman', Times, serif;
+}
+
+/* Specific margin for general card paragraphs */
+.ingredient-card p,
+.recipe-card p {
+    margin-bottom: 0.5rem;
 }
 
 .recipe-card .ingredients {
@@ -306,8 +313,8 @@ button:hover {
 }
 
 .stat-card h3 {
-    color: #2c3e50;
     margin-bottom: 0.5rem;
+    color: #2c3e50;
 }
 
 .stat-card p {
@@ -485,69 +492,6 @@ footer {
     border-radius: 4px;
     cursor: pointer;
     margin-top: 20px;
-}
-
-/* Make sure recipe cards are consistent across pages */
-.recipe-card {
-    background-color: #fff;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 1rem;
-    margin-bottom: 1rem;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.recipe-card h4 {
-    margin-top: 0;
-    color: #333;
-    font-size: 1.2rem;
-}
-
-.recipe-card .ingredients,
-.recipe-card .instructions {
-    margin-top: 1rem;
-}
-
-.recipe-card h5 {
-    font-size: 1rem;
-    margin-bottom: 0.5rem;
-    color: #555;
-}
-
-.recipe-card ul {
-    padding-left: 1.5rem;
-    margin: 0.5rem 0;
-}
-
-.recipe-card .card-actions {
-    margin-top: 1rem;
-    display: flex;
-    gap: 0.5rem;
-}
-
-.recipe-card .card-actions button {
-    padding: 0.3rem 0.8rem;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9rem;
-}
-
-.recipe-card .edit-recipe {
-    background-color: #4caf50;
-    color: white;
-}
-
-.recipe-card .delete-recipe {
-    background-color: #f44336;
-    color: white;
-}
-
-/* Responsive adjustments for smaller screens */
-@media (max-width: 768px) {
-    #featured-recipes-container {
-        grid-template-columns: 1fr;
-    }
 }
 
 /* Recipe Carousel */
@@ -792,13 +736,13 @@ footer {
 /* Recipe Card Styling - consolidated and updated */
 .recipe-card h4.recipe-title {
     margin-bottom: 0.75rem;
-    color: #2c3e50;
     font-size: 1.4rem;
     font-weight: 600;
     font-family: Georgia, 'Times New Roman', Times, serif;
     text-align: center;
     padding-bottom: 0.5rem;
     position: relative;
+    color: #2c3e50;
 }
 
 .recipe-card h4.recipe-title::after {
@@ -901,8 +845,8 @@ footer {
 
 /* Search page styles */
 .section-title h2 {
-    color: #2c3e50;
     margin-bottom: 0.5rem;
+    color: #2c3e50;
 }
 
 /* Form container - use the existing section styling */
@@ -1054,10 +998,10 @@ footer {
 }
 
 .results-section h3 {
-    color: #2c3e50;
     margin-bottom: 1rem;
     border-bottom: 2px solid #eee;
     padding-bottom: 0.25rem;
+    color: #2c3e50;
 }
 
 #search-results-container {
@@ -1139,9 +1083,9 @@ footer {
 
 .ingredient-name {
     font-weight: bold;
-    color: #2c3e50;
     font-size: 1.1rem;
     margin-right: 0.5rem;
+    color: #2c3e50;
 }
 
 .ingredient-parent-info {
@@ -1150,12 +1094,11 @@ footer {
     font-style: italic;
 }
 
+/* Specifics for .ingredient-description, common styles moved to the group above */
 .ingredient-description {
     font-size: 0.9rem;
-    color: #555;
     margin-top: 0.25rem;
-    font-style: italic;
-    font-family: Georgia, 'Times New Roman', Times, serif;
+    /* color, font-style, font-family are inherited */
 }
 
 /* Adjustments for card actions in compact view */
@@ -1195,8 +1138,8 @@ footer {
     margin-top: 0;
     margin-bottom: 1rem; /* Reduced margin */
     font-size: 1.1rem; /* Reduced font size */
-    color: #2c3e50;
     font-family: Georgia, 'Times New Roman', Times, serif;
+    color: #2c3e50;
 }
 
 .close-tag-modal-btn {
