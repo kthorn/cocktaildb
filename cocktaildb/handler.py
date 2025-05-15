@@ -390,7 +390,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             recipe_id = path_params.get("recipeId") if path_params else None
             # POST without recipe_id is for creating a new recipe
             if http_method == "POST" and not recipe_id:
-                return handle_create_recipe(logger, db, event, context)
+                return handle_create_recipe(logger, db, event)
             elif http_method == "GET":
                 if recipe_id:
                     return handle_get_single_recipe(logger, db, recipe_id, user_id)

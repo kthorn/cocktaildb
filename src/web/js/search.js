@@ -26,6 +26,15 @@ document.addEventListener('DOMContentLoaded', () => {
     addIngredientRowBtn.addEventListener('click', addIngredientRow);
     setupInitialIngredientRow();
 
+    // Check for URL query parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const tagFromUrl = urlParams.get('tag');
+
+    if (tagFromUrl) {
+        tagsSearch.value = tagFromUrl;
+        performSearch(); // Auto-search if tag is in URL
+    }
+
     // Form submit event
     searchForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -155,11 +164,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Function to setup the initial ingredient row
     function setupInitialIngredientRow() {
-        const firstRow = ingredientQueryBuilder.querySelector('.item-row');
+        let firstRow = ingredientQueryBuilder.querySelector('.item-row');
+        
+        // If no ingredient row exists, add one
+        if (!firstRow) {
+            addIngredientRow();
+            firstRow = ingredientQueryBuilder.querySelector('.item-row'); // Get the newly added row
+        }
+        
+        // Now, firstRow is guaranteed to exist (either pre-existing or newly added)
         if (firstRow) {
-            setupIngredientRow(firstRow);
+            // The setupIngredientRow is already called by addIngredientRow if it was invoked.
+            // If the row was pre-existing (though we removed it from HTML, good to be defensive),
+            // we might need to call it. However, addIngredientRow calls it.
+            // So, we primarily need to ensure the remove button is hidden.
             
-            // Hide the remove button on the first row initially since it's required
             const removeButton = firstRow.querySelector('.remove-row');
             if (removeButton) {
                 removeButton.style.display = 'none';

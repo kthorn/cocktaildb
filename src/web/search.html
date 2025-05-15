@@ -17,75 +17,69 @@
 
             <section class="form-container">
                 <form id="recipe-search-form" class="form-stack">
-                    <div class="form-group">
-                        <label for="name-search">Recipe Name</label>
-                        <input type="text" id="name-search" name="name-search"
-                            placeholder="Search by recipe name">
-                    </div>
+                    <div class="form-content-wrapper">
+                        <div class="main-search-fields">
+                            <div class="form-group">
+                                <label for="name-search">Recipe Name</label>
+                                <input type="text" id="name-search"
+                                    name="name-search"
+                                    placeholder="Search by recipe name">
+                            </div>
 
-                    <div class="form-group">
-                        <label>Rating</label>
-                        <div class="input-group">
-                            <label>
-                                <input type="radio" name="rating-filter"
-                                    value="all" checked>
-                                Any rating
-                            </label>
-                            <label>
-                                <input type="radio" name="rating-filter"
-                                    value="4+">
-                                4+ stars
-                            </label>
-                            <label>
-                                <input type="radio" name="rating-filter"
-                                    value="3+">
-                                3+ stars
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="tags-search">Tags</label>
-                        <input type="text" id="tags-search" name="tags-search"
-                            placeholder="Enter tags (comma separated)">
-                    </div>
-
-                    <div class="form-group ingredient-search-container">
-                        <label>Ingredients</label>
-                        <div id="ingredient-query-builder">
-                            <div class="item-row">
-                                <select
-                                    class="logical-operator item-row-field-fixed">
-                                    <option value="MUST">Must contain</option>
-                                    <option value="MUST_NOT">Must NOT
-                                        contain</option>
-                                </select>
-                                <div
-                                    class="ingredient-search-wrapper item-row-field-expand">
-                                    <input type="text" class="ingredient-search"
-                                        placeholder="Search for ingredient">
-                                    <input type="hidden" class="ingredient-id">
-                                    <div class="autocomplete-dropdown"></div>
-                                    <div class="search-status">Loading
-                                        ingredients...</div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Rating</label>
+                                    <div class="input-group">
+                                        <label>
+                                            <input type="radio"
+                                                name="rating-filter"
+                                                value="all" checked>
+                                            Any rating
+                                        </label>
+                                        <label>
+                                            <input type="radio"
+                                                name="rating-filter"
+                                                value="4+">
+                                            4+ stars
+                                        </label>
+                                        <label>
+                                            <input type="radio"
+                                                name="rating-filter"
+                                                value="3+">
+                                            3+ stars
+                                        </label>
+                                    </div>
                                 </div>
-                                <button type="button"
-                                    class="remove-row btn-circle btn-danger">✕</button>
+
+                                <div class="form-group">
+                                    <label for="tags-search">Tags</label>
+                                    <input type="text" id="tags-search"
+                                        name="tags-search"
+                                        placeholder="Enter tags (comma separated)">
+                                </div>
                             </div>
-                            <div class="add-row-wrapper">
-                                <button type="button" id="add-ingredient-row"
-                                    class="btn-success">
-                                    Add Another Ingredient
-                                </button>
+
+                            <div class="form-group ingredient-search-container">
+                                <label>Ingredients</label>
+                                <div id="ingredient-query-builder">
+                                    <!-- item-row is dynamically added by JS -->
+                                    <!-- The add button will be styled to appear next to the last row or handled by JS -->
+                                </div>
+                                <div class="add-row-wrapper">
+                                    <button type="button"
+                                        id="add-ingredient-row"
+                                        class="btn-success btn-circle"><span
+                                            class="btn-icon">+</span></button>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="form-actions">
-                        <button type="submit" id="search-button"
-                            class="btn-primary">Search</button>
-                        <button type="reset" id="reset-button"
-                            class="btn-secondary">Reset</button>
+                        <div class="form-actions">
+                            <button type="reset" id="reset-button"
+                                class="btn-secondary">Reset</button>
+                            <button type="submit" id="search-button"
+                                class="btn-primary">Search</button>
+                        </div>
                     </div>
                 </form>
             </section>
