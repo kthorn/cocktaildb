@@ -797,17 +797,26 @@ button:hover, .btn:hover {
 #search-results-container {
     position: relative;
     min-height: 200px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-lg);
+    margin-top: var(--space-md);
 }
 
 /* Empty message */
 .empty-message {
     text-align: center;
-    padding: var(--space-xl);
+    padding: var(--space-md);
     background-color: #f9f9f9;
     border-radius: var(--radius-md);
     color: #666;
     position: relative;
     z-index: 5;
+    grid-column: 1 / -1;
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* Footer styles */
@@ -970,20 +979,21 @@ footer {
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 300px;
+    min-height: 120px;
     width: 100%;
     background-color: #f9f9fa;
     border-radius: var(--radius-md);
-    border: 2px dashed #dee2e6;
+    border: 1px dashed #dee2e6;
     position: absolute;
     top: 0;
     left: 0;
     z-index: 10;
+    grid-column: 1 / -1;
 }
 
 .loading-placeholder p {
     color: #6c757d;
-    font-size: var(--text-lg);
+    font-size: var(--text-md);
 }
 
 /* Carousel Recipe Card Styling */
@@ -1184,6 +1194,10 @@ footer {
     }
 
     .quick-stats {
+        grid-template-columns: 1fr;
+    }
+    
+    #search-results-container {
         grid-template-columns: 1fr;
     }
     
