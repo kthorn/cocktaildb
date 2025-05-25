@@ -1,164 +1,141 @@
 @echo off
 setlocal enabledelayedexpansion
 
-REM Check for no-build flag
+REM Parse arguments
+set TARGET_ENV=%1
 set NO_BUILD=0
-if "%1"=="--no-build" (
+
+REM Default to dev if no environment specified
+if "!TARGET_ENV!"=="" (
+    echo No environment specified, defaulting to 'dev'.
+    set TARGET_ENV=dev
+) else if "!TARGET_ENV!"=="--no-build" (
+    echo Error: Please specify environment first, e.g., dev --no-build
+    exit /b 1
+) else (
+    echo Target environment: !TARGET_ENV!
+)
+
+REM Check for no-build flag
+if "%2"=="--no-build" (
     set NO_BUILD=1
     echo Skipping SAM build and deploy steps...
 )
 
-REM Check for hosted zone ID environment variable or use a default value
-if "%HOSTED_ZONE_ID%"=="" (
-    echo WARNING: HOSTED_ZONE_ID environment variable not set.
-    echo Please set the HOSTED_ZONE_ID environment variable before running this script.
+REM Validate environment
+if not "!TARGET_ENV!"=="dev" if not "!TARGET_ENV!"=="prod" (
+    echo Error: Invalid environment '!TARGET_ENV!'. Use 'dev' or 'prod'.
     exit /b 1
 )
 
-call mamba activate cocktaildb-312
+REM Validate HOSTED_ZONE_ID for prod deployments
+if "!TARGET_ENV!"=="prod" (
+    if "%HOSTED_ZONE_ID%"=="" (
+        echo ERROR: HOSTED_ZONE_ID environment variable required for prod deployment.
+        echo Please set the HOSTED_ZONE_ID environment variable before running this script.
+        exit /b 1
+    )
+) else (
+    if "%HOSTED_ZONE_ID%"=="" (
+        echo WARNING: HOSTED_ZONE_ID not set for dev. Using placeholder.
+        set HOSTED_ZONE_ID=NONE
+    )
+)
 
-REM Change to project root directory
+REM Setup environment
+call mamba activate cocktaildb-312
 cd %~dp0\..
 
-REM Define stack name
-set STACK_NAME=cocktail-db-prod
+REM Define deployment variables
+set STACK_NAME=cocktail-db-!TARGET_ENV!
 set REGION=us-east-1
+set DB_NAME_PARAM=cocktaildb-!TARGET_ENV!
+set USER_POOL_NAME_PARAM=CocktailDB-UserPool-!TARGET_ENV!
+set PARAM_OVERRIDES=Environment=!TARGET_ENV! HostedZoneId=%HOSTED_ZONE_ID% DatabaseName=!DB_NAME_PARAM! UserPoolName=!USER_POOL_NAME_PARAM!
 
+echo Stack name: !STACK_NAME!
+
+REM Build and deploy with SAM (if not skipped)
 if %NO_BUILD%==0 (
     echo Building application with SAM...
     sam build --template-file template.yaml --region %REGION%
-
     if %ERRORLEVEL% neq 0 (
         echo Error building with SAM
         exit /b %ERRORLEVEL%
     )
 
-    echo Deploying with SAM to production environment...
+    echo Deploying with SAM to !TARGET_ENV! environment...
     sam deploy ^
         --template-file .aws-sam\build\template.yaml ^
-        --stack-name %STACK_NAME% ^
-        --parameter-overrides Environment=prod HostedZoneId=%HOSTED_ZONE_ID% ^
-        --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM ^
+        --stack-name !STACK_NAME! ^
+        --parameter-overrides !PARAM_OVERRIDES! ^
+        --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND ^
         --no-fail-on-empty-changeset ^
         --resolve-s3 ^
         --on-failure DELETE ^
-        --region %REGION% 
+        --region %REGION%
 
     if %ERRORLEVEL% neq 0 (
-        echo Error deploying with SAM
+        echo Error deploying with SAM to !TARGET_ENV!
         exit /b %ERRORLEVEL%
     )
 
-    echo Deployment complete!
+    echo Deployment to !TARGET_ENV! complete!
 ) else (
-    echo Skipped SAM build and deploy steps
+    echo Skipped SAM build and deploy steps for !STACK_NAME!
 )
 
-REM Get website bucket name from CloudFormation outputs
+REM Get S3 bucket name for web content
 echo Getting S3 bucket name...
-set BUCKET_NAME=
-set AWS_CMD=aws cloudformation describe-stacks --stack-name %STACK_NAME% --query "Stacks[0].Outputs[?OutputKey=='WebsiteBucketName'].OutputValue" --output text --region %REGION%
-for /f "tokens=*" %%i in ('%AWS_CMD%') do (
+for /f "tokens=*" %%i in ('aws cloudformation describe-stacks --stack-name !STACK_NAME! --query "Stacks[0].Outputs[?OutputKey=='WebsiteBucketName'].OutputValue" --output text --region %REGION%') do (
     set BUCKET_NAME=%%i
 )
 
-REM Verify we got a valid bucket name
 if "!BUCKET_NAME!"=="" (
-    echo Error: Could not retrieve bucket name from CloudFormation outputs
+    echo Error: Could not retrieve bucket name from CloudFormation outputs for stack !STACK_NAME!
     echo Please check if the stack deployment completed successfully
     exit /b 1
 )
 
 echo Found bucket name: !BUCKET_NAME!
 
-REM Get API endpoint URL from CloudFormation outputs
-echo Getting API endpoint URL...
-set API_URL=
-set AWS_CMD=aws cloudformation describe-stacks --stack-name %STACK_NAME% --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" --output text --region %REGION%
-for /f "tokens=*" %%i in ('%AWS_CMD%') do (
-    set API_URL=%%i
-)
-
-REM Get Cognito User Pool ID
-echo Getting Cognito User Pool ID...
-set USER_POOL_ID=
-set AWS_CMD=aws cloudformation describe-stacks --stack-name %STACK_NAME% --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --region %REGION%
-for /f "tokens=*" %%i in ('%AWS_CMD%') do (
-    set USER_POOL_ID=%%i
-)
-
-REM Get Cognito User Pool Client ID
-echo Getting Cognito User Pool Client ID...
-set CLIENT_ID=
-set AWS_CMD=aws cloudformation describe-stacks --stack-name %STACK_NAME% --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text --region %REGION%
-for /f "tokens=*" %%i in ('%AWS_CMD%') do (
-    set CLIENT_ID=%%i
-)
-
-REM Get Cognito Domain URL
-echo Getting Cognito Domain URL...
-set COGNITO_DOMAIN=
-set AWS_CMD=aws cloudformation describe-stacks --stack-name %STACK_NAME% --query "Stacks[0].Outputs[?OutputKey=='CognitoDomainURL'].OutputValue" --output text --region %REGION%
-for /f "tokens=*" %%i in ('%AWS_CMD%') do (
-    set COGNITO_DOMAIN=%%i
-)
-
-REM Verify we got a valid API URL
-if "!API_URL!"=="" (
-    echo Warning: Could not retrieve API URL from CloudFormation outputs
-) else (
-    echo Found API URL: !API_URL!
-    
-    REM Update config.js with the current API URL and Cognito information
-    echo Updating config.js with current API URL and Cognito information...
-    (
-        echo // Configuration for the Cocktail Database application
-        echo const config = {
-        echo     // API endpoint
-        echo     apiUrl: '!API_URL!',
-        echo.
-        echo     // Cognito configuration
-        echo     userPoolId: '!USER_POOL_ID!',
-        echo     clientId: '!CLIENT_ID!',
-        echo     cognitoDomain: '!COGNITO_DOMAIN!',
-        echo.
-        echo     // General settings
-        echo     appName: 'Cocktail Database'
-        echo };
-        echo.
-        echo // Export the configuration
-        echo export default config; 
-    ) > src\web\js\config.js
-    echo config.js updated successfully
-)
-
-REM Upload web content to S3 after deployment
-echo Uploading web content to S3 bucket: !BUCKET_NAME!
-aws s3 sync src\web\ s3://!BUCKET_NAME!/ --delete --region %REGION%
-
+REM Generate config.js using Python script
+echo Generating config.js...
+python scripts\generate_config.py !STACK_NAME! !TARGET_ENV! --region %REGION%
 if %ERRORLEVEL% neq 0 (
-    echo Error uploading web content with AWS CLI
+    echo Error generating config.js
     exit /b %ERRORLEVEL%
-) else (
-    echo Web content uploaded successfully!
 )
+
+REM Upload web content to S3
+echo Uploading web content to S3...
+aws s3 sync src\web\ s3://!BUCKET_NAME!/ --delete --region %REGION%
+if %ERRORLEVEL% neq 0 (
+    echo Error uploading web content
+    exit /b %ERRORLEVEL%
+)
+
+echo Web content uploaded successfully!
 
 REM Invalidate CloudFront cache
 echo Invalidating CloudFront cache...
-set DISTRIBUTION_ID=
-set AWS_CMD=aws cloudformation describe-stacks --stack-name %STACK_NAME% --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistribution'].OutputValue" --output text --region %REGION%
-for /f "tokens=*" %%i in ('%AWS_CMD%') do (
+for /f "tokens=*" %%i in ('aws cloudformation describe-stacks --stack-name !STACK_NAME! --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistribution'].OutputValue" --output text --region %REGION%') do (
     set DISTRIBUTION_ID=%%i
 )
 
 if not "!DISTRIBUTION_ID!"=="" (
     aws cloudfront create-invalidation --distribution-id !DISTRIBUTION_ID! --paths "/*" --region %REGION%
-    echo CloudFront cache invalidation initiated
+    echo CloudFront cache invalidation initiated!
 ) else (
     echo Warning: Could not retrieve CloudFront distribution ID
 )
 
-echo Getting CloudFormation outputs...
-aws cloudformation describe-stacks --stack-name %STACK_NAME% --query "Stacks[0].Outputs" --output table --region %REGION%
+REM Display final CloudFormation outputs
+echo.
+echo CloudFormation stack outputs:
+aws cloudformation describe-stacks --stack-name !STACK_NAME! --query "Stacks[0].Outputs" --output table --region %REGION%
+
+echo.
+echo Deployment completed successfully!
 
 endlocal 

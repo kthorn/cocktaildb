@@ -1,23 +1,31 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Cocktail Database Infrastructure
+Description: Cocktail Database Infrastructure (Supports Dev/Prod Environments)
 
 Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: The deployment environment (dev or prod).
   DatabaseName:
     Type: String
-    Default: cocktaildb
+    Default: "cocktaildb-dev"
   CognitoAdvancedSecurity:
     Type: String
-    Default: "OFF"
+    Default: "OFF" # Consider making this conditional: "ENFORCED" for prod, "OFF" for dev
   UserPoolName:
     Type: String
-    Default: CocktailDB-UserPool
+    Default: "CocktailDB-UserPool-dev"
   DomainName:
     Type: String
     Default: mixology.tools
+    Description: Custom domain name for production (e.g., mixology.tools). Not used for dev.
   HostedZoneId:
     Type: String
-    Description: ID of the existing Route 53 hosted zone for your domain (without /hostedzone/ prefix)
+    Description: ID of the existing Route 53 hosted zone for your production domain (without /hostedzone/ prefix). Required if Environment is prod.
 
 Globals:
   Function:
@@ -30,6 +38,9 @@ Globals:
       AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
       AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
       AllowOrigin: "'*'"
+
+Conditions:
+  IsProdEnvironment: !Equals [!Ref Environment, "prod"]
 
 Resources:
   # VPC and Network Configuration
@@ -107,7 +118,7 @@ Resources:
     Type: AWS::EFS::FileSystem
     Properties:
       PerformanceMode: generalPurpose
-      Encrypted: true
+      Encrypted: true # Consider making this conditional if dev doesn't need encryption
       LifecyclePolicies:
         - TransitionToIA: AFTER_7_DAYS
       FileSystemTags:
@@ -203,27 +214,13 @@ Resources:
           OwnerGid: "1000"
           Permissions: "0755"
 
-  # S3 bucket for cocktail images
-  CocktailBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub ${AWS::StackName}-cocktail-images
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-
   # S3 bucket for database backups
   BackupBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub ${AWS::StackName}-db-backups
+      BucketName: !Sub "cocktaildbbackups-${AWS::AccountId}-${Environment}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
       LifecycleConfiguration: 
         Rules:
           - Id: ExpireOldBackups
@@ -235,12 +232,9 @@ Resources:
   WebsiteBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub ${AWS::StackName}-website
+      BucketName: !Sub "cocktailwebsite-${AWS::AccountId}-${Environment}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
       WebsiteConfiguration:
         IndexDocument: index.html
         ErrorDocument: error.html
@@ -261,6 +255,7 @@ Resources:
   # SSL Certificate for CloudFront
   CloudFrontCertificate:
     Type: AWS::CertificateManager::Certificate
+    Condition: IsProdEnvironment
     Properties:
       DomainName: !Ref DomainName
       ValidationMethod: DNS
@@ -272,6 +267,7 @@ Resources:
   # Route 53 Record Set for CloudFront
   DomainRecordSet:
     Type: AWS::Route53::RecordSet
+    Condition: IsProdEnvironment
     Properties:
       HostedZoneId: !Ref HostedZoneId
       Name: !Ref DomainName
@@ -300,12 +296,13 @@ Resources:
       DistributionConfig:
         Enabled: true
         DefaultRootObject: index.html
-        Aliases:
-          - !Ref DomainName
-        ViewerCertificate:
-          AcmCertificateArn: !Ref CloudFrontCertificate
-          SslSupportMethod: sni-only
-          MinimumProtocolVersion: TLSv1.2_2021
+        Aliases: !If [IsProdEnvironment, [!Ref DomainName], !Ref "AWS::NoValue"]
+        ViewerCertificate: !If
+          - IsProdEnvironment
+          - AcmCertificateArn: !Ref CloudFrontCertificate
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true # Use default CF cert for dev
         Origins:
           - Id: S3Origin
             DomainName: !GetAtt WebsiteBucket.RegionalDomainName
@@ -401,7 +398,6 @@ Resources:
       Environment:
         Variables:
           DB_NAME: !Ref DatabaseName
-          S3_BUCKET: !Ref CocktailBucket
           USER_POOL_ID: !Ref CognitoUserPool
           APP_CLIENT_ID: !Ref CognitoUserPoolClient
       VpcConfig:
@@ -427,15 +423,6 @@ Resources:
                 - ec2:DescribeSecurityGroups
                 - ec2:DescribeSubnets
               Resource: "*"
-            - Effect: Allow
-              Action:
-                - s3:GetObject
-                - s3:PutObject
-                - s3:DeleteObject
-                - s3:ListBucket
-              Resource:
-                - !Sub arn:aws:s3:::${CocktailBucket}
-                - !Sub arn:aws:s3:::${CocktailBucket}/*
       Events:
         GetIngredients:
           Type: Api
@@ -763,18 +750,15 @@ Resources:
   DeploymentBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub ${AWS::StackName}-deployment
+      BucketName: !Sub "cocktailsamdeployment-${AWS::AccountId}-${Environment}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
 
   # Cognito User Pool for Authentication
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: !Ref UserPoolName
+      UserPoolName: !Ref UserPoolName # This now uses the environment-specific default
       AliasAttributes:
         - email
         - preferred_username
@@ -790,7 +774,7 @@ Resources:
           RequireSymbols: false
           RequireUppercase: false
       UserPoolAddOns:
-        AdvancedSecurityMode: "OFF"
+        AdvancedSecurityMode: !Ref CognitoAdvancedSecurity # Use parameter
       Schema:
         - Name: name
           AttributeDataType: String
@@ -802,7 +786,7 @@ Resources:
     Type: AWS::Cognito::UserPoolClient
     Properties:
       UserPoolId: !Ref CognitoUserPool
-      ClientName: cocktaildb-client
+      ClientName: !Sub cocktaildb-client-${Environment}
       GenerateSecret: false
       ExplicitAuthFlows:
         - ALLOW_USER_SRP_AUTH
@@ -811,12 +795,16 @@ Resources:
       PreventUserExistenceErrors: ENABLED
       SupportedIdentityProviders:
         - COGNITO
-      CallbackURLs:
-        - !Sub https://${CloudFrontDistribution.DomainName}/callback.html
-        - !Sub https://${DomainName}/callback.html
-      LogoutURLs:
-        - !Sub https://${CloudFrontDistribution.DomainName}/logout.html
-        - !Sub https://${DomainName}/logout.html
+      CallbackURLs: !If
+        - IsProdEnvironment
+        - - !Sub "https://${DomainName}/callback.html"
+          - !Sub "https://${DomainName}/login.html" # Assuming a login redirect page
+        - - !Sub "https://${CloudFrontDistribution.DomainName}/callback.html"
+          - !Sub "https://${CloudFrontDistribution.DomainName}/login.html"
+      LogoutURLs: !If
+        - IsProdEnvironment
+        - - !Sub "https://${DomainName}/logout.html"
+        - - !Sub "https://${CloudFrontDistribution.DomainName}/logout.html"
       AllowedOAuthFlows:
         - code
         - implicit
@@ -831,7 +819,7 @@ Resources:
   CognitoDomain:
     Type: AWS::Cognito::UserPoolDomain
     Properties:
-      Domain: !Sub ${AWS::StackName}-auth
+      Domain: !Sub "cocktaildbauth-${Environment}-${AWS::AccountId}" # Globally unique domain
       UserPoolId: !Ref CognitoUserPool
 
   # IAM Role for API Gateway CloudWatch Logging
@@ -971,20 +959,16 @@ Outputs:
     Description: Mount path for EFS in Lambda
     Value: /mnt/efs
 
-  CocktailBucketName:
-    Description: S3 bucket for cocktail images
-    Value: !Ref CocktailBucket
-
   WebsiteURL:
-    Description: S3 Website URL (direct)
-    Value: !Sub "https://${WebsiteBucket.DomainName}"
+    Description: S3 Website URL (direct, for reference)
+    Value: !Sub "https://${WebsiteBucket.DomainName}" # This gives the S3 regional domain, not the CF one
 
   WebsiteBucketName:
     Description: Name of the S3 bucket used for website hosting
     Value: !Ref WebsiteBucket
 
   CloudFrontURL:
-    Description: CloudFront Distribution URL (use this for your website)
+    Description: CloudFront Distribution URL (use this for dev, or as base for prod CNAME)
     Value: !Sub https://${CloudFrontDistribution.DomainName}
 
   CloudFrontDistribution:
@@ -1005,15 +989,15 @@ Outputs:
     
   CognitoDomainURL:
     Description: Cognito Domain URL for hosted UI
-    Value: !Sub https://${AWS::StackName}-auth.auth.${AWS::Region}.amazoncognito.com
+    Value: !Sub "https://${CognitoDomain}.auth.${AWS::Region}.amazoncognito.com"
 
   CustomDomainURL:
-    Description: Website URL with custom domain
-    Value: !Sub https://${DomainName}
+    Description: Website URL with custom domain (production only)
+    Value: !If [IsProdEnvironment, !Sub "https://${DomainName}", "N/A (dev environment)"]
 
   CertificateARN:
-    Description: ACM Certificate ARN
-    Value: !Ref CloudFrontCertificate
+    Description: ACM Certificate ARN (production only)
+    Value: !If [IsProdEnvironment, !Ref CloudFrontCertificate, "N/A (dev environment)"]
 
   BackupBucketName:
     Description: S3 bucket for database backups

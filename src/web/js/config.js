@@ -1,16 +1,19 @@
-// Configuration for the Cocktail Database application
+// Configuration for the Cocktail Database application (dev environment)
 const config = {
     // API endpoint
-    apiUrl: 'https://s3erosx1de.execute-api.us-east-1.amazonaws.com/api',
+    apiUrl: 'https://notydlwqjg.execute-api.us-east-1.amazonaws.com/api',
 
     // Cognito configuration
-    userPoolId: 'us-east-1_ODEoiO01N',
-    clientId: '378epckb6k1thhiun3kq2052kk',
-    cognitoDomain: 'https://cocktail-db-prod-auth.auth.us-east-1.amazoncognito.com',
+    userPoolId: 'us-east-1_soMU2Xdub',
+    clientId: '2tlupke974via48519tnc1ioto',
+    cognitoDomain: 'https://cocktaildbauth-dev-732940910135.auth.us-east-1.amazoncognito.com', // This is the base Cognito Hosted UI domain
+
+    // Application URL (for redirects, etc.)
+    appUrl: 'https://dm5yrgc752xin.cloudfront.net',
 
     // General settings
-    appName: 'Cocktail Database'
+    appName: 'Cocktail Database (dev)'
 };
 
 // Export the configuration
-export default config; 
+export default config;
