@@ -1,150 +1,132 @@
-from fastapi import FastAPI, Query
+"""
+FastAPI application for CocktailDB API
+
+This is the main FastAPI application that handles all cocktail database operations.
+It replaces the previous AWS Lambda handler with a modern FastAPI implementation.
+"""
+
+import logging
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from mangum import Mangum
-from typing import Optional
+
+from .core.config import settings
+from .core.exceptions import CocktailDBException
+from .core.exception_handlers import (
+    cocktail_db_exception_handler,
+    http_exception_handler,
+    starlette_http_exception_handler,
+    validation_exception_handler,
+    general_exception_handler,
+)
+from .routes import ingredients, recipes, ratings, units, tags, auth
+from .routes.tags import recipe_tags_router
+from .models.responses import MessageResponse
+
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, settings.log_level),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for FastAPI application"""
+    # Startup
+    logger.info("Starting CocktailDB API")
+    logger.info(f"Environment: {settings.environment}")
+    logger.info(f"Database path: {settings.db_path}")
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down CocktailDB API")
+
 
 # Create FastAPI app
 app = FastAPI(
-    title="Cocktail DB API",
-    description="API for managing cocktail recipes and ingredients",
-    version="1.0.0",
+    title=settings.api_title,
+    description=settings.api_description,
+    version=settings.api_version,
+    debug=settings.debug,
+    lifespan=lifespan,
+    docs_url="/docs" if settings.environment == "dev" else None,
+    redoc_url="/redoc" if settings.environment == "dev" else None,
 )
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=settings.cors_credentials,
+    allow_methods=settings.cors_methods,
+    allow_headers=settings.cors_headers,
+)
+
+# Add exception handlers
+app.add_exception_handler(CocktailDBException, cocktail_db_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(StarletteHTTPException, starlette_http_exception_handler)
+
+# Add routers with API v1 prefix
+API_V1_PREFIX = "/api/v1"
+
+app.include_router(ingredients.router, prefix=API_V1_PREFIX)
+app.include_router(recipes.router, prefix=API_V1_PREFIX)
+app.include_router(ratings.router, prefix=API_V1_PREFIX)
+app.include_router(units.router, prefix=API_V1_PREFIX)
+app.include_router(tags.router, prefix=API_V1_PREFIX)
+app.include_router(recipe_tags_router, prefix=API_V1_PREFIX)
+app.include_router(auth.router, prefix=API_V1_PREFIX)
 
 
 # Root endpoint
-@app.get("/")
+@app.get("/", response_model=MessageResponse)
 async def root():
-    return {"message": "Cocktail DB API"}
+    """Root endpoint returning API information"""
+    return MessageResponse(
+        message=f"CocktailDB API v{settings.api_version} - Environment: {settings.environment}"
+    )
 
 
-# Ingredients endpoints
-@app.get("/ingredients")
-async def get_ingredients():
-    """Get all ingredients"""
-    # TODO: Implement logic
-    return {"message": "Get all ingredients"}
+# Health check endpoint
+@app.get("/health", response_model=MessageResponse)
+async def health_check():
+    """Health check endpoint"""
+    return MessageResponse(message="API is healthy")
 
 
-@app.get("/ingredients/{id}")
-async def get_ingredient(id: str):
-    """Get a specific ingredient by ID"""
-    # TODO: Implement logic
-    return {"message": f"Get ingredient with ID: {id}"}
+# Legacy endpoints for backward compatibility (without /api/v1 prefix)
+# These maintain the same paths as the original Lambda handler
+
+app.include_router(ingredients.router, prefix="", include_in_schema=False)
+app.include_router(recipes.router, prefix="", include_in_schema=False)
+app.include_router(ratings.router, prefix="", include_in_schema=False)
+app.include_router(units.router, prefix="", include_in_schema=False)
+app.include_router(tags.router, prefix="", include_in_schema=False)
+app.include_router(recipe_tags_router, prefix="", include_in_schema=False)
+app.include_router(auth.router, prefix="", include_in_schema=False)
 
 
-# Ratings endpoints
-@app.get("/ratings/{recipe_id}")
-async def get_recipe_ratings(recipe_id: str):
-    """Get ratings for a specific recipe"""
-    # TODO: Implement logic
-    return {"message": f"Get ratings for recipe: {recipe_id}"}
+# Create the Lambda handler for AWS deployment
+handler = Mangum(app, lifespan="off")
 
-
-# Recipes endpoints
-@app.get("/recipes")
-async def get_recipes(search: Optional[bool] = Query(None)):
-    """Get all recipes or search recipes"""
-    if search:
-        # TODO: Implement search logic
-        return {"message": "Search recipes"}
-    # TODO: Implement logic to get all recipes
-    return {"message": "Get all recipes"}
-
-
-@app.get("/recipes/{id}")
-async def get_recipe(id: str):
-    """Get a specific recipe by ID"""
-    # TODO: Implement logic
-    return {"message": f"Get recipe with ID: {id}"}
-
-
-# Private tags endpoints
-@app.get("/recipes/{recipe_id}/private_tags")
-async def get_recipe_private_tags(recipe_id: str):
-    """Get private tags for a specific recipe"""
-    # TODO: Implement logic
-    return {"message": f"Get private tags for recipe: {recipe_id}"}
-
-
-@app.post("/recipes/{recipe_id}/private_tags")
-async def add_recipe_private_tag(recipe_id: str):
-    """Add a private tag to a recipe"""
-    # TODO: Implement logic
-    return {"message": f"Add private tag to recipe: {recipe_id}"}
-
-
-@app.get("/recipes/{recipe_id}/private_tags/{tag_id}")
-async def get_recipe_private_tag(recipe_id: str, tag_id: str):
-    """Get a specific private tag for a recipe"""
-    # TODO: Implement logic
-    return {"message": f"Get private tag {tag_id} for recipe: {recipe_id}"}
-
-
-@app.put("/recipes/{recipe_id}/private_tags/{tag_id}")
-async def update_recipe_private_tag(recipe_id: str, tag_id: str):
-    """Update a specific private tag for a recipe"""
-    # TODO: Implement logic
-    return {"message": f"Update private tag {tag_id} for recipe: {recipe_id}"}
-
-
-@app.delete("/recipes/{recipe_id}/private_tags/{tag_id}")
-async def delete_recipe_private_tag(recipe_id: str, tag_id: str):
-    """Delete a specific private tag from a recipe"""
-    # TODO: Implement logic
-    return {"message": f"Delete private tag {tag_id} for recipe: {recipe_id}"}
-
-
-# Public tags endpoints
-@app.get("/recipes/{recipe_id}/public_tags")
-async def get_recipe_public_tags(recipe_id: str):
-    """Get public tags for a specific recipe"""
-    # TODO: Implement logic
-    return {"message": f"Get public tags for recipe: {recipe_id}"}
-
-
-@app.post("/recipes/{recipe_id}/public_tags")
-async def add_recipe_public_tag(recipe_id: str):
-    """Add a public tag to a recipe"""
-    # TODO: Implement logic
-    return {"message": f"Add public tag to recipe: {recipe_id}"}
-
-
-@app.get("/recipes/{recipe_id}/public_tags/{tag_id}")
-async def get_recipe_public_tag(recipe_id: str, tag_id: str):
-    """Get a specific public tag for a recipe"""
-    # TODO: Implement logic
-    return {"message": f"Get public tag {tag_id} for recipe: {recipe_id}"}
-
-
-@app.put("/recipes/{recipe_id}/public_tags/{tag_id}")
-async def update_recipe_public_tag(recipe_id: str, tag_id: str):
-    """Update a specific public tag for a recipe"""
-    # TODO: Implement logic
-    return {"message": f"Update public tag {tag_id} for recipe: {recipe_id}"}
-
-
-@app.delete("/recipes/{recipe_id}/public_tags/{tag_id}")
-async def delete_recipe_public_tag(recipe_id: str, tag_id: str):
-    """Delete a specific public tag from a recipe"""
-    # TODO: Implement logic
-    return {"message": f"Delete public tag {tag_id} for recipe: {recipe_id}"}
-
-
-# Units endpoints
-@app.get("/units")
-async def get_units(type: Optional[str] = Query(None)):
-    """Get all units or filter by type"""
-    if type:
-        # TODO: Implement logic to filter by type
-        return {"message": f"Get units of type: {type}"}
-    # TODO: Implement logic to get all units
-    return {"message": "Get all units"}
-
-
-# Create the Lambda handler
-handler = Mangum(app)
 
 # For local development
 if __name__ == "__main__":
     import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    
+    logger.info("Starting development server...")
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        log_level=settings.log_level.lower()
+    )
