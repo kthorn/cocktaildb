@@ -1,5 +1,0 @@
-pg8000
-sqlalchemy
-boto3
-python-jose
-python-dotenv
