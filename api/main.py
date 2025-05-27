@@ -13,18 +13,25 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from mangum import Mangum
 
-from .core.config import settings
-from .core.exceptions import CocktailDBException
-from .core.exception_handlers import (
+# Handle both Lambda and local execution environments
+import sys
+import os
+
+# Add current directory to Python path for Lambda
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from core.config import settings
+from core.exceptions import CocktailDBException
+from core.exception_handlers import (
     cocktail_db_exception_handler,
     http_exception_handler,
     starlette_http_exception_handler,
     validation_exception_handler,
     general_exception_handler,
 )
-from .routes import ingredients, recipes, ratings, units, tags, auth
-from .routes.tags import recipe_tags_router
-from .models.responses import MessageResponse
+from routes import ingredients, recipes, ratings, units, tags, auth
+from routes.tags import recipe_tags_router
+from models.responses import MessageResponse
 
 # Configure logging
 logging.basicConfig(
@@ -124,7 +131,7 @@ if __name__ == "__main__":
     
     logger.info("Starting development server...")
     uvicorn.run(
-        "main:app",
+        "api.main:app",
         host="0.0.0.0",
         port=8000,
         reload=True,

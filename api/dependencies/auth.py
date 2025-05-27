@@ -3,8 +3,8 @@ from typing import Optional, Dict, Any
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from ..auth import verify_token, extract_token_from_header
-from ..core.config import settings
+from auth import verify_token, extract_token_from_header
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 

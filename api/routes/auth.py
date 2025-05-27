@@ -3,8 +3,8 @@
 import logging
 from fastapi import APIRouter, Depends
 
-from ..dependencies.auth import UserInfo, require_authentication
-from ..models.responses import UserInfoResponse
+from dependencies.auth import UserInfo, require_authentication
+from models.responses import UserInfoResponse
 
 logger = logging.getLogger(__name__)
 

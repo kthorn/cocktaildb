@@ -3,8 +3,8 @@ import time
 from contextlib import contextmanager
 from typing import Generator, Optional
 
-from ..db.db_core import Database
-from .config import settings
+from db.db_core import Database
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 

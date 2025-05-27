@@ -392,14 +392,16 @@ Resources:
       - CognitoUserPoolClient
     Properties:
       FunctionName: !Sub ${AWS::StackName}-api-handler
-      CodeUri: cocktaildb/
-      Handler: handler.lambda_handler
-      Timeout: 30
+      CodeUri: api/
+      Handler: main.handler
+      Timeout: 60
       Environment:
         Variables:
           DB_NAME: !Ref DatabaseName
           USER_POOL_ID: !Ref CognitoUserPool
           APP_CLIENT_ID: !Ref CognitoUserPoolClient
+          ENVIRONMENT: !Ref Environment
+          DB_PATH: /mnt/efs/cocktaildb.db
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup

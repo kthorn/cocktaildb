@@ -1,8 +1,8 @@
 from fastapi import Depends
 from typing import Generator
 
-from ..core.database import get_database, get_db_session
-from ..db.db_core import Database
+from core.database import get_database, get_db_session
+from db.db_core import Database
 
 
 def get_db() -> Database:
