@@ -5,20 +5,72 @@ param(
     [string]$SqlFilePath,
 
     [Parameter(Mandatory=$false)]
-    [string]$LambdaFunctionName = "cocktail-db-prod-schema-deploy",
+    [ValidateSet("dev", "prod")]
+    [string]$Environment = "dev",
 
     [Parameter(Mandatory=$false)]
-    [string]$DbName = "cocktaildb",
+    [string]$LambdaFunctionName = "",
+
+    [Parameter(Mandatory=$false)]
+    [string]$DbName = "",
 
     [Parameter(Mandatory=$false)]
     [switch]$ForceInit = $false,
 
     [Parameter(Mandatory=$false)]
-    [string]$StackId = "arn:aws:cloudformation:us-east-1:732940910135:stack/cocktail-db-prod/e130ecf0-247c-11f0-9c66-122677aad09d",
+    [string]$StackId = "",
 
     [Parameter(Mandatory=$false)]
-    [string]$LogicalResourceId = "SchemaDeployResource"
+    [string]$LogicalResourceId = "SchemaDeployResource",
+
+    [Parameter(Mandatory=$false)]
+    [string]$Region = "us-east-1"
 )
+
+# Set environment-specific defaults if not provided
+$stackName = "cocktail-db-$Environment"
+
+if (-not $LambdaFunctionName) {
+    $LambdaFunctionName = "$stackName-schema-deploy"
+}
+
+if (-not $DbName) {
+    $DbName = "cocktaildb-$Environment"
+}
+
+if (-not $StackId) {
+    # Try to get actual stack ID from CloudFormation
+    try {
+        $stackInfo = aws cloudformation describe-stacks --stack-name $stackName --region $Region --query "Stacks[0].StackId" --output text 2>$null
+        if ($stackInfo -and $stackInfo -ne "None") {
+            $StackId = $stackInfo
+            Write-Host "Retrieved stack ID from CloudFormation: $StackId"
+        } else {
+            # Fallback to placeholder format
+            $accountId = aws sts get-caller-identity --query "Account" --output text 2>$null
+            if ($accountId -and $accountId -ne "None") {
+                $StackId = "arn:aws:cloudformation:${Region}:${accountId}:stack/${stackName}/placeholder-stack-id"
+                Write-Host "Using placeholder stack ID: $StackId"
+            } else {
+                $StackId = "arn:aws:cloudformation:${Region}:123456789012:stack/${stackName}/placeholder-stack-id"
+                Write-Host "Using default placeholder stack ID: $StackId"
+            }
+        }
+    } catch {
+        # Fallback to placeholder format
+        $StackId = "arn:aws:cloudformation:${Region}:123456789012:stack/${stackName}/placeholder-stack-id"
+        Write-Host "Using fallback placeholder stack ID: $StackId"
+    }
+}
+
+Write-Host "=== Migration Configuration ==="
+Write-Host "Environment: $Environment"
+Write-Host "Stack Name: $stackName"
+Write-Host "Lambda Function: $LambdaFunctionName"
+Write-Host "Database Name: $DbName"
+Write-Host "Region: $Region"
+Write-Host "Force Init: $($ForceInit.IsPresent)"
+Write-Host "=============================="
 
 # Check if SQL file exists
 if (-not (Test-Path $SqlFilePath -PathType Leaf)) {

@@ -30,7 +30,7 @@ class RecipeIngredientResponse(BaseModel):
     """Response model for recipe ingredient data"""
     ingredient_id: int = Field(..., description="Ingredient ID")
     ingredient_name: str = Field(..., description="Ingredient name")
-    quantity: Optional[float] = Field(None, description="Quantity amount")
+    amount: Optional[float] = Field(None, description="Ingredient amount")
     unit_id: Optional[int] = Field(None, description="Unit ID")
     unit_name: Optional[str] = Field(None, description="Unit name")
     unit_abbreviation: Optional[str] = Field(None, description="Unit abbreviation")

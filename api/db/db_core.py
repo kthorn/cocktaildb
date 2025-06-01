@@ -2,6 +2,7 @@ import logging
 import sqlite3
 import time
 import functools
+import os
 from typing import Dict, List, Optional, Any, Union, Tuple, cast
 
 from .db_utils import extract_all_ingredient_ids, assemble_ingredient_full_names
@@ -15,7 +16,8 @@ from .sql_queries import (
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-db_path = "/mnt/efs/cocktaildb.db"
+# Get database path from environment variable or use default
+db_path = os.environ.get("DB_PATH", "/mnt/efs/cocktaildb.db")
 
 
 def retry_on_db_locked(max_retries=3, initial_backoff=0.1):

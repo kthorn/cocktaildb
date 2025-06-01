@@ -401,7 +401,7 @@ Resources:
           USER_POOL_ID: !Ref CognitoUserPool
           APP_CLIENT_ID: !Ref CognitoUserPoolClient
           ENVIRONMENT: !Ref Environment
-          DB_PATH: /mnt/efs/cocktaildb.db
+          DB_PATH: !Sub /mnt/efs/${DatabaseName}.db
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -746,6 +746,13 @@ Resources:
                 - elasticfilesystem:ClientWrite
                 - elasticfilesystem:ClientRootAccess
               Resource: !GetAtt CocktailEFS.Arn
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:GetObjectVersion
+              Resource: 
+                - !Sub "arn:aws:s3:::cocktail-db-dev-db-backups/*"
+                - !Sub "arn:aws:s3:::cocktail-db-prod-db-backups/*"
 
 
   # S3 bucket for deployment artifacts
