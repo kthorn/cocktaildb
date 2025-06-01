@@ -67,6 +67,18 @@ Resources:
         - Key: Name
           Value: !Sub ${AWS::StackName}-public-subnet-1
 
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CocktailVPC
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      CidrBlock: 10.0.1.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-private-subnet-1
+
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -80,21 +92,55 @@ Resources:
       VpcId: !Ref CocktailVPC
       InternetGatewayId: !Ref InternetGateway
 
-  RouteTable:
+  PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref CocktailVPC
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-route-table
+          Value: !Sub ${AWS::StackName}-public-route-table
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref CocktailVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-private-route-table
 
   PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: AttachGateway
     Properties:
-      RouteTableId: !Ref RouteTable
+      RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway
+
+  # NAT Gateway for Lambda internet access (if needed in future)
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-nat-eip
+
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-nat-gateway
 
   # --- Add S3 Gateway VPC Endpoint ---
   S3VPCEndpoint:
@@ -103,7 +149,8 @@ Resources:
       VpcId: !Ref CocktailVPC
       ServiceName: !Sub com.amazonaws.${AWS::Region}.s3 # S3 service endpoint
       RouteTableIds:
-        - !Ref RouteTable # Add this endpoint to our route table
+        - !Ref PublicRouteTable
+        - !Ref PrivateRouteTable
       PolicyDocument: # Optional: Restrict access further if needed
         Version: "2012-10-17"
         Statement:
@@ -125,11 +172,17 @@ Resources:
         - Key: Name
           Value: !Sub ${AWS::StackName}-efs
 
-  Subnet1RouteTableAssociation:
+  PublicSubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet
-      RouteTableId: !Ref RouteTable
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
 
   # Security Groups for Lambda and EFS
   LambdaSecurityGroup:
@@ -186,14 +239,14 @@ Resources:
       ToPort: 443
       CidrIp: !GetAtt CocktailVPC.CidrBlock
 
-  # Update the MountTarget to use the new EFS security group
+  # EFS Mount Target in private subnet for security
   MountTarget:
     Type: AWS::EFS::MountTarget
     DependsOn:
       - CocktailEFS
     Properties:
       FileSystemId: !Ref CocktailEFS
-      SubnetId: !Ref PublicSubnet
+      SubnetId: !Ref PrivateSubnet
       SecurityGroups:
         - !Ref EFSSecurityGroup
 
@@ -406,7 +459,7 @@ Resources:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
         SubnetIds:
-          - !Ref PublicSubnet
+          - !Ref PrivateSubnet
       FileSystemConfigs:
         - Arn: !GetAtt EFSAccessPoint.Arn
           LocalMountPath: /mnt/efs
@@ -733,7 +786,7 @@ Resources:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
         SubnetIds:
-          - !Ref PublicSubnet
+          - !Ref PrivateSubnet
       FileSystemConfigs:
         - Arn: !GetAtt EFSAccessPoint.Arn
           LocalMountPath: /mnt/efs
@@ -909,7 +962,7 @@ Resources:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup # Reuse existing SG for EFS access
         SubnetIds:
-          - !Ref PublicSubnet # Needs to be in the same subnet as EFS mount target
+          - !Ref PrivateSubnet # Use private subnet with NAT Gateway
       FileSystemConfigs:
         - Arn: !GetAtt EFSAccessPoint.Arn
           LocalMountPath: /mnt/efs # Mount path for EFS
@@ -959,6 +1012,14 @@ Outputs:
   PublicSubnetId:
     Description: ID of Public Subnet
     Value: !Ref PublicSubnet
+
+  PrivateSubnetId:
+    Description: ID of Private Subnet
+    Value: !Ref PrivateSubnet
+
+  NATGatewayId:
+    Description: ID of NAT Gateway
+    Value: !Ref NATGateway
 
   EFSFileSystemId:
     Description: ID of the EFS file system

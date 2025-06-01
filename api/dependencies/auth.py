@@ -1,19 +1,12 @@
 import logging
 from typing import Optional, Dict, Any
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-
-from auth import verify_token, extract_token_from_header
-from core.config import settings
+from fastapi import Depends, HTTPException, status, Request
 
 logger = logging.getLogger(__name__)
 
-# OAuth2 scheme for token extraction
-security = HTTPBearer(auto_error=False)
-
 
 class UserInfo:
-    """User information extracted from JWT token"""
+    """User information extracted from API Gateway Cognito Authorizer"""
     
     def __init__(self, user_id: str, username: Optional[str] = None, 
                  email: Optional[str] = None, groups: Optional[list] = None,
@@ -25,73 +18,71 @@ class UserInfo:
         self.claims = claims or {}
 
 
-async def get_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Optional[str]:
-    """Extract token from Authorization header"""
-    if not credentials:
-        return None
-    return credentials.credentials
-
-
-async def get_current_user_optional(token: Optional[str] = Depends(get_token)) -> Optional[UserInfo]:
-    """Get current user information if token is provided (optional authentication)"""
-    if not token:
-        return None
-    
+def get_user_from_lambda_event(request: Request) -> Optional[UserInfo]:
+    """Extract user information from Lambda event context (API Gateway Cognito Authorizer)"""
     try:
-        claims = verify_token(
-            token=token,
-            region=settings.aws_region,
-            user_pool_id=settings.user_pool_id,
-            app_client_id=settings.app_client_id
-        )
+        # Import here to avoid circular import
+        from main import _current_lambda_event
+        event = _current_lambda_event
+            
+        if not event:
+            logger.debug("No Lambda event found in global state")
+            return None
+            
+        # Extract authorizer claims from API Gateway event
+        authorizer_context = event.get("requestContext", {}).get("authorizer", {})
+        claims = authorizer_context.get("claims")
+        
+        if not claims:
+            logger.debug("No authorizer claims found in Lambda event")
+            return None
+            
+        logger.info(f"Found authorizer claims: {list(claims.keys())}")
+        
+        # Extract user information from claims
+        user_id = claims.get("sub")
+        if not user_id:
+            logger.warning("No 'sub' claim found in authorizer context")
+            return None
+            
+        username = claims.get("username") or claims.get("cognito:username")
+        email = claims.get("email")
+        groups_str = claims.get("cognito:groups", "")
+        groups = groups_str.split(",") if groups_str else []
         
         return UserInfo(
-            user_id=claims.get("sub"),
-            username=claims.get("username", claims.get("cognito:username")),
-            email=claims.get("email"),
-            groups=claims.get("cognito:groups", []),
+            user_id=user_id,
+            username=username,
+            email=email,
+            groups=groups,
             claims=claims
         )
+        
     except Exception as e:
-        logger.warning(f"Failed to verify token: {str(e)}")
+        logger.error(f"Error extracting user from Lambda event: {str(e)}")
         return None
 
 
-async def get_current_user(token: Optional[str] = Depends(get_token)) -> UserInfo:
+async def get_current_user_optional(request: Request) -> Optional[UserInfo]:
+    """Get current user information if available (optional authentication)"""
+    return get_user_from_lambda_event(request)
+
+
+async def get_current_user(request: Request) -> UserInfo:
     """Get current user information (required authentication)"""
-    if not token:
+    user = get_user_from_lambda_event(request)
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authorization token required",
+            detail="Authentication required",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    try:
-        claims = verify_token(
-            token=token,
-            region=settings.aws_region,
-            user_pool_id=settings.user_pool_id,
-            app_client_id=settings.app_client_id
-        )
-        
-        return UserInfo(
-            user_id=claims.get("sub"),
-            username=claims.get("username", claims.get("cognito:username")),
-            email=claims.get("email"),
-            groups=claims.get("cognito:groups", []),
-            claims=claims
-        )
-    except Exception as e:
-        logger.warning(f"Token verification failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    return user
 
 
-async def require_authentication(user: Optional[UserInfo] = Depends(get_current_user_optional)) -> UserInfo:
+async def require_authentication(request: Request) -> UserInfo:
     """Require authentication - raises exception if user is not authenticated"""
+    user = get_user_from_lambda_event(request)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

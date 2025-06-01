@@ -121,8 +121,28 @@ app.include_router(recipe_tags_router, prefix="", include_in_schema=False)
 app.include_router(auth.router, prefix="", include_in_schema=False)
 
 
-# Create the Lambda handler for AWS deployment
-handler = Mangum(app, lifespan="off")
+# Create the Lambda handler for AWS deployment with custom scope
+def lambda_handler(event, context):
+    """Lambda handler that injects event into request scope"""
+    # Create Mangum handler
+    mangum_handler = Mangum(app, lifespan="off")
+    
+    # Store event in a way that can be accessed by dependencies
+    import contextvars
+    _lambda_event = contextvars.ContextVar('lambda_event')
+    _lambda_event.set(event)
+    
+    # Store event globally for access in dependencies
+    global _current_lambda_event
+    _current_lambda_event = event
+    
+    return mangum_handler(event, context)
+
+# Global variable to store current Lambda event
+_current_lambda_event = None
+
+# For backward compatibility, also export as handler
+handler = lambda_handler
 
 
 # For local development
