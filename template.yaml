@@ -116,31 +116,6 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
 
-  PrivateRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NATGateway
-
-  # NAT Gateway for Lambda internet access (if needed in future)
-  NATGatewayEIP:
-    Type: AWS::EC2::EIP
-    DependsOn: AttachGateway
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub ${AWS::StackName}-nat-eip
-
-  NATGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NATGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet
-      Tags:
-        - Key: Name
-          Value: !Sub ${AWS::StackName}-nat-gateway
 
   # --- Add S3 Gateway VPC Endpoint ---
   S3VPCEndpoint:
@@ -267,9 +242,10 @@ Resources:
           OwnerGid: "1000"
           Permissions: "0755"
 
-  # S3 bucket for database backups
+  # S3 bucket for database backups (prod only)
   BackupBucket:
     Type: AWS::S3::Bucket
+    Condition: IsProdEnvironment
     Properties:
       BucketName: !Sub "cocktaildbbackups-${AWS::AccountId}-${Environment}"
       PublicAccessBlockConfiguration:
@@ -279,7 +255,6 @@ Resources:
           - Id: ExpireOldBackups
             Status: Enabled
             ExpirationInDays: 30
-            # Consider NoncurrentVersionExpirationInDays if versioning is enabled
 
   # S3 bucket for website hosting
   WebsiteBucket:
@@ -799,22 +774,7 @@ Resources:
                 - elasticfilesystem:ClientWrite
                 - elasticfilesystem:ClientRootAccess
               Resource: !GetAtt CocktailEFS.Arn
-            - Effect: Allow
-              Action:
-                - s3:GetObject
-                - s3:GetObjectVersion
-              Resource: 
-                - !Sub "arn:aws:s3:::cocktail-db-dev-db-backups/*"
-                - !Sub "arn:aws:s3:::cocktail-db-prod-db-backups/*"
 
-
-  # S3 bucket for deployment artifacts
-  DeploymentBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "cocktailsamdeployment-${AWS::AccountId}-${Environment}"
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
 
   # Cognito User Pool for Authentication
   CognitoUserPool:
@@ -943,12 +903,13 @@ Resources:
               Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
               Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
 
-  # Lambda Function for Nightly DB Backup
+  # Lambda Function for Nightly DB Backup (prod only)
   BackupLambda:
     Type: AWS::Serverless::Function
+    Condition: IsProdEnvironment
     DependsOn:
-      - MountTarget # Ensure EFS is ready
-      - BackupBucket # Ensure bucket exists
+      - MountTarget
+      - BackupBucket
     Properties:
       FunctionName: !Sub ${AWS::StackName}-db-backup-handler
       CodeUri: backup-lambda/
@@ -960,21 +921,21 @@ Resources:
           BACKUP_BUCKET: !Ref BackupBucket
       VpcConfig:
         SecurityGroupIds:
-          - !Ref LambdaSecurityGroup # Reuse existing SG for EFS access
+          - !Ref LambdaSecurityGroup
         SubnetIds:
-          - !Ref PrivateSubnet # Use private subnet with NAT Gateway
+          - !Ref PrivateSubnet
       FileSystemConfigs:
         - Arn: !GetAtt EFSAccessPoint.Arn
-          LocalMountPath: /mnt/efs # Mount path for EFS
+          LocalMountPath: /mnt/efs
       Policies:
-        - VPCAccessPolicy: {} # Policy for VPC access
+        - VPCAccessPolicy: {}
         - Statement:
-            - Effect: Allow # Allow EFS mount and read
+            - Effect: Allow
               Action:
                 - elasticfilesystem:ClientMount
                 - elasticfilesystem:ClientRead
               Resource: !GetAtt CocktailEFS.Arn
-            - Effect: Allow # Allow writing backup to S3 and managing old backups
+            - Effect: Allow
               Action:
                 - s3:PutObject
                 - s3:ListBucket
@@ -983,9 +944,10 @@ Resources:
                 - !Sub arn:aws:s3:::${BackupBucket}
                 - !Sub arn:aws:s3:::${BackupBucket}/*
 
-  # EventBridge Rule to trigger backup nightly (e.g., 2 AM UTC)
+  # EventBridge Rule to trigger backup nightly (prod only)
   BackupSchedule:
     Type: AWS::Events::Rule
+    Condition: IsProdEnvironment
     Properties:
       Name: !Sub ${AWS::StackName}-DailyDbBackupRule
       Description: Trigger nightly database backup
@@ -995,9 +957,10 @@ Resources:
         - Arn: !GetAtt BackupLambda.Arn
           Id: "BackupLambdaTarget"
 
-  # Permission for EventBridge to invoke the Backup Lambda
+  # Permission for EventBridge to invoke the Backup Lambda (prod only)
   BackupLambdaInvokePermission:
     Type: AWS::Lambda::Permission
+    Condition: IsProdEnvironment
     Properties:
       FunctionName: !GetAtt BackupLambda.Arn
       Action: lambda:InvokeFunction
@@ -1016,10 +979,6 @@ Outputs:
   PrivateSubnetId:
     Description: ID of Private Subnet
     Value: !Ref PrivateSubnet
-
-  NATGatewayId:
-    Description: ID of NAT Gateway
-    Value: !Ref NATGateway
 
   EFSFileSystemId:
     Description: ID of the EFS file system
@@ -1070,6 +1029,6 @@ Outputs:
     Value: !If [IsProdEnvironment, !Ref CloudFrontCertificate, "N/A (dev environment)"]
 
   BackupBucketName:
-    Description: S3 bucket for database backups
-    Value: !Ref BackupBucket
+    Description: S3 bucket for database backups (prod only)
+    Value: !If [IsProdEnvironment, !Ref BackupBucket, "N/A (dev environment)"]
 
