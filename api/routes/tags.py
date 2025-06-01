@@ -5,7 +5,7 @@ from typing import List
 from fastapi import APIRouter, Depends, status
 
 from dependencies.auth import UserInfo, get_current_user_optional, require_authentication
-from dependencies.database import get_db
+from core.database import get_database as get_db
 from db.db_core import Database
 from models.requests import TagCreate, RecipeTagAssociation
 from models.responses import TagResponse, MessageResponse
