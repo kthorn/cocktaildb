@@ -61,6 +61,14 @@ class Database:
         logger.info("Initializing Database class with SQLite on EFS")
         try:
             self.db_path = db_path
+            logger.info(f"Using database path: {self.db_path}")
+            logger.info(f"DB_PATH environment variable: {os.environ.get('DB_PATH', 'not set')}")
+            logger.info(f"Database file exists: {os.path.exists(self.db_path)}")
+            
+            if os.path.exists(self.db_path):
+                logger.info(f"Database file size: {os.path.getsize(self.db_path)} bytes")
+            else:
+                logger.warning(f"Database file does not exist at: {self.db_path}")
 
             # Test the connection
             self._test_connection()

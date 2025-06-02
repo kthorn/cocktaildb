@@ -39,20 +39,23 @@ class CocktailAPI {
     }
 
     // Common fetch options for all requests
-    getFetchOptions(method = 'GET', body = null) {
+    getFetchOptions(method = 'GET', body = null, requiresAuth = false) {
         const options = {
             method,
             mode: 'cors',
             credentials: 'omit',  // Must be 'omit' for a server with wildcard CORS origin
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: {},
         };
 
-        // Always use the ID Token - API Gateway Authorizer expects this
-        const idToken = localStorage.getItem('id_token');
-        if (method !== 'GET') {
-            // Require authentication for non-GET requests
+        // Only add Content-Type header for requests with body (POST, PUT, etc.)
+        if (body) {
+            options.headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(body);
+        }
+
+        // Add Authorization header for non-GET requests or when explicitly required
+        if (method !== 'GET' || requiresAuth) {
+            // Require authentication for non-GET requests or auth-required GET requests
             if (!isAuthenticated()) {
                 throw new Error('Authentication required. Please log in to perform this action.');
             }            
@@ -61,21 +64,20 @@ class CocktailAPI {
             if (!token) {
                 throw new Error('No authentication token found. Please log in again.');
             }
-        }
-        if (idToken) {
-            options.headers['Authorization'] = `Bearer ${idToken}`;
-        }
-        if (body) {
-            options.body = JSON.stringify(body);
+            // Use the ID Token for API Gateway Authorizer
+            const idToken = localStorage.getItem('id_token');
+            if (idToken) {
+                options.headers['Authorization'] = `Bearer ${idToken}`;
+            }
         }
 
         return options;
     }
 
     // Private helper for making requests
-    async _request(path, method = 'GET', body = null) {
+    async _request(path, method = 'GET', body = null, requiresAuth = false) {
         const url = `${this.baseUrl}${path}`;
-        const options = this.getFetchOptions(method, body);
+        const options = this.getFetchOptions(method, body, requiresAuth);
         const response = await fetch(url, options);
         return this.handleResponse(response);
     }
@@ -238,7 +240,20 @@ class CocktailAPI {
         return this._request(path, 'DELETE');
     }
 
-    // Get all public tags (if needed directly)
+    // Get all public tags
+    async getPublicTags() {
+        return this._request('/tags/public');
+    }
+
+    // Get private tags (requires authentication)
+    async getPrivateTags() {
+        return this._request('/tags/private', 'GET', null, true);
+    }
+
+    // Get current user info (requires authentication)
+    async getCurrentUserInfo() {
+        return this._request('/auth/me', 'GET', null, true);
+    }
 }
 
 // Create and export the API instance

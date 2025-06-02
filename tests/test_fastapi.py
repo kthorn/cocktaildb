@@ -4,7 +4,6 @@ Basic tests for the FastAPI application
 
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import Mock, patch
 
 # Note: These tests assume the FastAPI app structure is in place
 # In a real environment, you'd import the actual app
@@ -61,16 +60,17 @@ class TestCocktailAPIBasic:
         # CORS headers should be present in preflight responses
         assert response.status_code in [200, 405]  # 405 if OPTIONS not implemented
     
-    @patch('api.dependencies.auth.verify_token')
-    def test_authenticated_endpoint(self, mock_verify_token, client):
-        """Test authenticated endpoint with mocked token"""
-        # Mock the token verification
-        mock_verify_token.return_value = {
-            "sub": "test-user-id",
-            "username": "testuser",
-            "email": "test@example.com",
-            "cognito:groups": []
-        }
+    def test_authenticated_endpoint(self, client, mocker):
+        """Test authenticated endpoint with mocked user"""
+        # Mock the user extraction using pytest-mock
+        from api.dependencies.auth import UserInfo
+        mock_get_user = mocker.patch('api.dependencies.auth.get_user_from_lambda_event')
+        mock_get_user.return_value = UserInfo(
+            user_id="test-user-id",
+            username="testuser",
+            email="test@example.com",
+            groups=[]
+        )
         
         headers = {"Authorization": "Bearer fake-token"}
         response = client.get("/api/v1/auth/me", headers=headers)

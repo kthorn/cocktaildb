@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     
     # CORS settings
     cors_origins: list[str] = Field(default=["*"], description="CORS allowed origins")
-    cors_credentials: bool = Field(default=True, description="CORS allow credentials")
+    cors_credentials: bool = Field(default=False, description="CORS allow credentials")
     cors_methods: list[str] = Field(default=["*"], description="CORS allowed methods")
     cors_headers: list[str] = Field(default=["*"], description="CORS allowed headers")
     

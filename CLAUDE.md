@@ -16,8 +16,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Deploy without build**: `scripts\deploy.bat dev --no-build`
 
 ### Database Operations  
-- **Apply migration**: `.\scripts\apply-migration.ps1 -SqlFilePath "path\to\migration.sql"`
-- **Force DB reinitialization**: `.\scripts\apply-migration.ps1 -SqlFilePath "schema.sql" -ForceInit`
+- **Apply migration to dev**: `.\scripts\apply-migration.ps1 -SqlFilePath "path\to\migration.sql" -Environment dev`
+- **Apply migration to prod**: `.\scripts\apply-migration.ps1 -SqlFilePath "path\to\migration.sql" -Environment prod`
+- **Force DB reinitialization**: `.\scripts\apply-migration.ps1 -SqlFilePath "schema.sql" -Environment dev -ForceInit`
+- **Unix migration script**: `./scripts/apply-migration.sh -f path/to/migration.sql -e dev`
+- **Unix force reinit**: `./scripts/apply-migration.sh -f schema.sql -e dev --force-init`
+
+### Database Backup & Restore
+- **List available backups**: `.\scripts\restore-backup.ps1 -ListBackups` or `./scripts/restore-backup.sh --list`
+- **Restore latest prod to dev**: `.\scripts\restore-backup.ps1 -TargetEnvironment dev -SourceEnvironment prod`
+- **Restore specific backup**: `.\scripts\restore-backup.ps1 -TargetEnvironment dev -BackupFile "backup-2024-01-15_10-30-00.db"`
+- **Unix restore latest prod to dev**: `./scripts/restore-backup.sh -t dev -s prod`
+- **Unix restore specific backup**: `./scripts/restore-backup.sh -t dev -f backup-2024-01-15_10-30-00.db`
+- **Dry run restore**: `./scripts/restore-backup.sh -t dev --dry-run`
 
 ### AWS SAM Operations
 - **Build**: `sam build --template-file template.yaml`
@@ -27,6 +38,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Run tests**: `python -m pytest tests/` 
 - **Test database**: `python tests/test_db.py`
 - **FastAPI tests**: `pytest tests/test_fastapi.py`
+- **Download test database**: `./scripts/download-test-db.sh`
 
 ## Architecture Overview
 

@@ -104,19 +104,27 @@ async def get_recipe(
     """Get a specific recipe by ID"""
     try:
         logger.info(f"Getting recipe {recipe_id}")
+        logger.info(f"Database instance: {db}")
+        logger.info(f"User info: {user}")
         
         user_id = user.user_id if user else None
+        logger.info(f"Resolved user_id: {user_id}")
+        
         recipe = db.get_recipe(recipe_id, user_id)
+        logger.info(f"Recipe retrieved: {recipe is not None}")
         
         if not recipe:
+            logger.warning(f"Recipe {recipe_id} not found")
             raise NotFoundException(f"Recipe with ID {recipe_id} not found")
-            
+        
+        logger.info(f"Returning recipe: {recipe.get('name', 'unnamed')}")
         return RecipeResponse(**recipe)
         
     except NotFoundException:
+        logger.warning(f"NotFoundException for recipe {recipe_id}")
         raise
     except Exception as e:
-        logger.error(f"Error getting recipe {recipe_id}: {str(e)}")
+        logger.error(f"Error getting recipe {recipe_id}: {str(e)}", exc_info=True)
         raise DatabaseException("Failed to retrieve recipe", detail=str(e))
 
 

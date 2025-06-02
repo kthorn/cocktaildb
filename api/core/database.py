@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 from typing import Optional
 
@@ -16,17 +17,26 @@ def get_database() -> Database:
     """FastAPI dependency for database access with connection pooling"""
     global _DB_INSTANCE, _DB_INIT_TIME
     
-    current_time = time.time()
-    
-    # If DB instance exists and is less than cache duration old, reuse it
-    if _DB_INSTANCE is not None and current_time - _DB_INIT_TIME < _DB_CACHE_DURATION:
-        logger.debug(
-            f"Reusing existing database connection (age: {current_time - _DB_INIT_TIME:.2f}s)"
-        )
+    try:
+        current_time = time.time()
+        
+        # If DB instance exists and is less than cache duration old, reuse it
+        if _DB_INSTANCE is not None and current_time - _DB_INIT_TIME < _DB_CACHE_DURATION:
+            logger.debug(
+                f"Reusing existing database connection (age: {current_time - _DB_INIT_TIME:.2f}s)"
+            )
+            return _DB_INSTANCE
+        
+        # Initialize a new database connection
+        logger.info("Creating new database connection")
+        logger.info(f"DB_PATH environment variable: {os.environ.get('DB_PATH', 'not set')}")
+        
+        _DB_INSTANCE = Database()
+        _DB_INIT_TIME = current_time
+        
+        logger.info("Database connection created successfully")
         return _DB_INSTANCE
-    
-    # Initialize a new database connection
-    logger.info("Creating new database connection")
-    _DB_INSTANCE = Database()
-    _DB_INIT_TIME = current_time
-    return _DB_INSTANCE
+        
+    except Exception as e:
+        logger.error(f"Failed to create database connection: {str(e)}", exc_info=True)
+        raise
