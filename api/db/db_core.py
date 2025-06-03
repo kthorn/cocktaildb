@@ -16,9 +16,6 @@ from .sql_queries import (
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Get database path from environment variable or use default
-db_path = os.environ.get("DB_PATH", "/mnt/efs/cocktaildb.db")
-
 
 def retry_on_db_locked(max_retries=3, initial_backoff=0.1):
     """Decorator to retry operations when database is locked"""
@@ -60,7 +57,8 @@ class Database:
         """Initialize the database connection to SQLite on EFS"""
         logger.info("Initializing Database class with SQLite on EFS")
         try:
-            self.db_path = db_path
+            # Read database path from environment variable at runtime, not import time
+            self.db_path = os.environ.get("DB_PATH", "/mnt/efs/cocktaildb.db")
             logger.info(f"Using database path: {self.db_path}")
             logger.info(f"DB_PATH environment variable: {os.environ.get('DB_PATH', 'not set')}")
             logger.info(f"Database file exists: {os.path.exists(self.db_path)}")
@@ -918,6 +916,26 @@ class Database:
             return result
         except Exception as e:
             logger.error(f"Error getting ratings for recipe {recipe_id}: {str(e)}")
+            raise
+
+    @retry_on_db_locked()
+    def get_user_rating(self, recipe_id: int, user_id: str) -> Optional[Dict[str, Any]]:
+        """Get a specific user's rating for a recipe"""
+        try:
+            result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    """
+                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating, created_at
+                    FROM ratings 
+                    WHERE recipe_id = :recipe_id AND cognito_user_id = :user_id
+                    """,
+                    {"recipe_id": recipe_id, "user_id": user_id},
+                ),
+            )
+            return result[0] if result else None
+        except Exception as e:
+            logger.error(f"Error getting user rating for recipe {recipe_id}, user {user_id}: {str(e)}")
             raise
 
     @retry_on_db_locked()

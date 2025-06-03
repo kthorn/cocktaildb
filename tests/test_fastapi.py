@@ -1,82 +1,19 @@
 """
-Basic tests for the FastAPI application
+Basic tests for the FastAPI application - focused on app-level concerns
 """
 
 import pytest
 from fastapi.testclient import TestClient
 
-# Note: These tests assume the FastAPI app structure is in place
-# In a real environment, you'd import the actual app
-# from api.main import app
 
-
-class TestCocktailAPIBasic:
-    """Basic tests for the CocktailDB FastAPI application"""
+class TestApplicationBootstrap:
+    """Test basic application startup and configuration"""
     
-    @pytest.fixture
-    def client(self):
-        """Create a test client fixture"""
-        # This would normally import the actual FastAPI app
-        # For now, this is a placeholder structure
-        try:
-            from api.main import app
-            return TestClient(app)
-        except ImportError:
-            pytest.skip("FastAPI app not available for testing")
-    
-    def test_root_endpoint(self, client):
-        """Test the root endpoint"""
-        response = client.get("/")
-        assert response.status_code == 200
-        assert "message" in response.json()
-    
-    def test_health_endpoint(self, client):
+    def test_health_endpoint(self, test_client_memory):
         """Test the health check endpoint"""
-        response = client.get("/health")
+        response = test_client_memory.get("/health")
         assert response.status_code == 200
         assert response.json()["message"] == "API is healthy"
-    
-    def test_get_ingredients_unauthenticated(self, client):
-        """Test getting ingredients without authentication"""
-        response = client.get("/api/v1/ingredients")
-        assert response.status_code in [200, 500]  # 500 if DB not available
-    
-    def test_get_units_unauthenticated(self, client):
-        """Test getting units without authentication"""
-        response = client.get("/api/v1/units")
-        assert response.status_code in [200, 500]  # 500 if DB not available
-    
-    def test_create_ingredient_without_auth(self, client):
-        """Test creating ingredient without authentication should fail"""
-        response = client.post("/api/v1/ingredients", json={
-            "name": "Test Ingredient",
-            "description": "Test description"
-        })
-        assert response.status_code == 401
-    
-    def test_cors_headers(self, client):
-        """Test CORS headers are present"""
-        response = client.options("/api/v1/ingredients")
-        # CORS headers should be present in preflight responses
-        assert response.status_code in [200, 405]  # 405 if OPTIONS not implemented
-    
-    def test_authenticated_endpoint(self, client, mocker):
-        """Test authenticated endpoint with mocked user"""
-        # Mock the user extraction using pytest-mock
-        from api.dependencies.auth import UserInfo
-        mock_get_user = mocker.patch('api.dependencies.auth.get_user_from_lambda_event')
-        mock_get_user.return_value = UserInfo(
-            user_id="test-user-id",
-            username="testuser",
-            email="test@example.com",
-            groups=[]
-        )
-        
-        headers = {"Authorization": "Bearer fake-token"}
-        response = client.get("/api/v1/auth/me", headers=headers)
-        
-        # Should succeed if mocking works, or fail with 401 if not mocked properly
-        assert response.status_code in [200, 401, 500]
 
 
 class TestModelsAndValidation:

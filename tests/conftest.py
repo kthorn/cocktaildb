@@ -6,14 +6,45 @@ import pytest
 import tempfile
 import os
 import shutil
+import sqlite3
+import time
 from pathlib import Path
 from fastapi.testclient import TestClient
-import sqlite3
 from typing import Generator, Dict, Any
 
 # Test configuration
 TEST_DB_PATH = "tests/fixtures/test_cocktaildb.db"
 TEMP_DB_DIR = "tests/temp_dbs"
+
+@pytest.fixture(scope="function", autouse=True)
+def clear_database_cache():
+    """Clear the global database cache and force cleanup of any lingering connections"""
+    import api.core.database
+    
+    # Clear before test
+    api.core.database._DB_INSTANCE = None
+    api.core.database._DB_INIT_TIME = 0
+    
+    yield
+    
+    # Aggressive cleanup after test
+    if api.core.database._DB_INSTANCE:
+        try:
+            # Force close any open connections by trying to access the connection
+            db_instance = api.core.database._DB_INSTANCE
+            if hasattr(db_instance, 'db_path') and db_instance.db_path:
+                # Close any lingering connections by forcing a new connection and closing it
+                conn = sqlite3.connect(db_instance.db_path)
+                conn.execute("PRAGMA journal_mode=DELETE")  # Switch away from WAL
+                conn.close()
+        except Exception:
+            pass  # Ignore errors during cleanup
+    
+    api.core.database._DB_INSTANCE = None
+    api.core.database._DB_INIT_TIME = 0
+    
+    # Small delay to let file system catch up
+    time.sleep(0.01)
 
 @pytest.fixture(scope="session")
 def test_settings():
@@ -44,24 +75,12 @@ def production_db_path():
 
 
 @pytest.fixture(scope="function")
-def temp_db_from_production(production_db_path):
-    """Create a temporary copy of production database for isolated tests"""
-    # Ensure temp directory exists
-    temp_dir = Path(TEMP_DB_DIR)
-    temp_dir.mkdir(exist_ok=True)
-    
-    # Create temporary file
-    temp_fd, temp_path = tempfile.mkstemp(suffix=".db", dir=TEMP_DB_DIR)
-    os.close(temp_fd)
-    
-    # Copy production database
-    shutil.copy2(production_db_path, temp_path)
-    
-    yield temp_path
-    
-    # Cleanup
-    if os.path.exists(temp_path):
-        os.unlink(temp_path)
+def temp_db_from_production(production_db_path, tmp_path):
+    """Create a temporary copy of production database for isolated tests using pytest's tmp_path"""
+    # Use pytest's native temporary directory
+    temp_db = tmp_path / "test_cocktaildb.db"
+    shutil.copy2(production_db_path, temp_db)    
+    return str(temp_db)
 
 
 @pytest.fixture(scope="function")
@@ -188,7 +207,7 @@ def test_client_production_isolated(test_settings, temp_db_from_production, monk
 @pytest.fixture(scope="function")
 def authenticated_client(test_client_memory_with_app, mock_user):
     """Test client with mocked authentication using FastAPI dependency override"""
-    from api.dependencies.auth import UserInfo, require_authentication
+    from dependencies.auth import UserInfo, require_authentication
     
     client, app = test_client_memory_with_app
     
@@ -217,7 +236,7 @@ def authenticated_client(test_client_memory_with_app, mock_user):
 @pytest.fixture(scope="function")
 def admin_client(test_client_memory_with_app, mock_admin_user):
     """Test client with mocked admin authentication using FastAPI dependency override"""
-    from api.dependencies.auth import UserInfo, require_authentication
+    from dependencies.auth import UserInfo, require_authentication
     
     client, app = test_client_memory_with_app
     
