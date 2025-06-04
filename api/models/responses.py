@@ -40,13 +40,21 @@ class RecipeIngredientResponse(BaseModel):
         from_attributes = True
 
 
-class TagResponse(BaseModel):
-    """Response model for tag data"""
+class PublicTagResponse(BaseModel):
+    """Response model for public tag data"""
     id: int = Field(..., description="Tag ID")
     name: str = Field(..., description="Tag name")
-    description: Optional[str] = Field(None, description="Tag description")
-    is_private: bool = Field(..., description="Whether the tag is private")
-    created_by: Optional[str] = Field(None, description="User ID who created the tag")
+    
+    class Config:
+        from_attributes = True
+
+
+class PrivateTagResponse(BaseModel):
+    """Response model for private tag data"""
+    id: int = Field(..., description="Tag ID")
+    name: str = Field(..., description="Tag name")
+    cognito_user_id: str = Field(..., description="User ID who created the tag")
+    cognito_username: str = Field(..., description="Username who created the tag")
     
     class Config:
         from_attributes = True
@@ -62,8 +70,8 @@ class RecipeResponse(BaseModel):
     avg_rating: Optional[float] = Field(None, description="Average rating")
     rating_count: Optional[int] = Field(None, description="Number of ratings")
     ingredients: List[RecipeIngredientResponse] = Field(default=[], description="Recipe ingredients")
-    public_tags: List[TagResponse] = Field(default=[], description="Public tags")
-    private_tags: List[TagResponse] = Field(default=[], description="Private tags (if user authenticated)")
+    public_tags: List[PublicTagResponse] = Field(default=[], description="Public tags")
+    private_tags: List[PrivateTagResponse] = Field(default=[], description="Private tags (if user authenticated)")
     
     class Config:
         from_attributes = True

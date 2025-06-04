@@ -60,11 +60,15 @@ class Database:
             # Read database path from environment variable at runtime, not import time
             self.db_path = os.environ.get("DB_PATH", "/mnt/efs/cocktaildb.db")
             logger.info(f"Using database path: {self.db_path}")
-            logger.info(f"DB_PATH environment variable: {os.environ.get('DB_PATH', 'not set')}")
+            logger.info(
+                f"DB_PATH environment variable: {os.environ.get('DB_PATH', 'not set')}"
+            )
             logger.info(f"Database file exists: {os.path.exists(self.db_path)}")
-            
+
             if os.path.exists(self.db_path):
-                logger.info(f"Database file size: {os.path.getsize(self.db_path)} bytes")
+                logger.info(
+                    f"Database file size: {os.path.getsize(self.db_path)} bytes"
+                )
             else:
                 logger.warning(f"Database file does not exist at: {self.db_path}")
 
@@ -123,10 +127,23 @@ class Database:
         )
         # Set busy timeout to handle cases where the database is locked
         conn.execute("PRAGMA busy_timeout = 10000")  # 10 seconds in milliseconds
-        # Optimize for concurrent access
-        conn.execute(
-            "PRAGMA journal_mode = WAL"
-        )  # Write-Ahead Logging for better concurrency
+
+        # Check if we're in test environment to avoid WAL mode issues
+        is_test_env = (
+            os.environ.get("ENVIRONMENT") == "test"
+            or self.db_path == ":memory:"
+            or "test" in self.db_path.lower()
+        )
+
+        if is_test_env:
+            # Use DELETE journal mode for tests to avoid locking issues
+            conn.execute("PRAGMA journal_mode = DELETE")
+        else:
+            # Optimize for concurrent access in production
+            conn.execute(
+                "PRAGMA journal_mode = WAL"
+            )  # Write-Ahead Logging for better concurrency
+
         conn.row_factory = sqlite3.Row  # Return rows as dictionaries
         return conn
 
@@ -774,12 +791,25 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, abbreviation FROM units ORDER BY name"
+                    "SELECT id, name, abbreviation, conversion_to_ml FROM units ORDER BY name"
                 ),
             )
             return result
         except Exception as e:
             logger.error(f"Error getting units: {str(e)}")
+            raise
+
+    def get_units_by_type(self, unit_type: str) -> List[Dict[str, Any]]:
+        """Get units filtered by type (this implementation returns all units since there's no type column)"""
+        try:
+            # Since the units table doesn't have a type column, we'll return all units
+            # This could be enhanced later by adding a type column or filtering by name patterns
+            logger.warning(
+                f"get_units_by_type called with type '{unit_type}' but units table has no type column, returning all units"
+            )
+            return self.get_units()
+        except Exception as e:
+            logger.error(f"Error getting units by type {unit_type}: {str(e)}")
             raise
 
     @retry_on_db_locked()
@@ -935,7 +965,9 @@ class Database:
             )
             return result[0] if result else None
         except Exception as e:
-            logger.error(f"Error getting user rating for recipe {recipe_id}, user {user_id}: {str(e)}")
+            logger.error(
+                f"Error getting user rating for recipe {recipe_id}, user {user_id}: {str(e)}"
+            )
             raise
 
     @retry_on_db_locked()
@@ -1398,7 +1430,7 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, name FROM private_tags 
+                    SELECT id, name, cognito_user_id, cognito_username FROM private_tags 
                     WHERE cognito_user_id = :cognito_user_id ORDER BY name
                     """,
                     {"cognito_user_id": cognito_user_id},

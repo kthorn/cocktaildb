@@ -8,7 +8,7 @@ from dependencies.auth import UserInfo, get_current_user_optional, require_authe
 from core.database import get_database as get_db
 from db.db_core import Database
 from models.requests import TagCreate, RecipeTagAssociation
-from models.responses import TagResponse, MessageResponse
+from models.responses import PublicTagResponse, PrivateTagResponse, MessageResponse
 from core.exceptions import NotFoundException, DatabaseException
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tags", tags=["tags"])
 
 
-@router.get("/public", response_model=List[TagResponse])
+@router.get("/public", response_model=List[PublicTagResponse])
 async def get_public_tags(
     db: Database = Depends(get_db),
     user: UserInfo = Depends(get_current_user_optional)
@@ -25,13 +25,13 @@ async def get_public_tags(
     try:
         logger.info("Getting public tags")
         tags = db.get_public_tags()
-        return [TagResponse(**tag) for tag in tags]
+        return [PublicTagResponse(**tag) for tag in tags]
     except Exception as e:
         logger.error(f"Error getting public tags: {str(e)}")
         raise DatabaseException("Failed to retrieve public tags", detail=str(e))
 
 
-@router.post("/public", response_model=TagResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/public", response_model=PublicTagResponse, status_code=status.HTTP_201_CREATED)
 async def create_public_tag(
     tag_data: TagCreate,
     db: Database = Depends(get_db),
@@ -41,21 +41,15 @@ async def create_public_tag(
     try:
         logger.info(f"Creating public tag: {tag_data.name}")
         
-        tag_dict = tag_data.model_dump()
-        tag_dict.update({
-            "is_private": False,
-            "created_by": user.user_id
-        })
-        
-        created_tag = db.create_tag(tag_dict)
-        return TagResponse(**created_tag)
+        created_tag = db.create_public_tag(tag_data.name)
+        return PublicTagResponse(**created_tag)
         
     except Exception as e:
         logger.error(f"Error creating public tag: {str(e)}")
         raise DatabaseException("Failed to create public tag", detail=str(e))
 
 
-@router.get("/private", response_model=List[TagResponse])
+@router.get("/private", response_model=List[PrivateTagResponse])
 async def get_private_tags(
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_authentication)
@@ -64,13 +58,13 @@ async def get_private_tags(
     try:
         logger.info(f"Getting private tags for user {user.user_id}")
         tags = db.get_private_tags(user.user_id)
-        return [TagResponse(**tag) for tag in tags]
+        return [PrivateTagResponse(**tag) for tag in tags]
     except Exception as e:
         logger.error(f"Error getting private tags: {str(e)}")
         raise DatabaseException("Failed to retrieve private tags", detail=str(e))
 
 
-@router.post("/private", response_model=TagResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/private", response_model=PrivateTagResponse, status_code=status.HTTP_201_CREATED)
 async def create_private_tag(
     tag_data: TagCreate,
     db: Database = Depends(get_db),
@@ -80,14 +74,8 @@ async def create_private_tag(
     try:
         logger.info(f"Creating private tag: {tag_data.name}")
         
-        tag_dict = tag_data.model_dump()
-        tag_dict.update({
-            "is_private": True,
-            "created_by": user.user_id
-        })
-        
-        created_tag = db.create_tag(tag_dict)
-        return TagResponse(**created_tag)
+        created_tag = db.create_private_tag(tag_data.name, user.user_id, user.username)
+        return PrivateTagResponse(**created_tag)
         
     except Exception as e:
         logger.error(f"Error creating private tag: {str(e)}")

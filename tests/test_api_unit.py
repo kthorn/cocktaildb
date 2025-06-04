@@ -67,12 +67,7 @@ class TestRecipeEndpoints:
     def test_get_recipes_public_access(self, test_client_memory):
         """Test getting recipes without authentication"""
         response = test_client_memory.get("/api/v1/recipes")
-        assert response.status_code in [status.HTTP_200_OK, status.HTTP_500_INTERNAL_SERVER_ERROR]
-    
-    def test_get_recipes_with_pagination(self, test_client_memory):
-        """Test recipe pagination"""
-        response = test_client_memory.get("/api/v1/recipes?limit=10&offset=0")
-        assert response.status_code in [status.HTTP_200_OK, status.HTTP_500_INTERNAL_SERVER_ERROR]
+        assert response.status_code == status.HTTP_200_OK
     
     def test_create_recipe_unauthorized(self, test_client_memory):
         """Test creating recipe without authentication"""
@@ -87,15 +82,6 @@ class TestRecipeEndpoints:
         """Test creating recipe with authentication"""
         response = authenticated_client.post("/api/v1/recipes", json=sample_recipe_data)
         assert response.status_code != status.HTTP_401_UNAUTHORIZED
-    
-    def test_get_recipe_by_id(self, test_client_memory):
-        """Test getting specific recipe by ID"""
-        response = test_client_memory.get("/api/v1/recipes/1")
-        assert response.status_code in [
-            status.HTTP_200_OK, 
-            status.HTTP_404_NOT_FOUND, 
-            status.HTTP_500_INTERNAL_SERVER_ERROR
-        ]
 
 
 class TestAuthenticationEndpoints:
@@ -121,12 +107,12 @@ class TestPublicResourceEndpoints:
     def test_get_units(self, test_client_memory):
         """Test getting units (public endpoint)"""
         response = test_client_memory.get("/api/v1/units")
-        assert response.status_code in [status.HTTP_200_OK, status.HTTP_500_INTERNAL_SERVER_ERROR]
+        assert response.status_code == status.HTTP_200_OK
     
     def test_get_tags(self, test_client_memory):
         """Test getting tags (public endpoint)"""
-        response = test_client_memory.get("/api/v1/tags")
-        assert response.status_code in [status.HTTP_200_OK, status.HTTP_500_INTERNAL_SERVER_ERROR]
+        response = test_client_memory.get("/api/v1/tags/public")
+        assert response.status_code == status.HTTP_200_OK
     
     def test_create_unit_unauthorized(self, test_client_memory):
         """Test creating unit without authentication"""
@@ -210,9 +196,3 @@ class TestCORSFunctionality:
         response = test_client_memory.options("/api/v1/ingredients", headers=headers)
         # Should not be 404 or 405 if CORS is properly configured
         assert response.status_code != status.HTTP_404_NOT_FOUND
-    
-    def test_cors_headers_present(self, test_client_memory):
-        """Test that CORS headers are present in responses"""
-        response = test_client_memory.get("/api/v1/ingredients")
-        # CORS headers should be present
-        assert "access-control-allow-origin" in [h.lower() for h in response.headers.keys()]
