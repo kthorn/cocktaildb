@@ -4,19 +4,32 @@ import logging
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, Query, status
 
-from dependencies.auth import UserInfo, get_current_user_optional, require_authentication
+from dependencies.auth import (
+    UserInfo,
+    get_current_user_optional,
+    require_authentication,
+)
 from core.database import get_database as get_db
 from db.db_core import Database
-from models.requests import RecipeCreate, RecipeUpdate, RecipeSearchRequest, RatingCreate
+from models.requests import (
+    RecipeCreate,
+    RecipeUpdate,
+    RecipeSearchRequest,
+    RatingCreate,
+)
 from models.responses import (
-    RecipeResponse, RecipeListResponse, MessageResponse, SearchResultsResponse,
-    RatingSummaryResponse, RatingResponse
+    RecipeResponse,
+    RecipeListResponse,
+    MessageResponse,
+    SearchResultsResponse,
+    RatingSummaryResponse,
+    RatingResponse,
 )
 from core.exceptions import NotFoundException, DatabaseException, ValidationException
 from .rating_handlers import (
     get_recipe_ratings_handler,
     create_or_update_rating_handler,
-    delete_rating_handler
+    delete_rating_handler,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,43 +45,47 @@ async def get_recipes(
     limit: int = Query(20, ge=1, le=100, description="Maximum number of results"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Database = Depends(get_db),
-    user: Optional[UserInfo] = Depends(get_current_user_optional)
+    user: Optional[UserInfo] = Depends(get_current_user_optional),
 ):
     """Get all recipes or search recipes"""
     try:
         if search:
             logger.info(f"Searching recipes with query: {query}")
-            
+
             # Parse ingredients filter if provided
             ingredient_filters = []
             if ingredients:
                 import json
+
                 try:
                     ingredient_filters = json.loads(ingredients)
                 except json.JSONDecodeError:
                     raise ValidationException("Invalid ingredients filter format")
-            
+
             # Perform search
             search_params = {
                 "query": query,
                 "ingredients": ingredient_filters,
                 "limit": limit,
-                "offset": offset
+                "offset": offset,
             }
-            
+
             results = db.search_recipes(search_params)
-            
+
             return SearchResultsResponse(
-                recipes=[RecipeListResponse(**recipe) for recipe in results.get("recipes", [])],
+                recipes=[
+                    RecipeListResponse(**recipe)
+                    for recipe in results.get("recipes", [])
+                ],
                 total_count=results.get("total_count", 0),
                 offset=offset,
-                limit=limit
+                limit=limit,
             )
         else:
             logger.info("Getting all recipes")
             recipes = db.get_recipes()
             return [RecipeListResponse(**recipe) for recipe in recipes]
-            
+
     except ValidationException:
         raise
     except Exception as e:
@@ -80,22 +97,22 @@ async def get_recipes(
 async def create_recipe(
     recipe_data: RecipeCreate,
     db: Database = Depends(get_db),
-    user: UserInfo = Depends(require_authentication)
+    user: UserInfo = Depends(require_authentication),
 ):
     """Create a new recipe (requires authentication)"""
     try:
         logger.info(f"Creating recipe: {recipe_data.name}")
-        
+
         # Prepare data for database
         recipe_dict = recipe_data.model_dump()
         recipe_dict["created_by"] = user.user_id
-        
+
         created_recipe = db.create_recipe(recipe_dict)
-        
+
         # Get the full recipe data with ingredients
         full_recipe = db.get_recipe(created_recipe["id"], user.user_id)
         return RecipeResponse(**full_recipe)
-        
+
     except Exception as e:
         logger.error(f"Error creating recipe: {str(e)}")
         raise DatabaseException("Failed to create recipe", detail=str(e))
@@ -105,27 +122,27 @@ async def create_recipe(
 async def get_recipe(
     recipe_id: int,
     db: Database = Depends(get_db),
-    user: Optional[UserInfo] = Depends(get_current_user_optional)
+    user: Optional[UserInfo] = Depends(get_current_user_optional),
 ):
     """Get a specific recipe by ID"""
     try:
         logger.info(f"Getting recipe {recipe_id}")
         logger.info(f"Database instance: {db}")
         logger.info(f"User info: {user}")
-        
+
         user_id = user.user_id if user else None
         logger.info(f"Resolved user_id: {user_id}")
-        
+
         recipe = db.get_recipe(recipe_id, user_id)
         logger.info(f"Recipe retrieved: {recipe is not None}")
-        
+
         if not recipe:
             logger.warning(f"Recipe {recipe_id} not found")
             raise NotFoundException(f"Recipe with ID {recipe_id} not found")
-        
+
         logger.info(f"Returning recipe: {recipe.get('name', 'unnamed')}")
         return RecipeResponse(**recipe)
-        
+
     except NotFoundException:
         logger.warning(f"NotFoundException for recipe {recipe_id}")
         raise
@@ -139,27 +156,29 @@ async def update_recipe(
     recipe_id: int,
     recipe_data: RecipeUpdate,
     db: Database = Depends(get_db),
-    user: UserInfo = Depends(require_authentication)
+    user: UserInfo = Depends(require_authentication),
 ):
     """Update a recipe (requires authentication)"""
     try:
         logger.info(f"Updating recipe {recipe_id}")
-        
+
         # Check if recipe exists
         existing_recipe = db.get_recipe(recipe_id, user.user_id)
         if not existing_recipe:
             raise NotFoundException(f"Recipe with ID {recipe_id} not found")
-        
+
         # Prepare data for database (only include non-None values)
-        update_dict = {k: v for k, v in recipe_data.model_dump().items() if v is not None}
+        update_dict = {
+            k: v for k, v in recipe_data.model_dump().items() if v is not None
+        }
         update_dict["id"] = recipe_id
-        
+
         updated_recipe = db.update_recipe(update_dict)
-        
+
         # Get the full recipe data with ingredients
         full_recipe = db.get_recipe(recipe_id, user.user_id)
         return RecipeResponse(**full_recipe)
-        
+
     except NotFoundException:
         raise
     except Exception as e:
@@ -171,20 +190,20 @@ async def update_recipe(
 async def delete_recipe(
     recipe_id: int,
     db: Database = Depends(get_db),
-    user: UserInfo = Depends(require_authentication)
+    user: UserInfo = Depends(require_authentication),
 ):
     """Delete a recipe (requires authentication)"""
     try:
         logger.info(f"Deleting recipe {recipe_id}")
-        
+
         # Check if recipe exists
         existing_recipe = db.get_recipe(recipe_id, user.user_id)
         if not existing_recipe:
             raise NotFoundException(f"Recipe with ID {recipe_id} not found")
-        
+
         db.delete_recipe(recipe_id)
         return MessageResponse(message=f"Recipe {recipe_id} deleted successfully")
-        
+
     except NotFoundException:
         raise
     except Exception as e:
@@ -197,18 +216,22 @@ async def delete_recipe(
 async def get_recipe_ratings(
     recipe_id: int,
     db: Database = Depends(get_db),
-    user: UserInfo = Depends(get_current_user_optional)
+    user: UserInfo = Depends(get_current_user_optional),
 ):
     """Get ratings for a specific recipe"""
     return await get_recipe_ratings_handler(recipe_id, db, user)
 
 
-@router.post("/{recipe_id}/ratings", response_model=RatingResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{recipe_id}/ratings",
+    response_model=RatingResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_or_update_rating(
     recipe_id: int,
     rating_data: RatingCreate,
     db: Database = Depends(get_db),
-    user: UserInfo = Depends(require_authentication)
+    user: UserInfo = Depends(require_authentication),
 ):
     """Create or update a rating for a recipe (requires authentication)"""
     return await create_or_update_rating_handler(recipe_id, rating_data, db, user)
@@ -219,7 +242,7 @@ async def update_recipe_rating(
     recipe_id: int,
     rating_data: RatingCreate,
     db: Database = Depends(get_db),
-    user: UserInfo = Depends(require_authentication)
+    user: UserInfo = Depends(require_authentication),
 ):
     """Update a rating for a recipe (requires authentication)"""
     # PUT and POST have the same logic for ratings (upsert)
@@ -230,7 +253,7 @@ async def update_recipe_rating(
 async def delete_recipe_rating(
     recipe_id: int,
     db: Database = Depends(get_db),
-    user: UserInfo = Depends(require_authentication)
+    user: UserInfo = Depends(require_authentication),
 ):
     """Delete a user's rating for a recipe (requires authentication)"""
     return await delete_rating_handler(recipe_id, db, user)
