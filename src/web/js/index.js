@@ -18,7 +18,7 @@ async function updateStats() {
 // Load and display a recipe
 async function loadRecipes() {
     try {
-        recipes = await api.getRecipes();
+        recipes = await api.getRecipesWithFullData();
         if (recipes.length > 0) {
             displayRecipe(currentRecipeIndex);
         } else {
@@ -32,7 +32,7 @@ async function loadRecipes() {
 }
 
 // Display a specific recipe by index
-async function displayRecipe(index) {
+function displayRecipe(index) {
     if (recipes.length === 0) return;
     
     // Ensure index is within bounds
@@ -42,8 +42,8 @@ async function displayRecipe(index) {
     currentRecipeIndex = index;
     
     try {
-        // Fetch fresh recipe data
-        const recipe = await api.getRecipe(recipes[index].id);
+        // Use the already loaded full recipe data
+        const recipe = recipes[index];
         const recipeCard = createRecipeCard(recipe);
         
         document.getElementById('recipe-display').innerHTML = '';
@@ -55,12 +55,12 @@ async function displayRecipe(index) {
 }
 
 // Event listeners for carousel arrows
-document.getElementById('prev-recipe').addEventListener('click', async () => {
-    await displayRecipe(currentRecipeIndex - 1);
+document.getElementById('prev-recipe').addEventListener('click', () => {
+    displayRecipe(currentRecipeIndex - 1);
 });
 
-document.getElementById('next-recipe').addEventListener('click', async () => {
-    await displayRecipe(currentRecipeIndex + 1);
+document.getElementById('next-recipe').addEventListener('click', () => {
+    displayRecipe(currentRecipeIndex + 1);
 });
 
 // Initialize when DOM is loaded

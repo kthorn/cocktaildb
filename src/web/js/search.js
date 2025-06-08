@@ -74,8 +74,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Build the search query
             const searchQuery = buildSearchQuery();
             
-            // Call the API to search recipes
-            const results = await api.searchRecipes(searchQuery);
+            // Call the API to search recipes with full data
+            const results = await api.searchRecipesWithFullData(searchQuery);
             
             // Hide loading
             loadingPlaceholder.classList.add('hidden');

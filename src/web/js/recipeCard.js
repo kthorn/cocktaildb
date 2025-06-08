@@ -70,8 +70,8 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
     const shouldShowActions = showActions && isAuthenticated();
     const shouldShowAddTagButton = isAuthenticated(); // Check if user is authenticated for add tag button
     
-    const publicTags = recipe.tags ? recipe.tags.filter(tag => tag.type === 'public') : [];
-    const publicTagNames = publicTags.map(tag => tag.name);
+    const publicTags = recipe.tags && Array.isArray(recipe.tags) ? recipe.tags.filter(tag => tag.type === 'public') : [];
+    const publicTagNames = (publicTags || []).map(tag => tag.name);
     const hasPublicTags = publicTagNames.length > 0;
     
     // Start with the basic recipe details
@@ -95,7 +95,7 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
         <div class="ingredients">
             <h5>Ingredients</h5>
             <ul>
-                ${recipe.ingredients.map(ing => {
+                ${(recipe.ingredients || []).map(ing => {
                     // Format with proper spaces between amount, unit and ingredient name
                     const unitDisplay = ing.unit_name ? `${ing.unit_name} ` : '';
                     

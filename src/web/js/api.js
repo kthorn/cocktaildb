@@ -112,6 +112,36 @@ class CocktailAPI {
         return this._request(`/recipes/${id}`);
     }
 
+    // Get all recipes with full details (ingredients, instructions, etc.)
+    async getRecipesWithFullData() {
+        const basicRecipes = await this.getRecipes();
+        return this.enrichRecipes(basicRecipes);
+    }
+
+    // Search recipes and return full details
+    async searchRecipesWithFullData(searchQuery) {
+        const basicRecipes = await this.searchRecipes(searchQuery);
+        return this.enrichRecipes(basicRecipes);
+    }
+
+    // Helper to convert basic recipe data to full recipe data
+    async enrichRecipes(basicRecipes) {
+        if (!basicRecipes || basicRecipes.length === 0) {
+            return basicRecipes;
+        }
+
+        return Promise.all(
+            basicRecipes.map(async (recipe) => {
+                try {
+                    return await this.getRecipe(recipe.id);
+                } catch (error) {
+                    console.error(`Error fetching full recipe data for ${recipe.id}:`, error);
+                    return recipe; // Fallback to basic recipe data
+                }
+            })
+        );
+    }
+
     async createRecipe(recipeData) {
         return this._request('/recipes', 'POST', recipeData);
     }
