@@ -15,6 +15,9 @@ from models.requests import (
     RecipeCreate,
     RecipeUpdate,
     RatingCreate,
+    RecipeListParams,
+    PaginationParams,
+    SearchParams,
 )
 from models.responses import (
     RecipeResponse,
@@ -22,6 +25,9 @@ from models.responses import (
     MessageResponse,
     RatingSummaryResponse,
     RatingResponse,
+    PaginatedRecipeResponse,
+    PaginatedSearchResponse,
+    PaginationMetadata,
 )
 from core.exceptions import NotFoundException, DatabaseException, ValidationException
 from .rating_handlers import (
@@ -35,8 +41,73 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 
 
-@router.get("", response_model=List[RecipeListResponse])
+@router.get("", response_model=PaginatedRecipeResponse)
 async def get_recipes(
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    limit: int = Query(20, ge=1, le=1000, description="Number of items per page"),
+    sort_by: str = Query("name", description="Sort field: name, created_at, avg_rating"),
+    sort_order: str = Query("asc", description="Sort order: asc, desc"),
+    db: Database = Depends(get_db),
+    user: Optional[UserInfo] = Depends(get_current_user_optional),
+):
+    """Get paginated recipes with full details"""
+    try:
+        logger.info(f"Getting recipes page {page}, limit {limit}, sort_by {sort_by}, sort_order {sort_order}")
+        
+        # Validate sort parameters
+        valid_sort_fields = ["name", "created_at", "avg_rating"]
+        valid_sort_orders = ["asc", "desc"]
+        
+        if sort_by not in valid_sort_fields:
+            raise ValidationException(f"Invalid sort_by field. Must be one of: {valid_sort_fields}")
+        
+        if sort_order not in valid_sort_orders:
+            raise ValidationException(f"Invalid sort_order. Must be one of: {valid_sort_orders}")
+        
+        # Calculate offset
+        offset = (page - 1) * limit
+        user_id = user.user_id if user else None
+        
+        # Get paginated recipes with full details including ingredients
+        recipes_data = db.get_recipes_paginated(
+            limit=limit,
+            offset=offset,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            user_id=user_id
+        )
+        
+        # Get total count for pagination metadata
+        total_count = db.get_recipes_count()
+        total_pages = (total_count + limit - 1) // limit
+        
+        # Build pagination metadata
+        pagination = PaginationMetadata(
+            page=page,
+            limit=limit,
+            total_pages=total_pages,
+            total_count=total_count,
+            has_next=page < total_pages,
+            has_previous=page > 1
+        )
+        
+        # Convert to response models
+        recipes = [RecipeResponse(**recipe) for recipe in recipes_data]
+        
+        return PaginatedRecipeResponse(
+            recipes=recipes,
+            pagination=pagination
+        )
+
+    except ValidationException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting paginated recipes: {str(e)}")
+        raise DatabaseException("Failed to retrieve recipes", detail=str(e))
+
+
+@router.get("/legacy", response_model=List[RecipeListResponse])
+async def get_recipes_legacy(
     search: Optional[bool] = Query(None, description="Whether to perform search"),
     name: Optional[str] = Query(None, description="Recipe name search"),
     min_rating: Optional[float] = Query(None, description="Minimum rating filter"),
@@ -50,7 +121,7 @@ async def get_recipes(
     db: Database = Depends(get_db),
     user: Optional[UserInfo] = Depends(get_current_user_optional),
 ):
-    """Get all recipes or search recipes"""
+    """Legacy endpoint: Get all recipes or search recipes (returns summary data only)"""
     try:
         if search:
             logger.info(
@@ -107,7 +178,7 @@ async def get_recipes(
             # db.search_recipes returns List[Dict[str, Any]] directly, not a dict with "recipes" key
             return [RecipeListResponse(**recipe) for recipe in results]
         else:
-            logger.info("Getting all recipes")
+            logger.info("Getting all recipes (legacy)")
             recipes = db.get_recipes()
             return [RecipeListResponse(**recipe) for recipe in recipes]
 
@@ -116,6 +187,90 @@ async def get_recipes(
     except Exception as e:
         logger.error(f"Error getting recipes: {str(e)}")
         raise DatabaseException("Failed to retrieve recipes", detail=str(e))
+
+
+@router.get("/search", response_model=PaginatedSearchResponse)
+async def search_recipes(
+    q: Optional[str] = Query(None, description="Search query"),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    limit: int = Query(20, ge=1, le=1000, description="Number of items per page"),
+    sort_by: str = Query("name", description="Sort field: name, created_at, avg_rating"),
+    sort_order: str = Query("asc", description="Sort order: asc, desc"),
+    min_rating: Optional[float] = Query(None, description="Minimum average rating", ge=0, le=5),
+    max_rating: Optional[float] = Query(None, description="Maximum average rating", ge=0, le=5),
+    tags: Optional[str] = Query(None, description="Comma-separated list of tags"),
+    ingredients: Optional[str] = Query(None, description="Comma-separated ingredient names"),
+    db: Database = Depends(get_db),
+    user: Optional[UserInfo] = Depends(get_current_user_optional),
+):
+    """Search recipes with pagination and filters"""
+    try:
+        logger.info(f"Searching recipes: q='{q}', page={page}, limit={limit}")
+        
+        # Validate sort parameters
+        valid_sort_fields = ["name", "created_at", "avg_rating"]
+        valid_sort_orders = ["asc", "desc"]
+        
+        if sort_by not in valid_sort_fields:
+            raise ValidationException(f"Invalid sort_by field. Must be one of: {valid_sort_fields}")
+        
+        if sort_order not in valid_sort_orders:
+            raise ValidationException(f"Invalid sort_order. Must be one of: {valid_sort_orders}")
+        
+        # Calculate offset
+        offset = (page - 1) * limit
+        user_id = user.user_id if user else None
+        
+        # Build search parameters
+        search_params = {}
+        if q:
+            search_params["q"] = q
+        if min_rating is not None:
+            search_params["min_rating"] = min_rating
+        if max_rating is not None:
+            search_params["max_rating"] = max_rating
+        if tags:
+            search_params["tags"] = [tag.strip() for tag in tags.split(",") if tag.strip()]
+        if ingredients:
+            search_params["ingredients"] = [ing.strip() for ing in ingredients.split(",") if ing.strip()]
+        
+        logger.info(f"Search params: {search_params}")
+        
+        # Get paginated search results
+        recipes_data, total_count = db.search_recipes_paginated(
+            search_params=search_params,
+            limit=limit,
+            offset=offset,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            user_id=user_id
+        )
+        
+        # Build pagination metadata
+        total_pages = (total_count + limit - 1) // limit
+        pagination = PaginationMetadata(
+            page=page,
+            limit=limit,
+            total_pages=total_pages,
+            total_count=total_count,
+            has_next=page < total_pages,
+            has_previous=page > 1
+        )
+        
+        # Convert to response models
+        recipes = [RecipeResponse(**recipe) for recipe in recipes_data]
+        
+        return PaginatedSearchResponse(
+            recipes=recipes,
+            pagination=pagination,
+            query=q
+        )
+
+    except ValidationException:
+        raise
+    except Exception as e:
+        logger.error(f"Error searching recipes: {str(e)}")
+        raise DatabaseException("Failed to search recipes", detail=str(e))
 
 
 @router.post("", response_model=RecipeResponse, status_code=status.HTTP_201_CREATED)

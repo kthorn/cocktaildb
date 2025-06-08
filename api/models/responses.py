@@ -176,3 +176,48 @@ class ErrorResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class PaginationMetadata(BaseModel):
+    """Response model for pagination metadata"""
+
+    page: int = Field(..., description="Current page number (1-based)", ge=1)
+    limit: int = Field(..., description="Number of items per page", ge=1, le=1000)
+    total_pages: int = Field(..., description="Total number of pages", ge=0)
+    total_count: int = Field(..., description="Total number of items", ge=0)
+    has_next: bool = Field(..., description="Whether there is a next page")
+    has_previous: bool = Field(..., description="Whether there is a previous page")
+
+    class Config:
+        from_attributes = True
+
+
+class PaginatedRecipeResponse(BaseModel):
+    """Response model for paginated recipe data"""
+
+    recipes: List[RecipeResponse] = Field(..., description="List of recipes with full details")
+    pagination: PaginationMetadata = Field(..., description="Pagination metadata")
+
+    class Config:
+        from_attributes = True
+
+
+class PaginatedRecipeListResponse(BaseModel):
+    """Response model for paginated recipe list data (lighter version)"""
+
+    recipes: List[RecipeListResponse] = Field(..., description="List of recipe summaries")
+    pagination: PaginationMetadata = Field(..., description="Pagination metadata")
+
+    class Config:
+        from_attributes = True
+
+
+class PaginatedSearchResponse(BaseModel):
+    """Response model for paginated search results"""
+
+    recipes: List[RecipeResponse] = Field(..., description="List of matching recipes with full details")
+    pagination: PaginationMetadata = Field(..., description="Pagination metadata")
+    query: Optional[str] = Field(None, description="Search query used")
+
+    class Config:
+        from_attributes = True

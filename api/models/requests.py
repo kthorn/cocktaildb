@@ -70,3 +70,29 @@ class UnitCreate(BaseModel):
     name: str = Field(..., description="Unit name")
     abbreviation: Optional[str] = Field(None, description="Unit abbreviation")
     conversion_to_ml: Optional[float] = Field(None, description="Conversion factor to milliliters")
+
+
+class PaginationParams(BaseModel):
+    """Request model for pagination parameters"""
+    page: int = Field(1, description="Page number (1-based)", ge=1)
+    limit: int = Field(20, description="Number of items per page", ge=1, le=1000)
+
+    @property
+    def offset(self) -> int:
+        """Calculate offset from page and limit"""
+        return (self.page - 1) * self.limit
+
+
+class RecipeListParams(PaginationParams):
+    """Request model for recipe list parameters with pagination"""
+    sort_by: Optional[str] = Field("name", description="Sort field: name, created_at, avg_rating")
+    sort_order: Optional[str] = Field("asc", description="Sort order: asc, desc")
+
+
+class SearchParams(PaginationParams):
+    """Request model for search parameters with pagination"""
+    q: Optional[str] = Field(None, description="Search query")
+    ingredients: Optional[List[str]] = Field(None, description="Ingredient filter list")
+    min_rating: Optional[float] = Field(None, description="Minimum average rating", ge=0, le=5)
+    max_rating: Optional[float] = Field(None, description="Maximum average rating", ge=0, le=5)
+    tags: Optional[List[str]] = Field(None, description="Tag filter list")
