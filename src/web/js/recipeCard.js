@@ -284,6 +284,72 @@ export function displayRecipes(recipes, container, showActions = true, onRecipeD
     });
 }
 
+/**
+ * Appends recipe cards to the specified container (for progressive loading)
+ * @param {Array} recipes - Array of recipe objects to append
+ * @param {HTMLElement} container - Container element to append recipes to
+ * @param {boolean} showActions - Whether to show edit/delete buttons
+ * @param {Function} onRecipeDeleted - Callback when recipe is deleted
+ */
+export function appendRecipes(recipes, container, showActions = true, onRecipeDeleted = null) {
+    if (!recipes || recipes.length === 0) {
+        return;
+    }
+
+    recipes.forEach(recipe => {
+        const card = createRecipeCard(recipe, showActions, onRecipeDeleted);
+        container.appendChild(card);
+    });
+}
+
+/**
+ * Sets up progressive recipe loading for a container
+ * @param {HTMLElement} container - Container element to display recipes in
+ * @param {boolean} showActions - Whether to show edit/delete buttons
+ * @param {Function} onRecipeDeleted - Callback when recipe is deleted
+ * @returns {Object} Progressive loading controller with methods
+ */
+export function createProgressiveRecipeLoader(container, showActions = true, onRecipeDeleted = null) {
+    let hasStarted = false;
+    
+    return {
+        // Initialize the container (clear existing content, show loading state)
+        start: () => {
+            if (!hasStarted) {
+                container.innerHTML = '<p class="loading-recipes">Loading recipes...</p>';
+                hasStarted = true;
+            }
+        },
+        
+        // Add a batch of recipes to the container
+        addBatch: (recipes) => {
+            if (!hasStarted) {
+                return;
+            }
+            
+            // Remove loading message on first batch
+            const loadingMsg = container.querySelector('.loading-recipes');
+            if (loadingMsg) {
+                loadingMsg.remove();
+            }
+            
+            appendRecipes(recipes, container, showActions, onRecipeDeleted);
+        },
+        
+        // Finish loading (handle empty results)
+        finish: (totalCount = 0) => {
+            const loadingMsg = container.querySelector('.loading-recipes');
+            if (loadingMsg) {
+                loadingMsg.remove();
+            }
+            
+            if (totalCount === 0) {
+                container.innerHTML = '<p>No recipes found.</p>';
+            }
+        }
+    };
+}
+
 // --- Tag Editor Modal Logic (Moved from recipes.js) ---
 let tagEditorModalElement = null;
 let tagEditorRecipeNameEl = null;

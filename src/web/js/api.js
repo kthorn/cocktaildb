@@ -126,7 +126,7 @@ class CocktailAPI {
 
     // Helper to convert basic recipe data to full recipe data
     // Uses batching to prevent overwhelming the server with concurrent requests
-    async enrichRecipes(basicRecipes) {
+    async enrichRecipes(basicRecipes, onBatchLoaded = null) {
         if (!basicRecipes || basicRecipes.length === 0) {
             return basicRecipes;
         }
@@ -147,6 +147,11 @@ class CocktailAPI {
             
             const batchResults = await Promise.all(batchPromises);
             fullRecipes.push(...batchResults);
+            
+            // Call the callback with the current batch if provided
+            if (typeof onBatchLoaded === 'function') {
+                onBatchLoaded(batchResults, fullRecipes.length, basicRecipes.length);
+            }
             
             // Small delay between batches to be gentle on the backend
             if (i + batchSize < basicRecipes.length) {
@@ -297,6 +302,18 @@ class CocktailAPI {
     // Get current user info (requires authentication)
     async getCurrentUserInfo() {
         return this._request('/auth/me', 'GET', null, true);
+    }
+
+    // Get all recipes with full details and progressive loading support
+    async getRecipesWithFullDataProgressive(onBatchLoaded = null) {
+        const basicRecipes = await this.getRecipes();
+        return this.enrichRecipes(basicRecipes, onBatchLoaded);
+    }
+
+    // Search recipes and return full details with progressive loading support
+    async searchRecipesWithFullDataProgressive(searchQuery, onBatchLoaded = null) {
+        const basicRecipes = await this.searchRecipes(searchQuery);
+        return this.enrichRecipes(basicRecipes, onBatchLoaded);
     }
 }
 

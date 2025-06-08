@@ -1,6 +1,6 @@
 import { api } from './api.js';
 import { isAuthenticated } from './auth.js';
-import { displayRecipes } from './recipeCard.js';
+import { displayRecipes, createProgressiveRecipeLoader } from './recipeCard.js';
 
 
 // Declare function in global scope
@@ -169,9 +169,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load and display recipes
     async function loadRecipes() {
         try {
-            // Use the centralized batching logic from api.js
-            const fullRecipes = await api.getRecipesWithFullData();
-            displayRecipes(fullRecipes, recipesContainer, true, loadRecipes);
+            // Set up progressive loading
+            const progressLoader = createProgressiveRecipeLoader(recipesContainer, true, loadRecipes);
+            progressLoader.start();
+            
+            // Use the centralized batching logic from api.js with progressive loading
+            const fullRecipes = await api.getRecipesWithFullDataProgressive((batch, loadedCount, totalCount) => {
+                // Add each batch as it becomes available
+                progressLoader.addBatch(batch);
+                console.log(`Loaded ${loadedCount}/${totalCount} recipes`);
+            });
+            
+            // Finish loading
+            progressLoader.finish(fullRecipes.length);
         } catch (error) {
             console.error('Error loading recipes:', error);
             recipesContainer.innerHTML = '<p>Error loading recipes. Please try again later.</p>';

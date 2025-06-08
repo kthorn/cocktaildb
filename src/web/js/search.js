@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { displayRecipes } from './recipeCard.js';
+import { displayRecipes, createProgressiveRecipeLoader } from './recipeCard.js';
 
 // Keep a global reference to ingredients for type-ahead
 let availableIngredients = [];
@@ -74,20 +74,30 @@ document.addEventListener('DOMContentLoaded', () => {
             // Build the search query
             const searchQuery = buildSearchQuery();
             
-            // Call the API to search recipes with full data
-            const results = await api.searchRecipesWithFullData(searchQuery);
+            // Set up progressive loading
+            const progressLoader = createProgressiveRecipeLoader(searchResultsContainer, false);
             
-            // Hide loading
+            // Hide the default loading placeholder and start progressive loading
             loadingPlaceholder.classList.add('hidden');
+            progressLoader.start();
+            
+            // Call the API to search recipes with progressive loading
+            const results = await api.searchRecipesWithFullDataProgressive(searchQuery, (batch, loadedCount, totalCount) => {
+                // Add each batch as it becomes available
+                progressLoader.addBatch(batch);
+                console.log(`Loaded ${loadedCount}/${totalCount} recipes`);
+            });
+            
+            // Finish loading
+            progressLoader.finish(results.length);
             
             if (results.length === 0) {
                 // Show no results message
                 emptyResults.classList.remove('hidden');
                 emptyResults.querySelector('p').textContent = 'No recipes found matching your criteria.';
             } else {
-                // Hide no results message and show recipes
+                // Hide no results message - recipes are already displayed progressively
                 emptyResults.classList.add('hidden');
-                displayRecipes(results, searchResultsContainer, false);
             }
         } catch (error) {
             console.error('Error searching recipes:', error);
