@@ -169,30 +169,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load and display recipes
     async function loadRecipes() {
         try {
-            const recipeList = await api.getRecipes();
-            
-            // Fetch full recipe data with controlled concurrency to avoid overwhelming the backend
-            const fullRecipes = [];
-            const batchSize = 5; // Process 5 recipes at a time
-            
-            for (let i = 0; i < recipeList.length; i += batchSize) {
-                const batch = recipeList.slice(i, i + batchSize);
-                const batchPromises = batch.map(recipe => 
-                    api.getRecipe(recipe.id).catch(error => {
-                        console.error(`Error loading recipe ${recipe.id}:`, error);
-                        return null; // Return null for failed recipes so we can filter them out
-                    })
-                );
-                
-                const batchResults = await Promise.all(batchPromises);
-                fullRecipes.push(...batchResults.filter(recipe => recipe !== null));
-                
-                // Small delay between batches to be gentle on the backend
-                if (i + batchSize < recipeList.length) {
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
-            }
-            
+            // Use the centralized batching logic from api.js
+            const fullRecipes = await api.getRecipesWithFullData();
             displayRecipes(fullRecipes, recipesContainer, true, loadRecipes);
         } catch (error) {
             console.error('Error loading recipes:', error);

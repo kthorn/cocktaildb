@@ -125,21 +125,36 @@ class CocktailAPI {
     }
 
     // Helper to convert basic recipe data to full recipe data
+    // Uses batching to prevent overwhelming the server with concurrent requests
     async enrichRecipes(basicRecipes) {
         if (!basicRecipes || basicRecipes.length === 0) {
             return basicRecipes;
         }
 
-        return Promise.all(
-            basicRecipes.map(async (recipe) => {
+        const fullRecipes = [];
+        const batchSize = 5; // Process 5 recipes at a time to prevent server overload
+        
+        for (let i = 0; i < basicRecipes.length; i += batchSize) {
+            const batch = basicRecipes.slice(i, i + batchSize);
+            const batchPromises = batch.map(async (recipe) => {
                 try {
                     return await this.getRecipe(recipe.id);
                 } catch (error) {
                     console.error(`Error fetching full recipe data for ${recipe.id}:`, error);
                     return recipe; // Fallback to basic recipe data
                 }
-            })
-        );
+            });
+            
+            const batchResults = await Promise.all(batchPromises);
+            fullRecipes.push(...batchResults);
+            
+            // Small delay between batches to be gentle on the backend
+            if (i + batchSize < basicRecipes.length) {
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+        }
+        
+        return fullRecipes;
     }
 
     async createRecipe(recipeData) {
