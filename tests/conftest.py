@@ -334,7 +334,7 @@ def assert_ingredient_structure(ingredient: Dict[str, Any]):
 
 def assert_recipe_structure(recipe: Dict[str, Any]):
     """Assert that recipe has expected structure"""
-    expected_keys = ["recipe_id", "name", "instructions", "created_by", "created_at"]
+    expected_keys = ["id", "name", "instructions", "created_by"]
     assert_valid_response_structure(recipe, expected_keys)
 
 

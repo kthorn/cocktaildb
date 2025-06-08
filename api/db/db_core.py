@@ -127,23 +127,10 @@ class Database:
         )
         # Set busy timeout to handle cases where the database is locked
         conn.execute("PRAGMA busy_timeout = 10000")  # 10 seconds in milliseconds
-
-        # Check if we're in test environment to avoid WAL mode issues
-        is_test_env = (
-            os.environ.get("ENVIRONMENT") == "test"
-            or self.db_path == ":memory:"
-            or "test" in self.db_path.lower()
-        )
-
-        if is_test_env:
-            # Use DELETE journal mode for tests to avoid locking issues
-            conn.execute("PRAGMA journal_mode = DELETE")
-        else:
-            # Optimize for concurrent access in production
-            conn.execute(
-                "PRAGMA journal_mode = WAL"
-            )  # Write-Ahead Logging for better concurrency
-
+        # Optimize for concurrent access
+        conn.execute(
+            "PRAGMA journal_mode = WAL"
+        )  # Write-Ahead Logging for better concurrency
         conn.row_factory = sqlite3.Row  # Return rows as dictionaries
         return conn
 
