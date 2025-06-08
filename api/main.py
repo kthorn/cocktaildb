@@ -36,7 +36,7 @@ from models.responses import MessageResponse
 # Configure logging
 logging.basicConfig(
     level=getattr(logging, settings.log_level),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -48,9 +48,9 @@ async def lifespan(app: FastAPI):
     logger.info("Starting CocktailDB API")
     logger.info(f"Environment: {settings.environment}")
     logger.info(f"Database path: {settings.db_path}")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down CocktailDB API")
 
@@ -126,17 +126,19 @@ def lambda_handler(event, context):
     """Lambda handler that injects event into request scope"""
     # Create Mangum handler
     mangum_handler = Mangum(app, lifespan="off")
-    
+
     # Store event in a way that can be accessed by dependencies
     import contextvars
-    _lambda_event = contextvars.ContextVar('lambda_event')
+
+    _lambda_event = contextvars.ContextVar("lambda_event")
     _lambda_event.set(event)
-    
+
     # Store event globally for access in dependencies
     global _current_lambda_event
     _current_lambda_event = event
-    
+
     return mangum_handler(event, context)
+
 
 # Global variable to store current Lambda event
 _current_lambda_event = None
@@ -148,12 +150,12 @@ handler = lambda_handler
 # For local development
 if __name__ == "__main__":
     import uvicorn
-    
+
     logger.info("Starting development server...")
     uvicorn.run(
-        "api.main:app",
+        "main:app",
         host="0.0.0.0",
         port=8000,
         reload=True,
-        log_level=settings.log_level.lower()
+        log_level=settings.log_level.lower(),
     )

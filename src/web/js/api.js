@@ -139,10 +139,9 @@ class CocktailAPI {
         }
         
         if (searchQuery.tags && searchQuery.tags.length > 0) {
-            // For multiple tags, append each one
-            searchQuery.tags.forEach(tag => {
-                queryParams.append('tags', tag);
-            });
+            // Send tags as a comma-separated string
+            const tagsString = searchQuery.tags.join(',');
+            queryParams.append('tags', tagsString);
         }
         
         // Handle ingredient queries as a comma-separated list of ID:OPERATOR pairs

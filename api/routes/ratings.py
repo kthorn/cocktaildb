@@ -8,7 +8,7 @@ from dependencies.auth import (
     get_current_user_optional,
     require_authentication,
 )
-from core.database import get_database as get_db
+from db.database import get_database as get_db
 from db.db_core import Database
 from models.requests import RatingCreate
 from models.responses import RatingSummaryResponse, RatingResponse, MessageResponse

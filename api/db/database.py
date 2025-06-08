@@ -3,7 +3,7 @@ import os
 import time
 from typing import Optional
 
-from ..db.db_core import Database
+from .db_core import Database
 
 logger = logging.getLogger(__name__)
 

@@ -9,19 +9,17 @@ from dependencies.auth import (
     get_current_user_optional,
     require_authentication,
 )
-from core.database import get_database as get_db
+from db.database import get_database as get_db
 from db.db_core import Database
 from models.requests import (
     RecipeCreate,
     RecipeUpdate,
-    RecipeSearchRequest,
     RatingCreate,
 )
 from models.responses import (
     RecipeResponse,
     RecipeListResponse,
     MessageResponse,
-    SearchResultsResponse,
     RatingSummaryResponse,
     RatingResponse,
 )
@@ -40,8 +38,13 @@ router = APIRouter(prefix="/recipes", tags=["recipes"])
 @router.get("", response_model=List[RecipeListResponse])
 async def get_recipes(
     search: Optional[bool] = Query(None, description="Whether to perform search"),
-    query: Optional[str] = Query(None, description="Search query"),
-    ingredients: Optional[str] = Query(None, description="Ingredient filters (JSON)"),
+    name: Optional[str] = Query(None, description="Recipe name search"),
+    min_rating: Optional[float] = Query(None, description="Minimum rating filter"),
+    tags: Optional[str] = Query(None, description="Comma-separated list of tags"),
+    ingredients: Optional[str] = Query(
+        None,
+        description="Comma-separated ingredient filters in format 'id:operator,id:operator'",
+    ),
     limit: int = Query(20, ge=1, le=100, description="Maximum number of results"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Database = Depends(get_db),
@@ -50,37 +53,59 @@ async def get_recipes(
     """Get all recipes or search recipes"""
     try:
         if search:
-            logger.info(f"Searching recipes with query: {query}")
+            logger.info(
+                f"Searching recipes with name: {name}, min_rating: {min_rating}, tags: {tags}, ingredients: {ingredients}"
+            )
 
             # Parse ingredients filter if provided
             ingredient_filters = []
             if ingredients:
-                import json
-
                 try:
-                    ingredient_filters = json.loads(ingredients)
-                except json.JSONDecodeError:
-                    raise ValidationException("Invalid ingredients filter format")
+                    # Parse comma-separated format like "1:MUST,2:MUST_NOT"
+                    for ingredient_spec in ingredients.split(","):
+                        ingredient_spec = ingredient_spec.strip()
+                        if ":" not in ingredient_spec:
+                            continue
+                        ingredient_id_str, operator = ingredient_spec.split(":", 1)
+                        ingredient_filters.append(
+                            {
+                                "id": int(ingredient_id_str.strip()),
+                                "operator": operator.strip(),
+                            }
+                        )
+                except (ValueError, IndexError) as e:
+                    logger.error(
+                        f"Error parsing ingredients parameter '{ingredients}': {e}"
+                    )
+                    raise ValidationException(
+                        "Invalid ingredients filter format. Expected format: 'id:operator,id:operator'"
+                    )
 
-            # Perform search
+            # Parse tags if provided
+            tag_list = []
+            if tags:
+                tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
+
+            # Build search parameters
             search_params = {
-                "query": query,
+                "name": name,
+                "min_rating": min_rating,
+                "tags": tag_list if tag_list else [],
                 "ingredients": ingredient_filters,
                 "limit": limit,
                 "offset": offset,
             }
 
+            # Remove None values to avoid issues
+            search_params = {
+                k: v for k, v in search_params.items() if v is not None and v != []
+            }
+
+            logger.info(f"Final search_params: {search_params}")
             results = db.search_recipes(search_params)
 
-            return SearchResultsResponse(
-                recipes=[
-                    RecipeListResponse(**recipe)
-                    for recipe in results.get("recipes", [])
-                ],
-                total_count=results.get("total_count", 0),
-                offset=offset,
-                limit=limit,
-            )
+            # db.search_recipes returns List[Dict[str, Any]] directly, not a dict with "recipes" key
+            return [RecipeListResponse(**recipe) for recipe in results]
         else:
             logger.info("Getting all recipes")
             recipes = db.get_recipes()

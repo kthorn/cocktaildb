@@ -562,7 +562,60 @@ class Database:
     def get_recipes(
         self, cognito_user_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Get all recipes with their ingredients"""
+        """Get all recipes for list view (optimized - only ingredient counts, not full details)"""
+        try:
+            start_time = time.time()
+
+            # Get basic recipe data
+            params = {"cognito_user_id": cognito_user_id}
+            recipes_result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(get_all_recipes_sql, params),
+            )
+
+            if not recipes_result:
+                return []
+
+            # Get ingredient counts efficiently for all recipes in one query
+            recipe_ids = [recipe["id"] for recipe in recipes_result]
+            placeholders = ",".join("?" for _ in recipe_ids)
+
+            ingredient_counts = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    f"""
+                    SELECT recipe_id, COUNT(*) as ingredient_count
+                    FROM recipe_ingredients
+                    WHERE recipe_id IN ({placeholders})
+                    GROUP BY recipe_id
+                    """,
+                    tuple(recipe_ids),
+                ),
+            )
+
+            # Create a lookup map for ingredient counts
+            count_map = {
+                row["recipe_id"]: row["ingredient_count"] for row in ingredient_counts
+            }
+
+            # Add ingredient_count to each recipe
+            for recipe in recipes_result:
+                recipe["ingredient_count"] = count_map.get(recipe["id"], 0)
+
+            total_time = time.time() - start_time
+            logger.info(
+                f"get_recipes: Total execution time: {total_time:.3f}s (optimized)"
+            )
+            return recipes_result
+
+        except Exception as e:
+            logger.error(f"Error getting recipes: {str(e)}")
+            raise
+
+    def get_recipes_with_ingredients(
+        self, cognito_user_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get all recipes with their full ingredient details (for detailed views)"""
         try:
             start_time = time.time()
             # 1. Get all recipes
@@ -574,7 +627,7 @@ class Database:
             )
             recipes_end = time.time()
             logger.info(
-                f"get_recipes: Fetched {len(recipes_result)} recipes in {recipes_end - recipes_start:.3f}s"
+                f"get_recipes_with_ingredients: Fetched {len(recipes_result)} recipes in {recipes_end - recipes_start:.3f}s"
             )
             if not recipes_result:
                 return []
@@ -590,7 +643,7 @@ class Database:
             )
             ingredients_end = time.time()
             logger.info(
-                f"get_recipes: Fetched {len(all_recipe_ingredients_list)} recipe ingredient entries in {ingredients_end - ingredients_start:.3f}s"
+                f"get_recipes_with_ingredients: Fetched {len(all_recipe_ingredients_list)} recipe ingredient entries in {ingredients_end - ingredients_start:.3f}s"
             )
             # 3. Identify all necessary ingredient IDs (direct + ancestors) using the helper
             ids_start = time.time()
@@ -599,7 +652,7 @@ class Database:
             )
             ids_end = time.time()
             logger.info(
-                f"get_recipes: Identified {len(all_needed_ingredient_ids)} unique ingredient IDs in {ids_end - ids_start:.3f}s"
+                f"get_recipes_with_ingredients: Identified {len(all_needed_ingredient_ids)} unique ingredient IDs in {ids_end - ids_start:.3f}s"
             )
             # 4. Fetch names for all needed ingredients in one query
             fetch_names_start = time.time()
@@ -616,7 +669,7 @@ class Database:
                 ingredient_names_map = {row["id"]: row["name"] for row in names_result}
             fetch_names_end = time.time()
             logger.info(
-                f"get_recipes: Fetched {len(ingredient_names_map)} ingredient names in {fetch_names_end - fetch_names_start:.3f}s"
+                f"get_recipes_with_ingredients: Fetched {len(ingredient_names_map)} ingredient names in {fetch_names_end - fetch_names_start:.3f}s"
             )
             # 5. Assemble full names using the helper method
             assemble_names_start = time.time()
@@ -625,7 +678,7 @@ class Database:
             )
             assemble_names_end = time.time()
             logger.info(
-                f"get_recipes: Assembled full names in {assemble_names_end - assemble_names_start:.3f}s"
+                f"get_recipes_with_ingredients: Assembled full names in {assemble_names_end - assemble_names_start:.3f}s"
             )
             # 6. Group ingredients by recipe
             grouping_start = time.time()
@@ -637,7 +690,7 @@ class Database:
                 recipe_ingredients_grouped[recipe_id].append(ing_data)
             grouping_end = time.time()
             logger.info(
-                f"get_recipes: Grouped ingredients in {grouping_end - grouping_start:.3f}s"
+                f"get_recipes_with_ingredients: Grouped ingredients in {grouping_end - grouping_start:.3f}s"
             )
             # 7. Combine recipes with their assembled ingredients
             combine_start = time.time()
@@ -645,13 +698,15 @@ class Database:
                 recipe["ingredients"] = recipe_ingredients_grouped.get(recipe["id"], [])
             combine_end = time.time()
             logger.info(
-                f"get_recipes: Combined recipes and ingredients in {combine_end - combine_start:.3f}s"
+                f"get_recipes_with_ingredients: Combined recipes and ingredients in {combine_end - combine_start:.3f}s"
             )
             total_time = time.time() - start_time
-            logger.info(f"get_recipes: Total execution time: {total_time:.3f}s")
+            logger.info(
+                f"get_recipes_with_ingredients: Total execution time: {total_time:.3f}s"
+            )
             return recipes_result
         except Exception as e:
-            logger.error(f"Error getting recipes: {str(e)}")
+            logger.error(f"Error getting recipes with ingredients: {str(e)}")
             raise
 
     def get_recipe(
@@ -1272,9 +1327,33 @@ class Database:
                 self.execute_query(query, params),
             )
 
-            # Fetch ingredients for each recipe
-            for recipe in recipes_result:
-                recipe["ingredients"] = self._get_recipe_ingredients(recipe["id"])
+            # Get ingredient counts efficiently for search results
+            if recipes_result:
+                recipe_ids = [recipe["id"] for recipe in recipes_result]
+                placeholders = ",".join("?" for _ in recipe_ids)
+
+                ingredient_counts = cast(
+                    List[Dict[str, Any]],
+                    self.execute_query(
+                        f"""
+                        SELECT recipe_id, COUNT(*) as ingredient_count
+                        FROM recipe_ingredients
+                        WHERE recipe_id IN ({placeholders})
+                        GROUP BY recipe_id
+                        """,
+                        tuple(recipe_ids),
+                    ),
+                )
+
+                # Create a lookup map for ingredient counts
+                count_map = {
+                    row["recipe_id"]: row["ingredient_count"]
+                    for row in ingredient_counts
+                }
+
+                # Add ingredient_count to each recipe
+                for recipe in recipes_result:
+                    recipe["ingredient_count"] = count_map.get(recipe["id"], 0)
 
             return recipes_result
 
