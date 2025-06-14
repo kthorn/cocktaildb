@@ -39,20 +39,23 @@ class CocktailAPI {
     }
 
     // Common fetch options for all requests
-    getFetchOptions(method = 'GET', body = null) {
+    getFetchOptions(method = 'GET', body = null, requiresAuth = false) {
         const options = {
             method,
             mode: 'cors',
             credentials: 'omit',  // Must be 'omit' for a server with wildcard CORS origin
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: {},
         };
 
-        // Always use the ID Token - API Gateway Authorizer expects this
-        const idToken = localStorage.getItem('id_token');
-        if (method !== 'GET') {
-            // Require authentication for non-GET requests
+        // Only add Content-Type header for requests with body (POST, PUT, etc.)
+        if (body) {
+            options.headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(body);
+        }
+
+        // Add Authorization header for non-GET requests or when explicitly required
+        if (method !== 'GET' || requiresAuth) {
+            // Require authentication for non-GET requests or auth-required GET requests
             if (!isAuthenticated()) {
                 throw new Error('Authentication required. Please log in to perform this action.');
             }            
@@ -61,21 +64,20 @@ class CocktailAPI {
             if (!token) {
                 throw new Error('No authentication token found. Please log in again.');
             }
-        }
-        if (idToken) {
-            options.headers['Authorization'] = `Bearer ${idToken}`;
-        }
-        if (body) {
-            options.body = JSON.stringify(body);
+            // Use the ID Token for API Gateway Authorizer
+            const idToken = localStorage.getItem('id_token');
+            if (idToken) {
+                options.headers['Authorization'] = `Bearer ${idToken}`;
+            }
         }
 
         return options;
     }
 
     // Private helper for making requests
-    async _request(path, method = 'GET', body = null) {
+    async _request(path, method = 'GET', body = null, requiresAuth = false) {
         const url = `${this.baseUrl}${path}`;
-        const options = this.getFetchOptions(method, body);
+        const options = this.getFetchOptions(method, body, requiresAuth);
         const response = await fetch(url, options);
         return this.handleResponse(response);
     }
@@ -110,6 +112,56 @@ class CocktailAPI {
         return this._request(`/recipes/${id}`);
     }
 
+    // Get all recipes with full details (ingredients, instructions, etc.)
+    async getRecipesWithFullData() {
+        const basicRecipes = await this.getRecipes();
+        return this.enrichRecipes(basicRecipes);
+    }
+
+    // Search recipes and return full details
+    async searchRecipesWithFullData(searchQuery) {
+        const basicRecipes = await this.searchRecipes(searchQuery);
+        return this.enrichRecipes(basicRecipes);
+    }
+
+    // Helper to convert basic recipe data to full recipe data
+    // Uses batching to prevent overwhelming the server with concurrent requests
+    async enrichRecipes(basicRecipes, onBatchLoaded = null) {
+        if (!basicRecipes || basicRecipes.length === 0) {
+            return basicRecipes;
+        }
+
+        const fullRecipes = [];
+        const batchSize = 5; // Process 5 recipes at a time to prevent server overload
+        
+        for (let i = 0; i < basicRecipes.length; i += batchSize) {
+            const batch = basicRecipes.slice(i, i + batchSize);
+            const batchPromises = batch.map(async (recipe) => {
+                try {
+                    return await this.getRecipe(recipe.id);
+                } catch (error) {
+                    console.error(`Error fetching full recipe data for ${recipe.id}:`, error);
+                    return recipe; // Fallback to basic recipe data
+                }
+            });
+            
+            const batchResults = await Promise.all(batchPromises);
+            fullRecipes.push(...batchResults);
+            
+            // Call the callback with the current batch if provided
+            if (typeof onBatchLoaded === 'function') {
+                onBatchLoaded(batchResults, fullRecipes.length, basicRecipes.length);
+            }
+            
+            // Small delay between batches to be gentle on the backend
+            if (i + batchSize < basicRecipes.length) {
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+        }
+        
+        return fullRecipes;
+    }
+
     async createRecipe(recipeData) {
         return this._request('/recipes', 'POST', recipeData);
     }
@@ -137,10 +189,9 @@ class CocktailAPI {
         }
         
         if (searchQuery.tags && searchQuery.tags.length > 0) {
-            // For multiple tags, append each one
-            searchQuery.tags.forEach(tag => {
-                queryParams.append('tags', tag);
-            });
+            // Send tags as a comma-separated string
+            const tagsString = searchQuery.tags.join(',');
+            queryParams.append('tags', tagsString);
         }
         
         // Handle ingredient queries as a comma-separated list of ID:OPERATOR pairs
@@ -238,7 +289,32 @@ class CocktailAPI {
         return this._request(path, 'DELETE');
     }
 
-    // Get all public tags (if needed directly)
+    // Get all public tags
+    async getPublicTags() {
+        return this._request('/tags/public');
+    }
+
+    // Get private tags (requires authentication)
+    async getPrivateTags() {
+        return this._request('/tags/private', 'GET', null, true);
+    }
+
+    // Get current user info (requires authentication)
+    async getCurrentUserInfo() {
+        return this._request('/auth/me', 'GET', null, true);
+    }
+
+    // Get all recipes with full details and progressive loading support
+    async getRecipesWithFullDataProgressive(onBatchLoaded = null) {
+        const basicRecipes = await this.getRecipes();
+        return this.enrichRecipes(basicRecipes, onBatchLoaded);
+    }
+
+    // Search recipes and return full details with progressive loading support
+    async searchRecipesWithFullDataProgressive(searchQuery, onBatchLoaded = null) {
+        const basicRecipes = await this.searchRecipes(searchQuery);
+        return this.enrichRecipes(basicRecipes, onBatchLoaded);
+    }
 }
 
 // Create and export the API instance

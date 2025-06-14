@@ -18,11 +18,27 @@ async function updateStats() {
 // Load and display a recipe
 async function loadRecipes() {
     try {
-        recipes = await api.getRecipes();
-        if (recipes.length > 0) {
-            displayRecipe(currentRecipeIndex);
-        } else {
+        // Show loading message
+        document.getElementById('recipe-display').innerHTML = '<p>Loading recipes...</p>';
+        
+        recipes = await api.getRecipesWithFullDataProgressive((batch, loadedCount, totalCount) => {
+            console.log(`Loaded ${loadedCount}/${totalCount} recipes for carousel`);
+            // Show first recipe as soon as first batch is available
+            if (loadedCount === batch.length && recipes.length === 0) {
+                recipes = [...batch];
+                displayRecipe(currentRecipeIndex);
+                updateStats();
+            } else {
+                recipes.push(...batch);
+                updateStats();
+            }
+        });
+        
+        if (recipes.length === 0) {
             document.getElementById('recipe-display').innerHTML = '<p>No recipes found.</p>';
+        } else if (recipes.length > 0) {
+            // Ensure we're displaying the first recipe if not done already
+            displayRecipe(currentRecipeIndex);
         }
         updateStats();
     } catch (error) {
@@ -32,7 +48,7 @@ async function loadRecipes() {
 }
 
 // Display a specific recipe by index
-async function displayRecipe(index) {
+function displayRecipe(index) {
     if (recipes.length === 0) return;
     
     // Ensure index is within bounds
@@ -42,8 +58,8 @@ async function displayRecipe(index) {
     currentRecipeIndex = index;
     
     try {
-        // Fetch fresh recipe data
-        const recipe = await api.getRecipe(recipes[index].id);
+        // Use the already loaded full recipe data
+        const recipe = recipes[index];
         const recipeCard = createRecipeCard(recipe);
         
         document.getElementById('recipe-display').innerHTML = '';
@@ -55,12 +71,12 @@ async function displayRecipe(index) {
 }
 
 // Event listeners for carousel arrows
-document.getElementById('prev-recipe').addEventListener('click', async () => {
-    await displayRecipe(currentRecipeIndex - 1);
+document.getElementById('prev-recipe').addEventListener('click', () => {
+    displayRecipe(currentRecipeIndex - 1);
 });
 
-document.getElementById('next-recipe').addEventListener('click', async () => {
-    await displayRecipe(currentRecipeIndex + 1);
+document.getElementById('next-recipe').addEventListener('click', () => {
+    displayRecipe(currentRecipeIndex + 1);
 });
 
 // Initialize when DOM is loaded
