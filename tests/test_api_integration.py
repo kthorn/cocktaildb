@@ -268,10 +268,16 @@ class TestComplexIntegrationScenarios:
         assert recipes_response.status_code == status.HTTP_200_OK
 
         recipes_data = recipes_response.json()
-        if not recipes_data:
+        # Handle both possible response formats: direct list or dict with "recipes" key
+        recipes = (
+            recipes_data
+            if isinstance(recipes_data, list)
+            else recipes_data.get("recipes", [])
+        )
+        if not recipes:
             pytest.skip("No recipes available for integration test")
 
-        recipe_id = recipes_data[0]["id"]
+        recipe_id = recipes[0]["id"]
 
         # Get detailed recipe with ingredients
         recipe_detail_response = test_client_production_readonly.get(
