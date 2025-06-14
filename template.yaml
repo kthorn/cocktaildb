@@ -217,8 +217,6 @@ Resources:
   # EFS Mount Target in private subnet for security
   MountTarget:
     Type: AWS::EFS::MountTarget
-    DependsOn:
-      - CocktailEFS
     Properties:
       FileSystemId: !Ref CocktailEFS
       SubnetId: !Ref PrivateSubnet
@@ -228,8 +226,6 @@ Resources:
   # EFS Access Point
   EFSAccessPoint:
     Type: AWS::EFS::AccessPoint
-    DependsOn:
-      - CocktailEFS
     Properties:
       FileSystemId: !Ref CocktailEFS
       PosixUser:
@@ -401,9 +397,6 @@ Resources:
   # Bucket policy custom resource
   BucketPolicyResource:
     Type: AWS::CloudFormation::CustomResource
-    DependsOn:
-      - WebsiteBucket
-      - CloudFrontDistribution
     Properties:
       ServiceToken: !GetAtt WebsiteBucketPolicyFunction.Arn
       BucketName: !Ref WebsiteBucket
@@ -415,9 +408,6 @@ Resources:
     Type: AWS::Serverless::Function
     DependsOn: 
       - MountTarget
-      - EFSAccessPoint
-      - CognitoUserPool
-      - CognitoUserPoolClient
     Properties:
       FunctionName: !Sub ${AWS::StackName}-api-handler
       CodeUri: api/
@@ -748,7 +738,6 @@ Resources:
     Type: AWS::Serverless::Function
     DependsOn: 
       - MountTarget
-      - EFSAccessPoint
     Properties:
       FunctionName: !Sub ${AWS::StackName}-schema-deploy
       CodeUri: schema-deploy/
@@ -909,7 +898,6 @@ Resources:
     Condition: IsProdEnvironment
     DependsOn:
       - MountTarget
-      - BackupBucket
     Properties:
       FunctionName: !Sub ${AWS::StackName}-db-backup-handler
       CodeUri: backup-lambda/
