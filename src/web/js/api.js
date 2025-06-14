@@ -105,7 +105,13 @@ class CocktailAPI {
 
     // Recipes API
     async getRecipes() {
-        return this._request('/recipes');
+        const response = await this._request('/recipes');
+        // Handle new paginated response format
+        if (response && typeof response === 'object' && response.recipes) {
+            return response.recipes;
+        }
+        // Fallback for direct array response (legacy format)
+        return response || [];
     }
 
     async getRecipe(id) {
@@ -181,7 +187,7 @@ class CocktailAPI {
         
         // Add search filters to query params
         if (searchQuery.name) {
-            queryParams.append('name', searchQuery.name);
+            queryParams.append('q', searchQuery.name);
         }
         
         if (searchQuery.rating) {
@@ -194,22 +200,29 @@ class CocktailAPI {
             queryParams.append('tags', tagsString);
         }
         
-        // Handle ingredient queries as a comma-separated list of ID:OPERATOR pairs
+        // Handle ingredient queries as a comma-separated list of names
         if (searchQuery.ingredients && searchQuery.ingredients.length > 0) {
-            const ingredientParams = searchQuery.ingredients.map(ing => 
-                `${ing.id}:${ing.operator}`
+            const ingredientNames = searchQuery.ingredients.map(ing => 
+                typeof ing === 'string' ? ing : ing.name || ing.id
             ).join(',');
             
-            queryParams.append('ingredients', ingredientParams);
+            queryParams.append('ingredients', ingredientNames);
         }
         
         // Build the URL with query string
         const queryString = queryParams.toString();
-        const url = `${this.baseUrl}/recipes?search=true${queryString ? `&${queryString}` : ''}`;
+        const url = `${this.baseUrl}/recipes/search${queryString ? `?${queryString}` : ''}`;
         
         // Always use GET for recipe searches
         const response = await fetch(url, this.getFetchOptions());
-        return this.handleResponse(response);
+        const data = await this.handleResponse(response);
+        
+        // Handle new paginated search response format
+        if (data && typeof data === 'object' && data.recipes) {
+            return data.recipes;
+        }
+        // Fallback for direct array response (legacy format)
+        return data || [];
     }
 
     // Units API
