@@ -36,7 +36,7 @@ fi
 if [ "$TARGET_ENV" = "prod" ]; then
     if [ -z "$HOSTED_ZONE_ID" ]; then
         echo "ERROR: HOSTED_ZONE_ID environment variable required for prod deployment."
-        echo "Please set the HOSTED_ZONE_ID environment variable before running this script."
+        echo "Please set the HOSTED_ZONE_ID environment variable to the Route 53 Hosted Zone ID for the domain you want to use."
         exit 1
     fi
 else
@@ -44,19 +44,6 @@ else
         echo "WARNING: HOSTED_ZONE_ID not set for dev. Using placeholder."
         HOSTED_ZONE_ID="NONE"
     fi
-fi
-
-# Setup environment - activate conda/mamba environment if available
-if command -v mamba &> /dev/null; then
-    echo "Activating mamba environment..."
-    eval "$(mamba shell hook --shell bash)"
-    mamba activate cocktaildb-312 2>/dev/null || echo "Warning: Could not activate mamba environment cocktaildb-312"
-elif command -v conda &> /dev/null; then
-    echo "Activating conda environment..."
-    eval "$(conda shell.bash hook)"
-    conda activate cocktaildb-312 2>/dev/null || echo "Warning: Could not activate conda environment cocktaildb-312"
-else
-    echo "Warning: Neither mamba nor conda found. Proceeding with current environment."
 fi
 
 # Change to project root
