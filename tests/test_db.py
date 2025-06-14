@@ -1,7 +1,7 @@
 import pytest
 
 # Import the standalone helper functions
-from cocktaildb.db import extract_all_ingredient_ids, assemble_ingredient_full_names
+from api.db import extract_all_ingredient_ids, assemble_ingredient_full_names
 
 # REMOVED: Unnecessary fixture
 # @pytest.fixture
