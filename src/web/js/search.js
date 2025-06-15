@@ -58,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (firstRow) {
             firstRow.querySelector('.logical-operator').value = 'MUST';
             firstRow.querySelector('.ingredient-search').value = '';
-            firstRow.querySelector('.ingredient-id').value = '';
+            // No longer need to clear ingredient ID since we use names directly
         }
     });
 
@@ -136,15 +136,16 @@ document.addEventListener('DOMContentLoaded', () => {
             
             ingredientRows.forEach(row => {
                 const logicalOp = row.querySelector('.logical-operator').value;
-                const ingredientId = row.querySelector('.ingredient-id').value;
                 const ingredientName = row.querySelector('.ingredient-search').value.trim();
                 
-                // Only add if an ingredient is selected
-                if (ingredientId && ingredientName) {
-                    query.ingredients.push({
-                        id: parseInt(ingredientId),
-                        operator: logicalOp
-                    });
+                // Only add if an ingredient name is provided
+                if (ingredientName) {
+                    // Create ingredient specification with operator if not MUST (default)
+                    if (logicalOp === 'MUST') {
+                        query.ingredients.push(ingredientName);
+                    } else {
+                        query.ingredients.push(`${ingredientName}:${logicalOp}`);
+                    }
                 }
             });
             
@@ -297,7 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear on double-click
         ingredientSearchInput.addEventListener('dblclick', () => {
             ingredientSearchInput.value = '';
-            ingredientIdInput.value = '';
+            // No longer need to clear ingredient ID
         });
     }
 
@@ -348,7 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             item.addEventListener('click', () => {
                 searchInput.value = ingredient.name;
-                row.querySelector('.ingredient-id').value = ingredient.id;
+                // No longer need to set ingredient ID since we use names directly
                 dropdown.style.display = 'none';
             });
             
@@ -402,13 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activeIngredientIndex >= 0 && activeIngredientIndex < items.length) {
             const selectedValue = items[activeIngredientIndex].textContent;
             searchInput.value = selectedValue;
-            
-            // Find and set the corresponding ingredient ID
-            const ingredient = availableIngredients.find(ing => ing.name === selectedValue);
-            if (ingredient) {
-                idInput.value = ingredient.id;
-            }
-            
+            // No longer need to set ingredient ID since we use names directly
             dropdown.style.display = 'none';
         }
     }

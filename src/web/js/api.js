@@ -200,13 +200,11 @@ class CocktailAPI {
             queryParams.append('tags', tagsString);
         }
         
-        // Handle ingredient queries as a comma-separated list of names
+        // Handle ingredient queries as a comma-separated list of names with operators
         if (searchQuery.ingredients && searchQuery.ingredients.length > 0) {
-            const ingredientNames = searchQuery.ingredients.map(ing => 
-                typeof ing === 'string' ? ing : ing.name || ing.id
-            ).join(',');
-            
-            queryParams.append('ingredients', ingredientNames);
+            // Ingredients are already in the correct format: ["Vodka", "Gin:MUST_NOT", etc.]
+            const ingredientsString = searchQuery.ingredients.join(',');
+            queryParams.append('ingredients', ingredientsString);
         }
         
         // Build the URL with query string
