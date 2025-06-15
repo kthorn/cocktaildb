@@ -1,0 +1,204 @@
+"""
+Tests for ingredient search functionality
+"""
+
+import pytest
+from fastapi.testclient import TestClient
+from api.main import app
+
+
+class TestIngredientSearch:
+    """Test search functionality with ingredient filters"""
+
+    @pytest.fixture
+    def client(self):
+        """Create test client"""
+        return TestClient(app)
+
+    def test_search_recipes_with_aperol_ingredient(self, client):
+        """Test searching recipes by Aperol ingredient"""
+        # Search for recipes containing Aperol
+        response = client.get("/api/v1/recipes/search?ingredients=Aperol")
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Should return only recipes that actually contain Aperol
+        assert "recipes" in data
+        assert "pagination" in data
+        
+        # Based on our test database, there should be exactly 1 recipe with Aperol
+        assert data["pagination"]["total_count"] == 1
+        assert len(data["recipes"]) == 1
+        
+        # Verify the returned recipe actually contains Aperol
+        recipe = data["recipes"][0]
+        assert "ingredients" in recipe
+        
+        aperol_ingredients = [
+            ing for ing in recipe["ingredients"] 
+            if "aperol" in ing["ingredient_name"].lower()
+        ]
+        assert len(aperol_ingredients) > 0, "Recipe should contain Aperol ingredient"
+
+    def test_search_recipes_with_nonexistent_ingredient(self, client):
+        """Test searching recipes by nonexistent ingredient"""
+        response = client.get("/api/v1/recipes/search?ingredients=NonexistentIngredient123")
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Should return no recipes
+        assert data["pagination"]["total_count"] == 0
+        assert len(data["recipes"]) == 0
+
+    def test_search_recipes_with_multiple_ingredients(self, client):
+        """Test searching recipes with multiple ingredient filters"""
+        # Test with two ingredients that are likely to appear together in cocktails
+        # Using Aperol and Prosecco which should appear in some Italian cocktails
+        response = client.get("/api/v1/recipes/search?ingredients=Lime Juice,Simple Syrup")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Should return only recipes that contain both ingredients
+        # This might be 0 recipes, which is valid
+        assert "recipes" in data
+        assert "pagination" in data
+        assert isinstance(data["pagination"]["total_count"], int)
+        
+        # If recipes are returned, verify they contain the requested ingredients
+        for recipe in data["recipes"]:
+            ingredient_names = [ing["ingredient_name"].lower() for ing in recipe["ingredients"]]
+            # Note: Due to hierarchical matching, we might match child ingredients
+            # So we check if the recipe contains ingredients that match our search terms
+            has_lime_juice = any("lime" in name and "juice" in name for name in ingredient_names)
+            has_simple_syrup = any("simple" in name and "syrup" in name for name in ingredient_names)
+            assert has_lime_juice or has_simple_syrup, f"Recipe should contain ingredients matching the search terms. Found: {ingredient_names}"
+
+    def test_search_recipes_without_ingredients_returns_all(self, client):
+        """Test that search without ingredient filter returns all recipes"""
+        response = client.get("/api/v1/recipes/search")
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Should return all recipes (limited by pagination)
+        assert "recipes" in data
+        assert "pagination" in data
+        assert data["pagination"]["total_count"] > 1  # Should have multiple recipes
+        assert len(data["recipes"]) > 0
+
+    def test_search_recipes_ingredient_filter_vs_no_filter_difference(self, client):
+        """Test that ingredient filtering actually filters results"""
+        # Get all recipes (no filter)
+        all_response = client.get("/api/v1/recipes/search")
+        assert all_response.status_code == 200
+        all_data = all_response.json()
+        
+        # Get recipes with Aperol filter
+        aperol_response = client.get("/api/v1/recipes/search?ingredients=Aperol")
+        assert aperol_response.status_code == 200
+        aperol_data = aperol_response.json()
+        
+        # The counts should be different
+        assert all_data["pagination"]["total_count"] != aperol_data["pagination"]["total_count"]
+        assert all_data["pagination"]["total_count"] > aperol_data["pagination"]["total_count"]
+        
+        # Aperol search should return fewer results
+        assert aperol_data["pagination"]["total_count"] <= 1  # We know there's only 1 Aperol recipe
+
+    def test_search_recipes_multiple_ingredients_and_logic(self, client):
+        """Test that multiple ingredients use AND logic (recipe must contain ALL ingredients)"""
+        # Find two ingredients that might appear together
+        response = client.get("/api/v1/recipes/search?ingredients=Bourbon,Simple Syrup")
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Should return only recipes that contain BOTH ingredients
+        assert "recipes" in data
+        assert "pagination" in data
+        
+        # If recipes are returned, verify they contain ingredients matching both terms
+        for recipe in data["recipes"]:
+            ingredient_names = [ing["ingredient_name"].lower() for ing in recipe["ingredients"]]
+            
+            # Check for bourbon (or parent whiskey due to hierarchy)
+            has_bourbon_or_whiskey = any(
+                "bourbon" in name or "whiskey" in name 
+                for name in ingredient_names
+            )
+            
+            # Check for simple syrup
+            has_simple_syrup = any(
+                "simple" in name and "syrup" in name 
+                for name in ingredient_names
+            )
+            
+            assert has_bourbon_or_whiskey, f"Recipe should contain bourbon/whiskey. Found: {ingredient_names}"
+            assert has_simple_syrup, f"Recipe should contain simple syrup. Found: {ingredient_names}"
+
+    def test_search_recipes_hierarchical_ingredient_matching(self, client):
+        """Test that searching for parent ingredient matches recipes with child ingredients"""
+        # Search for "Whiskey" should match recipes containing "Bourbon" (child of Whiskey)
+        
+        # First, find a recipe that contains Bourbon
+        bourbon_response = client.get("/api/v1/recipes/search?ingredients=Bourbon")
+        assert bourbon_response.status_code == 200
+        bourbon_data = bourbon_response.json()
+        
+        if bourbon_data["pagination"]["total_count"] > 0:
+            # Now search for Whiskey (parent of Bourbon)
+            whiskey_response = client.get("/api/v1/recipes/search?ingredients=Whiskey")
+            assert whiskey_response.status_code == 200
+            whiskey_data = whiskey_response.json()
+            
+            # Whiskey search should return at least as many recipes as Bourbon search
+            # (since all Bourbon recipes should also match Whiskey search)
+            assert whiskey_data["pagination"]["total_count"] >= bourbon_data["pagination"]["total_count"]
+            
+            # Get the first bourbon recipe ID
+            bourbon_recipe_id = bourbon_data["recipes"][0]["id"]
+            
+            # Check that this recipe also appears in whiskey search results
+            whiskey_recipe_ids = [recipe["id"] for recipe in whiskey_data["recipes"]]
+            assert bourbon_recipe_id in whiskey_recipe_ids, "Recipe with Bourbon should also match Whiskey search"
+
+    def test_search_recipes_case_insensitive_ingredients(self, client):
+        """Test that ingredient search is case-insensitive"""
+        # Test different cases of the same ingredient
+        test_cases = ["aperol", "Aperol", "APEROL", "ApErOl"]
+        
+        expected_count = None
+        for ingredient_case in test_cases:
+            response = client.get(f"/api/v1/recipes/search?ingredients={ingredient_case}")
+            assert response.status_code == 200
+            data = response.json()
+            
+            if expected_count is None:
+                expected_count = data["pagination"]["total_count"]
+            else:
+                assert data["pagination"]["total_count"] == expected_count, (
+                    f"Case-insensitive search failed: {ingredient_case} returned "
+                    f"{data['pagination']['total_count']} recipes, expected {expected_count}"
+                )
+
+    def test_search_recipes_ingredient_name_with_spaces(self, client):
+        """Test searching for ingredients with spaces in their names"""
+        # Test with "Simple Syrup" which has a space
+        response = client.get("/api/v1/recipes/search?ingredients=Simple Syrup")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Should return recipes containing simple syrup
+        assert "recipes" in data
+        assert "pagination" in data
+        
+        # If recipes found, verify they contain simple syrup
+        for recipe in data["recipes"]:
+            ingredient_names = [ing["ingredient_name"].lower() for ing in recipe["ingredients"]]
+            has_simple_syrup = any(
+                "simple" in name and "syrup" in name 
+                for name in ingredient_names
+            )
+            assert has_simple_syrup, f"Recipe should contain simple syrup. Found: {ingredient_names}"

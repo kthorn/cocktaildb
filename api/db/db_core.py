@@ -441,6 +441,21 @@ class Database:
             logger.error(f"Error getting ingredients: {str(e)}")
             raise
 
+    def get_ingredient_by_name(self, ingredient_name: str) -> Optional[Dict[str, Any]]:
+        """Get a single ingredient by name (case-insensitive)"""
+        try:
+            result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id, name, description, parent_id, path FROM ingredients WHERE LOWER(name) = LOWER(?)",
+                    (ingredient_name,)
+                )
+            )
+            return result[0] if result else None
+        except Exception as e:
+            logger.error(f"Error getting ingredient by name '{ingredient_name}': {str(e)}")
+            return None
+
     def get_ingredient(self, ingredient_id: int) -> Optional[Dict[str, Any]]:
         """Get a single ingredient by ID"""
         try:
@@ -1755,8 +1770,8 @@ class Database:
         """Search recipes with pagination, returns (recipes, total_count)"""
         try:
             from .sql_queries import (
-                search_recipes_paginated_with_ingredients_sql,
-                search_recipes_count_sql
+                build_search_recipes_count_sql,
+                build_search_recipes_paginated_sql
             )
             
             # Build query parameters
@@ -1771,19 +1786,44 @@ class Database:
                 "cognito_user_id": user_id
             }
             
+            # Handle ingredient filtering by converting names to IDs and paths
+            ingredient_filter_conditions = []
+            has_invalid_ingredients = False
+            if search_params.get("ingredients"):
+                for i, ingredient_name in enumerate(search_params["ingredients"]):
+                    ingredient = self.get_ingredient_by_name(ingredient_name.strip())
+                    if ingredient:
+                        # Use path-based matching to include child ingredients
+                        param_name = f"ingredient_path_{i}"
+                        query_params[param_name] = f"%/{ingredient['id']}/%"
+                        ingredient_filter_conditions.append(f"i2.path LIKE :{param_name}")
+                    else:
+                        logger.warning(f"Ingredient not found: {ingredient_name}")
+                        has_invalid_ingredients = True
+                
+                # If any ingredient doesn't exist, return no results
+                if has_invalid_ingredients:
+                    logger.info("Some ingredients not found, returning empty results")
+                    return [], 0
+            
             logger.info(f"Searching recipes with params: {query_params}")
+            logger.info(f"Ingredient filter conditions: {ingredient_filter_conditions}")
+            
+            # Build dynamic SQL queries
+            count_sql = build_search_recipes_count_sql(ingredient_filter_conditions)
+            paginated_sql = build_search_recipes_paginated_sql(ingredient_filter_conditions)
             
             # Get total count first
             count_result = cast(
                 List[Dict[str, Any]],
-                self.execute_query(search_recipes_count_sql, query_params)
+                self.execute_query(count_sql, query_params)
             )
             total_count = count_result[0]["total_count"] if count_result else 0
             
             # Get paginated results
             rows = cast(
                 List[Dict[str, Any]],
-                self.execute_query(search_recipes_paginated_with_ingredients_sql, query_params)
+                self.execute_query(paginated_sql, query_params)
             )
             
             # Group results by recipe ID and assemble full recipe objects
