@@ -6,7 +6,7 @@
 set -e
 
 BACKUP_BUCKET="cocktail-db-prod-db-backups"
-BACKUP_FILE="backup-2025-06-14_08-00-18.db"  # Default to latest
+BACKUP_FILE=""  # Will be auto-detected if not specified
 TARGET_ENVIRONMENT="dev"
 REGION="us-east-1"
 
@@ -23,7 +23,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         -h|--help)
             echo "Usage: $0 [-f backup_file] [-t target_env]"
-            echo "  -f, --file: Backup file name (default: backup-2025-06-14_08-00-18.db)"
+            echo "  -f, --file: Backup file name (default: latest backup)"
             echo "  -t, --target: Target environment (default: dev)"
             exit 0
             ;;
@@ -33,6 +33,17 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Auto-detect latest backup file if not specified
+if [ -z "$BACKUP_FILE" ]; then
+    echo "Finding latest backup file from $BACKUP_BUCKET..."
+    BACKUP_FILE=$(aws s3 ls "s3://$BACKUP_BUCKET/" --region "$REGION" | sort | tail -n 1 | awk '{print $4}')
+    if [ -z "$BACKUP_FILE" ]; then
+        echo "Error: No backup files found in bucket $BACKUP_BUCKET"
+        exit 1
+    fi
+    echo "Latest backup file: $BACKUP_FILE"
+fi
 
 echo "Downloading backup $BACKUP_FILE from $BACKUP_BUCKET..."
 
