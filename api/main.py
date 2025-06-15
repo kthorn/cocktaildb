@@ -8,9 +8,9 @@ It replaces the previous AWS Lambda handler with a modern FastAPI implementation
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
 from mangum import Mangum
 
 # Handle both Lambda and local execution environments
@@ -41,6 +41,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+class CORSHeaderMiddleware(BaseHTTPMiddleware):
+    """Add CORS headers to all responses for Lambda proxy integration"""
+    
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        
+        # Add CORS headers to all responses
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        
+        return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for FastAPI application"""
@@ -66,14 +80,8 @@ app = FastAPI(
     redoc_url="/redoc" if settings.environment == "dev" else None,
 )
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=settings.cors_credentials,
-    allow_methods=settings.cors_methods,
-    allow_headers=settings.cors_headers,
-)
+# Add CORS middleware for Lambda proxy integration success responses
+app.add_middleware(CORSHeaderMiddleware)
 
 # Add exception handlers
 app.add_exception_handler(CocktailDBException, cocktail_db_exception_handler)

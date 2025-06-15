@@ -20,11 +20,7 @@ class Settings(BaseSettings):
     api_version: str = Field(default="1.0.0", description="API version")
     api_description: str = Field(default="API for managing cocktail recipes and ingredients")
     
-    # CORS settings
-    cors_origins: list[str] = Field(default=["*"], description="CORS allowed origins")
-    cors_credentials: bool = Field(default=False, description="CORS allow credentials")
-    cors_methods: list[str] = Field(default=["*"], description="CORS allowed methods")
-    cors_headers: list[str] = Field(default=["*"], description="CORS allowed headers")
+    # CORS is handled by API Gateway
     
     # Environment
     environment: str = Field(default="dev", description="Environment (dev/prod)")

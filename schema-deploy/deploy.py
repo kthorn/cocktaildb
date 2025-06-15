@@ -45,23 +45,42 @@ def send_response(event, context, response_status, response_data):
 def lambda_handler(event, context):
     """
     Custom resource handler to deploy the schema.sql file to EFS and initialize the database
+    Supports both CloudFormation custom resource events and direct invocation
     """
     logger.info(f"Event: {json.dumps(event)}")
 
+    # Check if this is a CloudFormation custom resource event
+    is_cloudformation_event = "RequestType" in event and "StackId" in event
+    
     try:
-        # Only process Create/Update events
-        if event["RequestType"] in ["Create", "Update"]:
+        # For CloudFormation events, only process Create/Update
+        # For direct invocation, always process
+        should_process = (
+            not is_cloudformation_event or 
+            event["RequestType"] in ["Create", "Update"]
+        )
+        
+        if should_process:
             schema_content = ""
-            db_name = event["ResourceProperties"].get("DBName", "cocktaildb")
+            
+            # Handle both CloudFormation and direct invocation
+            if is_cloudformation_event:
+                properties = event["ResourceProperties"]
+            else:
+                properties = event  # For direct invocation, use event directly
+                logger.info("Direct invocation detected - using event as properties")
+            
+            db_name = properties.get("DBName", "cocktaildb")
             db_path = f"/mnt/efs/{db_name}.db"
             
             # Check if this is a restore operation
-            restore_from_s3 = event["ResourceProperties"].get("RestoreFromS3", "false").lower() == "true"
+            restore_from_s3 = properties.get("RestoreFromS3", "false").lower() == "true"
+            restore_from_data = "BackupData" in properties
             
             if restore_from_s3:
                 # Handle database restoration from S3 backup
-                backup_bucket = event["ResourceProperties"].get("BackupS3Bucket")
-                backup_key = event["ResourceProperties"].get("BackupS3Key")
+                backup_bucket = properties.get("BackupS3Bucket")
+                backup_key = properties.get("BackupS3Key")
                 
                 if not backup_bucket or not backup_key:
                     raise ValueError("BackupS3Bucket and BackupS3Key are required for restoration")
@@ -114,20 +133,47 @@ def lambda_handler(event, context):
                             logger.info(f"Cleaned up temporary backup file: {temp_backup_path}")
                         except Exception as e:
                             logger.warning(f"Failed to clean up temporary file: {str(e)}")
+                        
+            elif restore_from_data:
+                # Handle database restoration from direct backup data
+                logger.info("Restoring database from provided backup data")
+                
+                try:
+                    import base64
+                    
+                    # Get base64-encoded backup data
+                    backup_data_b64 = properties.get("BackupData")
+                    if not backup_data_b64:
+                        raise ValueError("BackupData is required for data restoration")
+                    
+                    # Decode the backup data
+                    backup_data = base64.b64decode(backup_data_b64)
+                    
+                    # Write directly to the database path
+                    with open(db_path, 'wb') as f:
+                        f.write(backup_data)
+                        
+                    logger.info(f"Successfully restored database to {db_path} from backup data")
+                    logger.info(f"Restored database size: {len(backup_data)} bytes")
+                    
+                except Exception as e:
+                    error_msg = f"Could not restore from backup data: {str(e)}"
+                    logger.error(error_msg)
+                    raise Exception(error_msg)
                 
             else:
                 # Normal schema deployment
                 # Try to get schema from direct input
-                if "SchemaContent" in event["ResourceProperties"]:
-                    schema_content = event["ResourceProperties"]["SchemaContent"]
+                if "SchemaContent" in properties:
+                    schema_content = properties["SchemaContent"]
                     logger.info("Successfully read schema from direct input SchemaContent")
                 # Try to get schema from S3
                 elif (
-                    "SchemaS3Bucket" in event["ResourceProperties"]
-                    and "SchemaS3Key" in event["ResourceProperties"]
+                    "SchemaS3Bucket" in properties
+                    and "SchemaS3Key" in properties
                 ):
-                    s3_bucket = event["ResourceProperties"]["SchemaS3Bucket"]
-                    s3_key = event["ResourceProperties"]["SchemaS3Key"]
+                    s3_bucket = properties["SchemaS3Bucket"]
+                    s3_key = properties["SchemaS3Key"]
                     logger.info(
                         f"Attempting to download schema from S3: s3://{s3_bucket}/{s3_key}"
                     )
@@ -172,7 +218,7 @@ def lambda_handler(event, context):
 
                 # For updates, only reinitialize if forced
                 force_init = (
-                    event["ResourceProperties"].get("ForceInit", "false").lower() == "true"
+                    properties.get("ForceInit", "false").lower() == "true"
                 )
                 if (
                     event["RequestType"] == "Update"
@@ -201,16 +247,25 @@ def lambda_handler(event, context):
                     conn.close()
                     logger.info(f"Successfully initialized database at {db_path}")
 
-        # Always return success for Delete events
-        send_response(
-            event,
-            context,
-            "SUCCESS",
-            {
-                "Message": "Schema file and database initialization completed successfully"
-            },
-        )
+        # Send CloudFormation response only for CloudFormation events
+        if is_cloudformation_event:
+            send_response(
+                event,
+                context,
+                "SUCCESS",
+                {
+                    "Message": "Schema file and database initialization completed successfully"
+                },
+            )
+        else:
+            logger.info("Direct invocation completed successfully")
+            return {"statusCode": 200, "body": "Schema deployment completed successfully"}
     except Exception as e:
         error_msg = f"Error processing schema file or initializing database: {str(e)}"
         logger.error(error_msg)
-        send_response(event, context, "FAILED", {"Message": error_msg})
+        
+        if is_cloudformation_event:
+            send_response(event, context, "FAILED", {"Message": error_msg})
+        else:
+            logger.error("Direct invocation failed")
+            return {"statusCode": 500, "body": f"Schema deployment failed: {error_msg}"}

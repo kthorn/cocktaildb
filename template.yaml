@@ -38,6 +38,8 @@ Globals:
       AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
       AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
       AllowOrigin: "'*'"
+    BinaryMediaTypes:
+      - "*/*"
 
 Conditions:
   IsProdEnvironment: !Equals [!Ref Environment, "prod"]
@@ -54,19 +56,9 @@ Resources:
         - Key: Name
           Value: !Sub ${AWS::StackName}-vpc
 
-  PublicSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref CocktailVPC
-      AvailabilityZone: !Select
-        - 0
-        - !GetAZs ''
-      CidrBlock: 10.0.2.0/24
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${AWS::StackName}-public-subnet-1
-
+  # Private subnet in AZ-0 for Lambda functions and EFS mount target
+  # This ensures AZ-affinity: Lambda functions and EFS mount target are in the same AZ
+  # preventing cross-AZ latency and potential ENOENT errors
   PrivateSubnet:
     Type: AWS::EC2::Subnet
     Properties:
@@ -79,27 +71,6 @@ Resources:
         - Key: Name
           Value: !Sub ${AWS::StackName}-private-subnet-1
 
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub ${AWS::StackName}-igw
-
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref CocktailVPC
-      InternetGatewayId: !Ref InternetGateway
-
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref CocktailVPC
-      Tags:
-        - Key: Name
-          Value: !Sub ${AWS::StackName}-public-route-table
-
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -108,15 +79,6 @@ Resources:
         - Key: Name
           Value: !Sub ${AWS::StackName}-private-route-table
 
-  PublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: AttachGateway
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-
-
   # --- Add S3 Gateway VPC Endpoint ---
   S3VPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -124,16 +86,65 @@ Resources:
       VpcId: !Ref CocktailVPC
       ServiceName: !Sub com.amazonaws.${AWS::Region}.s3 # S3 service endpoint
       RouteTableIds:
-        - !Ref PublicRouteTable
         - !Ref PrivateRouteTable
-      PolicyDocument: # Optional: Restrict access further if needed
+      PolicyDocument:
         Version: "2012-10-17"
         Statement:
           - Effect: "Allow"
             Principal: "*"
-            Action: "*" # Allow all S3 actions via the endpoint
-            Resource: "*" # Allow access to all S3 resources
+            Action:
+              - "s3:GetObject"
+              - "s3:PutObject"
+              - "s3:ListBucket"
+              - "s3:DeleteObject"
+            Resource:
+              - !Sub "arn:aws:s3:::cocktailwebsite-${AWS::AccountId}-${Environment}"
+              - !Sub "arn:aws:s3:::cocktailwebsite-${AWS::AccountId}-${Environment}/*"
+              - !If 
+                - IsProdEnvironment
+                - !Sub "arn:aws:s3:::cocktaildbbackups-${AWS::AccountId}-${Environment}"
+                - !Ref "AWS::NoValue"
+              - !If 
+                - IsProdEnvironment
+                - !Sub "arn:aws:s3:::cocktaildbbackups-${AWS::AccountId}-${Environment}/*"
+                - !Ref "AWS::NoValue"
   # ------------------------------------
+
+  # EFS VPC Endpoint for Lambda-to-EFS API communication
+  EFSVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.elasticfilesystem
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref EFSVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: "*"
+            Action:
+              - "elasticfilesystem:ClientMount"
+              - "elasticfilesystem:ClientWrite"
+              - "elasticfilesystem:ClientRootAccess"
+              - "elasticfilesystem:DescribeMountTargets"
+            Resource: "*"
+
+  # Security Group for EFS VPC Endpoint
+  EFSVPCEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EFS VPC Endpoint
+      VpcId: !Ref CocktailVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
 
   # EFS File System
   CocktailEFS:
@@ -147,17 +158,13 @@ Resources:
         - Key: Name
           Value: !Sub ${AWS::StackName}-efs
 
-  PublicSubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet
-      RouteTableId: !Ref PublicRouteTable
-
   PrivateSubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet
       RouteTableId: !Ref PrivateRouteTable
+
+
 
   # Security Groups for Lambda and EFS
   LambdaSecurityGroup:
@@ -170,6 +177,18 @@ Resources:
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          DestinationSecurityGroupId: !Ref EFSSecurityGroup
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 10.0.0.2/32
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 10.0.0.2/32
 
   EFSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -187,15 +206,6 @@ Resources:
       ToPort: 443
       CidrIp: !GetAtt CocktailVPC.CidrBlock
 
-  LambdaEgressToEFS:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      GroupId: !Ref LambdaSecurityGroup
-      IpProtocol: tcp
-      FromPort: 2049
-      ToPort: 2049
-      DestinationSecurityGroupId: !Ref EFSSecurityGroup
-
   EFSIngressFromLambda:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -205,16 +215,9 @@ Resources:
       ToPort: 2049
       SourceSecurityGroupId: !Ref LambdaSecurityGroup
 
-  EFSEgressHTTPS:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      GroupId: !Ref EFSSecurityGroup
-      IpProtocol: tcp
-      FromPort: 443
-      ToPort: 443
-      CidrIp: !GetAtt CocktailVPC.CidrBlock
-
-  # EFS Mount Target in private subnet for security
+  # EFS Mount Target in private subnet for security and AZ-affinity
+  # Single mount target ensures Lambda functions access EFS from the same AZ
+  # avoiding cross-AZ latency and potential ENOENT errors
   MountTarget:
     Type: AWS::EFS::MountTarget
     Properties:
@@ -349,6 +352,7 @@ Resources:
   WebsiteBucketPolicyFunction:
     Type: AWS::Serverless::Function
     Properties:
+      Runtime: python3.11
       Handler: index.handler
       InlineCode: |
         import boto3
@@ -411,7 +415,7 @@ Resources:
     Properties:
       FunctionName: !Sub ${AWS::StackName}-api-handler
       CodeUri: api/
-      Handler: main.handler
+      Handler: main.handler  
       Timeout: 60
       Environment:
         Variables:
@@ -431,17 +435,26 @@ Resources:
       Policies:
         - VPCAccessPolicy: {}
         - Statement:
-            - Effect: Allow
+            - Sid: AWSLambdaVPCAccessExecutionRole
+              Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - ec2:CreateNetworkInterface
+                - ec2:DescribeNetworkInterfaces
+                - ec2:DeleteNetworkInterface
+                - ec2:DescribeVpcEndpoints
+                - ec2:DescribeSecurityGroups
+                - ec2:DescribeSubnets
+              Resource: "*"
+            - Sid: AmazonElasticFileSystemClientFullAccess
+              Effect: Allow
               Action:
                 - elasticfilesystem:ClientMount
                 - elasticfilesystem:ClientWrite
                 - elasticfilesystem:ClientRootAccess
-              Resource: !GetAtt CocktailEFS.Arn
-            - Effect: Allow
-              Action:
-                - ec2:DescribeVpcEndpoints
-                - ec2:DescribeSecurityGroups
-                - ec2:DescribeSubnets
+                - elasticfilesystem:DescribeMountTargets
               Resource: "*"
       Events:
         GetIngredients:
@@ -546,7 +559,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
-            Path: /units
+            Path: /units/{unitId}
             Method: put
             Auth:
               Authorizer: CognitoAuthorizer
@@ -554,7 +567,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
-            Path: /units
+            Path: /units/{unitId}
             Method: delete
             Auth:
               Authorizer: CognitoAuthorizer
@@ -918,11 +931,23 @@ Resources:
       Policies:
         - VPCAccessPolicy: {}
         - Statement:
-            - Effect: Allow
+            - Sid: AWSLambdaVPCAccessExecutionRole
+              Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - ec2:CreateNetworkInterface
+                - ec2:DescribeNetworkInterfaces
+                - ec2:DeleteNetworkInterface
+              Resource: "*"
+            - Sid: AmazonElasticFileSystemClientAccess
+              Effect: Allow
               Action:
                 - elasticfilesystem:ClientMount
                 - elasticfilesystem:ClientRead
-              Resource: !GetAtt CocktailEFS.Arn
+                - elasticfilesystem:DescribeMountTargets
+              Resource: "*"
             - Effect: Allow
               Action:
                 - s3:PutObject
@@ -955,14 +980,117 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt BackupSchedule.Arn
 
+  VpcFlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/vpc/flowlogs/${AWS::StackName}"
+      RetentionInDays: 7         # keep 7 days; adjust as needed
+
+  VpcFlowLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AllowCWLogs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt VpcFlowLogGroup.Arn
+
+  CocktailVpcFlowLogs:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceType: VPC
+      ResourceId:  !Ref CocktailVPC       # the VPC in your template
+      TrafficType: ALL                    # ACCEPT | REJECT | ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName:  !Ref VpcFlowLogGroup
+      DeliverLogsPermissionArn: !GetAtt VpcFlowLogsRole.Arn
+      MaxAggregationInterval: 60          # 1 min granularity
+
+
+
+  # Test Lambda without EFS to verify VPC connectivity
+  TestLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-test-handler
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 30
+      InlineCode: |
+        import json
+        import socket
+        
+        def handler(event, context):
+            try:
+                # Test DNS resolution for EFS filesystem
+                efs_endpoint = f"fs-010533de27d14c69b.efs.us-east-1.amazonaws.com"
+                efs_ip = socket.gethostbyname(efs_endpoint)
+                
+                # Test DNS resolution for EFS VPC endpoint  
+                vpc_endpoint = "elasticfilesystem.us-east-1.amazonaws.com"
+                vpc_endpoint_ip = socket.gethostbyname(vpc_endpoint)
+                
+                # Test network connectivity to EFS mount target
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(5)
+                result = sock.connect_ex(('10.0.1.92', 2049))
+                sock.close()
+                
+                # Test connectivity to VPC endpoint IP on port 443
+                sock2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock2.settimeout(5)
+                api_result = sock2.connect_ex((vpc_endpoint_ip, 443))
+                sock2.close()
+                
+                # Test direct connectivity to VPC endpoint private IP
+                sock3 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock3.settimeout(5)
+                direct_vpc_result = sock3.connect_ex(('10.0.1.105', 443))
+                sock3.close()
+                
+                return {
+                    'statusCode': 200,
+                    'body': json.dumps({
+                        'message': 'VPC connectivity test',
+                        'efs_dns_resolved': efs_ip,
+                        'vpc_endpoint_dns_resolved': vpc_endpoint_ip,
+                        'efs_mount_target_reachable': result == 0,
+                        'efs_api_endpoint_reachable': api_result == 0,
+                        'vpc_endpoint_direct_reachable': direct_vpc_result == 0,
+                        'mount_target_result': result,
+                        'api_endpoint_result': api_result,
+                        'direct_vpc_result': direct_vpc_result
+                    })
+                }
+            except Exception as e:
+                return {
+                    'statusCode': 500,
+                    'body': json.dumps({'error': str(e)})
+                }
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet
+      Policies:
+        - VPCAccessPolicy: {}
+
 Outputs:
   VpcId:
     Description: ID of the VPC
     Value: !Ref CocktailVPC
-
-  PublicSubnetId:
-    Description: ID of Public Subnet
-    Value: !Ref PublicSubnet
 
   PrivateSubnetId:
     Description: ID of Private Subnet
