@@ -304,7 +304,7 @@ search_recipes_paginated_with_ingredients_sql = """
 """
 
 # Dynamic SQL generation function for ingredient filtering
-def build_search_recipes_count_sql(ingredient_filter_conditions: List[str]) -> str:
+def build_search_recipes_count_sql(must_conditions: List[str], must_not_conditions: List[str]) -> str:
     """Build the count SQL with optional ingredient filtering"""
     base_sql = """
     SELECT COUNT(DISTINCT r.id) as total_count
@@ -324,15 +324,17 @@ def build_search_recipes_count_sql(ingredient_filter_conditions: List[str]) -> s
     AND
         (:max_rating IS NULL OR COALESCE(r.avg_rating, 0) <= :max_rating)"""
     
-    if ingredient_filter_conditions:
-        # Add ingredient filtering - recipe must contain ALL of the specified ingredients (AND logic)
-        # Create a subquery for each ingredient condition and require all to match
-        for condition in ingredient_filter_conditions:
-            base_sql += f" AND r.id IN (SELECT DISTINCT ri2.recipe_id FROM recipe_ingredients ri2 JOIN ingredients i2 ON ri2.ingredient_id = i2.id WHERE {condition})"
+    # Add MUST ingredient filtering - recipe must contain ALL of the specified ingredients
+    for condition in must_conditions:
+        base_sql += f" AND r.id IN (SELECT DISTINCT ri2.recipe_id FROM recipe_ingredients ri2 JOIN ingredients i2 ON ri2.ingredient_id = i2.id WHERE {condition})"
+    
+    # Add MUST_NOT ingredient filtering - recipe must NOT contain ANY of the specified ingredients
+    for condition in must_not_conditions:
+        base_sql += f" AND r.id NOT IN (SELECT DISTINCT ri2.recipe_id FROM recipe_ingredients ri2 JOIN ingredients i2 ON ri2.ingredient_id = i2.id WHERE {condition})"
     
     return base_sql
 
-def build_search_recipes_paginated_sql(ingredient_filter_conditions: List[str]) -> str:
+def build_search_recipes_paginated_sql(must_conditions: List[str], must_not_conditions: List[str]) -> str:
     """Build the paginated search SQL with optional ingredient filtering"""
     base_sql = """
     WITH search_results AS (
@@ -368,11 +370,13 @@ def build_search_recipes_paginated_sql(ingredient_filter_conditions: List[str]) 
         AND
             (:max_rating IS NULL OR COALESCE(r.avg_rating, 0) <= :max_rating)"""
 
-    if ingredient_filter_conditions:
-        # Add ingredient filtering - recipe must contain ALL of the specified ingredients (AND logic)
-        # Create a subquery for each ingredient condition and require all to match
-        for condition in ingredient_filter_conditions:
-            base_sql += f" AND r.id IN (SELECT DISTINCT ri2.recipe_id FROM recipe_ingredients ri2 JOIN ingredients i2 ON ri2.ingredient_id = i2.id WHERE {condition})"
+    # Add MUST ingredient filtering - recipe must contain ALL of the specified ingredients
+    for condition in must_conditions:
+        base_sql += f" AND r.id IN (SELECT DISTINCT ri2.recipe_id FROM recipe_ingredients ri2 JOIN ingredients i2 ON ri2.ingredient_id = i2.id WHERE {condition})"
+    
+    # Add MUST_NOT ingredient filtering - recipe must NOT contain ANY of the specified ingredients
+    for condition in must_not_conditions:
+        base_sql += f" AND r.id NOT IN (SELECT DISTINCT ri2.recipe_id FROM recipe_ingredients ri2 JOIN ingredients i2 ON ri2.ingredient_id = i2.id WHERE {condition})"
 
     base_sql += """
         GROUP BY

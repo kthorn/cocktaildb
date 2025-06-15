@@ -199,7 +199,7 @@ async def search_recipes(
     min_rating: Optional[float] = Query(None, description="Minimum average rating", ge=0, le=5),
     max_rating: Optional[float] = Query(None, description="Maximum average rating", ge=0, le=5),
     tags: Optional[str] = Query(None, description="Comma-separated list of tags"),
-    ingredients: Optional[str] = Query(None, description="Comma-separated ingredient names"),
+    ingredients: Optional[str] = Query(None, description="Comma-separated ingredient names with optional operators (e.g., 'Vodka,Gin:MUST,Vermouth:MUST_NOT')"),
     db: Database = Depends(get_db),
     user: Optional[UserInfo] = Depends(get_current_user_optional),
 ):

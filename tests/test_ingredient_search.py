@@ -202,3 +202,77 @@ class TestIngredientSearch:
                 for name in ingredient_names
             )
             assert has_simple_syrup, f"Recipe should contain simple syrup. Found: {ingredient_names}"
+
+    def test_search_recipes_must_not_contain_ingredient(self, client):
+        """Test MUST_NOT logic - exclude recipes containing specific ingredients"""
+        # First, get all recipes to establish baseline
+        all_response = client.get("/api/v1/recipes/search")
+        assert all_response.status_code == 200
+        all_data = all_response.json()
+        total_recipes = all_data["pagination"]["total_count"]
+        
+        # Find recipes that contain Aperol
+        aperol_response = client.get("/api/v1/recipes/search?ingredients=Aperol")
+        assert aperol_response.status_code == 200
+        aperol_data = aperol_response.json()
+        aperol_count = aperol_data["pagination"]["total_count"]
+        
+        if aperol_count > 0:
+            # Test MUST_NOT Aperol - should return recipes that DON'T contain Aperol
+            # Using the format: ingredient_name:MUST_NOT
+            must_not_response = client.get("/api/v1/recipes/search?ingredients=Aperol:MUST_NOT")
+            assert must_not_response.status_code == 200
+            must_not_data = must_not_response.json()
+            
+            # Should return fewer recipes than total (excluding Aperol recipes)
+            expected_count = total_recipes - aperol_count
+            assert must_not_data["pagination"]["total_count"] == expected_count
+            
+            # Verify that none of the returned recipes contain Aperol
+            for recipe in must_not_data["recipes"]:
+                ingredient_names = [ing["ingredient_name"].lower() for ing in recipe["ingredients"]]
+                has_aperol = any("aperol" in name for name in ingredient_names)
+                assert not has_aperol, f"Recipe should NOT contain Aperol but found: {ingredient_names}"
+
+    def test_search_recipes_mixed_must_and_must_not(self, client):
+        """Test combination of MUST and MUST_NOT ingredients"""
+        # Search for recipes that MUST contain Whiskey but MUST NOT contain Aperol
+        response = client.get("/api/v1/recipes/search?ingredients=Whiskey:MUST,Aperol:MUST_NOT")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Should return recipes with whiskey but without aperol
+        assert "recipes" in data
+        assert "pagination" in data
+        
+        # Verify each returned recipe contains whiskey but not aperol
+        for recipe in data["recipes"]:
+            ingredient_names = [ing["ingredient_name"].lower() for ing in recipe["ingredients"]]
+            
+            # Must have whiskey (or its children like bourbon, rye, scotch, etc.)
+            # Due to hierarchical matching, any whiskey type should be included
+            has_whiskey_type = any(
+                "whiskey" in name or "bourbon" in name or "rye" in name or "scotch" in name
+                for name in ingredient_names
+            )
+            assert has_whiskey_type, f"Recipe should contain some type of whiskey. Found: {ingredient_names}"
+            
+            # Must NOT have aperol
+            has_aperol = any("aperol" in name for name in ingredient_names)
+            assert not has_aperol, f"Recipe should NOT contain Aperol. Found: {ingredient_names}"
+
+    def test_search_recipes_must_not_nonexistent_ingredient(self, client):
+        """Test MUST_NOT with nonexistent ingredient should return all recipes"""
+        # Get baseline count
+        all_response = client.get("/api/v1/recipes/search")
+        assert all_response.status_code == 200
+        all_data = all_response.json()
+        total_recipes = all_data["pagination"]["total_count"]
+        
+        # MUST_NOT nonexistent ingredient should return all recipes
+        response = client.get("/api/v1/recipes/search?ingredients=NonexistentIngredient123:MUST_NOT")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Should return all recipes since none contain the nonexistent ingredient
+        assert data["pagination"]["total_count"] == total_recipes

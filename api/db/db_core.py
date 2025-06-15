@@ -1787,31 +1787,53 @@ class Database:
             }
             
             # Handle ingredient filtering by converting names to IDs and paths
-            ingredient_filter_conditions = []
+            must_ingredient_conditions = []
+            must_not_ingredient_conditions = []
             has_invalid_ingredients = False
+            
             if search_params.get("ingredients"):
-                for i, ingredient_name in enumerate(search_params["ingredients"]):
-                    ingredient = self.get_ingredient_by_name(ingredient_name.strip())
+                for i, ingredient_spec in enumerate(search_params["ingredients"]):
+                    # Parse ingredient specification: "name" or "name:MUST" or "name:MUST_NOT"
+                    ingredient_spec = ingredient_spec.strip()
+                    
+                    if ":" in ingredient_spec:
+                        ingredient_name, operator = ingredient_spec.split(":", 1)
+                        ingredient_name = ingredient_name.strip()
+                        operator = operator.strip().upper()
+                    else:
+                        ingredient_name = ingredient_spec
+                        operator = "MUST"  # Default to MUST if no operator specified
+                    
+                    ingredient = self.get_ingredient_by_name(ingredient_name)
                     if ingredient:
                         # Use path-based matching to include child ingredients
                         param_name = f"ingredient_path_{i}"
                         query_params[param_name] = f"%/{ingredient['id']}/%"
-                        ingredient_filter_conditions.append(f"i2.path LIKE :{param_name}")
+                        condition = f"i2.path LIKE :{param_name}"
+                        
+                        if operator == "MUST_NOT":
+                            must_not_ingredient_conditions.append(condition)
+                        else:  # MUST or any other value defaults to MUST
+                            must_ingredient_conditions.append(condition)
                     else:
                         logger.warning(f"Ingredient not found: {ingredient_name}")
-                        has_invalid_ingredients = True
+                        if operator != "MUST_NOT":
+                            # Only fail for MUST ingredients that don't exist
+                            # MUST_NOT for nonexistent ingredients should be ignored
+                            has_invalid_ingredients = True
                 
-                # If any ingredient doesn't exist, return no results
+                # If any MUST ingredient doesn't exist, return no results
                 if has_invalid_ingredients:
-                    logger.info("Some ingredients not found, returning empty results")
+                    logger.info("Some MUST ingredients not found, returning empty results")
                     return [], 0
             
             logger.info(f"Searching recipes with params: {query_params}")
-            logger.info(f"Ingredient filter conditions: {ingredient_filter_conditions}")
+            logger.info(f"MUST ingredient conditions: {must_ingredient_conditions}")
+            logger.info(f"MUST_NOT ingredient conditions: {must_not_ingredient_conditions}")
             
             # Build dynamic SQL queries
-            count_sql = build_search_recipes_count_sql(ingredient_filter_conditions)
-            paginated_sql = build_search_recipes_paginated_sql(ingredient_filter_conditions)
+            count_sql = build_search_recipes_count_sql(must_ingredient_conditions, must_not_ingredient_conditions)
+            paginated_sql = build_search_recipes_paginated_sql(must_ingredient_conditions, must_not_ingredient_conditions)
             
             # Get total count first
             count_result = cast(
