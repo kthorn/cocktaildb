@@ -304,8 +304,11 @@ search_recipes_paginated_with_ingredients_sql = """
 """
 
 # Dynamic SQL generation function for ingredient filtering
-def build_search_recipes_count_sql(must_conditions: List[str], must_not_conditions: List[str]) -> str:
-    """Build the count SQL with optional ingredient filtering"""
+def build_search_recipes_count_sql(must_conditions: List[str], must_not_conditions: List[str], tag_conditions: List[str] = None) -> str:
+    """Build the count SQL with optional ingredient and tag filtering"""
+    if tag_conditions is None:
+        tag_conditions = []
+    
     base_sql = """
     SELECT COUNT(DISTINCT r.id) as total_count
     FROM
@@ -313,7 +316,21 @@ def build_search_recipes_count_sql(must_conditions: List[str], must_not_conditio
     LEFT JOIN
         recipe_ingredients ri ON r.id = ri.recipe_id
     LEFT JOIN
-        ingredients i ON ri.ingredient_id = i.id
+        ingredients i ON ri.ingredient_id = i.id"""
+    
+    # Add tag joins if needed
+    if tag_conditions:
+        base_sql += """
+    LEFT JOIN
+        recipe_public_tags rpt2 ON r.id = rpt2.recipe_id
+    LEFT JOIN
+        public_tags pt2 ON rpt2.tag_id = pt2.id
+    LEFT JOIN
+        recipe_private_tags rpvt2 ON r.id = rpvt2.recipe_id
+    LEFT JOIN
+        private_tags pvt2 ON rpvt2.tag_id = pvt2.id"""
+    
+    base_sql += """
     WHERE
         (:search_query IS NULL OR 
          r.name LIKE '%' || :search_query || '%' OR 
@@ -332,9 +349,13 @@ def build_search_recipes_count_sql(must_conditions: List[str], must_not_conditio
     for condition in must_not_conditions:
         base_sql += f" AND r.id NOT IN (SELECT DISTINCT ri2.recipe_id FROM recipe_ingredients ri2 JOIN ingredients i2 ON ri2.ingredient_id = i2.id WHERE {condition})"
     
+    # Add tag filtering - recipe must have ALL of the specified tags
+    for condition in tag_conditions:
+        base_sql += f" AND r.id IN (SELECT DISTINCT rpt3.recipe_id FROM recipe_public_tags rpt3 JOIN public_tags pt3 ON rpt3.tag_id = pt3.id WHERE {condition} UNION SELECT DISTINCT rpvt3.recipe_id FROM recipe_private_tags rpvt3 JOIN private_tags pvt3 ON rpvt3.tag_id = pvt3.id WHERE {condition})"
+    
     return base_sql
 
-def build_search_recipes_paginated_sql(must_conditions: List[str], must_not_conditions: List[str]) -> str:
+def build_search_recipes_paginated_sql(must_conditions: List[str], must_not_conditions: List[str], tag_conditions: List[str] = None) -> str:
     """Build the paginated search SQL with optional ingredient filtering"""
     base_sql = """
     WITH search_results AS (
@@ -377,6 +398,12 @@ def build_search_recipes_paginated_sql(must_conditions: List[str], must_not_cond
     # Add MUST_NOT ingredient filtering - recipe must NOT contain ANY of the specified ingredients
     for condition in must_not_conditions:
         base_sql += f" AND r.id NOT IN (SELECT DISTINCT ri2.recipe_id FROM recipe_ingredients ri2 JOIN ingredients i2 ON ri2.ingredient_id = i2.id WHERE {condition})"
+    
+    # Add tag filtering - recipe must have ALL of the specified tags
+    if tag_conditions is None:
+        tag_conditions = []
+    for condition in tag_conditions:
+        base_sql += f" AND r.id IN (SELECT DISTINCT rpt3.recipe_id FROM recipe_public_tags rpt3 JOIN public_tags pt3 ON rpt3.tag_id = pt3.id WHERE {condition} UNION SELECT DISTINCT rpvt3.recipe_id FROM recipe_private_tags rpvt3 JOIN private_tags pvt3 ON rpvt3.tag_id = pvt3.id WHERE {condition})"
 
     base_sql += """
         GROUP BY

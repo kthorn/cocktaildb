@@ -1827,13 +1827,41 @@ class Database:
                     logger.info("Some MUST ingredients not found, returning empty results")
                     return [], 0
             
+            # Handle tag filtering
+            tag_conditions = []
+            if search_params.get("tags"):
+                for i, tag_name in enumerate(search_params["tags"]):
+                    tag_name = tag_name.strip()
+                    if tag_name:
+                        # Check if tag exists (both public and private)
+                        public_tag = self.get_public_tag_by_name(tag_name)
+                        private_tag = self.get_private_tag_by_name(tag_name, user_id) if user_id else None
+                        
+                        if public_tag or private_tag:
+                            # Recipe must have this tag (either public or private)
+                            public_param = f"public_tag_name_{i}"
+                            private_param = f"private_tag_name_{i}"
+                            query_params[public_param] = tag_name
+                            query_params[private_param] = tag_name
+                            
+                            condition = f"(pt2.name = :{public_param}"
+                            if user_id:
+                                condition += f" OR pvt2.name = :{private_param}"
+                            condition += ")"
+                            tag_conditions.append(condition)
+                        else:
+                            # Tag doesn't exist, return no results
+                            logger.info(f"Tag not found: {tag_name}, returning empty results")
+                            return [], 0
+            
             logger.info(f"Searching recipes with params: {query_params}")
             logger.info(f"MUST ingredient conditions: {must_ingredient_conditions}")
             logger.info(f"MUST_NOT ingredient conditions: {must_not_ingredient_conditions}")
+            logger.info(f"Tag conditions: {tag_conditions}")
             
             # Build dynamic SQL queries
-            count_sql = build_search_recipes_count_sql(must_ingredient_conditions, must_not_ingredient_conditions)
-            paginated_sql = build_search_recipes_paginated_sql(must_ingredient_conditions, must_not_ingredient_conditions)
+            count_sql = build_search_recipes_count_sql(must_ingredient_conditions, must_not_ingredient_conditions, tag_conditions)
+            paginated_sql = build_search_recipes_paginated_sql(must_ingredient_conditions, must_not_ingredient_conditions, tag_conditions)
             
             # Get total count first
             count_result = cast(

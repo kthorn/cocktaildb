@@ -223,8 +223,8 @@ async def search_recipes(
         
         # Build search parameters
         search_params = {}
-        if q:
-            search_params["q"] = q
+        if q and q.strip():
+            search_params["q"] = q.strip()
         if min_rating is not None:
             search_params["min_rating"] = min_rating
         if max_rating is not None:
