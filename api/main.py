@@ -89,16 +89,14 @@ app.add_exception_handler(Exception, general_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(StarletteHTTPException, starlette_http_exception_handler)
 
-# Add routers with API v1 prefix
-API_V1_PREFIX = "/api/v1"
-
-app.include_router(ingredients.router, prefix=API_V1_PREFIX)
-app.include_router(recipes.router, prefix=API_V1_PREFIX)
-app.include_router(ratings.router, prefix=API_V1_PREFIX)
-app.include_router(units.router, prefix=API_V1_PREFIX)
-app.include_router(tags.router, prefix=API_V1_PREFIX)
-app.include_router(recipe_tags_router, prefix=API_V1_PREFIX)
-app.include_router(auth.router, prefix=API_V1_PREFIX)
+# Add routers at root level (API Gateway handles /api prefix)
+app.include_router(ingredients.router)
+app.include_router(recipes.router)
+app.include_router(ratings.router)
+app.include_router(units.router)
+app.include_router(tags.router)
+app.include_router(recipe_tags_router)
+app.include_router(auth.router)
 
 
 # Root endpoint
@@ -117,16 +115,7 @@ async def health_check():
     return MessageResponse(message="API is healthy")
 
 
-# Legacy endpoints for backward compatibility (without /api/v1 prefix)
-# These maintain the same paths as the original Lambda handler
-
-app.include_router(ingredients.router, prefix="", include_in_schema=False)
-app.include_router(recipes.router, prefix="", include_in_schema=False)
-app.include_router(ratings.router, prefix="", include_in_schema=False)
-app.include_router(units.router, prefix="", include_in_schema=False)
-app.include_router(tags.router, prefix="", include_in_schema=False)
-app.include_router(recipe_tags_router, prefix="", include_in_schema=False)
-app.include_router(auth.router, prefix="", include_in_schema=False)
+# Legacy endpoints removed - now using FastAPI v1 endpoints only
 
 
 # Create the Lambda handler for AWS deployment with custom scope
