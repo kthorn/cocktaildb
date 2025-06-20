@@ -1,6 +1,6 @@
 import { api } from './api.js';
 import { isAuthenticated } from './auth.js';
-import { displayRecipes, createProgressiveRecipeLoader } from './recipeCard.js';
+import { displayRecipes, createProgressiveRecipeLoader, createRecipeCard } from './recipeCard.js';
 
 
 // Declare function in global scope
@@ -166,26 +166,102 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Load and display recipes
-    async function loadRecipes() {
+    // State for pagination
+    let currentPage = 1;
+    let recipesPerPage = 20;
+    let allLoadedRecipes = [];
+    let hasMorePages = true;
+    let isLoading = false;
+    
+    // Load and display recipes with pagination
+    async function loadRecipes(reset = true) {
+        if (isLoading) return;
+        
         try {
-            // Set up progressive loading
-            const progressLoader = createProgressiveRecipeLoader(recipesContainer, true, loadRecipes);
-            progressLoader.start();
+            isLoading = true;
             
-            // Use the centralized batching logic from api.js with progressive loading
-            const fullRecipes = await api.getRecipesWithFullDataProgressive((batch, loadedCount, totalCount) => {
-                // Add each batch as it becomes available
-                progressLoader.addBatch(batch);
-                console.log(`Loaded ${loadedCount}/${totalCount} recipes`);
-            });
+            // Reset if starting fresh
+            if (reset) {
+                currentPage = 1;
+                allLoadedRecipes = [];
+                hasMorePages = true;
+                recipesContainer.innerHTML = '<p class="loading-recipes">Loading recipes...</p>';
+            }
             
-            // Finish loading
-            progressLoader.finish(fullRecipes.length);
+            // Use the new paginated API that returns full recipe details
+            const result = await api.getRecipesWithFullData(currentPage, recipesPerPage);
+            
+            if (result && result.recipes) {
+                // Add new recipes to our loaded collection
+                allLoadedRecipes = reset ? result.recipes : [...allLoadedRecipes, ...result.recipes];
+                
+                // Update pagination state
+                hasMorePages = result.pagination.page < result.pagination.totalPages;
+                
+                // Clear loading message and display recipes
+                if (reset) {
+                    recipesContainer.innerHTML = '';
+                }
+                
+                // Display all loaded recipes (or just append new ones if not reset)
+                if (reset) {
+                    displayRecipes(allLoadedRecipes, recipesContainer, true, loadRecipes);
+                } else {
+                    // Append only the new recipes
+                    result.recipes.forEach(recipe => {
+                        const card = createRecipeCard(recipe, true, loadRecipes);
+                        recipesContainer.appendChild(card);
+                    });
+                }
+                
+                // Add load more button if there are more pages
+                updateLoadMoreButton();
+                
+                console.log(`Loaded page ${currentPage} of ${result.pagination.totalPages} (${result.recipes.length} recipes)`);
+            } else {
+                if (reset) {
+                    recipesContainer.innerHTML = '<p>No recipes found.</p>';
+                }
+            }
         } catch (error) {
             console.error('Error loading recipes:', error);
             recipesContainer.innerHTML = '<p>Error loading recipes. Please try again later.</p>';
+        } finally {
+            isLoading = false;
         }
+    }
+    
+    // Update or add the load more button
+    function updateLoadMoreButton() {
+        let loadMoreBtn = document.getElementById('load-more-recipes');
+        
+        if (hasMorePages) {
+            if (!loadMoreBtn) {
+                loadMoreBtn = document.createElement('button');
+                loadMoreBtn.id = 'load-more-recipes';
+                loadMoreBtn.className = 'btn-secondary load-more-btn';
+                loadMoreBtn.textContent = 'Load More Recipes';
+                loadMoreBtn.addEventListener('click', loadMoreRecipes);
+                
+                // Add after the recipes container
+                recipesContainer.parentNode.insertBefore(loadMoreBtn, recipesContainer.nextSibling);
+            }
+            loadMoreBtn.style.display = 'block';
+            loadMoreBtn.disabled = isLoading;
+            loadMoreBtn.textContent = isLoading ? 'Loading...' : 'Load More Recipes';
+        } else {
+            if (loadMoreBtn) {
+                loadMoreBtn.style.display = 'none';
+            }
+        }
+    }
+    
+    // Load more recipes (next page)
+    async function loadMoreRecipes() {
+        if (!hasMorePages || isLoading) return;
+        
+        currentPage++;
+        await loadRecipes(false); // Don't reset, append to existing
     }
 
     // Load available units
@@ -378,8 +454,9 @@ document.addEventListener('DOMContentLoaded', () => {
         ingredientsList.appendChild(div);
     };
 
-    // Make loadRecipes accessible to outside functions
-    window.loadRecipes = loadRecipes;
+    // Make functions accessible to outside functions
+    window.loadRecipes = () => loadRecipes(true); // Always reset when called externally
+    window.loadMoreRecipes = loadMoreRecipes;
 });
 
 // Edit recipe
