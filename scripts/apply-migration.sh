@@ -15,6 +15,15 @@ STACK_ID=""
 LOGICAL_RESOURCE_ID="SchemaDeployResource"
 REGION="us-east-1"
 
+# Validate environment early if provided as first argument (like deploy.sh)
+if [ -n "$1" ] && [ "$1" != "-f" ] && [ "$1" != "--file" ] && [ "$1" != "-h" ] && [ "$1" != "--help" ]; then
+    if [ "$1" = "dev" ] || [ "$1" = "prod" ]; then
+        ENVIRONMENT="$1"
+        shift
+        echo "Environment set to: $ENVIRONMENT"
+    fi
+fi
+
 # Help function
 show_help() {
     cat << EOF
@@ -35,11 +44,13 @@ Optional arguments:
   -h, --help                  Show this help message
 
 Examples:
-  # Apply migration to dev environment
-  $0 -f migrations/01_add_tags.sql
+  # Apply migration to dev environment (default)
+  $0 -f migrations/02_migration_add_top_and_rinse_units.sql
 
   # Apply migration to prod environment
-  $0 -f migrations/01_add_tags.sql -e prod
+  $0 -f migrations/02_migration_add_top_and_rinse_units.sql -e prod
+  # or
+  $0 prod -f migrations/02_migration_add_top_and_rinse_units.sql
 
   # Force reinitialization with schema
   $0 -f schema-deploy/schema.sql --force-init
@@ -103,7 +114,13 @@ if [ -z "$SQL_FILE_PATH" ]; then
     exit 1
 fi
 
-# Set environment-specific defaults if not provided
+# Validate environment (consistent with deploy.sh)
+if [ "$ENVIRONMENT" != "dev" ] && [ "$ENVIRONMENT" != "prod" ]; then
+    echo "Error: Invalid environment '$ENVIRONMENT'. Use 'dev' or 'prod'."
+    exit 1
+fi
+
+# Set environment-specific defaults if not provided (consistent with deploy.sh naming)
 STACK_NAME="cocktail-db-${ENVIRONMENT}"
 
 if [ -z "$LAMBDA_FUNCTION_NAME" ]; then
@@ -141,7 +158,17 @@ echo "Lambda Function: $LAMBDA_FUNCTION_NAME"
 echo "Database Name: $DB_NAME"
 echo "Region: $REGION"
 echo "Force Init: $FORCE_INIT"
+echo "SQL File: $SQL_FILE_PATH"
 echo "=============================="
+
+# Verify stack exists before attempting migration
+echo "Verifying stack '$STACK_NAME' exists..."
+if ! aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$REGION" >/dev/null 2>&1; then
+    echo "Error: Stack '$STACK_NAME' not found in region $REGION"
+    echo "Make sure you have deployed the stack using: ./scripts/deploy.sh $ENVIRONMENT"
+    exit 1
+fi
+echo "Stack verified successfully."
 
 # Check if SQL file exists
 if [ ! -f "$SQL_FILE_PATH" ]; then
