@@ -37,7 +37,7 @@ class TestComplexIngredientCRUD:
 
         # Create parent ingredient
         parent_data = {"name": "Test Spirits", "description": "Alcoholic spirits"}
-        parent_response = client.post("/api/v1/ingredients", json=parent_data)
+        parent_response = client.post("/ingredients", json=parent_data)
 
         if parent_response.status_code == 201:
             parent_ingredient = parent_response.json()
@@ -49,7 +49,7 @@ class TestComplexIngredientCRUD:
                 "description": "Juniper-flavored spirit",
                 "parent_id": parent_id,
             }
-            child_response = client.post("/api/v1/ingredients", json=child_data)
+            child_response = client.post("/ingredients", json=child_data)
 
             if child_response.status_code == 201:
                 child_ingredient = child_response.json()
@@ -59,7 +59,7 @@ class TestComplexIngredientCRUD:
                 # Update child ingredient
                 update_data = {"description": "Updated gin description"}
                 update_response = client.put(
-                    f"/api/v1/ingredients/{child_id}", json=update_data
+                    f"/ingredients/{child_id}", json=update_data
                 )
 
                 if update_response.status_code == 200:
@@ -68,12 +68,12 @@ class TestComplexIngredientCRUD:
                     assert updated_ingredient["parent_id"] == parent_id
 
                 # Delete child first (should succeed)
-                delete_child_response = client.delete(f"/api/v1/ingredients/{child_id}")
+                delete_child_response = client.delete(f"/ingredients/{child_id}")
                 assert delete_child_response.status_code in [200, 204]
 
                 # Delete parent (should succeed now that child is gone)
                 delete_parent_response = client.delete(
-                    f"/api/v1/ingredients/{parent_id}"
+                    f"/ingredients/{parent_id}"
                 )
                 assert delete_parent_response.status_code in [200, 204]
 
@@ -113,8 +113,8 @@ class TestComplexRecipeCRUD:
         client = TestClient(app)
 
         # Get existing ingredients and units for the recipe
-        ingredients_response = client.get("/api/v1/ingredients?limit=2")
-        units_response = client.get("/api/v1/units?limit=1")
+        ingredients_response = client.get("/ingredients?limit=2")
+        units_response = client.get("/units?limit=1")
 
         if (
             ingredients_response.status_code == 200
@@ -144,14 +144,14 @@ class TestComplexRecipeCRUD:
                 ],
             }
 
-            create_response = client.post("/api/v1/recipes", json=recipe_data)
+            create_response = client.post("/recipes", json=recipe_data)
 
             if create_response.status_code == 201:
                 created_recipe = create_response.json()
                 recipe_id = created_recipe["id"]
 
                 # Read back the recipe with full details
-                read_response = client.get(f"/api/v1/recipes/{recipe_id}")
+                read_response = client.get(f"/recipes/{recipe_id}")
                 assert read_response.status_code == 200
                 read_recipe = read_response.json()
                 assert "ingredients" in read_recipe
@@ -162,7 +162,7 @@ class TestComplexRecipeCRUD:
                     "instructions": "Updated: Stir gently with ice, double strain, express lemon peel"
                 }
                 update_response = client.put(
-                    f"/api/v1/recipes/{recipe_id}", json=update_data
+                    f"/recipes/{recipe_id}", json=update_data
                 )
 
                 if update_response.status_code == 200:
@@ -170,7 +170,7 @@ class TestComplexRecipeCRUD:
                     assert "Updated:" in updated_recipe["instructions"]
 
                 # Delete the recipe
-                delete_response = client.delete(f"/api/v1/recipes/{recipe_id}")
+                delete_response = client.delete(f"/recipes/{recipe_id}")
                 assert delete_response.status_code in [200, 204]
 
         # Clean up the override
@@ -204,7 +204,7 @@ class TestConcurrencyAndLocking:
             "instructions": "Original instructions",
         }
 
-        create_response = client.post("/api/v1/recipes", json=recipe_data)
+        create_response = client.post("/recipes", json=recipe_data)
 
         if create_response.status_code == 201:
             recipe_id = create_response.json()["recipe_id"]
@@ -214,14 +214,14 @@ class TestConcurrencyAndLocking:
             update2_data = {"instructions": "Second concurrent update"}
 
             # Both updates should succeed or handle conflicts gracefully
-            response1 = client.put(f"/api/v1/recipes/{recipe_id}", json=update1_data)
-            response2 = client.put(f"/api/v1/recipes/{recipe_id}", json=update2_data)
+            response1 = client.put(f"/recipes/{recipe_id}", json=update1_data)
+            response2 = client.put(f"/recipes/{recipe_id}", json=update2_data)
 
             # At least one should succeed
             assert response1.status_code == 200 or response2.status_code == 200
 
             # Verify final state is consistent
-            final_response = client.get(f"/api/v1/recipes/{recipe_id}")
+            final_response = client.get(f"/recipes/{recipe_id}")
             if final_response.status_code == 200:
                 final_recipe = final_response.json()
                 # Instructions should be one of the updates, not corrupted
@@ -239,7 +239,7 @@ class TestComplexQueries:
         client = test_client_production_isolated
 
         # Get ingredients with hierarchy
-        response = client.get("/api/v1/ingredients")
+        response = client.get("/ingredients")
         if response.status_code == 200:
             ingredients = response.json()
 
@@ -255,7 +255,7 @@ class TestComplexQueries:
                 :3
             ]:  # Test first 3 complex ingredients
                 ingredient_id = ingredient["id"]
-                detail_response = client.get(f"/api/v1/ingredients/{ingredient_id}")
+                detail_response = client.get(f"/ingredients/{ingredient_id}")
 
                 if detail_response.status_code == 200:
                     detailed_ingredient = detail_response.json()

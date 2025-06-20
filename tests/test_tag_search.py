@@ -11,7 +11,7 @@ class TestTagSearch:
     def test_search_recipes_by_single_tag(self, test_client_production_readonly):
         """Test searching recipes by a single tag"""
         # First, get all recipes to find available tags
-        all_response = test_client_production_readonly.get("/api/v1/recipes/search")
+        all_response = test_client_production_readonly.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
 
@@ -27,7 +27,7 @@ class TestTagSearch:
             test_tag = recipe_with_tags["tags"][0]["name"]
 
             response = test_client_production_readonly.get(
-                f"/api/v1/recipes/search?tags={test_tag}"
+                f"/recipes/search?tags={test_tag}"
             )
             assert response.status_code == 200
             data = response.json()
@@ -47,7 +47,7 @@ class TestTagSearch:
     def test_search_recipes_by_multiple_tags(self, test_client_production_readonly):
         """Test searching recipes by multiple tags (AND logic)"""
         # Find a recipe with multiple tags
-        all_response = test_client_production_readonly.get("/api/v1/recipes/search")
+        all_response = test_client_production_readonly.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
 
@@ -63,7 +63,7 @@ class TestTagSearch:
             tag2 = recipe_with_multiple_tags["tags"][1]["name"]
 
             response = test_client_production_readonly.get(
-                f"/api/v1/recipes/search?tags={tag1},{tag2}"
+                f"/recipes/search?tags={tag1},{tag2}"
             )
             assert response.status_code == 200
             data = response.json()
@@ -84,7 +84,7 @@ class TestTagSearch:
     def test_search_recipes_by_nonexistent_tag(self, test_client_production_readonly):
         """Test searching recipes by a tag that doesn't exist"""
         response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?tags=NonexistentTag123456"
+            "/recipes/search?tags=NonexistentTag123456"
         )
         assert response.status_code == 200
         data = response.json()
@@ -95,12 +95,12 @@ class TestTagSearch:
 
     def test_search_recipes_by_empty_tag(self, test_client_production_readonly):
         """Test searching with empty tag parameter"""
-        response = test_client_production_readonly.get("/api/v1/recipes/search?tags=")
+        response = test_client_production_readonly.get("/recipes/search?tags=")
         assert response.status_code == 200
         data = response.json()
 
         # Empty tag should return all recipes (same as no filter)
-        all_response = test_client_production_readonly.get("/api/v1/recipes/search")
+        all_response = test_client_production_readonly.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
 
@@ -113,7 +113,7 @@ class TestTagSearch:
     ):
         """Test that tag filtering actually filters results"""
         # Get all recipes (no filter)
-        all_response = test_client_production_readonly.get("/api/v1/recipes/search")
+        all_response = test_client_production_readonly.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
 
@@ -126,7 +126,7 @@ class TestTagSearch:
 
         if specific_tag:
             tag_response = test_client_production_readonly.get(
-                f"/api/v1/recipes/search?tags={specific_tag}"
+                f"/recipes/search?tags={specific_tag}"
             )
             assert tag_response.status_code == 200
             tag_data = tag_response.json()
@@ -140,7 +140,7 @@ class TestTagSearch:
     def test_search_recipes_by_duplicate_tags(self, test_client_production_readonly):
         """Test searching with duplicate tags in the list"""
         # Get a tag to duplicate
-        all_response = test_client_production_readonly.get("/api/v1/recipes/search")
+        all_response = test_client_production_readonly.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
 
@@ -153,14 +153,14 @@ class TestTagSearch:
         if tag_to_duplicate:
             # Search with duplicate tags
             response = test_client_production_readonly.get(
-                f"/api/v1/recipes/search?tags={tag_to_duplicate},{tag_to_duplicate}"
+                f"/recipes/search?tags={tag_to_duplicate},{tag_to_duplicate}"
             )
             assert response.status_code == 200
             data = response.json()
 
             # Should handle duplicates gracefully (same as single tag search)
             single_response = test_client_production_readonly.get(
-                f"/api/v1/recipes/search?tags={tag_to_duplicate}"
+                f"/recipes/search?tags={tag_to_duplicate}"
             )
             assert single_response.status_code == 200
             single_data = single_response.json()
@@ -179,7 +179,7 @@ class TestTagSearch:
         encoded_tag = urllib.parse.quote_plus(tag_with_spaces)
 
         response = test_client_production_readonly.get(
-            f"/api/v1/recipes/search?tags={encoded_tag}"
+            f"/recipes/search?tags={encoded_tag}"
         )
         assert response.status_code == 200
         data = response.json()
@@ -194,7 +194,7 @@ class TestTagSearch:
 
         for tag in numeric_tags:
             response = test_client_production_readonly.get(
-                f"/api/v1/recipes/search?tags={tag}"
+                f"/recipes/search?tags={tag}"
             )
             assert response.status_code == 200
             data = response.json()

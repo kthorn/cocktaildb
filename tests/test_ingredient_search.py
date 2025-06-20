@@ -14,7 +14,7 @@ class TestIngredientSearch:
         """Test searching recipes by Aperol ingredient"""
         # Search for recipes containing Aperol
         response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?ingredients=Aperol"
+            "/recipes/search?ingredients=Aperol"
         )
 
         assert response.status_code == 200
@@ -44,7 +44,7 @@ class TestIngredientSearch:
     ):
         """Test searching recipes by nonexistent ingredient"""
         response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?ingredients=NonexistentIngredient123"
+            "/recipes/search?ingredients=NonexistentIngredient123"
         )
 
         assert response.status_code == 200
@@ -61,7 +61,7 @@ class TestIngredientSearch:
         # Test with two ingredients that are likely to appear together in cocktails
         # Using Aperol and Prosecco which should appear in some Italian cocktails
         response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?ingredients=Lime Juice,Simple Syrup"
+            "/recipes/search?ingredients=Lime Juice,Simple Syrup"
         )
         assert response.status_code == 200
         data = response.json()
@@ -93,7 +93,7 @@ class TestIngredientSearch:
         self, test_client_production_readonly
     ):
         """Test that search without ingredient filter returns all recipes"""
-        response = test_client_production_readonly.get("/api/v1/recipes/search")
+        response = test_client_production_readonly.get("/recipes/search")
 
         assert response.status_code == 200
         data = response.json()
@@ -109,13 +109,13 @@ class TestIngredientSearch:
     ):
         """Test that ingredient filtering actually filters results"""
         # Get all recipes (no filter)
-        all_response = test_client_production_readonly.get("/api/v1/recipes/search")
+        all_response = test_client_production_readonly.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
 
         # Get recipes with Aperol filter
         aperol_response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?ingredients=Aperol"
+            "/recipes/search?ingredients=Aperol"
         )
         assert aperol_response.status_code == 200
         aperol_data = aperol_response.json()
@@ -141,7 +141,7 @@ class TestIngredientSearch:
         """Test that multiple ingredients use AND logic (recipe must contain ALL ingredients)"""
         # Find two ingredients that might appear together
         response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?ingredients=Bourbon,Simple Syrup"
+            "/recipes/search?ingredients=Bourbon,Simple Syrup"
         )
 
         assert response.status_code == 200
@@ -182,7 +182,7 @@ class TestIngredientSearch:
 
         # First, find a recipe that contains Bourbon
         bourbon_response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?ingredients=Bourbon"
+            "/recipes/search?ingredients=Bourbon"
         )
         assert bourbon_response.status_code == 200
         bourbon_data = bourbon_response.json()
@@ -190,7 +190,7 @@ class TestIngredientSearch:
         if bourbon_data["pagination"]["total_count"] > 0:
             # Now search for Whiskey (parent of Bourbon)
             whiskey_response = test_client_production_readonly.get(
-                "/api/v1/recipes/search?ingredients=Whiskey"
+                "/recipes/search?ingredients=Whiskey"
             )
             assert whiskey_response.status_code == 200
             whiskey_data = whiskey_response.json()
@@ -221,7 +221,7 @@ class TestIngredientSearch:
         expected_count = None
         for ingredient_case in test_cases:
             response = test_client_production_readonly.get(
-                f"/api/v1/recipes/search?ingredients={ingredient_case}"
+                f"/recipes/search?ingredients={ingredient_case}"
             )
             assert response.status_code == 200
             data = response.json()
@@ -240,7 +240,7 @@ class TestIngredientSearch:
         """Test searching for ingredients with spaces in their names"""
         # Test with "Simple Syrup" which has a space
         response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?ingredients=Simple Syrup"
+            "/recipes/search?ingredients=Simple Syrup"
         )
         assert response.status_code == 200
         data = response.json()
@@ -266,14 +266,14 @@ class TestIngredientSearch:
     ):
         """Test MUST_NOT logic - exclude recipes containing specific ingredients"""
         # First, get all recipes to establish baseline
-        all_response = test_client_production_readonly.get("/api/v1/recipes/search")
+        all_response = test_client_production_readonly.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
         total_recipes = all_data["pagination"]["total_count"]
 
         # Find recipes that contain Aperol
         aperol_response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?ingredients=Aperol"
+            "/recipes/search?ingredients=Aperol"
         )
         assert aperol_response.status_code == 200
         aperol_data = aperol_response.json()
@@ -283,7 +283,7 @@ class TestIngredientSearch:
             # Test MUST_NOT Aperol - should return recipes that DON'T contain Aperol
             # Using the format: ingredient_name:MUST_NOT
             must_not_response = test_client_production_readonly.get(
-                "/api/v1/recipes/search?ingredients=Aperol:MUST_NOT"
+                "/recipes/search?ingredients=Aperol:MUST_NOT"
             )
             assert must_not_response.status_code == 200
             must_not_data = must_not_response.json()
@@ -308,7 +308,7 @@ class TestIngredientSearch:
         """Test combination of MUST and MUST_NOT ingredients"""
         # Search for recipes that MUST contain Whiskey but MUST NOT contain Aperol
         response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?ingredients=Whiskey:MUST,Aperol:MUST_NOT"
+            "/recipes/search?ingredients=Whiskey:MUST,Aperol:MUST_NOT"
         )
         assert response.status_code == 200
         data = response.json()
@@ -347,14 +347,14 @@ class TestIngredientSearch:
     ):
         """Test MUST_NOT with nonexistent ingredient should return all recipes"""
         # Get baseline count
-        all_response = test_client_production_readonly.get("/api/v1/recipes/search")
+        all_response = test_client_production_readonly.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
         total_recipes = all_data["pagination"]["total_count"]
 
         # MUST_NOT nonexistent ingredient should return all recipes
         response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?ingredients=NonexistentIngredient123:MUST_NOT"
+            "/recipes/search?ingredients=NonexistentIngredient123:MUST_NOT"
         )
         assert response.status_code == 200
         data = response.json()

@@ -13,7 +13,7 @@ class TestRatingSearch:
         client = test_client_production_readonly
         # Test with a moderate minimum rating
         min_rating = 3.0
-        response = client.get(f"/api/v1/recipes/search?min_rating={min_rating}")
+        response = client.get(f"/recipes/search?min_rating={min_rating}")
 
         assert response.status_code == 200
         data = response.json()
@@ -34,7 +34,7 @@ class TestRatingSearch:
         client = test_client_production_readonly
         # Test with a moderate maximum rating
         max_rating = 4.0
-        response = client.get(f"/api/v1/recipes/search?max_rating={max_rating}")
+        response = client.get(f"/recipes/search?max_rating={max_rating}")
 
         assert response.status_code == 200
         data = response.json()
@@ -57,7 +57,7 @@ class TestRatingSearch:
         max_rating = 4.5
 
         response = client.get(
-            f"/api/v1/recipes/search?min_rating={min_rating}&max_rating={max_rating}"
+            f"/recipes/search?min_rating={min_rating}&max_rating={max_rating}"
         )
 
         assert response.status_code == 200
@@ -79,7 +79,7 @@ class TestRatingSearch:
         client = test_client_production_readonly
         # Use a high rating that might return few or no results
         min_rating = 4.8
-        response = client.get(f"/api/v1/recipes/search?min_rating={min_rating}")
+        response = client.get(f"/recipes/search?min_rating={min_rating}")
 
         assert response.status_code == 200
         data = response.json()
@@ -97,7 +97,7 @@ class TestRatingSearch:
         client = test_client_production_readonly
         # Use a low rating that might return few or no results
         max_rating = 2.0
-        response = client.get(f"/api/v1/recipes/search?max_rating={max_rating}")
+        response = client.get(f"/recipes/search?max_rating={max_rating}")
 
         assert response.status_code == 200
         data = response.json()
@@ -117,7 +117,7 @@ class TestRatingSearch:
         max_rating = 2.0  # Invalid: max < min
 
         response = client.get(
-            f"/api/v1/recipes/search?min_rating={min_rating}&max_rating={max_rating}"
+            f"/recipes/search?min_rating={min_rating}&max_rating={max_rating}"
         )
 
         # Should handle gracefully - either return 400 error or empty results
@@ -134,19 +134,19 @@ class TestRatingSearch:
         """Test searching with rating boundary values (0, 5)"""
         client = test_client_production_readonly
         # Test minimum possible rating
-        response = client.get("/api/v1/recipes/search?min_rating=0")
+        response = client.get("/recipes/search?min_rating=0")
         assert response.status_code == 200
         data = response.json()
         assert "recipes" in data
 
         # Test maximum possible rating
-        response = client.get("/api/v1/recipes/search?max_rating=5")
+        response = client.get("/recipes/search?max_rating=5")
         assert response.status_code == 200
         data = response.json()
         assert "recipes" in data
 
         # Test exact boundary values
-        response = client.get("/api/v1/recipes/search?min_rating=0&max_rating=5")
+        response = client.get("/recipes/search?min_rating=0&max_rating=5")
         assert response.status_code == 200
         data = response.json()
         assert "recipes" in data
@@ -155,7 +155,7 @@ class TestRatingSearch:
         """Test searching with negative rating values"""
         client = test_client_production_readonly
         # Negative ratings should be handled gracefully
-        response = client.get("/api/v1/recipes/search?min_rating=-1")
+        response = client.get("/recipes/search?min_rating=-1")
 
         # Should either return 400 error or treat as 0
         assert response.status_code in [200, 400, 422]
@@ -168,7 +168,7 @@ class TestRatingSearch:
         """Test searching with rating values above 5"""
         client = test_client_production_readonly
         # Ratings above 5 should be handled gracefully
-        response = client.get("/api/v1/recipes/search?min_rating=6")
+        response = client.get("/recipes/search?min_rating=6")
 
         # Should either return 400 error or return no results
         assert response.status_code in [200, 400, 422]
@@ -185,7 +185,7 @@ class TestRatingSearch:
         decimal_ratings = [1.5, 2.7, 3.3, 4.9]
 
         for rating in decimal_ratings:
-            response = client.get(f"/api/v1/recipes/search?min_rating={rating}")
+            response = client.get(f"/recipes/search?min_rating={rating}")
             assert response.status_code == 200
             data = response.json()
 
@@ -203,7 +203,7 @@ class TestRatingSearch:
         """Test how rating filters handle recipes with no ratings"""
         client = test_client_production_readonly
         # Test a range that should include unrated recipes if they're treated as 0
-        response = client.get("/api/v1/recipes/search?min_rating=0&max_rating=5")
+        response = client.get("/recipes/search?min_rating=0&max_rating=5")
 
         assert response.status_code == 200
         data = response.json()
@@ -222,7 +222,7 @@ class TestRatingSearch:
         """Test searching with string rating values"""
         client = test_client_production_readonly
         # Non-numeric rating values should be handled gracefully
-        response = client.get("/api/v1/recipes/search?min_rating=abc")
+        response = client.get("/recipes/search?min_rating=abc")
 
         # Should return 400 error for invalid parameter type
         assert response.status_code in [200, 400, 422]
@@ -233,12 +233,12 @@ class TestRatingSearch:
         """Test that rating filtering actually filters results"""
         client = test_client_production_readonly
         # Get all recipes (no filter)
-        all_response = client.get("/api/v1/recipes/search")
+        all_response = client.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
 
         # Get recipes with high rating filter
-        high_rating_response = client.get("/api/v1/recipes/search?min_rating=4.0")
+        high_rating_response = client.get("/recipes/search?min_rating=4.0")
         assert high_rating_response.status_code == 200
         high_rating_data = high_rating_response.json()
 
@@ -255,7 +255,7 @@ class TestRatingSearch:
         client = test_client_production_readonly
         # This tests how the API handles duplicate parameters
         # Most frameworks take the last value or the first value
-        response = client.get("/api/v1/recipes/search?min_rating=3.0&min_rating=4.0")
+        response = client.get("/recipes/search?min_rating=3.0&min_rating=4.0")
 
         assert response.status_code == 200
         data = response.json()
@@ -269,7 +269,7 @@ class TestRatingSearch:
         client = test_client_production_readonly
         # Test with many decimal places
         precise_rating = 3.14159
-        response = client.get(f"/api/v1/recipes/search?min_rating={precise_rating}")
+        response = client.get(f"/recipes/search?min_rating={precise_rating}")
 
         assert response.status_code == 200
         data = response.json()
@@ -285,7 +285,7 @@ class TestRatingSearch:
     def test_search_recipes_zero_rating(self, test_client_production_readonly):
         """Test searching for recipes with exactly zero rating"""
         client = test_client_production_readonly
-        response = client.get("/api/v1/recipes/search?min_rating=0&max_rating=0")
+        response = client.get("/recipes/search?min_rating=0&max_rating=0")
 
         assert response.status_code == 200
         data = response.json()

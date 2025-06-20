@@ -11,7 +11,7 @@ class TestCombinedSearch:
     def test_search_name_and_ingredients(self, test_client_production_readonly):
         """Test combining name search with ingredient filters"""
         # Get some recipes to understand what data we have
-        all_response = test_client_production_readonly.get("/api/v1/recipes/search")
+        all_response = test_client_production_readonly.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
 
@@ -30,7 +30,7 @@ class TestCombinedSearch:
                 ]
 
                 response = test_client_production_readonly.get(
-                    f"/api/v1/recipes/search?q={recipe_name_part}&ingredients={ingredient_name}"
+                    f"/recipes/search?q={recipe_name_part}&ingredients={ingredient_name}"
                 )
                 assert response.status_code == 200
                 data = response.json()
@@ -55,7 +55,7 @@ class TestCombinedSearch:
         name_query = "cocktail"
 
         response = test_client_production_readonly.get(
-            f"/api/v1/recipes/search?q={name_query}&min_rating={min_rating}"
+            f"/recipes/search?q={name_query}&min_rating={min_rating}"
         )
         assert response.status_code == 200
         data = response.json()
@@ -75,7 +75,7 @@ class TestCombinedSearch:
     def test_search_name_and_tags(self, test_client_production_readonly):
         """Test combining name search with tag filters"""
         # Get recipes with tags to create a realistic test
-        all_response = test_client_production_readonly.get("/api/v1/recipes/search")
+        all_response = test_client_production_readonly.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
 
@@ -90,7 +90,7 @@ class TestCombinedSearch:
             tag_name = recipe_with_tags["tags"][0]["name"]
 
             response = test_client_production_readonly.get(
-                f"/api/v1/recipes/search?q={name_part}&tags={tag_name}"
+                f"/recipes/search?q={name_part}&tags={tag_name}"
             )
             assert response.status_code == 200
             data = response.json()
@@ -114,7 +114,7 @@ class TestCombinedSearch:
         min_rating = 2.5
 
         response = test_client_production_readonly.get(
-            f"/api/v1/recipes/search?ingredients={ingredient}&min_rating={min_rating}"
+            f"/recipes/search?ingredients={ingredient}&min_rating={min_rating}"
         )
         assert response.status_code == 200
         data = response.json()
@@ -137,7 +137,7 @@ class TestCombinedSearch:
     def test_search_ingredients_and_tags(self, test_client_production_readonly):
         """Test combining ingredient search with tag filters"""
         # Get data to find realistic combinations
-        all_response = test_client_production_readonly.get("/api/v1/recipes/search")
+        all_response = test_client_production_readonly.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
 
@@ -158,7 +158,7 @@ class TestCombinedSearch:
             tag_name = suitable_recipe["tags"][0]["name"]
 
             response = test_client_production_readonly.get(
-                f"/api/v1/recipes/search?ingredients={ingredient_name}&tags={tag_name}"
+                f"/recipes/search?ingredients={ingredient_name}&tags={tag_name}"
             )
             assert response.status_code == 200
             data = response.json()
@@ -181,7 +181,7 @@ class TestCombinedSearch:
     def test_search_rating_and_tags(self, test_client_production_readonly):
         """Test combining rating search with tag filters"""
         # Get data to find recipes with tags
-        all_response = test_client_production_readonly.get("/api/v1/recipes/search")
+        all_response = test_client_production_readonly.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
 
@@ -195,7 +195,7 @@ class TestCombinedSearch:
             min_rating = 2.0
 
             response = test_client_production_readonly.get(
-                f"/api/v1/recipes/search?min_rating={min_rating}&tags={tag_to_use}"
+                f"/recipes/search?min_rating={min_rating}&tags={tag_to_use}"
             )
             assert response.status_code == 200
             data = response.json()
@@ -217,7 +217,7 @@ class TestCombinedSearch:
         """Test combining name, ingredient, and rating filters"""
         # Use broad filters to increase chance of matches
         response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?q=a&ingredients=Gin&min_rating=1.0"
+            "/recipes/search?q=a&ingredients=Gin&min_rating=1.0"
         )
         assert response.status_code == 200
         data = response.json()
@@ -243,7 +243,7 @@ class TestCombinedSearch:
     def test_search_quadruple_combination(self, test_client_production_readonly):
         """Test combining name, ingredient, rating, and tag filters"""
         # Get data to find a realistic combination
-        all_response = test_client_production_readonly.get("/api/v1/recipes/search")
+        all_response = test_client_production_readonly.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
 
@@ -266,7 +266,7 @@ class TestCombinedSearch:
             min_rating = 0.0  # Very low to ensure matches
 
             response = test_client_production_readonly.get(
-                f"/api/v1/recipes/search?q={name_part}&ingredients={ingredient_name}"
+                f"/recipes/search?q={name_part}&ingredients={ingredient_name}"
                 f"&tags={tag_name}&min_rating={min_rating}"
             )
             assert response.status_code == 200
@@ -281,7 +281,7 @@ class TestCombinedSearch:
     def test_search_with_sorting_combination(self, test_client_production_readonly):
         """Test combining multiple search filters with sorting"""
         response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?q=cocktail&min_rating=2.0&sort_by=name&sort_order=asc"
+            "/recipes/search?q=cocktail&min_rating=2.0&sort_by=name&sort_order=asc"
         )
         assert response.status_code == 200
         data = response.json()
@@ -306,7 +306,7 @@ class TestCombinedSearch:
     def test_search_with_pagination_combination(self, test_client_production_readonly):
         """Test combining multiple search filters with pagination"""
         response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?q=a&min_rating=1.0&page=1&limit=5"
+            "/recipes/search?q=a&min_rating=1.0&page=1&limit=5"
         )
         assert response.status_code == 200
         data = response.json()
@@ -332,7 +332,7 @@ class TestCombinedSearch:
         """Test combination that should return no results"""
         # Create a combination that's very unlikely to match
         response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?q=NonexistentRecipe123&ingredients=NonexistentIngredient456"
+            "/recipes/search?q=NonexistentRecipe123&ingredients=NonexistentIngredient456"
             "&tags=NonexistentTag789&min_rating=4.9"
         )
         assert response.status_code == 200
@@ -347,7 +347,7 @@ class TestCombinedSearch:
         """Test filters that might conflict or produce edge cases"""
         # Very high rating with very specific requirements
         response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?min_rating=4.8&max_rating=5.0"
+            "/recipes/search?min_rating=4.8&max_rating=5.0"
             "&ingredients=Aperol&tags=Summer"
         )
         assert response.status_code == 200
@@ -366,7 +366,7 @@ class TestCombinedSearch:
     ):
         """Test MUST/MUST_NOT ingredient logic combined with other filters"""
         response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?ingredients=Gin:MUST,Aperol:MUST_NOT"
+            "/recipes/search?ingredients=Gin:MUST,Aperol:MUST_NOT"
             "&min_rating=2.0&sort_by=name&sort_order=asc"
         )
         assert response.status_code == 200
@@ -397,7 +397,7 @@ class TestCombinedSearch:
         """Test combined search with special characters in parameters"""
         # Test URL encoding and special characters
         response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?q=Mom's&tags=Old-Fashioned&ingredients=Rye Whiskey"
+            "/recipes/search?q=Mom's&tags=Old-Fashioned&ingredients=Rye Whiskey"
         )
         assert response.status_code == 200
         data = response.json()
@@ -408,7 +408,7 @@ class TestCombinedSearch:
     def test_search_combination_empty_parameters(self, test_client_production_readonly):
         """Test combined search with some empty parameters"""
         response = test_client_production_readonly.get(
-            "/api/v1/recipes/search?q=&ingredients=Gin&tags=&min_rating=2.0"
+            "/recipes/search?q=&ingredients=Gin&tags=&min_rating=2.0"
         )
         assert response.status_code == 200
         data = response.json()
@@ -434,10 +434,10 @@ class TestCombinedSearch:
 
         # Make the same request twice
         response1 = test_client_production_readonly.get(
-            f"/api/v1/recipes/search{search_params}"
+            f"/recipes/search{search_params}"
         )
         response2 = test_client_production_readonly.get(
-            f"/api/v1/recipes/search{search_params}"
+            f"/recipes/search{search_params}"
         )
 
         assert response1.status_code == 200

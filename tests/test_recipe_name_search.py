@@ -12,7 +12,7 @@ class TestRecipeNameSearch:
         """Test searching recipes by exact name match"""
         client = test_client_production_readonly
         # First get all recipes to find a valid name
-        all_response = client.get("/api/v1/recipes/search")
+        all_response = client.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
         
@@ -20,7 +20,7 @@ class TestRecipeNameSearch:
             # Use the first recipe's name for exact search
             recipe_name = all_data["recipes"][0]["name"]
             
-            response = client.get(f"/api/v1/recipes/search?q={recipe_name}")
+            response = client.get(f"/recipes/search?q={recipe_name}")
             assert response.status_code == 200
             data = response.json()
             
@@ -36,7 +36,7 @@ class TestRecipeNameSearch:
         """Test searching recipes by partial name match"""
         client = test_client_production_readonly
         # First get all recipes to find a name we can partially match
-        all_response = client.get("/api/v1/recipes/search")
+        all_response = client.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
         
@@ -46,7 +46,7 @@ class TestRecipeNameSearch:
             if len(recipe_name) >= 3:
                 partial_name = recipe_name[:3]
                 
-                response = client.get(f"/api/v1/recipes/search?q={partial_name}")
+                response = client.get(f"/recipes/search?q={partial_name}")
                 assert response.status_code == 200
                 data = response.json()
                 
@@ -64,7 +64,7 @@ class TestRecipeNameSearch:
         """Test that name search is case-insensitive"""
         client = test_client_production_readonly
         # Get a recipe name to test with
-        all_response = client.get("/api/v1/recipes/search")
+        all_response = client.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
         
@@ -80,7 +80,7 @@ class TestRecipeNameSearch:
             
             expected_count = None
             for search_term in test_cases:
-                response = client.get(f"/api/v1/recipes/search?q={search_term}")
+                response = client.get(f"/recipes/search?q={search_term}")
                 assert response.status_code == 200
                 data = response.json()
                 
@@ -95,7 +95,7 @@ class TestRecipeNameSearch:
     def test_search_recipes_by_name_nonexistent(self, test_client_production_readonly):
         """Test searching for a recipe name that doesn't exist"""
         client = test_client_production_readonly
-        response = client.get("/api/v1/recipes/search?q=NonexistentRecipeName123456")
+        response = client.get("/recipes/search?q=NonexistentRecipeName123456")
         assert response.status_code == 200
         data = response.json()
         
@@ -106,12 +106,12 @@ class TestRecipeNameSearch:
     def test_search_recipes_by_name_empty_query(self, test_client_production_readonly):
         """Test searching with empty name query"""
         client = test_client_production_readonly
-        response = client.get("/api/v1/recipes/search?q=")
+        response = client.get("/recipes/search?q=")
         assert response.status_code == 200
         data = response.json()
         
         # Empty query should return all recipes (same as no filter)
-        all_response = client.get("/api/v1/recipes/search")
+        all_response = client.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
         
@@ -120,12 +120,12 @@ class TestRecipeNameSearch:
     def test_search_recipes_by_name_whitespace_query(self, test_client_production_readonly):
         """Test searching with whitespace-only query"""
         client = test_client_production_readonly
-        response = client.get("/api/v1/recipes/search?q=   ")
+        response = client.get("/recipes/search?q=   ")
         assert response.status_code == 200
         data = response.json()
         
         # Whitespace query should return all recipes (same as no filter after stripping)
-        all_response = client.get("/api/v1/recipes/search")
+        all_response = client.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
         
@@ -136,7 +136,7 @@ class TestRecipeNameSearch:
         client = test_client_production_readonly
         
         # Get a recipe name to test with
-        all_response = client.get("/api/v1/recipes/search")
+        all_response = client.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
         
@@ -145,12 +145,12 @@ class TestRecipeNameSearch:
             
             # Test with leading/trailing whitespace
             padded_name = f"  {recipe_name}  "
-            response = client.get(f"/api/v1/recipes/search?q={padded_name}")
+            response = client.get(f"/recipes/search?q={padded_name}")
             assert response.status_code == 200
             data = response.json()
             
             # Should find the same results as searching without whitespace
-            clean_response = client.get(f"/api/v1/recipes/search?q={recipe_name}")
+            clean_response = client.get(f"/recipes/search?q={recipe_name}")
             assert clean_response.status_code == 200
             clean_data = clean_response.json()
             
@@ -163,7 +163,7 @@ class TestRecipeNameSearch:
         special_chars = ["'", "-", "&", ".", "(", ")"]
         
         for char in special_chars:
-            response = client.get(f"/api/v1/recipes/search?q={char}")
+            response = client.get(f"/recipes/search?q={char}")
             assert response.status_code == 200
             data = response.json()
             
@@ -179,7 +179,7 @@ class TestRecipeNameSearch:
         number_searches = ["21", "7", "1", "2"]
         
         for search_term in number_searches:
-            response = client.get(f"/api/v1/recipes/search?q={search_term}")
+            response = client.get(f"/recipes/search?q={search_term}")
             assert response.status_code == 200
             data = response.json()
             
@@ -195,7 +195,7 @@ class TestRecipeNameSearch:
         """Test that name filtering actually filters results"""
         client = test_client_production_readonly
         # Get all recipes (no filter)
-        all_response = client.get("/api/v1/recipes/search")
+        all_response = client.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
         
@@ -203,7 +203,7 @@ class TestRecipeNameSearch:
             # Use a specific recipe name that should return fewer results
             specific_name = all_data["recipes"][0]["name"][:4]  # First 4 characters
             
-            name_response = client.get(f"/api/v1/recipes/search?q={specific_name}")
+            name_response = client.get(f"/recipes/search?q={specific_name}")
             assert name_response.status_code == 200
             name_data = name_response.json()
             
@@ -219,7 +219,7 @@ class TestRecipeNameSearch:
         search_term = "test recipe"
         encoded_term = urllib.parse.quote_plus(search_term)
         
-        response = client.get(f"/api/v1/recipes/search?q={encoded_term}")
+        response = client.get(f"/recipes/search?q={encoded_term}")
         assert response.status_code == 200
         data = response.json()
         
@@ -232,7 +232,7 @@ class TestRecipeNameSearch:
         client = test_client_production_readonly
         long_query = "a" * 100  # 100 character string
         
-        response = client.get(f"/api/v1/recipes/search?q={long_query}")
+        response = client.get(f"/recipes/search?q={long_query}")
         assert response.status_code == 200
         data = response.json()
         

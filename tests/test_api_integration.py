@@ -20,7 +20,7 @@ class TestProductionDataValidation:
         self, test_client_production_readonly
     ):
         """Test ingredients production data structure and relationships"""
-        response = test_client_production_readonly.get("/api/v1/ingredients")
+        response = test_client_production_readonly.get("/ingredients")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -47,7 +47,7 @@ class TestProductionDataValidation:
 
     def test_recipes_production_data_integrity(self, test_client_production_readonly):
         """Test recipes production data structure and completeness"""
-        response = test_client_production_readonly.get("/api/v1/recipes")
+        response = test_client_production_readonly.get("/recipes")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -57,7 +57,7 @@ class TestProductionDataValidation:
             # Test detailed recipe structure
             recipe_id = recipes[0]["id"]
             detail_response = test_client_production_readonly.get(
-                f"/api/v1/recipes/{recipe_id}"
+                f"/recipes/{recipe_id}"
             )
             assert detail_response.status_code == status.HTTP_200_OK
 
@@ -80,7 +80,7 @@ class TestProductionDataValidation:
 
     def test_units_production_data_completeness(self, test_client_production_readonly):
         """Test that essential cocktail units exist in production data"""
-        response = test_client_production_readonly.get("/api/v1/units")
+        response = test_client_production_readonly.get("/units")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -127,7 +127,7 @@ class TestSearchAndPaginationFunctionality:
     def test_ingredients_endpoint_functionality(self, test_client_production_readonly):
         """Test ingredients endpoint returns all ingredients (no search functionality)"""
         # Test basic ingredients endpoint
-        response = test_client_production_readonly.get("/api/v1/ingredients")
+        response = test_client_production_readonly.get("/ingredients")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -142,7 +142,7 @@ class TestSearchAndPaginationFunctionality:
             # Verify that adding search parameters doesn't change results
             # (since search is not implemented for ingredients)
             search_response = test_client_production_readonly.get(
-                "/api/v1/ingredients?search=gin"
+                "/ingredients?search=gin"
             )
             assert search_response.status_code == status.HTTP_200_OK
             search_data = search_response.json()
@@ -263,7 +263,7 @@ class TestComplexIntegrationScenarios:
         """Test complete recipe workflow with ingredients and ratings"""
         # Get a recipe with detailed information
         recipes_response = test_client_production_readonly.get(
-            "/api/v1/recipes?limit=1"
+            "/recipes?limit=1"
         )
         assert recipes_response.status_code == status.HTTP_200_OK
 
@@ -281,7 +281,7 @@ class TestComplexIntegrationScenarios:
 
         # Get detailed recipe with ingredients
         recipe_detail_response = test_client_production_readonly.get(
-            f"/api/v1/recipes/{recipe_id}"
+            f"/recipes/{recipe_id}"
         )
         assert recipe_detail_response.status_code == status.HTTP_200_OK
         recipe_detail = recipe_detail_response.json()
@@ -300,7 +300,7 @@ class TestComplexIntegrationScenarios:
 
         # Get ratings for this recipe
         ratings_response = test_client_production_readonly.get(
-            f"/api/v1/recipes/{recipe_id}/ratings"
+            f"/recipes/{recipe_id}/ratings"
         )
         assert ratings_response.status_code == status.HTTP_200_OK
 
@@ -328,7 +328,7 @@ class TestComplexIntegrationScenarios:
 
     def test_ingredient_hierarchy_navigation(self, test_client_production_readonly):
         """Test navigating ingredient hierarchies"""
-        response = test_client_production_readonly.get("/api/v1/ingredients")
+        response = test_client_production_readonly.get("/ingredients")
         assert response.status_code == status.HTTP_200_OK
 
         ingredients = response.json()
@@ -359,9 +359,9 @@ class TestPerformanceWithProductionData:
         import time
 
         endpoints_and_limits = [
-            ("/api/v1/ingredients", 3.0),
-            ("/api/v1/recipes?limit=50", 5.0),
-            ("/api/v1/units", 2.0),
+            ("/ingredients", 3.0),
+            ("/recipes?limit=50", 5.0),
+            ("/units", 2.0),
         ]
 
         for endpoint, time_limit in endpoints_and_limits:
