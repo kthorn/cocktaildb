@@ -35,9 +35,9 @@ Globals:
   
   Api:
     Cors:
-      AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
-      AllowOrigin: "'*'"
+      AllowMethods: "GET,POST,PUT,DELETE,OPTIONS"
+      AllowHeaders: "Content-Type,Authorization,Accept,X-Amz-Date,X-Api-Key,X-Amz-Security-Token"
+      AllowOrigin: "*"
     BinaryMediaTypes:
       - "*/*"
 
@@ -493,6 +493,84 @@ Resources:
             RestApiId: !Ref CocktailAPI
             Path: /ingredients/{ingredientId}
             Method: get
+        OptionsIngredients:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ingredients
+            Method: options
+        OptionsIngredientsId:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ingredients/{ingredientId}
+            Method: options
+        OptionsRecipes:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes
+            Method: options
+        OptionsRecipesId:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}
+            Method: options
+        OptionsUnits:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /units
+            Method: options
+        OptionsUnitsId:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /units/{unitId}
+            Method: options
+        OptionsRatings:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ratings/{recipeId}
+            Method: options
+        OptionsPublicTags:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /tags/public
+            Method: options
+        OptionsPrivateTags:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /tags/private
+            Method: options
+        OptionsRecipePublicTags:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}/public_tags
+            Method: options
+        OptionsRecipePrivateTags:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}/private_tags
+            Method: options
+        OptionsRecipePublicTagsId:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}/public_tags/{tagId}
+            Method: options
+        OptionsRecipePrivateTagsId:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}/private_tags/{tagId}
+            Method: options
         GetRecipes:
           Type: Api
           Properties:
@@ -562,6 +640,12 @@ Resources:
             Method: get
             Auth:
               Authorizer: CognitoAuthorizer
+        OptionsAuth:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /auth
+            Method: options
         GetRecipeItem:
           Type: Api
           Properties:
@@ -796,10 +880,6 @@ Resources:
     Properties:
       Name: !Sub ${AWS::StackName}-api
       StageName: api
-      Cors:
-        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
-        AllowOrigin: "'*'"
       Auth:
         Authorizers:
           CognitoAuthorizer:
@@ -813,19 +893,6 @@ Resources:
           DataTraceEnabled: true # Log full request/response data
           MetricsEnabled: true # Enable CloudWatch Metrics
       # ------------------------------------------
-      GatewayResponses:
-        DEFAULT_4XX:
-          ResponseParameters:
-            Headers:
-              Access-Control-Allow-Origin: "'*'"
-              Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
-              Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        DEFAULT_5XX:
-          ResponseParameters:
-            Headers:
-              Access-Control-Allow-Origin: "'*'"
-              Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
-              Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
 
   # Lambda Function for Nightly DB Backup (prod only)
   BackupLambda:
