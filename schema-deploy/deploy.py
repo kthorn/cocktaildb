@@ -216,21 +216,14 @@ def lambda_handler(event, context):
                 # Initialize the database
                 logger.info(f"Initializing database at {db_path}")
 
-                # For updates, only reinitialize if forced
+                # Check if we should reinitialize the database completely
                 force_init = (
                     properties.get("ForceInit", "false").lower() == "true"
                 )
-                if (
-                    event["RequestType"] == "Update"
-                    and os.path.exists(db_path)
-                    and not force_init
-                ):
-                    logger.info(
-                        f"Database already exists at {db_path}. Not reinitializing."
-                    )
-                else:
-                    # If database exists and this is a Create, delete it first
-                    if os.path.exists(db_path) and event["RequestType"] in ["Create"]:
+                
+                # For Create operations or ForceInit, remove existing database and recreate
+                if event["RequestType"] == "Create" or force_init:
+                    if os.path.exists(db_path):
                         try:
                             os.remove(db_path)
                             logger.info(f"Removed existing database at {db_path}")
@@ -240,12 +233,29 @@ def lambda_handler(event, context):
                     # Create and initialize the database
                     conn = sqlite3.connect(db_path)
                     cursor = conn.cursor()
-                    # Execute the schema SQL
                     cursor.executescript(schema_content)
-                    # Commit changes and close connection
                     conn.commit()
                     conn.close()
                     logger.info(f"Successfully initialized database at {db_path}")
+                
+                # For Update operations without ForceInit, apply migration to existing database
+                elif event["RequestType"] == "Update":
+                    if not os.path.exists(db_path):
+                        logger.warning(f"Database does not exist at {db_path}, creating new database")
+                        conn = sqlite3.connect(db_path)
+                        cursor = conn.cursor()
+                        cursor.executescript(schema_content)
+                        conn.commit()
+                        conn.close()
+                        logger.info(f"Successfully created database at {db_path}")
+                    else:
+                        logger.info(f"Applying migration to existing database at {db_path}")
+                        conn = sqlite3.connect(db_path)
+                        cursor = conn.cursor()
+                        cursor.executescript(schema_content)
+                        conn.commit()
+                        conn.close()
+                        logger.info(f"Successfully applied migration to database at {db_path}")
 
         # Send CloudFormation response only for CloudFormation events
         if is_cloudformation_event:
