@@ -31,13 +31,15 @@ Globals:
   Function:
     Runtime: python3.12
     Timeout: 60
-    MemorySize: 1024
+    MemorySize: 1536
   
   Api:
     Cors:
       AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
       AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
       AllowOrigin: "'*'"
+    BinaryMediaTypes:
+      - "*/*"
 
 Conditions:
   IsProdEnvironment: !Equals [!Ref Environment, "prod"]
@@ -54,47 +56,28 @@ Resources:
         - Key: Name
           Value: !Sub ${AWS::StackName}-vpc
 
-  PublicSubnet:
+  # Private subnet in AZ-0 for Lambda functions and EFS mount target
+  # This ensures AZ-affinity: Lambda functions and EFS mount target are in the same AZ
+  # preventing cross-AZ latency and potential ENOENT errors
+  PrivateSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref CocktailVPC
       AvailabilityZone: !Select
         - 0
         - !GetAZs ''
-      CidrBlock: 10.0.2.0/24
-      MapPublicIpOnLaunch: true
+      CidrBlock: 10.0.1.0/24
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-public-subnet-1
+          Value: !Sub ${AWS::StackName}-private-subnet-1
 
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub ${AWS::StackName}-igw
-
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref CocktailVPC
-      InternetGatewayId: !Ref InternetGateway
-
-  RouteTable:
+  PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref CocktailVPC
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-route-table
-
-  PublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: AttachGateway
-    Properties:
-      RouteTableId: !Ref RouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
+          Value: !Sub ${AWS::StackName}-private-route-table
 
   # --- Add S3 Gateway VPC Endpoint ---
   S3VPCEndpoint:
@@ -103,15 +86,65 @@ Resources:
       VpcId: !Ref CocktailVPC
       ServiceName: !Sub com.amazonaws.${AWS::Region}.s3 # S3 service endpoint
       RouteTableIds:
-        - !Ref RouteTable # Add this endpoint to our route table
-      PolicyDocument: # Optional: Restrict access further if needed
+        - !Ref PrivateRouteTable
+      PolicyDocument:
         Version: "2012-10-17"
         Statement:
           - Effect: "Allow"
             Principal: "*"
-            Action: "*" # Allow all S3 actions via the endpoint
-            Resource: "*" # Allow access to all S3 resources
+            Action:
+              - "s3:GetObject"
+              - "s3:PutObject"
+              - "s3:ListBucket"
+              - "s3:DeleteObject"
+            Resource:
+              - !Sub "arn:aws:s3:::cocktailwebsite-${AWS::AccountId}-${Environment}"
+              - !Sub "arn:aws:s3:::cocktailwebsite-${AWS::AccountId}-${Environment}/*"
+              - !If 
+                - IsProdEnvironment
+                - !Sub "arn:aws:s3:::cocktaildbbackups-${AWS::AccountId}-${Environment}"
+                - !Ref "AWS::NoValue"
+              - !If 
+                - IsProdEnvironment
+                - !Sub "arn:aws:s3:::cocktaildbbackups-${AWS::AccountId}-${Environment}/*"
+                - !Ref "AWS::NoValue"
   # ------------------------------------
+
+  # EFS VPC Endpoint for Lambda-to-EFS API communication
+  EFSVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.elasticfilesystem
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref EFSVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: "*"
+            Action:
+              - "elasticfilesystem:ClientMount"
+              - "elasticfilesystem:ClientWrite"
+              - "elasticfilesystem:ClientRootAccess"
+              - "elasticfilesystem:DescribeMountTargets"
+            Resource: "*"
+
+  # Security Group for EFS VPC Endpoint
+  EFSVPCEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EFS VPC Endpoint
+      VpcId: !Ref CocktailVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
 
   # EFS File System
   CocktailEFS:
@@ -125,11 +158,13 @@ Resources:
         - Key: Name
           Value: !Sub ${AWS::StackName}-efs
 
-  Subnet1RouteTableAssociation:
+  PrivateSubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet
-      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+
 
   # Security Groups for Lambda and EFS
   LambdaSecurityGroup:
@@ -142,6 +177,18 @@ Resources:
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          DestinationSecurityGroupId: !Ref EFSSecurityGroup
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 10.0.0.2/32
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 10.0.0.2/32
 
   EFSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -159,15 +206,6 @@ Resources:
       ToPort: 443
       CidrIp: !GetAtt CocktailVPC.CidrBlock
 
-  LambdaEgressToEFS:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      GroupId: !Ref LambdaSecurityGroup
-      IpProtocol: tcp
-      FromPort: 2049
-      ToPort: 2049
-      DestinationSecurityGroupId: !Ref EFSSecurityGroup
-
   EFSIngressFromLambda:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -177,31 +215,20 @@ Resources:
       ToPort: 2049
       SourceSecurityGroupId: !Ref LambdaSecurityGroup
 
-  EFSEgressHTTPS:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      GroupId: !Ref EFSSecurityGroup
-      IpProtocol: tcp
-      FromPort: 443
-      ToPort: 443
-      CidrIp: !GetAtt CocktailVPC.CidrBlock
-
-  # Update the MountTarget to use the new EFS security group
+  # EFS Mount Target in private subnet for security and AZ-affinity
+  # Single mount target ensures Lambda functions access EFS from the same AZ
+  # avoiding cross-AZ latency and potential ENOENT errors
   MountTarget:
     Type: AWS::EFS::MountTarget
-    DependsOn:
-      - CocktailEFS
     Properties:
       FileSystemId: !Ref CocktailEFS
-      SubnetId: !Ref PublicSubnet
+      SubnetId: !Ref PrivateSubnet
       SecurityGroups:
         - !Ref EFSSecurityGroup
 
   # EFS Access Point
   EFSAccessPoint:
     Type: AWS::EFS::AccessPoint
-    DependsOn:
-      - CocktailEFS
     Properties:
       FileSystemId: !Ref CocktailEFS
       PosixUser:
@@ -214,9 +241,10 @@ Resources:
           OwnerGid: "1000"
           Permissions: "0755"
 
-  # S3 bucket for database backups
+  # S3 bucket for database backups (prod only)
   BackupBucket:
     Type: AWS::S3::Bucket
+    Condition: IsProdEnvironment
     Properties:
       BucketName: !Sub "cocktaildbbackups-${AWS::AccountId}-${Environment}"
       PublicAccessBlockConfiguration:
@@ -226,7 +254,6 @@ Resources:
           - Id: ExpireOldBackups
             Status: Enabled
             ExpirationInDays: 30
-            # Consider NoncurrentVersionExpirationInDays if versioning is enabled
 
   # S3 bucket for website hosting
   WebsiteBucket:
@@ -325,6 +352,7 @@ Resources:
   WebsiteBucketPolicyFunction:
     Type: AWS::Serverless::Function
     Properties:
+      Runtime: python3.11
       Handler: index.handler
       InlineCode: |
         import boto3
@@ -373,9 +401,6 @@ Resources:
   # Bucket policy custom resource
   BucketPolicyResource:
     Type: AWS::CloudFormation::CustomResource
-    DependsOn:
-      - WebsiteBucket
-      - CloudFrontDistribution
     Properties:
       ServiceToken: !GetAtt WebsiteBucketPolicyFunction.Arn
       BucketName: !Ref WebsiteBucket
@@ -387,41 +412,49 @@ Resources:
     Type: AWS::Serverless::Function
     DependsOn: 
       - MountTarget
-      - EFSAccessPoint
-      - CognitoUserPool
-      - CognitoUserPoolClient
     Properties:
       FunctionName: !Sub ${AWS::StackName}-api-handler
-      CodeUri: cocktaildb/
-      Handler: handler.lambda_handler
-      Timeout: 30
+      CodeUri: api/
+      Handler: main.handler  
+      Timeout: 60
       Environment:
         Variables:
           DB_NAME: !Ref DatabaseName
           USER_POOL_ID: !Ref CognitoUserPool
           APP_CLIENT_ID: !Ref CognitoUserPoolClient
+          ENVIRONMENT: !Ref Environment
+          DB_PATH: !Sub /mnt/efs/${DatabaseName}.db
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
         SubnetIds:
-          - !Ref PublicSubnet
+          - !Ref PrivateSubnet
       FileSystemConfigs:
         - Arn: !GetAtt EFSAccessPoint.Arn
           LocalMountPath: /mnt/efs
       Policies:
         - VPCAccessPolicy: {}
         - Statement:
-            - Effect: Allow
+            - Sid: AWSLambdaVPCAccessExecutionRole
+              Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - ec2:CreateNetworkInterface
+                - ec2:DescribeNetworkInterfaces
+                - ec2:DeleteNetworkInterface
+                - ec2:DescribeVpcEndpoints
+                - ec2:DescribeSecurityGroups
+                - ec2:DescribeSubnets
+              Resource: "*"
+            - Sid: AmazonElasticFileSystemClientFullAccess
+              Effect: Allow
               Action:
                 - elasticfilesystem:ClientMount
                 - elasticfilesystem:ClientWrite
                 - elasticfilesystem:ClientRootAccess
-              Resource: !GetAtt CocktailEFS.Arn
-            - Effect: Allow
-              Action:
-                - ec2:DescribeVpcEndpoints
-                - ec2:DescribeSecurityGroups
-                - ec2:DescribeSubnets
+                - elasticfilesystem:DescribeMountTargets
               Resource: "*"
       Events:
         GetIngredients:
@@ -526,7 +559,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
-            Path: /units
+            Path: /units/{unitId}
             Method: put
             Auth:
               Authorizer: CognitoAuthorizer
@@ -534,7 +567,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
-            Path: /units
+            Path: /units/{unitId}
             Method: delete
             Auth:
               Authorizer: CognitoAuthorizer
@@ -718,7 +751,6 @@ Resources:
     Type: AWS::Serverless::Function
     DependsOn: 
       - MountTarget
-      - EFSAccessPoint
     Properties:
       FunctionName: !Sub ${AWS::StackName}-schema-deploy
       CodeUri: schema-deploy/
@@ -731,7 +763,7 @@ Resources:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
         SubnetIds:
-          - !Ref PublicSubnet
+          - !Ref PrivateSubnet
       FileSystemConfigs:
         - Arn: !GetAtt EFSAccessPoint.Arn
           LocalMountPath: /mnt/efs
@@ -745,14 +777,6 @@ Resources:
                 - elasticfilesystem:ClientRootAccess
               Resource: !GetAtt CocktailEFS.Arn
 
-
-  # S3 bucket for deployment artifacts
-  DeploymentBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "cocktailsamdeployment-${AWS::AccountId}-${Environment}"
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
 
   # Cognito User Pool for Authentication
   CognitoUserPool:
@@ -881,12 +905,12 @@ Resources:
               Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
               Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
 
-  # Lambda Function for Nightly DB Backup
+  # Lambda Function for Nightly DB Backup (prod only)
   BackupLambda:
     Type: AWS::Serverless::Function
+    Condition: IsProdEnvironment
     DependsOn:
-      - MountTarget # Ensure EFS is ready
-      - BackupBucket # Ensure bucket exists
+      - MountTarget
     Properties:
       FunctionName: !Sub ${AWS::StackName}-db-backup-handler
       CodeUri: backup-lambda/
@@ -898,21 +922,33 @@ Resources:
           BACKUP_BUCKET: !Ref BackupBucket
       VpcConfig:
         SecurityGroupIds:
-          - !Ref LambdaSecurityGroup # Reuse existing SG for EFS access
+          - !Ref LambdaSecurityGroup
         SubnetIds:
-          - !Ref PublicSubnet # Needs to be in the same subnet as EFS mount target
+          - !Ref PrivateSubnet
       FileSystemConfigs:
         - Arn: !GetAtt EFSAccessPoint.Arn
-          LocalMountPath: /mnt/efs # Mount path for EFS
+          LocalMountPath: /mnt/efs
       Policies:
-        - VPCAccessPolicy: {} # Policy for VPC access
+        - VPCAccessPolicy: {}
         - Statement:
-            - Effect: Allow # Allow EFS mount and read
+            - Sid: AWSLambdaVPCAccessExecutionRole
+              Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - ec2:CreateNetworkInterface
+                - ec2:DescribeNetworkInterfaces
+                - ec2:DeleteNetworkInterface
+              Resource: "*"
+            - Sid: AmazonElasticFileSystemClientAccess
+              Effect: Allow
               Action:
                 - elasticfilesystem:ClientMount
                 - elasticfilesystem:ClientRead
-              Resource: !GetAtt CocktailEFS.Arn
-            - Effect: Allow # Allow writing backup to S3 and managing old backups
+                - elasticfilesystem:DescribeMountTargets
+              Resource: "*"
+            - Effect: Allow
               Action:
                 - s3:PutObject
                 - s3:ListBucket
@@ -921,9 +957,10 @@ Resources:
                 - !Sub arn:aws:s3:::${BackupBucket}
                 - !Sub arn:aws:s3:::${BackupBucket}/*
 
-  # EventBridge Rule to trigger backup nightly (e.g., 2 AM UTC)
+  # EventBridge Rule to trigger backup nightly (prod only)
   BackupSchedule:
     Type: AWS::Events::Rule
+    Condition: IsProdEnvironment
     Properties:
       Name: !Sub ${AWS::StackName}-DailyDbBackupRule
       Description: Trigger nightly database backup
@@ -933,23 +970,62 @@ Resources:
         - Arn: !GetAtt BackupLambda.Arn
           Id: "BackupLambdaTarget"
 
-  # Permission for EventBridge to invoke the Backup Lambda
+  # Permission for EventBridge to invoke the Backup Lambda (prod only)
   BackupLambdaInvokePermission:
     Type: AWS::Lambda::Permission
+    Condition: IsProdEnvironment
     Properties:
       FunctionName: !GetAtt BackupLambda.Arn
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt BackupSchedule.Arn
 
+  VpcFlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/vpc/flowlogs/${AWS::StackName}"
+      RetentionInDays: 7         # keep 7 days; adjust as needed
+
+  VpcFlowLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AllowCWLogs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt VpcFlowLogGroup.Arn
+
+  CocktailVpcFlowLogs:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceType: VPC
+      ResourceId:  !Ref CocktailVPC       # the VPC in your template
+      TrafficType: ALL                    # ACCEPT | REJECT | ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName:  !Ref VpcFlowLogGroup
+      DeliverLogsPermissionArn: !GetAtt VpcFlowLogsRole.Arn
+      MaxAggregationInterval: 60          # 1 min granularity
+
 Outputs:
   VpcId:
     Description: ID of the VPC
     Value: !Ref CocktailVPC
 
-  PublicSubnetId:
-    Description: ID of Public Subnet
-    Value: !Ref PublicSubnet
+  PrivateSubnetId:
+    Description: ID of Private Subnet
+    Value: !Ref PrivateSubnet
 
   EFSFileSystemId:
     Description: ID of the EFS file system
@@ -1000,6 +1076,6 @@ Outputs:
     Value: !If [IsProdEnvironment, !Ref CloudFrontCertificate, "N/A (dev environment)"]
 
   BackupBucketName:
-    Description: S3 bucket for database backups
-    Value: !Ref BackupBucket
+    Description: S3 bucket for database backups (prod only)
+    Value: !If [IsProdEnvironment, !Ref BackupBucket, "N/A (dev environment)"]
 

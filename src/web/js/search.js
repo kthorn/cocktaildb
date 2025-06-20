@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { displayRecipes } from './recipeCard.js';
+import { displayRecipes, createProgressiveRecipeLoader } from './recipeCard.js';
 
 // Keep a global reference to ingredients for type-ahead
 let availableIngredients = [];
@@ -58,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (firstRow) {
             firstRow.querySelector('.logical-operator').value = 'MUST';
             firstRow.querySelector('.ingredient-search').value = '';
-            firstRow.querySelector('.ingredient-id').value = '';
+            // No longer need to clear ingredient ID since we use names directly
         }
     });
 
@@ -74,20 +74,30 @@ document.addEventListener('DOMContentLoaded', () => {
             // Build the search query
             const searchQuery = buildSearchQuery();
             
-            // Call the API to search recipes
-            const results = await api.searchRecipes(searchQuery);
+            // Set up progressive loading
+            const progressLoader = createProgressiveRecipeLoader(searchResultsContainer, false);
             
-            // Hide loading
+            // Hide the default loading placeholder and start progressive loading
             loadingPlaceholder.classList.add('hidden');
+            progressLoader.start();
+            
+            // Call the API to search recipes with progressive loading
+            const results = await api.searchRecipesWithFullDataProgressive(searchQuery, (batch, loadedCount, totalCount) => {
+                // Add each batch as it becomes available
+                progressLoader.addBatch(batch);
+                console.log(`Loaded ${loadedCount}/${totalCount} recipes`);
+            });
+            
+            // Finish loading
+            progressLoader.finish(results.length);
             
             if (results.length === 0) {
                 // Show no results message
                 emptyResults.classList.remove('hidden');
                 emptyResults.querySelector('p').textContent = 'No recipes found matching your criteria.';
             } else {
-                // Hide no results message and show recipes
+                // Hide no results message - recipes are already displayed progressively
                 emptyResults.classList.add('hidden');
-                displayRecipes(results, searchResultsContainer, false);
             }
         } catch (error) {
             console.error('Error searching recipes:', error);
@@ -126,15 +136,16 @@ document.addEventListener('DOMContentLoaded', () => {
             
             ingredientRows.forEach(row => {
                 const logicalOp = row.querySelector('.logical-operator').value;
-                const ingredientId = row.querySelector('.ingredient-id').value;
                 const ingredientName = row.querySelector('.ingredient-search').value.trim();
                 
-                // Only add if an ingredient is selected
-                if (ingredientId && ingredientName) {
-                    query.ingredients.push({
-                        id: parseInt(ingredientId),
-                        operator: logicalOp
-                    });
+                // Only add if an ingredient name is provided
+                if (ingredientName) {
+                    // Create ingredient specification with operator if not MUST (default)
+                    if (logicalOp === 'MUST') {
+                        query.ingredients.push(ingredientName);
+                    } else {
+                        query.ingredients.push(`${ingredientName}:${logicalOp}`);
+                    }
                 }
             });
             
@@ -287,7 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear on double-click
         ingredientSearchInput.addEventListener('dblclick', () => {
             ingredientSearchInput.value = '';
-            ingredientIdInput.value = '';
+            // No longer need to clear ingredient ID
         });
     }
 
@@ -338,7 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             item.addEventListener('click', () => {
                 searchInput.value = ingredient.name;
-                row.querySelector('.ingredient-id').value = ingredient.id;
+                // No longer need to set ingredient ID since we use names directly
                 dropdown.style.display = 'none';
             });
             
@@ -392,13 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activeIngredientIndex >= 0 && activeIngredientIndex < items.length) {
             const selectedValue = items[activeIngredientIndex].textContent;
             searchInput.value = selectedValue;
-            
-            // Find and set the corresponding ingredient ID
-            const ingredient = availableIngredients.find(ing => ing.name === selectedValue);
-            if (ingredient) {
-                idInput.value = ingredient.id;
-            }
-            
+            // No longer need to set ingredient ID since we use names directly
             dropdown.style.display = 'none';
         }
     }

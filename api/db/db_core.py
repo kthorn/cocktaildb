@@ -2,6 +2,7 @@ import logging
 import sqlite3
 import time
 import functools
+import os
 from typing import Dict, List, Optional, Any, Union, Tuple, cast
 
 from .db_utils import extract_all_ingredient_ids, assemble_ingredient_full_names
@@ -14,8 +15,6 @@ from .sql_queries import (
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
-db_path = "/mnt/efs/cocktaildb.db"
 
 
 def retry_on_db_locked(max_retries=3, initial_backoff=0.1):
@@ -58,7 +57,20 @@ class Database:
         """Initialize the database connection to SQLite on EFS"""
         logger.info("Initializing Database class with SQLite on EFS")
         try:
-            self.db_path = db_path
+            # Read database path from environment variable at runtime, not import time
+            self.db_path = os.environ.get("DB_PATH", "/mnt/efs/cocktaildb.db")
+            logger.info(f"Using database path: {self.db_path}")
+            logger.info(
+                f"DB_PATH environment variable: {os.environ.get('DB_PATH', 'not set')}"
+            )
+            logger.info(f"Database file exists: {os.path.exists(self.db_path)}")
+
+            if os.path.exists(self.db_path):
+                logger.info(
+                    f"Database file size: {os.path.getsize(self.db_path)} bytes"
+                )
+            else:
+                logger.warning(f"Database file does not exist at: {self.db_path}")
 
             # Test the connection
             self._test_connection()
@@ -429,6 +441,21 @@ class Database:
             logger.error(f"Error getting ingredients: {str(e)}")
             raise
 
+    def get_ingredient_by_name(self, ingredient_name: str) -> Optional[Dict[str, Any]]:
+        """Get a single ingredient by name (case-insensitive)"""
+        try:
+            result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id, name, description, parent_id, path FROM ingredients WHERE LOWER(name) = LOWER(?)",
+                    (ingredient_name,)
+                )
+            )
+            return result[0] if result else None
+        except Exception as e:
+            logger.error(f"Error getting ingredient by name '{ingredient_name}': {str(e)}")
+            return None
+
     def get_ingredient(self, ingredient_id: int) -> Optional[Dict[str, Any]]:
         """Get a single ingredient by ID"""
         try:
@@ -550,7 +577,60 @@ class Database:
     def get_recipes(
         self, cognito_user_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Get all recipes with their ingredients"""
+        """Get all recipes for list view (optimized - only ingredient counts, not full details)"""
+        try:
+            start_time = time.time()
+
+            # Get basic recipe data
+            params = {"cognito_user_id": cognito_user_id}
+            recipes_result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(get_all_recipes_sql, params),
+            )
+
+            if not recipes_result:
+                return []
+
+            # Get ingredient counts efficiently for all recipes in one query
+            recipe_ids = [recipe["id"] for recipe in recipes_result]
+            placeholders = ",".join("?" for _ in recipe_ids)
+
+            ingredient_counts = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    f"""
+                    SELECT recipe_id, COUNT(*) as ingredient_count
+                    FROM recipe_ingredients
+                    WHERE recipe_id IN ({placeholders})
+                    GROUP BY recipe_id
+                    """,
+                    tuple(recipe_ids),
+                ),
+            )
+
+            # Create a lookup map for ingredient counts
+            count_map = {
+                row["recipe_id"]: row["ingredient_count"] for row in ingredient_counts
+            }
+
+            # Add ingredient_count to each recipe
+            for recipe in recipes_result:
+                recipe["ingredient_count"] = count_map.get(recipe["id"], 0)
+
+            total_time = time.time() - start_time
+            logger.info(
+                f"get_recipes: Total execution time: {total_time:.3f}s (optimized)"
+            )
+            return recipes_result
+
+        except Exception as e:
+            logger.error(f"Error getting recipes: {str(e)}")
+            raise
+
+    def get_recipes_with_ingredients(
+        self, cognito_user_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get all recipes with their full ingredient details (for detailed views)"""
         try:
             start_time = time.time()
             # 1. Get all recipes
@@ -562,7 +642,7 @@ class Database:
             )
             recipes_end = time.time()
             logger.info(
-                f"get_recipes: Fetched {len(recipes_result)} recipes in {recipes_end - recipes_start:.3f}s"
+                f"get_recipes_with_ingredients: Fetched {len(recipes_result)} recipes in {recipes_end - recipes_start:.3f}s"
             )
             if not recipes_result:
                 return []
@@ -578,7 +658,7 @@ class Database:
             )
             ingredients_end = time.time()
             logger.info(
-                f"get_recipes: Fetched {len(all_recipe_ingredients_list)} recipe ingredient entries in {ingredients_end - ingredients_start:.3f}s"
+                f"get_recipes_with_ingredients: Fetched {len(all_recipe_ingredients_list)} recipe ingredient entries in {ingredients_end - ingredients_start:.3f}s"
             )
             # 3. Identify all necessary ingredient IDs (direct + ancestors) using the helper
             ids_start = time.time()
@@ -587,7 +667,7 @@ class Database:
             )
             ids_end = time.time()
             logger.info(
-                f"get_recipes: Identified {len(all_needed_ingredient_ids)} unique ingredient IDs in {ids_end - ids_start:.3f}s"
+                f"get_recipes_with_ingredients: Identified {len(all_needed_ingredient_ids)} unique ingredient IDs in {ids_end - ids_start:.3f}s"
             )
             # 4. Fetch names for all needed ingredients in one query
             fetch_names_start = time.time()
@@ -604,7 +684,7 @@ class Database:
                 ingredient_names_map = {row["id"]: row["name"] for row in names_result}
             fetch_names_end = time.time()
             logger.info(
-                f"get_recipes: Fetched {len(ingredient_names_map)} ingredient names in {fetch_names_end - fetch_names_start:.3f}s"
+                f"get_recipes_with_ingredients: Fetched {len(ingredient_names_map)} ingredient names in {fetch_names_end - fetch_names_start:.3f}s"
             )
             # 5. Assemble full names using the helper method
             assemble_names_start = time.time()
@@ -613,7 +693,7 @@ class Database:
             )
             assemble_names_end = time.time()
             logger.info(
-                f"get_recipes: Assembled full names in {assemble_names_end - assemble_names_start:.3f}s"
+                f"get_recipes_with_ingredients: Assembled full names in {assemble_names_end - assemble_names_start:.3f}s"
             )
             # 6. Group ingredients by recipe
             grouping_start = time.time()
@@ -625,7 +705,7 @@ class Database:
                 recipe_ingredients_grouped[recipe_id].append(ing_data)
             grouping_end = time.time()
             logger.info(
-                f"get_recipes: Grouped ingredients in {grouping_end - grouping_start:.3f}s"
+                f"get_recipes_with_ingredients: Grouped ingredients in {grouping_end - grouping_start:.3f}s"
             )
             # 7. Combine recipes with their assembled ingredients
             combine_start = time.time()
@@ -633,13 +713,15 @@ class Database:
                 recipe["ingredients"] = recipe_ingredients_grouped.get(recipe["id"], [])
             combine_end = time.time()
             logger.info(
-                f"get_recipes: Combined recipes and ingredients in {combine_end - combine_start:.3f}s"
+                f"get_recipes_with_ingredients: Combined recipes and ingredients in {combine_end - combine_start:.3f}s"
             )
             total_time = time.time() - start_time
-            logger.info(f"get_recipes: Total execution time: {total_time:.3f}s")
+            logger.info(
+                f"get_recipes_with_ingredients: Total execution time: {total_time:.3f}s"
+            )
             return recipes_result
         except Exception as e:
-            logger.error(f"Error getting recipes: {str(e)}")
+            logger.error(f"Error getting recipes with ingredients: {str(e)}")
             raise
 
     def get_recipe(
@@ -766,12 +848,25 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, abbreviation FROM units ORDER BY name"
+                    "SELECT id, name, abbreviation, conversion_to_ml FROM units ORDER BY name"
                 ),
             )
             return result
         except Exception as e:
             logger.error(f"Error getting units: {str(e)}")
+            raise
+
+    def get_units_by_type(self, unit_type: str) -> List[Dict[str, Any]]:
+        """Get units filtered by type (this implementation returns all units since there's no type column)"""
+        try:
+            # Since the units table doesn't have a type column, we'll return all units
+            # This could be enhanced later by adding a type column or filtering by name patterns
+            logger.warning(
+                f"get_units_by_type called with type '{unit_type}' but units table has no type column, returning all units"
+            )
+            return self.get_units()
+        except Exception as e:
+            logger.error(f"Error getting units by type {unit_type}: {str(e)}")
             raise
 
     @retry_on_db_locked()
@@ -908,6 +1003,28 @@ class Database:
             return result
         except Exception as e:
             logger.error(f"Error getting ratings for recipe {recipe_id}: {str(e)}")
+            raise
+
+    @retry_on_db_locked()
+    def get_user_rating(self, recipe_id: int, user_id: str) -> Optional[Dict[str, Any]]:
+        """Get a specific user's rating for a recipe"""
+        try:
+            result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    """
+                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating, created_at
+                    FROM ratings 
+                    WHERE recipe_id = :recipe_id AND cognito_user_id = :user_id
+                    """,
+                    {"recipe_id": recipe_id, "user_id": user_id},
+                ),
+            )
+            return result[0] if result else None
+        except Exception as e:
+            logger.error(
+                f"Error getting user rating for recipe {recipe_id}, user {user_id}: {str(e)}"
+            )
             raise
 
     @retry_on_db_locked()
@@ -1225,9 +1342,33 @@ class Database:
                 self.execute_query(query, params),
             )
 
-            # Fetch ingredients for each recipe
-            for recipe in recipes_result:
-                recipe["ingredients"] = self._get_recipe_ingredients(recipe["id"])
+            # Get ingredient counts efficiently for search results
+            if recipes_result:
+                recipe_ids = [recipe["id"] for recipe in recipes_result]
+                placeholders = ",".join("?" for _ in recipe_ids)
+
+                ingredient_counts = cast(
+                    List[Dict[str, Any]],
+                    self.execute_query(
+                        f"""
+                        SELECT recipe_id, COUNT(*) as ingredient_count
+                        FROM recipe_ingredients
+                        WHERE recipe_id IN ({placeholders})
+                        GROUP BY recipe_id
+                        """,
+                        tuple(recipe_ids),
+                    ),
+                )
+
+                # Create a lookup map for ingredient counts
+                count_map = {
+                    row["recipe_id"]: row["ingredient_count"]
+                    for row in ingredient_counts
+                }
+
+                # Add ingredient_count to each recipe
+                for recipe in recipes_result:
+                    recipe["ingredient_count"] = count_map.get(recipe["id"], 0)
 
             return recipes_result
 
@@ -1370,7 +1511,7 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, name FROM private_tags 
+                    SELECT id, name, cognito_user_id, cognito_username FROM private_tags 
                     WHERE cognito_user_id = :cognito_user_id ORDER BY name
                     """,
                     {"cognito_user_id": cognito_user_id},
@@ -1508,3 +1649,293 @@ class Database:
             raise
 
     # --- End Tag Management ---
+
+    # --- Pagination Methods ---
+    
+    @retry_on_db_locked()
+    def get_recipes_count(self) -> int:
+        """Get total count of recipes for pagination"""
+        try:
+            from .sql_queries import get_recipes_count_sql
+            result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(get_recipes_count_sql)
+            )
+            return result[0]["total_count"] if result else 0
+        except Exception as e:
+            logger.error(f"Error getting recipes count: {str(e)}")
+            raise
+
+    @retry_on_db_locked()
+    def get_recipes_paginated(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+        sort_by: str = "name",
+        sort_order: str = "asc",
+        user_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get paginated recipes with full details including ingredients"""
+        try:
+            from .sql_queries import get_recipes_paginated_with_ingredients_sql
+            
+            # Execute the complex query that gets recipes with their ingredients
+            params = {
+                "limit": limit,
+                "offset": offset,
+                "sort_by": sort_by,
+                "sort_order": sort_order,
+                "cognito_user_id": user_id
+            }
+            
+            logger.info(f"Getting paginated recipes with params: {params}")
+            
+            rows = cast(
+                List[Dict[str, Any]],
+                self.execute_query(get_recipes_paginated_with_ingredients_sql, params)
+            )
+            
+            # Group results by recipe ID and assemble full recipe objects
+            recipes = {}
+            for row in rows:
+                recipe_id = row["id"]
+                
+                if recipe_id not in recipes:
+                    # Create the base recipe object
+                    recipes[recipe_id] = {
+                        "id": recipe_id,
+                        "name": row["name"],
+                        "instructions": row["instructions"],
+                        "description": row["description"],
+                        "image_url": row.get("image_url"),
+                        "source": row.get("source"),
+                        "source_url": row.get("source_url"),
+                        "avg_rating": row.get("avg_rating"),
+                        "rating_count": row.get("rating_count"),
+                        "user_rating": row.get("user_rating"),
+                        "ingredients": [],
+                        "public_tags": [],
+                        "private_tags": []
+                    }
+                    
+                    # Parse tags from GROUP_CONCAT format
+                    if row.get("public_tags_data"):
+                        for tag_data in row["public_tags_data"].split(":::"):
+                            if tag_data and "|||" in tag_data:
+                                tag_id, tag_name = tag_data.split("|||", 1)
+                                recipes[recipe_id]["public_tags"].append({
+                                    "id": int(tag_id),
+                                    "name": tag_name
+                                })
+                    
+                    if row.get("private_tags_data"):
+                        for tag_data in row["private_tags_data"].split(":::"):
+                            if tag_data and "|||" in tag_data:
+                                tag_id, tag_name = tag_data.split("|||", 1)
+                                recipes[recipe_id]["private_tags"].append({
+                                    "id": int(tag_id),
+                                    "name": tag_name
+                                })
+                
+                # Add ingredient if present
+                if row.get("recipe_ingredient_id"):
+                    ingredient = {
+                        "ingredient_id": row["ingredient_id"],
+                        "ingredient_name": row["ingredient_name"],
+                        "amount": row.get("amount"),
+                        "unit_id": row.get("unit_id"),
+                        "unit_name": row.get("unit_name"),
+                        "unit_abbreviation": row.get("unit_abbreviation"),
+                    }
+                    recipes[recipe_id]["ingredients"].append(ingredient)
+            
+            result = list(recipes.values())
+            logger.info(f"Assembled {len(result)} recipes from {len(rows)} rows")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error getting paginated recipes: {str(e)}")
+            raise
+
+    @retry_on_db_locked()
+    def search_recipes_paginated(
+        self,
+        search_params: Dict[str, Any],
+        limit: int = 20,
+        offset: int = 0,
+        sort_by: str = "name",
+        sort_order: str = "asc",
+        user_id: Optional[str] = None
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """Search recipes with pagination, returns (recipes, total_count)"""
+        try:
+            from .sql_queries import (
+                build_search_recipes_count_sql,
+                build_search_recipes_paginated_sql
+            )
+            
+            # Build query parameters
+            query_params = {
+                "search_query": search_params.get("q"),
+                "min_rating": search_params.get("min_rating"),
+                "max_rating": search_params.get("max_rating"),
+                "limit": limit,
+                "offset": offset,
+                "sort_by": sort_by,
+                "sort_order": sort_order,
+                "cognito_user_id": user_id
+            }
+            
+            # Handle ingredient filtering by converting names to IDs and paths
+            must_ingredient_conditions = []
+            must_not_ingredient_conditions = []
+            has_invalid_ingredients = False
+            
+            if search_params.get("ingredients"):
+                for i, ingredient_spec in enumerate(search_params["ingredients"]):
+                    # Parse ingredient specification: "name" or "name:MUST" or "name:MUST_NOT"
+                    ingredient_spec = ingredient_spec.strip()
+                    
+                    if ":" in ingredient_spec:
+                        ingredient_name, operator = ingredient_spec.split(":", 1)
+                        ingredient_name = ingredient_name.strip()
+                        operator = operator.strip().upper()
+                    else:
+                        ingredient_name = ingredient_spec
+                        operator = "MUST"  # Default to MUST if no operator specified
+                    
+                    ingredient = self.get_ingredient_by_name(ingredient_name)
+                    if ingredient:
+                        # Use path-based matching to include child ingredients
+                        param_name = f"ingredient_path_{i}"
+                        query_params[param_name] = f"%/{ingredient['id']}/%"
+                        condition = f"i2.path LIKE :{param_name}"
+                        
+                        if operator == "MUST_NOT":
+                            must_not_ingredient_conditions.append(condition)
+                        else:  # MUST or any other value defaults to MUST
+                            must_ingredient_conditions.append(condition)
+                    else:
+                        logger.warning(f"Ingredient not found: {ingredient_name}")
+                        if operator != "MUST_NOT":
+                            # Only fail for MUST ingredients that don't exist
+                            # MUST_NOT for nonexistent ingredients should be ignored
+                            has_invalid_ingredients = True
+                
+                # If any MUST ingredient doesn't exist, return no results
+                if has_invalid_ingredients:
+                    logger.info("Some MUST ingredients not found, returning empty results")
+                    return [], 0
+            
+            # Handle tag filtering
+            tag_conditions = []
+            if search_params.get("tags"):
+                for i, tag_name in enumerate(search_params["tags"]):
+                    tag_name = tag_name.strip()
+                    if tag_name:
+                        # Check if tag exists (both public and private)
+                        public_tag = self.get_public_tag_by_name(tag_name)
+                        private_tag = self.get_private_tag_by_name(tag_name, user_id) if user_id else None
+                        
+                        if public_tag or private_tag:
+                            # Recipe must have this tag (either public or private)
+                            public_param = f"public_tag_name_{i}"
+                            private_param = f"private_tag_name_{i}"
+                            query_params[public_param] = tag_name
+                            query_params[private_param] = tag_name
+                            
+                            condition = f"(pt2.name = :{public_param}"
+                            if user_id:
+                                condition += f" OR pvt2.name = :{private_param}"
+                            condition += ")"
+                            tag_conditions.append(condition)
+                        else:
+                            # Tag doesn't exist, return no results
+                            logger.info(f"Tag not found: {tag_name}, returning empty results")
+                            return [], 0
+            
+            logger.info(f"Searching recipes with params: {query_params}")
+            logger.info(f"MUST ingredient conditions: {must_ingredient_conditions}")
+            logger.info(f"MUST_NOT ingredient conditions: {must_not_ingredient_conditions}")
+            logger.info(f"Tag conditions: {tag_conditions}")
+            
+            # Build dynamic SQL queries
+            count_sql = build_search_recipes_count_sql(must_ingredient_conditions, must_not_ingredient_conditions, tag_conditions)
+            paginated_sql = build_search_recipes_paginated_sql(must_ingredient_conditions, must_not_ingredient_conditions, tag_conditions)
+            
+            # Get total count first
+            count_result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(count_sql, query_params)
+            )
+            total_count = count_result[0]["total_count"] if count_result else 0
+            
+            # Get paginated results
+            rows = cast(
+                List[Dict[str, Any]],
+                self.execute_query(paginated_sql, query_params)
+            )
+            
+            # Group results by recipe ID and assemble full recipe objects
+            recipes = {}
+            for row in rows:
+                recipe_id = row["id"]
+                
+                if recipe_id not in recipes:
+                    # Create the base recipe object
+                    recipes[recipe_id] = {
+                        "id": recipe_id,
+                        "name": row["name"],
+                        "instructions": row["instructions"],
+                        "description": row["description"],
+                        "image_url": row.get("image_url"),
+                        "source": row.get("source"),
+                        "source_url": row.get("source_url"),
+                        "avg_rating": row.get("avg_rating"),
+                        "rating_count": row.get("rating_count"),
+                        "user_rating": row.get("user_rating"),
+                        "ingredients": [],
+                        "public_tags": [],
+                        "private_tags": []
+                    }
+                    
+                    # Parse tags from GROUP_CONCAT format
+                    if row.get("public_tags_data"):
+                        for tag_data in row["public_tags_data"].split(":::"):
+                            if tag_data and "|||" in tag_data:
+                                tag_id, tag_name = tag_data.split("|||", 1)
+                                recipes[recipe_id]["public_tags"].append({
+                                    "id": int(tag_id),
+                                    "name": tag_name
+                                })
+                    
+                    if row.get("private_tags_data"):
+                        for tag_data in row["private_tags_data"].split(":::"):
+                            if tag_data and "|||" in tag_data:
+                                tag_id, tag_name = tag_data.split("|||", 1)
+                                recipes[recipe_id]["private_tags"].append({
+                                    "id": int(tag_id),
+                                    "name": tag_name
+                                })
+                
+                # Add ingredient if present
+                if row.get("recipe_ingredient_id"):
+                    ingredient = {
+                        "ingredient_id": row["ingredient_id"],
+                        "ingredient_name": row["ingredient_name"],
+                        "amount": row.get("amount"),
+                        "unit_id": row.get("unit_id"),
+                        "unit_name": row.get("unit_name"),
+                        "unit_abbreviation": row.get("unit_abbreviation"),
+                    }
+                    recipes[recipe_id]["ingredients"].append(ingredient)
+            
+            result = list(recipes.values())
+            logger.info(f"Found {len(result)} recipes from search (total: {total_count})")
+            return result, total_count
+            
+        except Exception as e:
+            logger.error(f"Error searching recipes with pagination: {str(e)}")
+            raise
+
+    # --- End Pagination Methods ---

@@ -235,8 +235,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const ingredientCards = document.querySelectorAll('.ingredient-card');
 
         ingredientCards.forEach(card => {
-            const name = card.querySelector('h4').textContent.toLowerCase();
-            const description = card.querySelector('p').textContent.toLowerCase();
+            const name = card.querySelector('.ingredient-name').textContent.toLowerCase();
+            const description = card.querySelector('.ingredient-description').textContent.toLowerCase();
 
             if (name.includes(searchTerm) || description.includes(searchTerm)) {
                 card.style.display = 'block';
