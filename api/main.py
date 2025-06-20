@@ -42,16 +42,18 @@ logger = logging.getLogger(__name__)
 
 
 class CORSHeaderMiddleware(BaseHTTPMiddleware):
-    """Add CORS headers to all responses for Lambda proxy integration"""
-    
+    """Add CORS headers to all responses from Lambda"""
+
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        
+
         # Add CORS headers to all responses
         response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        
+        response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = (
+            "Content-Type,Authorization,Accept,X-Amz-Date,X-Api-Key,X-Amz-Security-Token"
+        )
+
         return response
 
 
@@ -80,7 +82,7 @@ app = FastAPI(
     redoc_url="/redoc" if settings.environment == "dev" else None,
 )
 
-# Add CORS middleware for Lambda proxy integration success responses
+# Add CORS middleware for Lambda responses (API Gateway handles OPTIONS)
 app.add_middleware(CORSHeaderMiddleware)
 
 # Add exception handlers
@@ -97,6 +99,10 @@ app.include_router(units.router)
 app.include_router(tags.router)
 app.include_router(recipe_tags_router)
 app.include_router(auth.router)
+
+# OPTIONS handlers are explicitly defined in template.yaml as mock integrations
+# This prevents CORS preflight requests from hitting Cognito authorization
+# and ensures proper CORS headers are returned for all endpoints
 
 
 # Root endpoint

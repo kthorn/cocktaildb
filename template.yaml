@@ -32,14 +32,6 @@ Globals:
     Runtime: python3.12
     Timeout: 60
     MemorySize: 1536
-  
-  Api:
-    Cors:
-      AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
-      AllowOrigin: "'*'"
-    BinaryMediaTypes:
-      - "*/*"
 
 Conditions:
   IsProdEnvironment: !Equals [!Ref Environment, "prod"]
@@ -493,18 +485,19 @@ Resources:
             RestApiId: !Ref CocktailAPI
             Path: /ingredients/{ingredientId}
             Method: get
-        OptionsIngredientItem:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /ingredients/{ingredientId}
-            Method: options
-        OptionsIngredients:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /ingredients
-            Method: options
+
+
+
+
+
+
+
+
+
+
+
+
+
         GetRecipes:
           Type: Api
           Properties:
@@ -535,12 +528,6 @@ Resources:
             Method: delete
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsRecipes:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /recipes
-            Method: options
         GetUnits:
           Type: Api
           Properties:
@@ -571,12 +558,6 @@ Resources:
             Method: delete
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsUnits:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /units
-            Method: options
         # Auth test endpoint
         GetAuth:
           Type: Api
@@ -586,24 +567,12 @@ Resources:
             Method: get
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsAuth:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /auth
-            Method: options
         GetRecipeItem:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
             Path: /recipes/{recipeId}
             Method: get
-        OptionsRecipeItem:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /recipes/{recipeId}
-            Method: options
         # Rating endpoints
         GetRatings:
           Type: Api
@@ -635,12 +604,6 @@ Resources:
             Method: delete
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsRatings:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /ratings/{recipeId}
-            Method: options
 
         # --- START Tag Endpoints ---
         GetPublicTags:
@@ -657,12 +620,6 @@ Resources:
             Method: post
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsPublicTags:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /tags/public
-            Method: options
 
         GetPrivateTags:
           Type: Api
@@ -680,12 +637,6 @@ Resources:
             Method: post
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsPrivateTags:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /tags/private
-            Method: options
 
         PostRecipePublicTag:
           Type: Api
@@ -703,18 +654,6 @@ Resources:
             Method: delete
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsRecipePublicTags:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /recipes/{recipeId}/public_tags
-            Method: options
-        OptionsRecipePublicTagItem:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /recipes/{recipeId}/public_tags/{tagId}
-            Method: options
             
         PostRecipePrivateTag:
           Type: Api
@@ -732,18 +671,6 @@ Resources:
             Method: delete
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsRecipePrivateTags:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /recipes/{recipeId}/private_tags
-            Method: options
-        OptionsRecipePrivateTagItem:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /recipes/{recipeId}/private_tags/{tagId}
-            Method: options
         # --- END Tag Endpoints ---
 
   # Custom resource to create sqlite db on EFS
@@ -877,7 +804,7 @@ Resources:
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
-        AllowOrigin: "'*'"
+        AllowOrigin: "'*'" # Allow all origins
       Auth:
         Authorizers:
           CognitoAuthorizer:
@@ -891,19 +818,6 @@ Resources:
           DataTraceEnabled: true # Log full request/response data
           MetricsEnabled: true # Enable CloudWatch Metrics
       # ------------------------------------------
-      GatewayResponses:
-        DEFAULT_4XX:
-          ResponseParameters:
-            Headers:
-              Access-Control-Allow-Origin: "'*'"
-              Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
-              Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        DEFAULT_5XX:
-          ResponseParameters:
-            Headers:
-              Access-Control-Allow-Origin: "'*'"
-              Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
-              Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
 
   # Lambda Function for Nightly DB Backup (prod only)
   BackupLambda:
