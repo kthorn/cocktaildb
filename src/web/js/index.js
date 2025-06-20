@@ -21,24 +21,14 @@ async function loadRecipes() {
         // Show loading message
         document.getElementById('recipe-display').innerHTML = '<p>Loading recipes...</p>';
         
-        recipes = await api.getRecipesWithFullDataProgressive((batch, loadedCount, totalCount) => {
-            console.log(`Loaded ${loadedCount}/${totalCount} recipes for carousel`);
-            // Show first recipe as soon as first batch is available
-            if (loadedCount === batch.length && recipes.length === 0) {
-                recipes = [...batch];
-                displayRecipe(currentRecipeIndex);
-                updateStats();
-            } else {
-                recipes.push(...batch);
-                updateStats();
-            }
-        });
+        // Use paginated API to get first page of recipes with full details
+        const result = await api.getRecipesWithFullData(1, 20);
         
-        if (recipes.length === 0) {
-            document.getElementById('recipe-display').innerHTML = '<p>No recipes found.</p>';
-        } else if (recipes.length > 0) {
-            // Ensure we're displaying the first recipe if not done already
+        if (result && result.recipes && result.recipes.length > 0) {
+            recipes = result.recipes;
             displayRecipe(currentRecipeIndex);
+        } else {
+            document.getElementById('recipe-display').innerHTML = '<p>No recipes found.</p>';
         }
         updateStats();
     } catch (error) {
