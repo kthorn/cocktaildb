@@ -493,18 +493,6 @@ Resources:
             RestApiId: !Ref CocktailAPI
             Path: /ingredients/{ingredientId}
             Method: get
-        OptionsIngredientItem:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /ingredients/{ingredientId}
-            Method: options
-        OptionsIngredients:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /ingredients
-            Method: options
         GetRecipes:
           Type: Api
           Properties:
@@ -535,12 +523,6 @@ Resources:
             Method: delete
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsRecipes:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /recipes
-            Method: options
         GetUnits:
           Type: Api
           Properties:
@@ -571,12 +553,6 @@ Resources:
             Method: delete
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsUnits:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /units
-            Method: options
         # Auth test endpoint
         GetAuth:
           Type: Api
@@ -586,24 +562,12 @@ Resources:
             Method: get
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsAuth:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /auth
-            Method: options
         GetRecipeItem:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
             Path: /recipes/{recipeId}
             Method: get
-        OptionsRecipeItem:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /recipes/{recipeId}
-            Method: options
         # Rating endpoints
         GetRatings:
           Type: Api
@@ -635,12 +599,6 @@ Resources:
             Method: delete
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsRatings:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /ratings/{recipeId}
-            Method: options
 
         # --- START Tag Endpoints ---
         GetPublicTags:
@@ -657,12 +615,6 @@ Resources:
             Method: post
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsPublicTags:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /tags/public
-            Method: options
 
         GetPrivateTags:
           Type: Api
@@ -680,12 +632,6 @@ Resources:
             Method: post
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsPrivateTags:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /tags/private
-            Method: options
 
         PostRecipePublicTag:
           Type: Api
@@ -703,18 +649,6 @@ Resources:
             Method: delete
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsRecipePublicTags:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /recipes/{recipeId}/public_tags
-            Method: options
-        OptionsRecipePublicTagItem:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /recipes/{recipeId}/public_tags/{tagId}
-            Method: options
             
         PostRecipePrivateTag:
           Type: Api
@@ -732,18 +666,6 @@ Resources:
             Method: delete
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsRecipePrivateTags:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /recipes/{recipeId}/private_tags
-            Method: options
-        OptionsRecipePrivateTagItem:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /recipes/{recipeId}/private_tags/{tagId}
-            Method: options
         # --- END Tag Endpoints ---
 
   # Custom resource to create sqlite db on EFS
