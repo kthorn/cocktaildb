@@ -32,15 +32,15 @@ class UnitResponse(BaseModel):
 
 
 class RecipeIngredientResponse(BaseModel):
-    """Response model for recipe ingredient data"""
+    """Response model for recipe ingredient data - matches actual database schema"""
 
     ingredient_id: int = Field(..., description="Ingredient ID")
     ingredient_name: str = Field(..., description="Ingredient name")
+    full_name: Optional[str] = Field(None, description="Full hierarchical ingredient name")
     amount: Optional[float] = Field(None, description="Ingredient amount")
     unit_id: Optional[int] = Field(None, description="Unit ID")
     unit_name: Optional[str] = Field(None, description="Unit name")
     unit_abbreviation: Optional[str] = Field(None, description="Unit abbreviation")
-    notes: Optional[str] = Field(None, description="Additional notes")
 
     class Config:
         from_attributes = True
@@ -69,15 +69,15 @@ class PrivateTagResponse(BaseModel):
 
 
 class RecipeResponse(BaseModel):
-    """Response model for recipe data"""
+    """Response model for recipe data - matches actual database schema"""
 
     id: int = Field(..., description="Recipe ID")
     name: str = Field(..., description="Recipe name")
     instructions: Optional[str] = Field(None, description="Recipe instructions")
     description: Optional[str] = Field(None, description="Recipe description")
-    created_by: Optional[str] = Field(
-        None, description="User ID who created the recipe"
-    )
+    image_url: Optional[str] = Field(None, description="Recipe image URL")
+    source: Optional[str] = Field(None, description="Recipe source")
+    source_url: Optional[str] = Field(None, description="Recipe source URL")
     avg_rating: Optional[float] = Field(None, description="Average rating")
     rating_count: Optional[int] = Field(None, description="Number of ratings")
     ingredients: List[RecipeIngredientResponse] = Field(
@@ -107,15 +107,13 @@ class RecipeListResponse(BaseModel):
 
 
 class RatingResponse(BaseModel):
-    """Response model for rating data"""
+    """Response model for rating data - matches actual database schema"""
 
     recipe_id: int = Field(..., description="Recipe ID")
     user_id: str = Field(..., description="User ID")
     rating: int = Field(..., description="Rating value (1-5)")
     comment: Optional[str] = Field(None, description="Optional comment")
-    created_at: Optional[datetime] = Field(
-        None, description="When the rating was created"
-    )
+    # Note: created_at field removed as it doesn't exist in current database schema
 
     class Config:
         from_attributes = True

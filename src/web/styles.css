@@ -996,6 +996,23 @@ footer {
     font-size: var(--text-md);
 }
 
+/* Infinite scroll loading indicator */
+.infinite-scroll-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: var(--space-lg);
+    margin: var(--space-md) 0;
+    background-color: transparent;
+    border-radius: var(--radius-md);
+}
+
+.infinite-scroll-loading p {
+    color: #6c757d;
+    font-size: var(--text-sm);
+    font-style: italic;
+}
+
 /* Carousel Recipe Card Styling */
 #recipe-display .recipe-card {
     width: 100%;

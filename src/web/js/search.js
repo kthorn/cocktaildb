@@ -10,9 +10,11 @@ let activeIngredientIndex = -1;
 let currentSearchQuery = null;
 let currentSearchPage = 1;
 let totalSearchPages = 1;
-let searchResultsPerPage = 20;
+let searchResultsPerPage = 10;
 let isSearching = false;
 let allSearchResults = [];
+let isInfiniteScrollEnabled = false;
+let scrollThreshold = 200; // pixels from bottom to trigger load
 
 document.addEventListener('DOMContentLoaded', () => {
     // Elements
@@ -61,11 +63,8 @@ document.addEventListener('DOMContentLoaded', () => {
         totalSearchPages = 1;
         allSearchResults = [];
         
-        // Remove load more button
-        const loadMoreBtn = document.getElementById('load-more-search-results');
-        if (loadMoreBtn) {
-            loadMoreBtn.remove();
-        }
+        // Disable infinite scroll and remove loading indicator
+        disableInfiniteScroll();
         
         // Reset ingredient rows to initial state
         const rows = ingredientQueryBuilder.querySelectorAll('.item-row');
@@ -91,6 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Build the search query
             const searchQuery = buildSearchQuery();
+            console.log('Built search query:', searchQuery);
             
             if (reset) {
                 // Reset pagination state for new search
@@ -105,15 +105,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Remove existing results
                 searchResultsContainer.querySelectorAll('.recipe-card').forEach(card => card.remove());
                 
-                // Remove existing load more button
-                const existingLoadMoreBtn = document.getElementById('load-more-search-results');
-                if (existingLoadMoreBtn) {
-                    existingLoadMoreBtn.remove();
-                }
+                // Disable existing infinite scroll
+                disableInfiniteScroll();
             }
             
             // Call the API to search recipes with pagination
             const result = await api.searchRecipesWithFullData(searchQuery, currentSearchPage, searchResultsPerPage);
+            console.log('API result:', result);
             
             // Hide loading placeholder
             loadingPlaceholder.classList.add('hidden');
@@ -140,8 +138,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
                 
-                // Add load more button if there are more pages
-                updateSearchLoadMoreButton();
+                // Setup infinite scroll if there are more pages
+                setupInfiniteScroll();
                 
                 // Hide no results message if we have results
                 if (allSearchResults.length > 0) {
@@ -152,6 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 console.log(`Search page ${currentSearchPage} of ${totalSearchPages} loaded (${result.recipes.length} recipes)`);
+                console.log('Pagination info:', result.pagination);
             } else if (reset) {
                 // Show no results message
                 emptyResults.classList.remove('hidden');
@@ -169,37 +168,97 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // Update or add the load more button for search results
-    function updateSearchLoadMoreButton() {
-        let loadMoreBtn = document.getElementById('load-more-search-results');
-        
+    // Setup infinite scroll for search results
+    function setupInfiniteScroll() {
+        console.log(`Setting up infinite scroll: page ${currentSearchPage} of ${totalSearchPages}`);
         if (currentSearchPage < totalSearchPages) {
-            if (!loadMoreBtn) {
-                loadMoreBtn = document.createElement('button');
-                loadMoreBtn.id = 'load-more-search-results';
-                loadMoreBtn.className = 'btn-secondary load-more-btn';
-                loadMoreBtn.textContent = 'Load More Results';
-                loadMoreBtn.addEventListener('click', loadMoreSearchResults);
-                
-                // Add after the search results container
-                searchResultsContainer.parentNode.insertBefore(loadMoreBtn, searchResultsContainer.nextSibling);
-            }
-            loadMoreBtn.style.display = 'block';
-            loadMoreBtn.disabled = isSearching;
-            loadMoreBtn.textContent = isSearching ? 'Loading...' : 'Load More Results';
+            isInfiniteScrollEnabled = true;
+            console.log('Infinite scroll enabled');
+            
+            // Add loading indicator at bottom
+            addScrollLoadingIndicator();
+            
+            // Add scroll event listener
+            window.addEventListener('scroll', handleScroll);
         } else {
-            if (loadMoreBtn) {
-                loadMoreBtn.style.display = 'none';
-            }
+            console.log('Infinite scroll disabled - no more pages');
+            disableInfiniteScroll();
         }
     }
     
-    // Load more search results (next page)
+    // Disable infinite scroll
+    function disableInfiniteScroll() {
+        isInfiniteScrollEnabled = false;
+        window.removeEventListener('scroll', handleScroll);
+        
+        // Remove loading indicator
+        const loadingIndicator = document.getElementById('infinite-scroll-loading');
+        if (loadingIndicator) {
+            loadingIndicator.remove();
+        }
+    }
+    
+    // Add loading indicator for infinite scroll
+    function addScrollLoadingIndicator() {
+        // Remove existing indicator if present
+        const existingIndicator = document.getElementById('infinite-scroll-loading');
+        if (existingIndicator) {
+            existingIndicator.remove();
+        }
+        
+        // Only add if there are more pages to load
+        if (currentSearchPage < totalSearchPages) {
+            const loadingIndicator = document.createElement('div');
+            loadingIndicator.id = 'infinite-scroll-loading';
+            loadingIndicator.className = 'infinite-scroll-loading hidden';
+            loadingIndicator.innerHTML = '<p>Loading more results...</p>';
+            
+            // Add after the search results container
+            searchResultsContainer.parentNode.insertBefore(loadingIndicator, searchResultsContainer.nextSibling);
+        }
+    }
+    
+    // Handle scroll event for infinite scroll
+    function handleScroll() {
+        if (!isInfiniteScrollEnabled || isSearching || currentSearchPage >= totalSearchPages) {
+            return;
+        }
+        
+        // Calculate distance from bottom
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const windowHeight = window.innerHeight;
+        const documentHeight = document.documentElement.scrollHeight;
+        const distanceFromBottom = documentHeight - (scrollTop + windowHeight);
+        
+        // Debug logging (only log occasionally to avoid spam)
+        if (Math.random() < 0.01) { // Log ~1% of scroll events
+            console.log(`Scroll: distance from bottom = ${distanceFromBottom}px, threshold = ${scrollThreshold}px`);
+        }
+        
+        // Trigger load when within threshold of bottom
+        if (distanceFromBottom <= scrollThreshold) {
+            console.log('Triggering infinite scroll load');
+            loadMoreSearchResults();
+        }
+    }
+    
+    // Load more search results (next page) for infinite scroll
     async function loadMoreSearchResults() {
         if (currentSearchPage >= totalSearchPages || isSearching) return;
         
+        // Show loading indicator
+        const loadingIndicator = document.getElementById('infinite-scroll-loading');
+        if (loadingIndicator) {
+            loadingIndicator.classList.remove('hidden');
+        }
+        
         currentSearchPage++;
         await performSearch(false); // Don't reset, append to existing
+        
+        // Hide loading indicator after loading
+        if (loadingIndicator) {
+            loadingIndicator.classList.add('hidden');
+        }
     }
 
     // Function to build the search query from form fields

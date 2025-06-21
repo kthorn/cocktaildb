@@ -79,7 +79,7 @@ async def get_recipes(
         
         # Get total count for pagination metadata
         total_count = db.get_recipes_count()
-        total_pages = (total_count + limit - 1) // limit
+        total_pages = max(1, (total_count + limit - 1) // limit)
         
         # Build pagination metadata
         pagination = PaginationMetadata(
@@ -206,6 +206,7 @@ async def search_recipes(
     """Search recipes with pagination and filters"""
     try:
         logger.info(f"Searching recipes: q='{q}', page={page}, limit={limit}")
+        logger.info(f"All search parameters: q={q}, min_rating={min_rating}, max_rating={max_rating}, tags={tags}, ingredients={ingredients}")
         
         # Validate sort parameters
         valid_sort_fields = ["name", "created_at", "avg_rating"]
@@ -235,6 +236,7 @@ async def search_recipes(
             search_params["ingredients"] = [ing.strip() for ing in ingredients.split(",") if ing.strip()]
         
         logger.info(f"Search params: {search_params}")
+        logger.info(f"Database search will be called with limit={limit}, offset={offset}")
         
         # Get paginated search results
         recipes_data, total_count = db.search_recipes_paginated(
@@ -246,8 +248,10 @@ async def search_recipes(
             user_id=user_id
         )
         
+        logger.info(f"Database returned {len(recipes_data)} recipes, total_count={total_count}")
+        
         # Build pagination metadata
-        total_pages = (total_count + limit - 1) // limit
+        total_pages = max(1, (total_count + limit - 1) // limit)
         pagination = PaginationMetadata(
             page=page,
             limit=limit,
