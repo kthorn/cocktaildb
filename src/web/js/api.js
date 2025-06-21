@@ -104,40 +104,15 @@ class CocktailAPI {
     }
 
     // Recipes API
-    // Note: Backend recipe ingredients use these fields:
-    // Request: ingredient_id, quantity (maps to 'amount' in DB), unit_id, notes
-    // Response: ingredient_name, full_name, amount, unit_name, unit_abbreviation
     async getRecipes(page = 1, limit = 20) {
         const response = await this._request(`/recipes?page=${page}&limit=${limit}`);
-        // Handle paginated response format with metadata (matches backend PaginationMetadata)
-        if (response && typeof response === 'object' && response.recipes && response.pagination) {
-            return {
-                recipes: response.recipes,
-                pagination: {
-                    page: response.pagination.page,
-                    limit: response.pagination.limit,
-                    total_pages: response.pagination.total_pages,
-                    total_count: response.pagination.total_count,
-                    has_next: response.pagination.has_next,
-                    has_previous: response.pagination.has_previous,
-                    // Keep legacy fields for backward compatibility
-                    total: response.pagination.total_count,
-                    totalPages: response.pagination.total_pages
-                }
-            };
-        }
-        // Handle legacy response format or direct recipe array
+        // Handle paginated response format with metadata
         if (response && typeof response === 'object' && response.recipes) {
             return {
                 recipes: response.recipes,
                 pagination: {
                     page: response.page || page,
                     limit: response.limit || limit,
-                    total_count: response.total || response.recipes.length,
-                    total_pages: response.total_pages || Math.ceil((response.total || response.recipes.length) / limit),
-                    has_next: false,
-                    has_previous: false,
-                    // Legacy fields
                     total: response.total || response.recipes.length,
                     totalPages: response.total_pages || Math.ceil((response.total || response.recipes.length) / limit)
                 }
@@ -146,17 +121,7 @@ class CocktailAPI {
         // Fallback for direct array response (legacy format)
         return {
             recipes: response || [],
-            pagination: { 
-                page: 1, 
-                limit: limit, 
-                total_count: (response || []).length, 
-                total_pages: 1,
-                has_next: false,
-                has_previous: false,
-                // Legacy fields
-                total: (response || []).length, 
-                totalPages: 1 
-            }
+            pagination: { page: 1, limit: limit, total: (response || []).length, totalPages: 1 }
         };
     }
 
@@ -268,36 +233,13 @@ class CocktailAPI {
         const response = await fetch(url, this.getFetchOptions());
         const data = await this.handleResponse(response);
         
-        // Handle paginated search response format with metadata (matches backend PaginationMetadata)
-        if (data && typeof data === 'object' && data.recipes && data.pagination) {
-            return {
-                recipes: data.recipes,
-                pagination: {
-                    page: data.pagination.page,
-                    limit: data.pagination.limit,
-                    total_pages: data.pagination.total_pages,
-                    total_count: data.pagination.total_count,
-                    has_next: data.pagination.has_next,
-                    has_previous: data.pagination.has_previous,
-                    // Keep legacy fields for backward compatibility
-                    total: data.pagination.total_count,
-                    totalPages: data.pagination.total_pages
-                },
-                query: data.query
-            };
-        }
-        // Handle legacy search response format
+        // Handle paginated search response format with metadata
         if (data && typeof data === 'object' && data.recipes) {
             return {
                 recipes: data.recipes,
                 pagination: {
                     page: data.page || page,
                     limit: data.limit || limit,
-                    total_count: data.total || data.recipes.length,
-                    total_pages: data.total_pages || Math.ceil((data.total || data.recipes.length) / limit),
-                    has_next: false,
-                    has_previous: false,
-                    // Legacy fields
                     total: data.total || data.recipes.length,
                     totalPages: data.total_pages || Math.ceil((data.total || data.recipes.length) / limit)
                 }
@@ -306,17 +248,7 @@ class CocktailAPI {
         // Fallback for direct array response (legacy format)
         return {
             recipes: data || [],
-            pagination: { 
-                page: 1, 
-                limit: limit, 
-                total_count: (data || []).length, 
-                total_pages: 1,
-                has_next: false,
-                has_previous: false,
-                // Legacy fields
-                total: (data || []).length, 
-                totalPages: 1 
-            }
+            pagination: { page: 1, limit: limit, total: (data || []).length, totalPages: 1 }
         };
     }
 
@@ -334,7 +266,6 @@ class CocktailAPI {
     }
     
     // Ratings API
-    // Backend returns RatingResponse (recipe_id, user_id, rating, comment) or RatingSummaryResponse
     async getRatings(recipeId) {
         try {
             // Ensure recipeId is defined and build a proper URL
@@ -384,7 +315,6 @@ class CocktailAPI {
     // Add a tag to a recipe
     // jsTagType should be 'public' or 'private'
     // The backend expects { name: tagName } in the body
-    // Backend returns PublicTagResponse (id, name) or PrivateTagResponse (id, name, cognito_user_id, cognito_username)
     async addTagToRecipe(recipeId, tagName, jsTagType) {
         const apiTagType = `${jsTagType}_tags`; // Converts to 'public_tags' or 'private_tags'
         const path = `/recipes/${recipeId}/${apiTagType}`;
