@@ -155,6 +155,10 @@ class Database:
             logger.error(f"Error initializing database: {str(e)}", exc_info=True)
             raise
 
+    def get_db_path(self) -> str:
+        """Get the database file path"""
+        return self.db_path
+
     def _test_connection(self):
         """Test the database connection"""
         logger.info("Testing database connection...")

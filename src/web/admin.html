@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <title>Admin - Cocktail Database</title>
+    </head>
+
+    <body>
+        <main>
+            <section>
+                <h2>Admin Panel</h2>
+                <p>Administrative tools for managing the cocktail database.</p>
+
+                <div class="admin-tools">
+                    <div class="card-container">
+                        <h3>Database Management</h3>
+                        <div class="form-actions">
+                            <button id="download-db-btn" class="btn btn-primary">
+                                Download Database
+                            </button>
+                        </div>
+                        <p style="color: var(--text-light); margin-top: var(--space-sm);">
+                            Download a backup copy of the current SQLite database.
+                        </p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <script type="module" src="js/common.js"></script>
+        <script type="module" src="js/api.js"></script>
+        <script type="module" src="js/admin.js"></script>
+    </body>
+
+</html>

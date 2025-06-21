@@ -212,7 +212,10 @@ class TestTagGenericOperations:
         with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
             db = Database()
 
-            private_tag = db.create_private_tag("personal", "user123", "testuser")
+            private_tag = db.create_private_tag(
+                "personal",
+                "user123",
+            )
 
             result = db.get_tag(private_tag["id"])
 
@@ -530,14 +533,14 @@ class TestTagConstraints:
             db = Database()
 
             # User1 creates "favorites"
-            tag1 = db.create_private_tag("favorites", "user1", "user1")
+            tag1 = db.create_private_tag("favorites", "user1")
 
             # User1 tries to create "favorites" again (should return existing)
-            tag1_dup = db.create_private_tag("favorites", "user1", "user1")
+            tag1_dup = db.create_private_tag("favorites", "user1")
             assert tag1["id"] == tag1_dup["id"]
 
             # User2 creates "favorites" (should be allowed)
-            tag2 = db.create_private_tag("favorites", "user2", "user2")
+            tag2 = db.create_private_tag("favorites", "user2")
             assert tag1["id"] != tag2["id"]
 
     def test_recipe_tag_association_uniqueness(self, memory_db_with_schema):
