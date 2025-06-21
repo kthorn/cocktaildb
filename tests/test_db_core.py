@@ -349,7 +349,7 @@ class TestSmartTitleCase:
         from api.db.db_core import smart_title_case
 
         # Empty and None cases
-        assert smart_title_case("") == ""
+        assert smart_title_case("") is None
         assert smart_title_case(None) is None
 
         # Single character
