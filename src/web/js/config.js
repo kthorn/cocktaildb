@@ -1,18 +1,18 @@
-// Configuration for the Cocktail Database application (dev environment)
+// Configuration for the Cocktail Database application (prod environment)
 const config = {
     // API endpoint
-    apiUrl: 'https://6kukiw1dxg.execute-api.us-east-1.amazonaws.com/api',
+    apiUrl: 'https://a5crx5o72d.execute-api.us-east-1.amazonaws.com/api',
 
     // Cognito configuration
-    userPoolId: 'us-east-1_LvzBbpSF3',
-    clientId: '3j29jtgdfvc058hdbn9p5nnome',
-    cognitoDomain: 'https://cocktaildbauth-dev-732940910135.auth.us-east-1.amazoncognito.com', // This is the base Cognito Hosted UI domain
+    userPoolId: 'us-east-1_nBFSSIaCD',
+    clientId: '4klgtis5qqa9eb7anku6rsr979',
+    cognitoDomain: 'https://cocktaildbauth-prod-732940910135.auth.us-east-1.amazoncognito.com', // This is the base Cognito Hosted UI domain
 
     // Application URL (for redirects, etc.)
-    appUrl: 'https://d2ifvut6v1mmr8.cloudfront.net',
+    appUrl: 'https://mixology.tools',
 
     // General settings
-    appName: 'Cocktail Database (dev)'
+    appName: 'Cocktail Database (prod)'
 };
 
 // Export the configuration

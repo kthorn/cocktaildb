@@ -118,6 +118,18 @@ document.addEventListener('DOMContentLoaded', () => {
             ingredientsList.innerHTML = '';
             delete recipeForm.dataset.mode;
             delete recipeForm.dataset.id;
+            
+            // Reset button text and page title to add mode
+            const submitButton = document.getElementById('submit-button');
+            const pageTitle = document.querySelector('h2');
+            if (submitButton) {
+                submitButton.textContent = 'Add Recipe';
+            }
+            if (pageTitle) {
+                pageTitle.textContent = 'Add Recipe';
+            }
+            document.title = 'Add Recipe - Cocktail Database';
+            
             // Add one ingredient row by default after reset
             addIngredientInput();
         } catch (error) {
@@ -436,6 +448,18 @@ async function editRecipe(id) {
         // Change form to update mode
         form.dataset.mode = 'edit';
         form.dataset.id = id;
+
+        // Update button text and page title for edit mode
+        const submitButton = document.getElementById('submit-button');
+        const pageTitle = document.querySelector('h2');
+        if (submitButton) {
+            submitButton.textContent = 'Update Recipe';
+        }
+        if (pageTitle) {
+            pageTitle.textContent = 'Edit Recipe';
+        }
+        // Update page title in browser tab
+        document.title = 'Edit Recipe - Cocktail Database';
 
         // Scroll to form
         form.scrollIntoView({ behavior: 'smooth' });
