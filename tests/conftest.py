@@ -5,11 +5,15 @@ PyTest configuration and shared fixtures for CocktailDB API tests
 import os
 import shutil
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Any, Dict
 
 import pytest
 from fastapi.testclient import TestClient
+
+# Add project root to Python path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 # Test configuration
 TEST_DB_PATH = "tests/fixtures/test_cocktaildb.db"

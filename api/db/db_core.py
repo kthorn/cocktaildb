@@ -1667,7 +1667,7 @@ class Database:
             private_tag = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, 1 as is_private, created_by FROM private_tags WHERE id = :tag_id",
+                    "SELECT id, name, 1 as is_private, cognito_user_id as created_by FROM private_tags WHERE id = :tag_id",
                     {"tag_id": tag_id},
                 ),
             )
@@ -1887,7 +1887,7 @@ class Database:
                     if tag_name:
                         # Check if tag exists (both public and private)
                         public_tag = self.get_public_tag_by_name(tag_name)
-                        private_tag = self.get_private_tag_by_name(tag_name, user_id) if user_id else None
+                        private_tag = self.get_private_tag_by_name_and_user(tag_name, user_id) if user_id else None
                         
                         if public_tag or private_tag:
                             # Recipe must have this tag (either public or private)
@@ -1896,9 +1896,9 @@ class Database:
                             query_params[public_param] = tag_name
                             query_params[private_param] = tag_name
                             
-                            condition = f"(pt2.name = :{public_param}"
+                            condition = f"(pt3.name = :{public_param}"
                             if user_id:
-                                condition += f" OR pvt2.name = :{private_param}"
+                                condition += f" OR pvt3.name = :{private_param}"
                             condition += ")"
                             tag_conditions.append(condition)
                         else:
