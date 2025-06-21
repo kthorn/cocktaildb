@@ -238,10 +238,10 @@ class CocktailAPI {
             return {
                 recipes: data.recipes,
                 pagination: {
-                    page: data.page || page,
-                    limit: data.limit || limit,
-                    total: data.total || data.recipes.length,
-                    totalPages: data.total_pages || Math.ceil((data.total || data.recipes.length) / limit)
+                    page: data.pagination.page || page,
+                    limit: data.pagination.limit || limit,
+                    total: data.pagination.total_count || data.recipes.length,
+                    totalPages: data.pagination.total_pages || Math.ceil((data.pagination.total_count || data.recipes.length) / limit)
                 }
             };
         }
