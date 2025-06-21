@@ -44,19 +44,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **CocktailDB** is a serverless cocktail recipe management application with the following key components:
 
-### Database Layer (`cocktaildb/db/`)
+### Database Layer (`api/db/`)
 - **SQLite on Amazon EFS**: Shared database across Lambda instances
-- **Connection pooling**: Global `_DB_INSTANCE` persists between Lambda invocations
+- **Connection pooling**: Global `_DB_INSTANCE` persists between Lambda invocations via `database.py`
+- **Core database class**: `db_core.py` (Database class with all database operations)
 - **Schema management**: `schema-deploy/schema.sql` defines current schema state
+- **SQL queries**: Stored as constants in `sql_queries.py`
 - **Key tables**: `recipes`, `ingredients` (hierarchical), `recipe_ingredients`, `ratings`, `units`, tags
 
 ### API Layer (`api/`)
-- **FastAPI Application**: `main.py` - modern FastAPI app with automatic documentation
-- **Legacy Lambda Handler**: `handler.py` - original Lambda entry point (being phased out)
-- **Route Modules**: `routes/` directory with organized endpoint handlers
+- **FastAPI Application**: `main.py` - modern FastAPI app with automatic documentation and CORS middleware
+- **Route Modules**: `routes/` directory with organized endpoint handlers (recipes, ingredients, ratings, units, tags, auth)
 - **Authentication**: `dependencies/auth.py` - FastAPI dependencies for JWT validation
-- **Database interface**: `db/db_core.py` (Database class), `db/sql_queries.py` (SQL constants)
-- **Request/Response Models**: `models/` directory with Pydantic models
+- **Exception Handling**: `core/exceptions.py` (custom exception classes), `core/exception_handlers.py` (global handlers)
+- **Configuration**: `core/config.py` - application settings and environment configuration
+- **Request/Response Models**: `models/` directory with Pydantic models for API validation
+- **Database Integration**: Uses `db/database.py` dependency injection for database access
 
 ### Frontend (`src/web/`)
 - **Static web app**: Vanilla JavaScript, served via CloudFront + S3
@@ -78,9 +81,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Error Handling**: Global exception handlers in `core/exception_handlers.py`
 
 ### Database Access
-- Use FastAPI dependency `get_db()` for database injection
-- Database connection cached globally as `_DB_INSTANCE` with connection pooling
+- Use FastAPI dependency `get_database()` from `db/database.py` for database injection
+- Database connection cached globally as `_DB_INSTANCE` with 5-minute cache duration (300 seconds)
+- Core database operations in `Database` class from `db/db_core.py`
 - SQL queries stored as constants in `db/sql_queries.py`
+- **Dependency pattern**: `db: Database = Depends(get_database)` in route handlers
 
 ### Authentication Flow (FastAPI)
 - **Dependencies**: Use `get_current_user()` or `get_current_user_optional()` 
@@ -88,20 +93,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **User Context**: `UserInfo` object provides structured user data
 - **Route Protection**: Add `user: UserInfo = Depends(require_authentication)` to protect endpoints
 
-### Legacy Authentication (Lambda)
-- JWT tokens validated using `get_user_from_token()` in `auth.py`
-- User ID extracted from Cognito claims for user-specific operations
-- Anonymous access allowed for read-only operations
-
 ### API Response Format
 - **FastAPI**: Return Pydantic response models directly, automatic serialization
-- **Legacy**: Use utility functions from `utils.py`: `_return_data()`, `_return_error()`, `_return_message()`
+- **Error Handling**: Custom exceptions (`CocktailDBException`, `DatabaseException`, `NotFoundException`, etc.) with structured error responses
+- **Response Models**: Standardized response classes in `models/responses.py` (e.g., `ErrorResponse`, `MessageResponse`)
+- **Validation**: Automatic request validation with detailed error messages via `RequestValidationError` handler
 
 ### Frontend API Integration  
 - All backend calls go through `CocktailAPI` class in `api.js`
 - Authentication tokens automatically included in requests
 - Error handling centralized with user-friendly messages
 - **API Paths**: Both `/api/v1/` (new) and legacy paths supported for backward compatibility
+
+### Pagination and Search
+- **Paginated Endpoints**: `/recipes` and `/recipes/search` support pagination with `page` and `limit` parameters
+- **Response Format**: Includes `pagination` metadata with `total_count`, `total_pages`, `has_next`, `has_previous`
+- **Search Features**: Full-text search, ingredient filtering, rating filters, tag filtering
+- **Sorting**: Configurable sort fields (`name`, `created_at`, `avg_rating`) and order (`asc`, `desc`)
 
 ## Database Schema Patterns
 
@@ -137,3 +145,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 3. `generate_config.py` creates frontend configuration
 4. Web content uploaded to S3
 5. CloudFront cache invalidated
+
+### Debugging
+- **Check Lambda logs**: Use AWS CloudWatch logs to debug API errors
+- **Error format**: Lambda errors typically show in format `[ERROR] timestamp request-id Error message`
+- **Common issues**: Check method signatures, parameter counts, and data validation
+- **Local testing**: Run FastAPI locally with `cd api && python main.py` for easier debugging

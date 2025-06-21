@@ -19,7 +19,7 @@ class IngredientUpdate(BaseModel):
 class RecipeIngredient(BaseModel):
     """Recipe ingredient specification"""
     ingredient_id: int = Field(..., description="Ingredient ID")
-    quantity: Optional[float] = Field(None, description="Quantity amount")
+    amount: Optional[float] = Field(None, description="Quantity amount")
     unit_id: Optional[int] = Field(None, description="Unit ID")
     notes: Optional[str] = Field(None, description="Additional notes")
 

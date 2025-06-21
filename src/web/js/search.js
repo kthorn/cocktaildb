@@ -129,11 +129,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Display results
                 if (reset) {
-                    displayRecipes(allSearchResults, searchResultsContainer, false);
+                    displayRecipes(allSearchResults, searchResultsContainer, true);
                 } else {
                     // Append new results
                     result.recipes.forEach(recipe => {
-                        const card = createRecipeCard(recipe, false);
+                        const card = createRecipeCard(recipe, true);
                         searchResultsContainer.appendChild(card);
                     });
                 }

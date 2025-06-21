@@ -100,9 +100,8 @@ async def update_ingredient(
         update_dict = {
             k: v for k, v in ingredient_data.model_dump().items() if v is not None
         }
-        update_dict["id"] = ingredient_id
 
-        updated_ingredient = db.update_ingredient(update_dict)
+        updated_ingredient = db.update_ingredient(ingredient_id, update_dict)
         return IngredientResponse(**updated_ingredient)
 
     except NotFoundException:

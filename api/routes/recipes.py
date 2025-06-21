@@ -355,9 +355,8 @@ async def update_recipe(
         update_dict = {
             k: v for k, v in recipe_data.model_dump().items() if v is not None
         }
-        update_dict["id"] = recipe_id
 
-        updated_recipe = db.update_recipe(update_dict)
+        db.update_recipe(recipe_id, update_dict)
 
         # Get the full recipe data with ingredients
         full_recipe = db.get_recipe(recipe_id, user.user_id)
