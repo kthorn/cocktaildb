@@ -175,4 +175,5 @@ cython_debug/
 
 *.txt
 *.json
-*.mdcsrc/web/js/config.js
+*.md
+src/web/js/config.js
