@@ -1648,6 +1648,58 @@ class Database:
             )
             raise
 
+    @retry_on_db_locked()
+    def get_tag(self, tag_id: int) -> Optional[Dict[str, Any]]:
+        """Gets a tag by its ID from either public or private tags."""
+        try:
+            # First check public tags
+            public_tag = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id, name, 0 as is_private FROM public_tags WHERE id = :tag_id",
+                    {"tag_id": tag_id},
+                ),
+            )
+            if public_tag:
+                return public_tag[0]
+            
+            # Then check private tags
+            private_tag = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id, name, 1 as is_private, created_by FROM private_tags WHERE id = :tag_id",
+                    {"tag_id": tag_id},
+                ),
+            )
+            return private_tag[0] if private_tag else None
+        except Exception as e:
+            logger.error(f"Error getting tag by ID {tag_id}: {str(e)}")
+            raise
+
+    @retry_on_db_locked()
+    def add_recipe_tag(self, recipe_id: int, tag_id: int, is_private: bool, user_id: str) -> bool:
+        """Generic method to add a tag to a recipe."""
+        try:
+            if is_private:
+                return self.add_private_tag_to_recipe(recipe_id, tag_id)
+            else:
+                return self.add_public_tag_to_recipe(recipe_id, tag_id)
+        except Exception as e:
+            logger.error(f"Error adding {'private' if is_private else 'public'} tag {tag_id} to recipe {recipe_id} for user {user_id}: {str(e)}")
+            raise
+
+    @retry_on_db_locked()
+    def remove_recipe_tag(self, recipe_id: int, tag_id: int, is_private: bool, user_id: str) -> bool:
+        """Generic method to remove a tag from a recipe."""
+        try:
+            if is_private:
+                return self.remove_private_tag_from_recipe(recipe_id, tag_id, user_id)
+            else:
+                return self.remove_public_tag_from_recipe(recipe_id, tag_id)
+        except Exception as e:
+            logger.error(f"Error removing {'private' if is_private else 'public'} tag {tag_id} from recipe {recipe_id} for user {user_id}: {str(e)}")
+            raise
+
     # --- End Tag Management ---
 
     # --- Pagination Methods ---
