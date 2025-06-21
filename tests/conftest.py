@@ -334,7 +334,16 @@ def assert_ingredient_structure(ingredient: Dict[str, Any]):
 
 def assert_recipe_structure(recipe: Dict[str, Any]):
     """Assert that recipe has expected structure"""
-    expected_keys = ["id", "name", "instructions", "created_by"]
+    expected_keys = [
+        "id",
+        "name",
+        "instructions",
+        "description",
+        "source",
+        "source_url",
+        "avg_rating",
+        "rating_count",
+    ]
     assert_valid_response_structure(recipe, expected_keys)
 
 
@@ -342,3 +351,214 @@ def assert_unit_structure(unit: Dict[str, Any]):
     """Assert that unit has expected structure"""
     expected_keys = ["id", "name", "abbreviation", "conversion_to_ml"]
     assert_valid_response_structure(unit, expected_keys)
+
+
+def assert_complete_recipe_structure(
+    recipe: Dict[str, Any], include_user_fields: bool = False
+):
+    """Assert that recipe has complete structure required for infinite scroll (no N+1 queries)"""
+    # Core recipe fields
+    core_fields = [
+        "id",
+        "name",
+        "instructions",
+        "created_by",
+        "avg_rating",
+        "rating_count",
+        "created_at",
+    ]
+    assert_valid_response_structure(recipe, core_fields)
+
+    # Extended fields for complete data
+    extended_fields = ["image_url", "source", "source_url"]
+    for field in extended_fields:
+        assert field in recipe, (
+            f"Recipe must include '{field}' field for infinite scroll"
+        )
+
+    # Tag structure validation
+    assert "public_tags" in recipe, "Recipe must include 'public_tags' array"
+    assert "private_tags" in recipe, "Recipe must include 'private_tags' array"
+    assert isinstance(recipe["public_tags"], list), "public_tags must be a list"
+    assert isinstance(recipe["private_tags"], list), "private_tags must be a list"
+
+    # Ingredient data completeness
+    if "ingredients" in recipe and recipe["ingredients"]:
+        for ingredient in recipe["ingredients"]:
+            ingredient_fields = ["id", "name", "amount", "unit", "notes"]
+            for field in ingredient_fields:
+                assert field in ingredient, f"Ingredient must include '{field}' field"
+
+    # User-specific fields (when authenticated)
+    if include_user_fields:
+        if "user_rating" in recipe:
+            user_rating = recipe["user_rating"]
+            assert user_rating is None or isinstance(user_rating, (int, float)), (
+                "user_rating must be null or numeric"
+            )
+            if user_rating is not None:
+                assert 1 <= user_rating <= 5, "user_rating must be between 1 and 5"
+
+
+def assert_search_response_structure(
+    response_data: Dict[str, Any], include_user_fields: bool = False
+):
+    """Assert that search response has complete structure required by API_SPEC.md"""
+    # Top-level response structure
+    top_level_fields = ["recipes", "pagination", "query"]
+    assert_valid_response_structure(response_data, top_level_fields)
+
+    # Pagination structure
+    pagination_fields = [
+        "page",
+        "limit",
+        "total_pages",
+        "total_count",
+        "has_next",
+        "has_previous",
+    ]
+    assert_valid_response_structure(response_data["pagination"], pagination_fields)
+
+    # Recipe array
+    assert isinstance(response_data["recipes"], list), "recipes must be a list"
+
+    # Each recipe should have complete structure
+    for recipe in response_data["recipes"]:
+        assert_complete_recipe_structure(recipe, include_user_fields)
+
+    # Query field validation
+    query = response_data["query"]
+    assert query is None or isinstance(query, str), "query field must be null or string"
+
+
+def assert_pagination_mathematical_consistency(pagination: Dict[str, Any]):
+    """Assert that pagination metadata is mathematically consistent"""
+    page = pagination["page"]
+    limit = pagination["limit"]
+    total_count = pagination["total_count"]
+    total_pages = pagination["total_pages"]
+    has_next = pagination["has_next"]
+    has_previous = pagination["has_previous"]
+
+    # Basic type validation
+    assert isinstance(page, int) and page >= 1, "page must be positive integer"
+    assert isinstance(limit, int) and limit >= 1, "limit must be positive integer"
+    assert isinstance(total_count, int) and total_count >= 0, (
+        "total_count must be non-negative integer"
+    )
+    assert isinstance(total_pages, int) and total_pages >= 1, (
+        "total_pages must be positive integer"
+    )
+    assert isinstance(has_next, bool), "has_next must be boolean"
+    assert isinstance(has_previous, bool), "has_previous must be boolean"
+
+    # Mathematical relationships
+    expected_total_pages = ((total_count - 1) // limit) + 1 if total_count > 0 else 1
+    assert total_pages == expected_total_pages, "total_pages calculation incorrect"
+
+    # has_next/has_previous logic
+    assert has_previous == (page > 1), "has_previous logic incorrect"
+    assert has_next == (page < total_pages), "has_next logic incorrect"
+
+
+def assert_sort_order_correctness(recipes: list, sort_by: str, sort_order: str = "asc"):
+    """Assert that recipes are correctly sorted according to parameters"""
+    if len(recipes) <= 1:
+        return  # Nothing to sort
+
+    values = []
+    for recipe in recipes:
+        if sort_by == "name":
+            values.append(recipe["name"].lower())
+        elif sort_by == "created_at":
+            values.append(recipe["created_at"])
+        elif sort_by == "avg_rating":
+            values.append(recipe["avg_rating"] or 0)  # Handle null ratings
+        else:
+            raise ValueError(f"Unknown sort_by parameter: {sort_by}")
+
+    if sort_order == "asc":
+        sorted_values = sorted(values)
+    elif sort_order == "desc":
+        sorted_values = sorted(values, reverse=True)
+    else:
+        raise ValueError(f"Unknown sort_order parameter: {sort_order}")
+
+    assert values == sorted_values, (
+        f"Recipes not properly sorted by {sort_by} {sort_order}"
+    )
+
+
+def assert_tag_structure(tag: Dict[str, Any]):
+    """Assert that tag object has expected structure"""
+    if isinstance(tag, dict):
+        required_fields = ["id", "name"]
+        for field in required_fields:
+            assert field in tag, f"Tag must include '{field}' field"
+    # If tag is just a string, that's also acceptable in some contexts
+
+
+def create_test_recipe_with_rating(
+    db_connection, user_id: str, recipe_name: str, rating: int
+):
+    """Helper function to create a test recipe with a user rating"""
+    # Create recipe
+    cursor = db_connection.execute(
+        "INSERT INTO recipes (name, instructions, created_by) VALUES (?, ?, ?) RETURNING id",
+        (recipe_name, "Test instructions for " + recipe_name, user_id),
+    )
+    recipe_id = cursor.fetchone()["id"]
+
+    # Create rating
+    db_connection.execute(
+        "INSERT INTO ratings (recipe_id, user_id, rating) VALUES (?, ?, ?)",
+        (recipe_id, user_id, rating),
+    )
+
+    db_connection.commit()
+    return recipe_id
+
+
+def create_test_recipe_with_tags(
+    db_connection,
+    user_id: str,
+    recipe_name: str,
+    public_tags: list = None,
+    private_tags: list = None,
+):
+    """Helper function to create a test recipe with public and private tags"""
+    # Create recipe
+    cursor = db_connection.execute(
+        "INSERT INTO recipes (name, instructions, created_by) VALUES (?, ?, ?) RETURNING id",
+        (recipe_name, "Test instructions for " + recipe_name, user_id),
+    )
+    recipe_id = cursor.fetchone()["id"]
+
+    # Create and associate public tags
+    if public_tags:
+        for tag_name in public_tags:
+            cursor = db_connection.execute(
+                "INSERT INTO tags (name, is_public, created_by) VALUES (?, ?, ?) RETURNING id",
+                (tag_name, 1, user_id),
+            )
+            tag_id = cursor.fetchone()["id"]
+            db_connection.execute(
+                "INSERT INTO recipe_tags (recipe_id, tag_id) VALUES (?, ?)",
+                (recipe_id, tag_id),
+            )
+
+    # Create and associate private tags
+    if private_tags:
+        for tag_name in private_tags:
+            cursor = db_connection.execute(
+                "INSERT INTO tags (name, is_public, created_by) VALUES (?, ?, ?) RETURNING id",
+                (tag_name, 0, user_id),
+            )
+            tag_id = cursor.fetchone()["id"]
+            db_connection.execute(
+                "INSERT INTO recipe_tags (recipe_id, tag_id) VALUES (?, ?)",
+                (recipe_id, tag_id),
+            )
+
+    db_connection.commit()
+    return recipe_id

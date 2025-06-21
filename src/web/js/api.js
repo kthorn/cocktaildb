@@ -104,14 +104,25 @@ class CocktailAPI {
     }
 
     // Recipes API
-    async getRecipes() {
-        const response = await this._request('/recipes');
-        // Handle new paginated response format
+    async getRecipes(page = 1, limit = 20) {
+        const response = await this._request(`/recipes?page=${page}&limit=${limit}`);
+        // Handle paginated response format with metadata
         if (response && typeof response === 'object' && response.recipes) {
-            return response.recipes;
+            return {
+                recipes: response.recipes,
+                pagination: {
+                    page: response.page || page,
+                    limit: response.limit || limit,
+                    total: response.total || response.recipes.length,
+                    totalPages: response.total_pages || Math.ceil((response.total || response.recipes.length) / limit)
+                }
+            };
         }
         // Fallback for direct array response (legacy format)
-        return response || [];
+        return {
+            recipes: response || [],
+            pagination: { page: 1, limit: limit, total: (response || []).length, totalPages: 1 }
+        };
     }
 
     async getRecipe(id) {
@@ -119,20 +130,23 @@ class CocktailAPI {
     }
 
     // Get all recipes with full details (ingredients, instructions, etc.)
-    async getRecipesWithFullData() {
-        const basicRecipes = await this.getRecipes();
-        return this.enrichRecipes(basicRecipes);
+    // Now uses paginated endpoint that returns full details directly
+    async getRecipesWithFullData(page = 1, limit = 20) {
+        return this.getRecipes(page, limit);
     }
 
     // Search recipes and return full details
-    async searchRecipesWithFullData(searchQuery) {
-        const basicRecipes = await this.searchRecipes(searchQuery);
-        return this.enrichRecipes(basicRecipes);
+    // Now uses paginated search endpoint that returns full details directly
+    async searchRecipesWithFullData(searchQuery, page = 1, limit = 20) {
+        return this.searchRecipes(searchQuery, page, limit);
     }
 
-    // Helper to convert basic recipe data to full recipe data
-    // Uses batching to prevent overwhelming the server with concurrent requests
+    // Legacy helper method - DEPRECATED
+    // Note: This method is no longer needed since paginated endpoints return full recipe details
+    // Keeping for backward compatibility with existing code
     async enrichRecipes(basicRecipes, onBatchLoaded = null) {
+        console.warn('enrichRecipes() is deprecated - use paginated endpoints that return full details directly');
+        
         if (!basicRecipes || basicRecipes.length === 0) {
             return basicRecipes;
         }
@@ -181,9 +195,13 @@ class CocktailAPI {
     }
 
     // Search recipes with various criteria
-    async searchRecipes(searchQuery) {
+    async searchRecipes(searchQuery, page = 1, limit = 20) {
         // Build query string from the search parameters
         const queryParams = new URLSearchParams();
+        
+        // Add pagination parameters
+        queryParams.append('page', page.toString());
+        queryParams.append('limit', limit.toString());
         
         // Add search filters to query params
         if (searchQuery.name) {
@@ -215,12 +233,23 @@ class CocktailAPI {
         const response = await fetch(url, this.getFetchOptions());
         const data = await this.handleResponse(response);
         
-        // Handle new paginated search response format
+        // Handle paginated search response format with metadata
         if (data && typeof data === 'object' && data.recipes) {
-            return data.recipes;
+            return {
+                recipes: data.recipes,
+                pagination: {
+                    page: data.pagination.page || page,
+                    limit: data.pagination.limit || limit,
+                    total: data.pagination.total_count || data.recipes.length,
+                    totalPages: data.pagination.total_pages || Math.ceil((data.pagination.total_count || data.recipes.length) / limit)
+                }
+            };
         }
         // Fallback for direct array response (legacy format)
-        return data || [];
+        return {
+            recipes: data || [],
+            pagination: { page: 1, limit: limit, total: (data || []).length, totalPages: 1 }
+        };
     }
 
     // Units API
@@ -316,15 +345,29 @@ class CocktailAPI {
     }
 
     // Get all recipes with full details and progressive loading support
-    async getRecipesWithFullDataProgressive(onBatchLoaded = null) {
-        const basicRecipes = await this.getRecipes();
-        return this.enrichRecipes(basicRecipes, onBatchLoaded);
+    // Now uses paginated endpoint - progressive loading handled by pagination
+    async getRecipesWithFullDataProgressive(onPageLoaded = null, page = 1, limit = 20) {
+        const result = await this.getRecipes(page, limit);
+        
+        // Call the callback with the loaded page if provided
+        if (typeof onPageLoaded === 'function') {
+            onPageLoaded(result.recipes, result.pagination);
+        }
+        
+        return result;
     }
 
     // Search recipes and return full details with progressive loading support
-    async searchRecipesWithFullDataProgressive(searchQuery, onBatchLoaded = null) {
-        const basicRecipes = await this.searchRecipes(searchQuery);
-        return this.enrichRecipes(basicRecipes, onBatchLoaded);
+    // Now uses paginated search endpoint - progressive loading handled by pagination
+    async searchRecipesWithFullDataProgressive(searchQuery, onPageLoaded = null, page = 1, limit = 20) {
+        const result = await this.searchRecipes(searchQuery, page, limit);
+        
+        // Call the callback with the loaded page if provided
+        if (typeof onPageLoaded === 'function') {
+            onPageLoaded(result.recipes, result.pagination);
+        }
+        
+        return result;
     }
 }
 

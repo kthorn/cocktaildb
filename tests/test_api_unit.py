@@ -25,14 +25,14 @@ class TestIngredientEndpoints:
 
     def test_get_ingredients_public_access(self, test_client_memory):
         """Test getting ingredients without authentication"""
-        response = test_client_memory.get("/api/v1/ingredients")
+        response = test_client_memory.get("/ingredients")
         # Should work for public endpoints
         assert response.status_code == status.HTTP_200_OK
 
     def test_create_ingredient_unauthorized(self, test_client_memory):
         """Test creating ingredient without authentication fails"""
         ingredient_data = {"name": "Test Ingredient", "description": "Test description"}
-        response = test_client_memory.post("/api/v1/ingredients", json=ingredient_data)
+        response = test_client_memory.post("/ingredients", json=ingredient_data)
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_create_ingredient_authorized(
@@ -40,7 +40,7 @@ class TestIngredientEndpoints:
     ):
         """Test creating ingredient with authentication"""
         response = authenticated_client.post(
-            "/api/v1/ingredients", json=sample_ingredient_data
+            "/ingredients", json=sample_ingredient_data
         )
         # May fail due to database constraints in memory DB, but should not be unauthorized
         assert response.status_code != status.HTTP_401_UNAUTHORIZED
@@ -48,12 +48,12 @@ class TestIngredientEndpoints:
     def test_update_ingredient_unauthorized(self, test_client_memory):
         """Test updating ingredient without authentication"""
         update_data = {"name": "Updated Name"}
-        response = test_client_memory.put("/api/v1/ingredients/1", json=update_data)
+        response = test_client_memory.put("/ingredients/1", json=update_data)
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_delete_ingredient_unauthorized(self, test_client_memory):
         """Test deleting ingredient without authentication"""
-        response = test_client_memory.delete("/api/v1/ingredients/1")
+        response = test_client_memory.delete("/ingredients/1")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
@@ -62,18 +62,18 @@ class TestRecipeEndpoints:
 
     def test_get_recipes_public_access(self, test_client_memory):
         """Test getting recipes without authentication"""
-        response = test_client_memory.get("/api/v1/recipes")
+        response = test_client_memory.get("/recipes")
         assert response.status_code == status.HTTP_200_OK
 
     def test_create_recipe_unauthorized(self, test_client_memory):
         """Test creating recipe without authentication"""
         recipe_data = {"name": "Test Recipe", "instructions": "Test instructions"}
-        response = test_client_memory.post("/api/v1/recipes", json=recipe_data)
+        response = test_client_memory.post("/recipes", json=recipe_data)
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_create_recipe_authorized(self, authenticated_client, sample_recipe_data):
         """Test creating recipe with authentication"""
-        response = authenticated_client.post("/api/v1/recipes", json=sample_recipe_data)
+        response = authenticated_client.post("/recipes", json=sample_recipe_data)
         assert response.status_code != status.HTTP_401_UNAUTHORIZED
 
 
@@ -82,12 +82,12 @@ class TestAuthenticationEndpoints:
 
     def test_auth_me_unauthorized(self, test_client_memory):
         """Test /auth/me without authentication"""
-        response = test_client_memory.get("/api/v1/auth/me")
+        response = test_client_memory.get("/auth/me")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_auth_me_authorized(self, authenticated_client, mock_user):
         """Test /auth/me with authentication"""
-        response = authenticated_client.get("/api/v1/auth/me")
+        response = authenticated_client.get("/auth/me")
         if response.status_code == status.HTTP_200_OK:
             data = response.json()
             assert "user_id" in data
@@ -99,12 +99,12 @@ class TestPublicResourceEndpoints:
 
     def test_get_units(self, test_client_memory):
         """Test getting units (public endpoint)"""
-        response = test_client_memory.get("/api/v1/units")
+        response = test_client_memory.get("/units")
         assert response.status_code == status.HTTP_200_OK
 
     def test_get_tags(self, test_client_memory):
         """Test getting tags (public endpoint)"""
-        response = test_client_memory.get("/api/v1/tags/public")
+        response = test_client_memory.get("/tags/public")
         assert response.status_code == status.HTTP_200_OK
 
     def test_create_unit_unauthorized(self, test_client_memory):
@@ -114,7 +114,7 @@ class TestPublicResourceEndpoints:
             "abbreviation": "tu",
             "conversion_to_ml": 30.0,
         }
-        response = test_client_memory.post("/api/v1/units", json=unit_data)
+        response = test_client_memory.post("/units", json=unit_data)
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
@@ -124,13 +124,13 @@ class TestRequestValidation:
     def test_create_ingredient_invalid_data(self, authenticated_client):
         """Test creating ingredient with invalid data"""
         invalid_data = {"description": "Missing name field"}
-        response = authenticated_client.post("/api/v1/ingredients", json=invalid_data)
+        response = authenticated_client.post("/ingredients", json=invalid_data)
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
     def test_create_recipe_invalid_data(self, authenticated_client):
         """Test creating recipe with invalid data"""
         invalid_data = {"instructions": "Missing name field"}
-        response = authenticated_client.post("/api/v1/recipes", json=invalid_data)
+        response = authenticated_client.post("/recipes", json=invalid_data)
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
     def test_missing_required_fields(self, authenticated_client):
@@ -138,7 +138,7 @@ class TestRequestValidation:
         # Ingredient requires name
         incomplete_data = {"description": "Missing name"}
         response = authenticated_client.post(
-            "/api/v1/ingredients", json=incomplete_data
+            "/ingredients", json=incomplete_data
         )
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
@@ -151,13 +151,13 @@ class TestRequestValidation:
             "name": "Test Ingredient",
             "parent_id": "not_a_number",  # Should be integer
         }
-        response = authenticated_client.post("/api/v1/ingredients", json=invalid_data)
+        response = authenticated_client.post("/ingredients", json=invalid_data)
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
     def test_malformed_json(self, authenticated_client):
         """Test sending malformed JSON"""
         response = authenticated_client.post(
-            "/api/v1/ingredients",
+            "/ingredients",
             data="invalid json",
             headers={"Content-Type": "application/json"},
         )
@@ -169,12 +169,12 @@ class TestErrorHandling:
 
     def test_invalid_endpoint(self, test_client_memory):
         """Test accessing non-existent endpoint"""
-        response = test_client_memory.get("/api/v1/nonexistent")
+        response = test_client_memory.get("/nonexistent")
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_invalid_method(self, test_client_memory):
         """Test using wrong HTTP method"""
-        response = test_client_memory.patch("/api/v1/ingredients")
+        response = test_client_memory.patch("/ingredients")
         assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
 
 
@@ -188,6 +188,6 @@ class TestCORSFunctionality:
             "Access-Control-Request-Method": "POST",
             "Access-Control-Request-Headers": "Content-Type,Authorization",
         }
-        response = test_client_memory.options("/api/v1/ingredients", headers=headers)
+        response = test_client_memory.options("/ingredients", headers=headers)
         # Should not be 404 or 405 if CORS is properly configured
         assert response.status_code != status.HTTP_404_NOT_FOUND

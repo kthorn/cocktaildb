@@ -1,10 +1,20 @@
 import { api } from './api.js';
-import { displayRecipes, createProgressiveRecipeLoader } from './recipeCard.js';
+import { displayRecipes, createProgressiveRecipeLoader, createRecipeCard } from './recipeCard.js';
 
 // Keep a global reference to ingredients for type-ahead
 let availableIngredients = [];
 let activeRowIndex = null;
 let activeIngredientIndex = -1;
+
+// Search pagination state
+let currentSearchQuery = null;
+let currentSearchPage = 1;
+let totalSearchPages = 1;
+let searchResultsPerPage = 10;
+let isSearching = false;
+let allSearchResults = [];
+let isInfiniteScrollEnabled = false;
+let scrollThreshold = 200; // pixels from bottom to trigger load
 
 document.addEventListener('DOMContentLoaded', () => {
     // Elements
@@ -47,6 +57,15 @@ document.addEventListener('DOMContentLoaded', () => {
         emptyResults.classList.remove('hidden');
         searchResultsContainer.querySelectorAll('.recipe-card').forEach(card => card.remove());
         
+        // Reset search pagination state
+        currentSearchQuery = null;
+        currentSearchPage = 1;
+        totalSearchPages = 1;
+        allSearchResults = [];
+        
+        // Disable infinite scroll and remove loading indicator
+        disableInfiniteScroll();
+        
         // Reset ingredient rows to initial state
         const rows = ingredientQueryBuilder.querySelectorAll('.item-row');
         rows.forEach((row, index) => {
@@ -63,47 +82,182 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Function to perform the search
-    async function performSearch() {
+    async function performSearch(reset = true) {
+        if (isSearching) return;
+        
         try {
-            loadingPlaceholder.classList.remove('hidden');
-            emptyResults.classList.add('hidden');
-            
-            // Remove existing results
-            searchResultsContainer.querySelectorAll('.recipe-card').forEach(card => card.remove());
+            isSearching = true;
             
             // Build the search query
             const searchQuery = buildSearchQuery();
+            console.log('Built search query:', searchQuery);
             
-            // Set up progressive loading
-            const progressLoader = createProgressiveRecipeLoader(searchResultsContainer, false);
+            if (reset) {
+                // Reset pagination state for new search
+                currentSearchQuery = searchQuery;
+                currentSearchPage = 1;
+                allSearchResults = [];
+                
+                // Show loading and hide results
+                loadingPlaceholder.classList.remove('hidden');
+                emptyResults.classList.add('hidden');
+                
+                // Remove existing results
+                searchResultsContainer.querySelectorAll('.recipe-card').forEach(card => card.remove());
+                
+                // Disable existing infinite scroll
+                disableInfiniteScroll();
+            }
             
-            // Hide the default loading placeholder and start progressive loading
+            // Call the API to search recipes with pagination
+            const result = await api.searchRecipesWithFullData(searchQuery, currentSearchPage, searchResultsPerPage);
+            console.log('API result:', result);
+            
+            // Hide loading placeholder
             loadingPlaceholder.classList.add('hidden');
-            progressLoader.start();
             
-            // Call the API to search recipes with progressive loading
-            const results = await api.searchRecipesWithFullDataProgressive(searchQuery, (batch, loadedCount, totalCount) => {
-                // Add each batch as it becomes available
-                progressLoader.addBatch(batch);
-                console.log(`Loaded ${loadedCount}/${totalCount} recipes`);
-            });
-            
-            // Finish loading
-            progressLoader.finish(results.length);
-            
-            if (results.length === 0) {
+            if (result && result.recipes) {
+                // Add results to our collection
+                if (reset) {
+                    allSearchResults = result.recipes;
+                } else {
+                    allSearchResults.push(...result.recipes);
+                }
+                
+                // Update pagination state
+                totalSearchPages = result.pagination.totalPages;
+                
+                // Display results
+                if (reset) {
+                    displayRecipes(allSearchResults, searchResultsContainer, false);
+                } else {
+                    // Append new results
+                    result.recipes.forEach(recipe => {
+                        const card = createRecipeCard(recipe, false);
+                        searchResultsContainer.appendChild(card);
+                    });
+                }
+                
+                // Setup infinite scroll if there are more pages
+                setupInfiniteScroll();
+                
+                // Hide no results message if we have results
+                if (allSearchResults.length > 0) {
+                    emptyResults.classList.add('hidden');
+                } else if (reset) {
+                    emptyResults.classList.remove('hidden');
+                    emptyResults.querySelector('p').textContent = 'No recipes found matching your criteria.';
+                }
+                
+                console.log(`Search page ${currentSearchPage} of ${totalSearchPages} loaded (${result.recipes.length} recipes)`);
+                console.log('Pagination info:', result.pagination);
+            } else if (reset) {
                 // Show no results message
                 emptyResults.classList.remove('hidden');
                 emptyResults.querySelector('p').textContent = 'No recipes found matching your criteria.';
-            } else {
-                // Hide no results message - recipes are already displayed progressively
-                emptyResults.classList.add('hidden');
             }
         } catch (error) {
             console.error('Error searching recipes:', error);
             loadingPlaceholder.classList.add('hidden');
-            emptyResults.classList.remove('hidden');
-            emptyResults.querySelector('p').textContent = 'Error searching recipes. Please try again.';
+            if (reset) {
+                emptyResults.classList.remove('hidden');
+                emptyResults.querySelector('p').textContent = 'Error searching recipes. Please try again.';
+            }
+        } finally {
+            isSearching = false;
+        }
+    }
+    
+    // Setup infinite scroll for search results
+    function setupInfiniteScroll() {
+        console.log(`Setting up infinite scroll: page ${currentSearchPage} of ${totalSearchPages}`);
+        if (currentSearchPage < totalSearchPages) {
+            isInfiniteScrollEnabled = true;
+            console.log('Infinite scroll enabled');
+            
+            // Add loading indicator at bottom
+            addScrollLoadingIndicator();
+            
+            // Add scroll event listener
+            window.addEventListener('scroll', handleScroll);
+        } else {
+            console.log('Infinite scroll disabled - no more pages');
+            disableInfiniteScroll();
+        }
+    }
+    
+    // Disable infinite scroll
+    function disableInfiniteScroll() {
+        isInfiniteScrollEnabled = false;
+        window.removeEventListener('scroll', handleScroll);
+        
+        // Remove loading indicator
+        const loadingIndicator = document.getElementById('infinite-scroll-loading');
+        if (loadingIndicator) {
+            loadingIndicator.remove();
+        }
+    }
+    
+    // Add loading indicator for infinite scroll
+    function addScrollLoadingIndicator() {
+        // Remove existing indicator if present
+        const existingIndicator = document.getElementById('infinite-scroll-loading');
+        if (existingIndicator) {
+            existingIndicator.remove();
+        }
+        
+        // Only add if there are more pages to load
+        if (currentSearchPage < totalSearchPages) {
+            const loadingIndicator = document.createElement('div');
+            loadingIndicator.id = 'infinite-scroll-loading';
+            loadingIndicator.className = 'infinite-scroll-loading hidden';
+            loadingIndicator.innerHTML = '<p>Loading more results...</p>';
+            
+            // Add after the search results container
+            searchResultsContainer.parentNode.insertBefore(loadingIndicator, searchResultsContainer.nextSibling);
+        }
+    }
+    
+    // Handle scroll event for infinite scroll
+    function handleScroll() {
+        if (!isInfiniteScrollEnabled || isSearching || currentSearchPage >= totalSearchPages) {
+            return;
+        }
+        
+        // Calculate distance from bottom
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const windowHeight = window.innerHeight;
+        const documentHeight = document.documentElement.scrollHeight;
+        const distanceFromBottom = documentHeight - (scrollTop + windowHeight);
+        
+        // Debug logging (only log occasionally to avoid spam)
+        if (Math.random() < 0.01) { // Log ~1% of scroll events
+            console.log(`Scroll: distance from bottom = ${distanceFromBottom}px, threshold = ${scrollThreshold}px`);
+        }
+        
+        // Trigger load when within threshold of bottom
+        if (distanceFromBottom <= scrollThreshold) {
+            console.log('Triggering infinite scroll load');
+            loadMoreSearchResults();
+        }
+    }
+    
+    // Load more search results (next page) for infinite scroll
+    async function loadMoreSearchResults() {
+        if (currentSearchPage >= totalSearchPages || isSearching) return;
+        
+        // Show loading indicator
+        const loadingIndicator = document.getElementById('infinite-scroll-loading');
+        if (loadingIndicator) {
+            loadingIndicator.classList.remove('hidden');
+        }
+        
+        currentSearchPage++;
+        await performSearch(false); // Don't reset, append to existing
+        
+        // Hide loading indicator after loading
+        if (loadingIndicator) {
+            loadingIndicator.classList.add('hidden');
         }
     }
 
