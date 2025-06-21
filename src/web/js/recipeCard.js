@@ -158,11 +158,8 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
         
         if (editBtn) {
             editBtn.addEventListener('click', () => {
-                if (window.editRecipe) {
-                    window.editRecipe(recipe.id);
-                } else {
-                    console.error('editRecipe function not found');
-                }
+                // Navigate to recipes page with edit parameter
+                window.location.href = `recipes.html?edit=${recipe.id}`;
             });
         }
     }

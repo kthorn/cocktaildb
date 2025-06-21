@@ -1,6 +1,5 @@
 import { api } from './api.js';
 import { isAuthenticated } from './auth.js';
-import { displayRecipes, createProgressiveRecipeLoader, createRecipeCard } from './recipeCard.js';
 
 
 // Declare function in global scope
@@ -8,20 +7,17 @@ let addIngredientInput;
 
 document.addEventListener('DOMContentLoaded', () => {  
     const recipeForm = document.getElementById('recipe-form');
-    const recipesContainer = document.getElementById('recipes-container');
-    const searchInput = document.getElementById('recipe-search');
     const addIngredientBtn = document.getElementById('add-ingredient');
     const ingredientsList = document.getElementById('ingredients-list');
 
-    if (!recipeForm || !recipesContainer || !searchInput || !addIngredientBtn || !ingredientsList) {
+    if (!recipeForm || !addIngredientBtn || !ingredientsList) {
         console.error('Required elements not found in the DOM');
         return;
     }
 
     let availableIngredients = [];
 
-    // Load recipes, units, and ingredients on page load
-    loadRecipes();
+    // Load units and ingredients on page load
     Promise.all([loadUnits(), loadIngredients()]).then(() => {
         // Add one ingredient row by default
         addIngredientInput();
@@ -124,7 +120,6 @@ document.addEventListener('DOMContentLoaded', () => {
             delete recipeForm.dataset.id;
             // Add one ingredient row by default after reset
             addIngredientInput();
-            loadRecipes();
         } catch (error) {
             console.error('Error saving recipe:', error);
             alert(`Failed to save recipe: ${error.message || 'Please try again.'}`);
@@ -148,121 +143,6 @@ document.addEventListener('DOMContentLoaded', () => {
     addIngredientBtn.addEventListener('click', () => {
         addIngredientInput();
     });
-
-    // Handle search
-    searchInput.addEventListener('input', (e) => {
-        const searchTerm = e.target.value.toLowerCase();
-        const recipeCards = document.querySelectorAll('.recipe-card');
-
-        recipeCards.forEach(card => {
-            const name = card.querySelector('h4').textContent.toLowerCase();
-            const description = card.querySelector('p').textContent.toLowerCase();
-
-            if (name.includes(searchTerm) || description.includes(searchTerm)) {
-                card.style.display = 'block';
-            } else {
-                card.style.display = 'none';
-            }
-        });
-    });
-
-    // State for pagination
-    let currentPage = 1;
-    let recipesPerPage = 20;
-    let allLoadedRecipes = [];
-    let hasMorePages = true;
-    let isLoading = false;
-    
-    // Load and display recipes with pagination
-    async function loadRecipes(reset = true) {
-        if (isLoading) return;
-        
-        try {
-            isLoading = true;
-            
-            // Reset if starting fresh
-            if (reset) {
-                currentPage = 1;
-                allLoadedRecipes = [];
-                hasMorePages = true;
-                recipesContainer.innerHTML = '<p class="loading-recipes">Loading recipes...</p>';
-            }
-            
-            // Use the new paginated API that returns full recipe details
-            const result = await api.getRecipesWithFullData(currentPage, recipesPerPage);
-            
-            if (result && result.recipes) {
-                // Add new recipes to our loaded collection
-                allLoadedRecipes = reset ? result.recipes : [...allLoadedRecipes, ...result.recipes];
-                
-                // Update pagination state
-                hasMorePages = result.pagination.page < result.pagination.totalPages;
-                
-                // Clear loading message and display recipes
-                if (reset) {
-                    recipesContainer.innerHTML = '';
-                }
-                
-                // Display all loaded recipes (or just append new ones if not reset)
-                if (reset) {
-                    displayRecipes(allLoadedRecipes, recipesContainer, true, loadRecipes);
-                } else {
-                    // Append only the new recipes
-                    result.recipes.forEach(recipe => {
-                        const card = createRecipeCard(recipe, true, loadRecipes);
-                        recipesContainer.appendChild(card);
-                    });
-                }
-                
-                // Add load more button if there are more pages
-                updateLoadMoreButton();
-                
-                console.log(`Loaded page ${currentPage} of ${result.pagination.totalPages} (${result.recipes.length} recipes)`);
-            } else {
-                if (reset) {
-                    recipesContainer.innerHTML = '<p>No recipes found.</p>';
-                }
-            }
-        } catch (error) {
-            console.error('Error loading recipes:', error);
-            recipesContainer.innerHTML = '<p>Error loading recipes. Please try again later.</p>';
-        } finally {
-            isLoading = false;
-        }
-    }
-    
-    // Update or add the load more button
-    function updateLoadMoreButton() {
-        let loadMoreBtn = document.getElementById('load-more-recipes');
-        
-        if (hasMorePages) {
-            if (!loadMoreBtn) {
-                loadMoreBtn = document.createElement('button');
-                loadMoreBtn.id = 'load-more-recipes';
-                loadMoreBtn.className = 'btn-secondary load-more-btn';
-                loadMoreBtn.textContent = 'Load More Recipes';
-                loadMoreBtn.addEventListener('click', loadMoreRecipes);
-                
-                // Add after the recipes container
-                recipesContainer.parentNode.insertBefore(loadMoreBtn, recipesContainer.nextSibling);
-            }
-            loadMoreBtn.style.display = 'block';
-            loadMoreBtn.disabled = isLoading;
-            loadMoreBtn.textContent = isLoading ? 'Loading...' : 'Load More Recipes';
-        } else {
-            if (loadMoreBtn) {
-                loadMoreBtn.style.display = 'none';
-            }
-        }
-    }
-    
-    // Load more recipes (next page)
-    async function loadMoreRecipes() {
-        if (!hasMorePages || isLoading) return;
-        
-        currentPage++;
-        await loadRecipes(false); // Don't reset, append to existing
-    }
 
     // Load available units
     async function loadUnits() {
@@ -406,7 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
         searchInput.addEventListener('focus', updateAutocomplete);
         
         // Blur event listener
-        searchInput.addEventListener('blur', (e) => {
+        searchInput.addEventListener('blur', () => {
             // Delay hiding to allow click events on dropdown items
             setTimeout(() => {
                 autocompleteDropdown.style.display = 'none';
@@ -454,13 +334,25 @@ document.addEventListener('DOMContentLoaded', () => {
         ingredientsList.appendChild(div);
     };
 
-    // Make functions accessible to outside functions
-    window.loadRecipes = () => loadRecipes(true); // Always reset when called externally
-    window.loadMoreRecipes = loadMoreRecipes;
+    // Check for edit parameter in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const editRecipeId = urlParams.get('edit');
+    if (editRecipeId) {
+        console.log('Edit recipe ID found:', editRecipeId);
+        // Wait for ingredients and units to load, then edit the recipe
+        Promise.all([loadUnits(), loadIngredients()]).then(() => {
+            console.log('Units and ingredients loaded, calling editRecipe');
+            editRecipe(editRecipeId);
+        }).catch(error => {
+            console.error('Error loading units/ingredients:', error);
+        });
+    }
 });
 
 // Edit recipe
 async function editRecipe(id) {
+    console.log('editRecipe called with ID:', id);
+    
     // Check authentication first
     if (!isAuthenticated()) {
         alert('Please log in to edit recipes.');
@@ -470,7 +362,7 @@ async function editRecipe(id) {
     const form = document.getElementById('recipe-form');
     const ingredientsList = document.getElementById('ingredients-list');
     if (!form || !ingredientsList) {
-        console.error('Required form elements not found');
+        console.error('Required form elements not found', { form, ingredientsList });
         return;
     }
 
@@ -478,6 +370,7 @@ async function editRecipe(id) {
         // Show loading state
         form.classList.add('loading');
         
+        console.log('Fetching recipe data for ID:', id);
         const recipe = await api.getRecipe(id);
         if (!recipe) {
             throw new Error('Recipe not found');
@@ -558,24 +451,3 @@ async function editRecipe(id) {
 // Make the editRecipe function globally available
 window.editRecipe = editRecipe;
 
-// Delete recipe
-async function deleteRecipe(id) {
-    // Check authentication first
-    if (!isAuthenticated()) {
-        alert('Please log in to delete recipes.');
-        return;
-    }
-
-    if (!confirm('Are you sure you want to delete this recipe?')) {
-        return;
-    }
-
-    try {
-        await api.deleteRecipe(id);
-        alert('Recipe deleted successfully!');
-        window.loadRecipes();
-    } catch (error) {
-        console.error('Error deleting recipe:', error);
-        alert(`Failed to delete recipe: ${error.message || 'Please try again.'}`);
-    }
-} 
