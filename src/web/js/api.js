@@ -314,11 +314,22 @@ class CocktailAPI {
 
     // Add a tag to a recipe
     // jsTagType should be 'public' or 'private'
-    // The backend expects { name: tagName } in the body
     async addTagToRecipe(recipeId, tagName, jsTagType) {
-        const apiTagType = `${jsTagType}_tags`; // Converts to 'public_tags' or 'private_tags'
-        const path = `/recipes/${recipeId}/${apiTagType}`;
-        return this._request(path, 'POST', { name: tagName });
+        if (jsTagType === 'private') {
+            // For private tags, first create the tag, then associate it with the recipe
+            const tag = await this.createPrivateTag(tagName);
+            const path = `/recipes/${recipeId}/private_tags`;
+            return this._request(path, 'POST', { tag_id: tag.id });
+        } else {
+            // For public tags, find the existing tag by name and use its ID
+            const publicTags = await this.getPublicTags();
+            const existingTag = publicTags.find(tag => tag.name.toLowerCase() === tagName.toLowerCase());
+            if (!existingTag) {
+                throw new Error(`Public tag "${tagName}" not found`);
+            }
+            const path = `/recipes/${recipeId}/public_tags`;
+            return this._request(path, 'POST', { tag_id: existingTag.id });
+        }
     }
 
     // Remove a tag from a recipe
@@ -337,6 +348,11 @@ class CocktailAPI {
     // Get private tags (requires authentication)
     async getPrivateTags() {
         return this._request('/tags/private', 'GET', null, true);
+    }
+
+    // Create a private tag (requires authentication)
+    async createPrivateTag(tagName) {
+        return this._request('/tags/private', 'POST', { name: tagName }, true);
     }
 
     // Get current user info (requires authentication)
