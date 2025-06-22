@@ -211,14 +211,17 @@ class TestCascadeOperations:
 
             # Add tags
             public_tag = db.create_public_tag("classic")
-            private_tag = db.create_private_tag("favorites", "user1", "user1")
+            private_tag = db.create_private_tag("favorites", "user1")
             db.add_public_tag_to_recipe(recipe["id"], public_tag["id"])
             db.add_private_tag_to_recipe(recipe["id"], private_tag["id"])
 
             # Verify all associations exist
             assert len(db.get_recipe_ratings(recipe["id"])) == 1
-            assert len(db._get_recipe_public_tags(recipe["id"])) == 1
-            assert len(db._get_recipe_private_tags(recipe["id"], "user1")) == 1
+            recipe_tags = db.execute_query(
+                "SELECT COUNT(*) as count FROM recipe_tags WHERE recipe_id = ?",
+                (recipe["id"],),
+            )
+            assert recipe_tags[0]["count"] == 2
 
             ingredients_before = db.execute_query(
                 "SELECT COUNT(*) as count FROM recipe_ingredients WHERE recipe_id = ?",
@@ -236,17 +239,11 @@ class TestCascadeOperations:
             )
             assert ratings_after[0]["count"] == 0
 
-            public_tags_after = db.execute_query(
-                "SELECT COUNT(*) as count FROM recipe_public_tags WHERE recipe_id = ?",
+            tags_after = db.execute_query(
+                "SELECT COUNT(*) as count FROM recipe_tags WHERE recipe_id = ?",
                 (recipe["id"],),
             )
-            assert public_tags_after[0]["count"] == 0
-
-            private_tags_after = db.execute_query(
-                "SELECT COUNT(*) as count FROM recipe_private_tags WHERE recipe_id = ?",
-                (recipe["id"],),
-            )
-            assert private_tags_after[0]["count"] == 0
+            assert tags_after[0]["count"] == 0
 
             ingredients_after = db.execute_query(
                 "SELECT COUNT(*) as count FROM recipe_ingredients WHERE recipe_id = ?",
@@ -507,16 +504,16 @@ class TestForeignKeyConstraints:
             tag = db.create_public_tag("test")
 
             # Try to associate with non-existent recipe
-            with pytest.raises(sqlite3.OperationalError):
+            with pytest.raises(sqlite3.IntegrityError):
                 db.execute_query(
-                    "INSERT INTO recipe_public_tags (recipe_id, tag_id) VALUES (?, ?)",
+                    "INSERT INTO recipe_tags (recipe_id, tag_id) VALUES (?, ?)",
                     (999, tag["id"]),
                 )
 
             # Try to associate with non-existent tag
-            with pytest.raises(sqlite3.OperationalError):
+            with pytest.raises(sqlite3.IntegrityError):
                 db.execute_query(
-                    "INSERT INTO recipe_public_tags (recipe_id, tag_id) VALUES (?, ?)",
+                    "INSERT INTO recipe_tags (recipe_id, tag_id) VALUES (?, ?)",
                     (recipe["id"], 999),
                 )
 
@@ -587,11 +584,11 @@ class TestComplexIntegrationScenarios:
             )
 
             # 4. Add tags
-            classic_tag = db.create_public_tag("classic")
+            novel_tag = db.create_public_tag("novel")
             strong_tag = db.create_public_tag("strong")
-            favorites_tag = db.create_private_tag("favorites", "user1", "testuser")
+            favorites_tag = db.create_private_tag("favorites", "user1")
 
-            db.add_public_tag_to_recipe(recipe["id"], classic_tag["id"])
+            db.add_public_tag_to_recipe(recipe["id"], novel_tag["id"])
             db.add_public_tag_to_recipe(recipe["id"], strong_tag["id"])
             db.add_private_tag_to_recipe(recipe["id"], favorites_tag["id"])
 
@@ -649,7 +646,7 @@ class TestComplexIntegrationScenarios:
                 for tag in complete_recipe["tags"]
                 if tag["type"] == "private"
             }
-            assert public_tag_names == {"classic", "strong"}
+            assert public_tag_names == {"novel", "strong"}
             assert private_tag_names == {"favorites"}
 
             # Verify ratings
@@ -662,7 +659,7 @@ class TestComplexIntegrationScenarios:
                 {
                     "name": "martini",
                     "min_rating": 4.0,
-                    "tags": ["classic"],
+                    "tags": ["novel"],
                     "ingredients": [{"id": gin["id"], "operator": "MUST"}],
                 }
             )

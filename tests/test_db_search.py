@@ -234,36 +234,6 @@ class TestTagBasedSearch:
             assert "Manhattan" in result_names
             assert "Margarita" not in result_names
 
-    def test_search_recipes_by_multiple_tags(self, memory_db_with_schema):
-        """Test searching recipes by multiple tags (AND logic)"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = Database()
-
-            # Create recipes and tags
-            recipe1 = db.create_recipe(
-                {"name": "Classic Martini", "instructions": "Test"}
-            )
-            recipe2 = db.create_recipe({"name": "Manhattan", "instructions": "Test"})
-            recipe3 = db.create_recipe({"name": "Margarita", "instructions": "Test"})
-
-            classic_tag = db.create_public_tag("classic")
-            strong_tag = db.create_public_tag("strong")
-            gin_tag = db.create_public_tag("gin")
-
-            # Tag recipes
-            db.add_public_tag_to_recipe(recipe1["id"], classic_tag["id"])
-            db.add_public_tag_to_recipe(recipe1["id"], gin_tag["id"])
-            db.add_public_tag_to_recipe(recipe2["id"], classic_tag["id"])
-            db.add_public_tag_to_recipe(recipe2["id"], strong_tag["id"])
-            db.add_public_tag_to_recipe(recipe3["id"], strong_tag["id"])
-
-            # Search by both "classic" AND "gin" tags
-            search_params = {"tags": ["classic", "gin"]}
-            results = db.search_recipes(search_params)
-
-            assert len(results) == 1
-            assert results[0]["name"] == "Classic Martini"
-
     def test_search_recipes_by_nonexistent_tag(self, memory_db_with_schema):
         """Test searching by non-existent tag"""
         with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):

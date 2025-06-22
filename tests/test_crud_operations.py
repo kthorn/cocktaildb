@@ -79,11 +79,11 @@ class TestComplexRecipeCRUD:
     """Test complex CRUD operations for recipes"""
 
     def test_recipe_with_ingredients_crud_workflow(
-        self, db_with_test_data, mock_user, mocker, monkeypatch
+        self, test_db_with_data, mock_user, mocker, monkeypatch
     ):
         """Test complete CRUD workflow for recipes with ingredients"""
         # Set up isolated database environment
-        monkeypatch.setenv("DB_PATH", db_with_test_data)
+        monkeypatch.setenv("DB_PATH", test_db_with_data)
         monkeypatch.setenv("ENVIRONMENT", "test")
 
         # Import and create app after environment is configured

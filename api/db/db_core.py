@@ -419,6 +419,9 @@ class Database:
                     # Root level ingredient
                     new_path = f"/{ingredient_id}/"
 
+                # Get descendants BEFORE updating the parent path
+                descendants = self.get_ingredient_descendants(ingredient_id)
+
                 # Update ingredient with new path
                 self.execute_query(
                     """
@@ -439,7 +442,6 @@ class Database:
                 )
 
                 # Update paths of descendants
-                descendants = self.get_ingredient_descendants(ingredient_id)
                 for descendant in descendants:
                     # Replace old path prefix with new path prefix
                     descendant_path = descendant["path"]
