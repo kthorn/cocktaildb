@@ -485,19 +485,6 @@ Resources:
             RestApiId: !Ref CocktailAPI
             Path: /ingredients/{ingredientId}
             Method: get
-
-
-
-
-
-
-
-
-
-
-
-
-
         GetRecipes:
           Type: Api
           Properties:
@@ -672,6 +659,16 @@ Resources:
             Auth:
               Authorizer: CognitoAuthorizer
         # --- END Tag Endpoints ---
+        
+        # --- Admin Endpoints ---
+        GetAdminDatabaseDownload:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /admin/database/download
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
 
   # Custom resource to create sqlite db on EFS
   SchemaDeployFunction:

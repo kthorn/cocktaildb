@@ -356,6 +356,8 @@ let tagChipsContainerEl = null;
 let saveTagsBtnEl = null;
 let cancelTagsBtnEl = null;
 let closeTagModalBtnEl = null;
+let publicTagsListEl = null;
+let privateTagsListEl = null;
 
 let currentRecipeTags = [];
 let originalRecipeTagsForEdit = [];
@@ -366,8 +368,27 @@ const modalHtml = `
             <span class="close-tag-modal-btn">&times;</span>
             <h3>Edit Tags for <span id="tag-editor-recipe-name">Recipe</span></h3>
             <input type="hidden" id="tag-editor-recipe-id">
+            
             <div class="form-group">
-                <label for="tag-input">Add tags (comma-separated):</label>
+                <label>Select from existing tags:</label>
+                <div id="existing-tags-section">
+                    <div id="public-tags-section">
+                        <h5>&#x1F30D; Public Tags</h5>
+                        <div id="public-tags-list" class="existing-tags-list">
+                            <!-- Public tags will be loaded here -->
+                        </div>
+                    </div>
+                    <div id="private-tags-section">
+                        <h5>&#x1F512; Private Tags</h5>
+                        <div id="private-tags-list" class="existing-tags-list">
+                            <!-- Private tags will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="tag-input">Or create new tags (comma-separated):</label>
                 <input type="text" id="tag-input" placeholder="e.g., easy, quick, my favorite">
                 <small>Default: Public (&#x1F30D;). Click a tag chip to toggle its privacy (&#x1F512;). Type a new tag and press Enter or comma.</small>
             </div>
@@ -394,6 +415,8 @@ function ensureTagModal() {
         saveTagsBtnEl = document.getElementById('save-tags-btn');
         cancelTagsBtnEl = document.getElementById('cancel-tags-btn');
         closeTagModalBtnEl = tagEditorModalElement.querySelector('.close-tag-modal-btn');
+        publicTagsListEl = document.getElementById('public-tags-list');
+        privateTagsListEl = document.getElementById('private-tags-list');
 
         // Attach internal modal event listeners
         closeTagModalBtnEl.addEventListener('click', closeTagEditorModal);
@@ -418,6 +441,63 @@ function ensureTagModal() {
     }
 }
 
+async function loadExistingTags() {
+    try {
+        // Load public tags
+        const publicTags = await api.getPublicTags();
+        displayExistingTags(publicTags, publicTagsListEl, 'public');
+        
+        // Load private tags if user is authenticated
+        if (isAuthenticated()) {
+            const privateTags = await api.getPrivateTags();
+            displayExistingTags(privateTags, privateTagsListEl, 'private');
+        } else {
+            privateTagsListEl.innerHTML = '<p class="auth-required">Login required to view private tags</p>';
+        }
+    } catch (error) {
+        console.error('Error loading existing tags:', error);
+        publicTagsListEl.innerHTML = '<p class="error">Error loading public tags</p>';
+        privateTagsListEl.innerHTML = '<p class="error">Error loading private tags</p>';
+    }
+}
+
+function displayExistingTags(tags, containerEl, tagType) {
+    if (!tags || tags.length === 0) {
+        containerEl.innerHTML = `<p class="no-tags">No ${tagType} tags available</p>`;
+        return;
+    }
+    
+    containerEl.innerHTML = '';
+    tags.forEach(tag => {
+        const tagElement = document.createElement('button');
+        tagElement.className = 'existing-tag-btn';
+        tagElement.dataset.tagName = tag.name;
+        tagElement.dataset.tagType = tagType;
+        tagElement.innerHTML = `
+            <span class="tag-icon">${tagType === 'private' ? '&#x1F512;' : '&#x1F30D;'}</span>
+            <span class="tag-name">${tag.name}</span>
+        `;
+        
+        // Check if tag is already added to current recipe
+        const isAlreadyAdded = currentRecipeTags.some(t => 
+            t.name.toLowerCase() === tag.name.toLowerCase() && t.type === tagType
+        );
+        
+        if (isAlreadyAdded) {
+            tagElement.classList.add('tag-already-added');
+            tagElement.disabled = true;
+        } else {
+            tagElement.addEventListener('click', () => {
+                addTagToModal(tag.name, tagType);
+                tagElement.classList.add('tag-already-added');
+                tagElement.disabled = true;
+            });
+        }
+        
+        containerEl.appendChild(tagElement);
+    });
+}
+
 function openTagEditorModal(recipeId, recipeName, currentTagsJson) {
     ensureTagModal(); // Ensure modal exists and listeners are attached
 
@@ -439,6 +519,10 @@ function openTagEditorModal(recipeId, recipeName, currentTagsJson) {
     }
     renderTagChipsInModal();
     tagInputEl.value = '';
+    
+    // Load existing tags for selection
+    loadExistingTags();
+    
     tagEditorModalElement.style.display = 'block';
     tagInputEl.focus();
 }
@@ -479,17 +563,41 @@ function renderTagChipsInModal() {
     });
 }
 
-function addTagToModal(tagName) {
+function addTagToModal(tagName, tagType = 'public') {
     const trimmedName = tagName.trim();
-    if (trimmedName && !currentRecipeTags.some(t => t.name.toLowerCase() === trimmedName.toLowerCase())) {
-        currentRecipeTags.push({ name: trimmedName, type: 'public' });
+    if (trimmedName && !currentRecipeTags.some(t => t.name.toLowerCase() === trimmedName.toLowerCase() && t.type === tagType)) {
+        currentRecipeTags.push({ name: trimmedName, type: tagType });
         renderTagChipsInModal();
+        // Refresh existing tags display to show updated state
+        refreshExistingTagsDisplay();
     }
 }
 
 function removeTagFromModal(index) {
     currentRecipeTags.splice(index, 1);
     renderTagChipsInModal();
+    // Refresh existing tags display to show updated state
+    refreshExistingTagsDisplay();
+}
+
+function refreshExistingTagsDisplay() {
+    // Re-enable buttons for tags that are no longer in currentRecipeTags
+    const existingTagBtns = document.querySelectorAll('.existing-tag-btn');
+    existingTagBtns.forEach(btn => {
+        const tagName = btn.dataset.tagName;
+        const tagType = btn.dataset.tagType;
+        const isCurrentlyAdded = currentRecipeTags.some(t => 
+            t.name.toLowerCase() === tagName.toLowerCase() && t.type === tagType
+        );
+        
+        if (isCurrentlyAdded) {
+            btn.classList.add('tag-already-added');
+            btn.disabled = true;
+        } else {
+            btn.classList.remove('tag-already-added');
+            btn.disabled = false;
+        }
+    });
 }
 
 function toggleTagPrivacy(index) {

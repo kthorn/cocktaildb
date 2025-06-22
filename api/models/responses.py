@@ -62,7 +62,17 @@ class PrivateTagResponse(BaseModel):
     id: int = Field(..., description="Tag ID")
     name: str = Field(..., description="Tag name")
     cognito_user_id: str = Field(..., description="User ID who created the tag")
-    cognito_username: str = Field(..., description="Username who created the tag")
+
+    class Config:
+        from_attributes = True
+
+
+class TagResponse(BaseModel):
+    """Response model for unified tag data with type field"""
+
+    id: int = Field(..., description="Tag ID")
+    name: str = Field(..., description="Tag name")
+    type: str = Field(..., description="Tag type: 'public' or 'private'")
 
     class Config:
         from_attributes = True
@@ -83,9 +93,11 @@ class RecipeResponse(BaseModel):
     ingredients: List[RecipeIngredientResponse] = Field(
         default=[], description="Recipe ingredients"
     )
-    public_tags: List[PublicTagResponse] = Field(default=[], description="Public tags")
+    tags: List[TagResponse] = Field(default=[], description="Unified tags with type field")
+    # Legacy fields for backward compatibility (can be removed when frontend is updated)
+    public_tags: List[PublicTagResponse] = Field(default=[], description="Public tags (deprecated)")
     private_tags: List[PrivateTagResponse] = Field(
-        default=[], description="Private tags (if user authenticated)"
+        default=[], description="Private tags (deprecated)"
     )
 
     class Config:

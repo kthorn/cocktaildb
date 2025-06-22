@@ -314,11 +314,38 @@ class CocktailAPI {
 
     // Add a tag to a recipe
     // jsTagType should be 'public' or 'private'
-    // The backend expects { name: tagName } in the body
     async addTagToRecipe(recipeId, tagName, jsTagType) {
-        const apiTagType = `${jsTagType}_tags`; // Converts to 'public_tags' or 'private_tags'
-        const path = `/recipes/${recipeId}/${apiTagType}`;
-        return this._request(path, 'POST', { name: tagName });
+        let tagToUse;
+        
+        if (jsTagType === 'private') {
+            // For private tags, check if it exists first
+            const privateTags = await this.getPrivateTags();
+            const existingTag = privateTags.find(tag => tag.name.toLowerCase() === tagName.toLowerCase());
+            
+            if (!existingTag) {
+                // Create new private tag if it doesn't exist
+                tagToUse = await this.createPrivateTag(tagName);
+            } else {
+                tagToUse = existingTag;
+            }
+            
+            const path = `/recipes/${recipeId}/private_tags`;
+            return this._request(path, 'POST', { tag_id: tagToUse.id });
+        } else {
+            // For public tags, check if it exists first
+            const publicTags = await this.getPublicTags();
+            const existingTag = publicTags.find(tag => tag.name.toLowerCase() === tagName.toLowerCase());
+            
+            if (!existingTag) {
+                // Create new public tag if it doesn't exist
+                tagToUse = await this.createPublicTag(tagName);
+            } else {
+                tagToUse = existingTag;
+            }
+            
+            const path = `/recipes/${recipeId}/public_tags`;
+            return this._request(path, 'POST', { tag_id: tagToUse.id });
+        }
     }
 
     // Remove a tag from a recipe
@@ -334,9 +361,19 @@ class CocktailAPI {
         return this._request('/tags/public');
     }
 
+    // Create a public tag (requires authentication)
+    async createPublicTag(tagName) {
+        return this._request('/tags/public', 'POST', { name: tagName }, true);
+    }
+
     // Get private tags (requires authentication)
     async getPrivateTags() {
         return this._request('/tags/private', 'GET', null, true);
+    }
+
+    // Create a private tag (requires authentication)
+    async createPrivateTag(tagName) {
+        return this._request('/tags/private', 'POST', { name: tagName }, true);
     }
 
     // Get current user info (requires authentication)

@@ -8,9 +8,9 @@ import pytest
 class TestRecipeNameSearch:
     """Test recipe search by name functionality"""
 
-    def test_search_recipes_by_name_exact_match(self, test_client_production_readonly):
+    def test_search_recipes_by_name_exact_match(self, test_client_with_data):
+        client, app = test_client_with_data
         """Test searching recipes by exact name match"""
-        client = test_client_production_readonly
         # First get all recipes to find a valid name
         all_response = client.get("/recipes/search")
         assert all_response.status_code == 200
@@ -32,9 +32,9 @@ class TestRecipeNameSearch:
             found_recipe = next((r for r in data["recipes"] if r["name"] == recipe_name), None)
             assert found_recipe is not None, f"Should find recipe with exact name '{recipe_name}'"
 
-    def test_search_recipes_by_name_partial_match(self, test_client_production_readonly):
+    def test_search_recipes_by_name_partial_match(self, test_client_with_data):
+        client, app = test_client_with_data
         """Test searching recipes by partial name match"""
-        client = test_client_production_readonly
         # First get all recipes to find a name we can partially match
         all_response = client.get("/recipes/search")
         assert all_response.status_code == 200
@@ -60,9 +60,9 @@ class TestRecipeNameSearch:
                         f"Recipe '{recipe['name']}' should contain '{partial_name}'"
                     )
 
-    def test_search_recipes_by_name_case_insensitive(self, test_client_production_readonly):
+    def test_search_recipes_by_name_case_insensitive(self, test_client_with_data):
+        client, app = test_client_with_data
         """Test that name search is case-insensitive"""
-        client = test_client_production_readonly
         # Get a recipe name to test with
         all_response = client.get("/recipes/search")
         assert all_response.status_code == 200
@@ -92,9 +92,9 @@ class TestRecipeNameSearch:
                         f"{data['pagination']['total_count']} recipes, expected {expected_count}"
                     )
 
-    def test_search_recipes_by_name_nonexistent(self, test_client_production_readonly):
+    def test_search_recipes_by_name_nonexistent(self, test_client_with_data):
+        client, app = test_client_with_data
         """Test searching for a recipe name that doesn't exist"""
-        client = test_client_production_readonly
         response = client.get("/recipes/search?q=NonexistentRecipeName123456")
         assert response.status_code == 200
         data = response.json()
@@ -103,9 +103,9 @@ class TestRecipeNameSearch:
         assert data["pagination"]["total_count"] == 0
         assert len(data["recipes"]) == 0
 
-    def test_search_recipes_by_name_empty_query(self, test_client_production_readonly):
+    def test_search_recipes_by_name_empty_query(self, test_client_with_data):
+        client, app = test_client_with_data
         """Test searching with empty name query"""
-        client = test_client_production_readonly
         response = client.get("/recipes/search?q=")
         assert response.status_code == 200
         data = response.json()
@@ -117,9 +117,9 @@ class TestRecipeNameSearch:
         
         assert data["pagination"]["total_count"] == all_data["pagination"]["total_count"]
 
-    def test_search_recipes_by_name_whitespace_query(self, test_client_production_readonly):
+    def test_search_recipes_by_name_whitespace_query(self, test_client_with_data):
+        client, app = test_client_with_data
         """Test searching with whitespace-only query"""
-        client = test_client_production_readonly
         response = client.get("/recipes/search?q=   ")
         assert response.status_code == 200
         data = response.json()
@@ -131,9 +131,9 @@ class TestRecipeNameSearch:
         
         assert data["pagination"]["total_count"] == all_data["pagination"]["total_count"]
 
-    def test_search_recipes_by_name_whitespace_trimming(self, test_client_production_readonly):
+    def test_search_recipes_by_name_whitespace_trimming(self, test_client_with_data):
+        client, app = test_client_with_data
         """Test that leading/trailing whitespace is trimmed from search queries"""
-        client = test_client_production_readonly
         
         # Get a recipe name to test with
         all_response = client.get("/recipes/search")
@@ -156,9 +156,9 @@ class TestRecipeNameSearch:
             
             assert data["pagination"]["total_count"] == clean_data["pagination"]["total_count"]
 
-    def test_search_recipes_by_name_special_characters(self, test_client_production_readonly):
+    def test_search_recipes_by_name_special_characters(self, test_client_with_data):
+        client, app = test_client_with_data
         """Test searching with special characters in name"""
-        client = test_client_production_readonly
         # Test with common cocktail special characters
         special_chars = ["'", "-", "&", ".", "(", ")"]
         
@@ -172,9 +172,9 @@ class TestRecipeNameSearch:
             assert "pagination" in data
             assert isinstance(data["pagination"]["total_count"], int)
 
-    def test_search_recipes_by_name_with_numbers(self, test_client_production_readonly):
+    def test_search_recipes_by_name_with_numbers(self, test_client_with_data):
+        client, app = test_client_with_data
         """Test searching for recipe names containing numbers"""
-        client = test_client_production_readonly
         # Test searching for numbers - the search may find matches in name, description, or instructions
         number_searches = ["21", "7", "1", "2"]
         
@@ -191,9 +191,9 @@ class TestRecipeNameSearch:
             # So we don't assert that the number must be in the name specifically
             # We just verify the API returns valid results for numeric searches
 
-    def test_search_recipes_name_vs_no_filter_difference(self, test_client_production_readonly):
+    def test_search_recipes_name_vs_no_filter_difference(self, test_client_with_data):
+        client, app = test_client_with_data
         """Test that name filtering actually filters results"""
-        client = test_client_production_readonly
         # Get all recipes (no filter)
         all_response = client.get("/recipes/search")
         assert all_response.status_code == 200
@@ -210,9 +210,9 @@ class TestRecipeNameSearch:
             # Name search should typically return fewer or equal results
             assert name_data["pagination"]["total_count"] <= all_data["pagination"]["total_count"]
 
-    def test_search_recipes_by_name_url_encoding(self, test_client_production_readonly):
+    def test_search_recipes_by_name_url_encoding(self, test_client_with_data):
+        client, app = test_client_with_data
         """Test that URL-encoded search terms work correctly"""
-        client = test_client_production_readonly
         import urllib.parse
         
         # Test with a space (should be encoded as %20 or +)
@@ -227,9 +227,9 @@ class TestRecipeNameSearch:
         assert "recipes" in data
         assert "pagination" in data
 
-    def test_search_recipes_by_name_long_query(self, test_client_production_readonly):
+    def test_search_recipes_by_name_long_query(self, test_client_with_data):
+        client, app = test_client_with_data
         """Test searching with very long query string"""
-        client = test_client_production_readonly
         long_query = "a" * 100  # 100 character string
         
         response = client.get(f"/recipes/search?q={long_query}")

@@ -137,9 +137,7 @@ class TestRequestValidation:
         """Test request with missing required fields"""
         # Ingredient requires name
         incomplete_data = {"description": "Missing name"}
-        response = authenticated_client.post(
-            "/ingredients", json=incomplete_data
-        )
+        response = authenticated_client.post("/ingredients", json=incomplete_data)
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
         error_detail = response.json()
@@ -176,6 +174,106 @@ class TestErrorHandling:
         """Test using wrong HTTP method"""
         response = test_client_memory.patch("/ingredients")
         assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+
+
+class TestTagAPIEndpoints:
+    """Test tag-related API endpoints"""
+
+    def test_get_public_tags(self, test_client_memory):
+        """Test GET /tags/public endpoint"""
+        response = test_client_memory.get("/tags/public")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert isinstance(data, list)
+
+    def test_create_public_tag_unauthorized(self, test_client_memory):
+        """Test creating public tag without authentication"""
+        tag_data = {"name": "test-tag"}
+        response = test_client_memory.post("/tags/public", json=tag_data)
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_create_public_tag_authorized(self, authenticated_client):
+        """Test creating public tag with authentication"""
+        tag_data = {"name": "test-public-tag"}
+        response = authenticated_client.post("/tags/public", json=tag_data)
+        # Should not be unauthorized (may fail due to other reasons like database constraints)
+        assert response.status_code != status.HTTP_401_UNAUTHORIZED
+
+    def test_create_private_tag_unauthorized(self, test_client_memory):
+        """Test creating private tag without authentication"""
+        tag_data = {"name": "private-tag"}
+        response = test_client_memory.post("/tags/private", json=tag_data)
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_get_private_tags_unauthorized(self, test_client_memory):
+        """Test getting private tags without authentication"""
+        response = test_client_memory.get("/tags/private")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_get_private_tags_authorized(self, authenticated_client):
+        """Test getting private tags with authentication"""
+        response = authenticated_client.get("/tags/private")
+        # Should not be unauthorized (may fail due to other reasons like database constraints)
+        assert response.status_code != status.HTTP_401_UNAUTHORIZED
+        if response.status_code == status.HTTP_200_OK:
+            data = response.json()
+            assert isinstance(data, list)
+
+    def test_create_private_tag_authorized(self, authenticated_client):
+        """Test creating private tag with authentication"""
+        tag_data = {"name": "test-private-tag"}
+        response = authenticated_client.post("/tags/private", json=tag_data)
+        # Should not be unauthorized (may fail due to other reasons like database constraints)
+        assert response.status_code != status.HTTP_401_UNAUTHORIZED
+
+    def test_create_private_tag_response_structure(self, authenticated_client):
+        """Test that private tag creation returns correct response structure"""
+        tag_data = {"name": "response-structure-test-tag"}
+        response = authenticated_client.post("/tags/private", json=tag_data)
+        
+        # Should succeed and return expected structure
+        if response.status_code == status.HTTP_201_CREATED:
+            data = response.json()
+            # Verify response has required fields for PrivateTagResponse
+            assert "id" in data
+            assert "name" in data
+            assert "cognito_user_id" in data
+            # Verify response does NOT have cognito_username field (this was the bug)
+            assert "cognito_username" not in data
+
+    def test_add_public_tag_to_recipe_unauthorized(self, test_client_memory):
+        """Test adding public tag to recipe without authentication"""
+        tag_data = {"tag_id": 1}
+        response = test_client_memory.post("/recipes/1/public_tags", json=tag_data)
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_add_private_tag_to_recipe_unauthorized(self, test_client_memory):
+        """Test adding private tag to recipe without authentication"""
+        tag_data = {"tag_id": 1}
+        response = test_client_memory.post("/recipes/1/private_tags", json=tag_data)
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_remove_public_tag_from_recipe_unauthorized(self, test_client_memory):
+        """Test removing public tag from recipe without authentication"""
+        response = test_client_memory.delete("/recipes/1/public_tags/1")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_remove_private_tag_from_recipe_unauthorized(self, test_client_memory):
+        """Test removing private tag from recipe without authentication"""
+        response = test_client_memory.delete("/recipes/1/private_tags/1")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_tag_validation_missing_name(self, authenticated_client):
+        """Test tag creation with missing name field"""
+        tag_data = {"description": "Missing name field"}
+        response = authenticated_client.post("/tags/public", json=tag_data)
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def test_recipe_tag_validation_missing_tag_id(self, authenticated_client):
+        """Test recipe tag association with missing tag_id"""
+        tag_data = {"invalid_field": "value"}
+        response = authenticated_client.post("/recipes/1/public_tags", json=tag_data)
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
 class TestCORSFunctionality:

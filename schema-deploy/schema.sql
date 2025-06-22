@@ -45,33 +45,19 @@ CREATE TABLE ratings (
   UNIQUE(cognito_user_id, recipe_id)
 );
 
-CREATE TABLE private_tags (
+CREATE TABLE tags (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT COLLATE NOCASE NOT NULL,
-  cognito_user_id TEXT NOT NULL,
-  cognito_username TEXT NOT NULL
+  created_by TEXT NULL, -- NULL for public tags, user_id for private tags
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE public_tags (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT COLLATE NOCASE NOT NULL
-);
-
-CREATE TABLE recipe_private_tags (
+CREATE TABLE recipe_tags (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   recipe_id INTEGER NOT NULL,
   tag_id INTEGER NOT NULL,
   FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
-  FOREIGN KEY (tag_id) REFERENCES private_tags(id) ON DELETE CASCADE,
-  UNIQUE(recipe_id, tag_id)
-);
-
-CREATE TABLE recipe_public_tags (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  recipe_id INTEGER NOT NULL,
-  tag_id INTEGER NOT NULL,
-  FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
-  FOREIGN KEY (tag_id) REFERENCES public_tags(id) ON DELETE CASCADE,
+  FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
   UNIQUE(recipe_id, tag_id)
 );
 
@@ -91,15 +77,14 @@ CREATE INDEX idx_ingredients_parent_id ON ingredients(parent_id);
 CREATE INDEX idx_ingredients_path ON ingredients(path);
 CREATE INDEX idx_recipe_ingredients_recipe_id ON recipe_ingredients(recipe_id);
 CREATE INDEX idx_recipe_ingredients_ingredient_id ON recipe_ingredients(ingredient_id);
-CREATE INDEX idx_recipe_private_tags_recipe_id ON recipe_private_tags(recipe_id);
-CREATE INDEX idx_recipe_private_tags_tag_id ON recipe_private_tags(tag_id);
-CREATE INDEX idx_recipe_public_tags_recipe_id ON recipe_public_tags(recipe_id);
-CREATE INDEX idx_recipe_public_tags_tag_id ON recipe_public_tags(tag_id);
+CREATE INDEX idx_recipe_tags_recipe_id ON recipe_tags(recipe_id);
+CREATE INDEX idx_recipe_tags_tag_id ON recipe_tags(tag_id);
 CREATE INDEX idx_ratings_cognito_user_id ON ratings(cognito_user_id);
 CREATE INDEX idx_ratings_recipe_id ON ratings(recipe_id);
 
-CREATE UNIQUE INDEX idx_public_tags ON public_tags(name);
-CREATE UNIQUE INDEX idx_private_tags ON private_tags(name, cognito_user_id);
+CREATE UNIQUE INDEX idx_public_tags ON tags(name) WHERE created_by IS NULL;
+CREATE UNIQUE INDEX idx_private_tags ON tags(name, created_by) WHERE created_by IS NOT NULL;
+CREATE INDEX idx_tags_created_by ON tags(created_by);
 
 -- Create trigger to update average rating when a new rating is added
 CREATE TRIGGER update_avg_rating_insert 
@@ -157,6 +142,6 @@ INSERT INTO ingredients (name, description, path) VALUES
   ('Juice', '', '/7/');
 
 -- Insert common tags
-INSERT INTO public_tags (name) VALUES
-  ('Tiki'),
-  ('Classic');
+INSERT INTO tags (name, created_by) VALUES
+  ('Tiki', NULL),
+  ('Classic', NULL);

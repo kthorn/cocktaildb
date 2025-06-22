@@ -18,13 +18,14 @@ class TestComplexIngredientCRUD:
     """Test complex CRUD operations for ingredients"""
 
     def test_ingredient_hierarchy_crud_workflow(
-        self, test_client_production_isolated, mock_user, mocker
+        self, test_client_with_data, mock_user, mocker
     ):
         """Test complete CRUD workflow with ingredient hierarchy"""
         # Mock authentication using pytest-mock
         mock_auth = mocker.patch("api.dependencies.auth.get_user_from_lambda_event")
         from api.dependencies.auth import UserInfo
 
+        client, app = test_client_with_data
         mock_auth.return_value = UserInfo(
             user_id=mock_user["user_id"],
             username=mock_user.get("username"),
@@ -32,8 +33,6 @@ class TestComplexIngredientCRUD:
             groups=mock_user.get("cognito:groups", []),
             claims=mock_user,
         )
-
-        client = test_client_production_isolated
 
         # Create parent ingredient
         parent_data = {"name": "Test Spirits", "description": "Alcoholic spirits"}
@@ -72,9 +71,7 @@ class TestComplexIngredientCRUD:
                 assert delete_child_response.status_code in [200, 204]
 
                 # Delete parent (should succeed now that child is gone)
-                delete_parent_response = client.delete(
-                    f"/ingredients/{parent_id}"
-                )
+                delete_parent_response = client.delete(f"/ingredients/{parent_id}")
                 assert delete_parent_response.status_code in [200, 204]
 
 
@@ -82,11 +79,11 @@ class TestComplexRecipeCRUD:
     """Test complex CRUD operations for recipes"""
 
     def test_recipe_with_ingredients_crud_workflow(
-        self, temp_db_from_production, mock_user, mocker, monkeypatch
+        self, test_db_with_data, mock_user, mocker, monkeypatch
     ):
         """Test complete CRUD workflow for recipes with ingredients"""
         # Set up isolated database environment
-        monkeypatch.setenv("DB_PATH", temp_db_from_production)
+        monkeypatch.setenv("DB_PATH", test_db_with_data)
         monkeypatch.setenv("ENVIRONMENT", "test")
 
         # Import and create app after environment is configured
@@ -161,9 +158,7 @@ class TestComplexRecipeCRUD:
                 update_data = {
                     "instructions": "Updated: Stir gently with ice, double strain, express lemon peel"
                 }
-                update_response = client.put(
-                    f"/recipes/{recipe_id}", json=update_data
-                )
+                update_response = client.put(f"/recipes/{recipe_id}", json=update_data)
 
                 if update_response.status_code == 200:
                     updated_recipe = update_response.json()
@@ -181,13 +176,12 @@ class TestComplexRecipeCRUD:
 class TestConcurrencyAndLocking:
     """Test concurrent operations and data consistency"""
 
-    def test_concurrent_recipe_updates(
-        self, test_client_production_isolated, mock_user, mocker
-    ):
+    def test_concurrent_recipe_updates(self, test_client_with_data, mock_user, mocker):
         """Test handling of concurrent recipe updates"""
         mock_auth = mocker.patch("api.dependencies.auth.get_user_from_lambda_event")
         from api.dependencies.auth import UserInfo
 
+        client, app = test_client_with_data
         mock_auth.return_value = UserInfo(
             user_id=mock_user["user_id"],
             username=mock_user.get("username"),
@@ -195,8 +189,6 @@ class TestConcurrencyAndLocking:
             groups=mock_user.get("cognito:groups", []),
             claims=mock_user,
         )
-
-        client = test_client_production_isolated
 
         # Create a recipe to test concurrent updates
         recipe_data = {
@@ -234,9 +226,9 @@ class TestConcurrencyAndLocking:
 class TestComplexQueries:
     """Test complex query operations and edge cases"""
 
-    def test_deep_ingredient_hierarchy_queries(self, test_client_production_isolated):
+    def test_deep_ingredient_hierarchy_queries(self, test_client_with_data):
+        client, app = test_client_with_data
         """Test querying ingredients with deep hierarchy"""
-        client = test_client_production_isolated
 
         # Get ingredients with hierarchy
         response = client.get("/ingredients")

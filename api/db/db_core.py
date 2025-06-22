@@ -3,6 +3,8 @@ import sqlite3
 import time
 import functools
 import os
+import re
+import unicodedata
 from typing import Dict, List, Optional, Any, Union, Tuple, cast
 
 from .db_utils import extract_all_ingredient_ids, assemble_ingredient_full_names
@@ -15,6 +17,90 @@ from .sql_queries import (
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+
+def smart_title_case(text: str) -> Optional[str]:
+    """
+    Convert text to title case while properly handling apostrophes and other special characters.
+    Unlike Python's built-in title(), this preserves the case after apostrophes.
+    """
+    if text is None:
+        return None
+    if text == "":
+        return None
+    if not text.strip():  # Only whitespace
+        return text
+
+    def title_case_part(part: str) -> str:
+        """Title case a part, handling hyphens and other separators"""
+        # Build result character by character, preserving Unicode
+        if not part:
+            return part
+
+        result = []
+        capitalize_next = True
+
+        for char in part:
+            if char.isalpha():
+                if capitalize_next:
+                    result.append(char.upper())
+                    capitalize_next = False
+                else:
+                    result.append(char.lower())
+            else:
+                result.append(char)
+                # Capitalize after non-letter characters (like hyphens)
+                capitalize_next = True
+
+        return "".join(result)
+
+    # First, handle the entire string to get basic title casing
+    # But we need to be smarter about apostrophes
+    result = []
+    i = 0
+    while i < len(text):
+        # Find the next word boundary or apostrophe
+        start = i
+        while i < len(text) and (text[i].isalnum() or text[i] in "-"):
+            i += 1
+
+        if start < i:  # We found a word part
+            word_part = text[start:i]
+            result.append(title_case_part(word_part))
+
+        # Handle apostrophes specially
+        if i < len(text) and text[i] == "'":
+            result.append("'")  # Add the apostrophe
+            i += 1
+            # The part after apostrophe should be lowercase
+            start = i
+            while i < len(text) and text[i].isalnum():
+                i += 1
+            if start < i:
+                result.append(text[start:i].lower())
+
+        # Handle other non-word characters
+        while (
+            i < len(text)
+            and not text[i].isalnum()
+            and text[i] != "'"
+            and text[i] != "-"
+        ):
+            result.append(text[i])
+            i += 1
+
+    return "".join(result)
+
+
+def remove_accents(text: str) -> str:
+    """
+    Remove accents from text for accent-insensitive search.
+    Normalizes to NFD (decomposed form) and removes combining characters.
+    """
+    if not text:
+        return text
+    # Normalize to NFD (decomposed form) and remove combining characters
+    return re.sub(r"[\u0300-\u036f]", "", unicodedata.normalize("NFD", text))
 
 
 def retry_on_db_locked(max_retries=3, initial_backoff=0.1):
@@ -81,6 +167,10 @@ class Database:
             logger.error(f"Error initializing database: {str(e)}", exc_info=True)
             raise
 
+    def get_db_path(self) -> str:
+        """Get the database file path"""
+        return self.db_path
+
     def _test_connection(self):
         """Test the database connection"""
         logger.info("Testing database connection...")
@@ -125,13 +215,20 @@ class Database:
             timeout=10.0,  # Wait up to 10 seconds for the lock
             isolation_level=None,  # Enable autocommit mode, explicit transactions still work
         )
-        # Set busy timeout to handle cases where the database is locked
+        # Enable foreign key constraints (must be done for each connection in SQLite)
+        conn.execute("PRAGMA foreign_keys = ON")
+        # Optimize for concurrent access by multiple lambdas
         conn.execute("PRAGMA busy_timeout = 10000")  # 10 seconds in milliseconds
-        # Optimize for concurrent access
-        conn.execute(
-            "PRAGMA journal_mode = WAL"
-        )  # Write-Ahead Logging for better concurrency
+        conn.execute("PRAGMA journal_mode = DELETE")
+        conn.execute("PRAGMA synchronous = FULL")
+        conn.execute("PRAGMA locking_mode = NORMAL")
+        conn.execute("PRAGMA temp_store = MEMORY")
+        conn.execute("PRAGMA cache_size = -10000")
         conn.row_factory = sqlite3.Row  # Return rows as dictionaries
+
+        # Register custom function for accent-insensitive search
+        conn.create_function("remove_accents", 1, remove_accents)
+
         return conn
 
     @retry_on_db_locked()
@@ -227,7 +324,7 @@ class Database:
                     VALUES (:name, :description, :parent_id)
                     """,
                     {
-                        "name": data.get("name").title() if data.get("name") else None,
+                        "name": smart_title_case(data.get("name")),
                         "description": data.get("description"),
                         "parent_id": data.get("parent_id"),
                     },
@@ -322,6 +419,9 @@ class Database:
                     # Root level ingredient
                     new_path = f"/{ingredient_id}/"
 
+                # Get descendants BEFORE updating the parent path
+                descendants = self.get_ingredient_descendants(ingredient_id)
+
                 # Update ingredient with new path
                 self.execute_query(
                     """
@@ -334,7 +434,7 @@ class Database:
                     """,
                     {
                         "id": ingredient_id,
-                        "name": data.get("name"),
+                        "name": smart_title_case(data.get("name")),
                         "description": data.get("description"),
                         "parent_id": new_parent_id,
                         "path": new_path,
@@ -342,7 +442,6 @@ class Database:
                 )
 
                 # Update paths of descendants
-                descendants = self.get_ingredient_descendants(ingredient_id)
                 for descendant in descendants:
                     # Replace old path prefix with new path prefix
                     descendant_path = descendant["path"]
@@ -363,7 +462,7 @@ class Database:
                     """,
                     {
                         "id": ingredient_id,
-                        "name": data.get("name"),
+                        "name": smart_title_case(data.get("name")),
                         "description": data.get("description"),
                     },
                 )
@@ -448,12 +547,14 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     "SELECT id, name, description, parent_id, path FROM ingredients WHERE LOWER(name) = LOWER(?)",
-                    (ingredient_name,)
-                )
+                    (ingredient_name,),
+                ),
             )
             return result[0] if result else None
         except Exception as e:
-            logger.error(f"Error getting ingredient by name '{ingredient_name}': {str(e)}")
+            logger.error(
+                f"Error getting ingredient by name '{ingredient_name}': {str(e)}"
+            )
             return None
 
     def get_ingredient(self, ingredient_id: int) -> Optional[Dict[str, Any]]:
@@ -525,7 +626,7 @@ class Database:
                 VALUES (:name, :instructions, :description, :image_url, :source, :source_url)
                 """,
                 {
-                    "name": data["name"].title() if data["name"] else None,
+                    "name": smart_title_case(data["name"]) if data["name"] else None,
                     "instructions": data.get("instructions"),
                     "description": data.get("description"),
                     "image_url": data.get("image_url"),
@@ -937,7 +1038,7 @@ class Database:
                 """,
                 {
                     "id": recipe_id,
-                    "name": data.get("name"),
+                    "name": smart_title_case(data.get("name")),
                     "instructions": data.get("instructions"),
                     "description": data.get("description"),
                     "image_url": data.get("image_url"),
@@ -1013,7 +1114,7 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating, created_at
+                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating
                     FROM ratings 
                     WHERE recipe_id = :recipe_id AND cognito_user_id = :user_id
                     """,
@@ -1216,9 +1317,11 @@ class Database:
                 WHERE 1=1
             """
             params = {}
-            # Add name search condition if provided
+            # Add name search condition if provided (accent-insensitive)
             if search_params.get("name"):
-                query += " AND name LIKE :name"
+                query += (
+                    " AND remove_accents(LOWER(name)) LIKE remove_accents(LOWER(:name))"
+                )
                 params["name"] = f"%{search_params['name']}%"
             # Add minimum rating condition if provided
             if search_params.get("min_rating"):
@@ -1231,9 +1334,9 @@ class Database:
                     query += """
                     AND EXISTS (
                     SELECT 1
-                    FROM recipe_public_tags rpt
-                    JOIN public_tags pt ON rpt.tag_id = pt.id
-                    WHERE rpt.recipe_id = recipes.id AND pt.name IN ({})
+                    FROM recipe_tags rt
+                    JOIN tags t ON rt.tag_id = t.id
+                    WHERE rt.recipe_id = recipes.id AND t.created_by IS NULL AND t.name IN ({})
                     )
                     """.format(",".join([":tag" + str(i) for i in range(len(tags))]))
                     for i, tag_name in enumerate(tags):
@@ -1381,16 +1484,19 @@ class Database:
     @retry_on_db_locked()
     def create_public_tag(self, name: str) -> Dict[str, Any]:
         """Creates a new public tag. Returns the created tag."""
+        if not name:
+            raise ValueError("Tag name cannot be empty")
         try:
             self.execute_query(
-                "INSERT INTO public_tags (name) VALUES (:name)", {"name": name}
+                "INSERT INTO tags (name, created_by) VALUES (:name, NULL)",
+                {"name": name},
             )
             # SQLite specific way to get last inserted ID if not returned directly
             # For this structure, we'll re-fetch. A more robust way would depend on DB specifics or ORM.
             tag = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name FROM public_tags WHERE name = :name",
+                    "SELECT id, name FROM tags WHERE name = :name AND created_by IS NULL",
                     {"name": name},
                 ),
             )
@@ -1415,7 +1521,7 @@ class Database:
             tag = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name FROM public_tags WHERE name = :name",
+                    "SELECT id, name FROM tags WHERE name = :name AND created_by IS NULL",
                     {"name": name},
                 ),
             )
@@ -1425,30 +1531,33 @@ class Database:
             raise
 
     @retry_on_db_locked()
-    def create_private_tag(
-        self, name: str, cognito_user_id: str, cognito_username: str
-    ) -> Dict[str, Any]:
+    def create_private_tag(self, name: str, cognito_user_id: str) -> Dict[str, Any]:
         """Creates a new private tag for a user. Returns the created tag."""
+        # Validate inputs
+        if not name or not name.strip():
+            raise ValueError("Tag name cannot be empty")
+        if not cognito_user_id or not cognito_user_id.strip():
+            raise ValueError("User ID cannot be empty")
+
         try:
             self.execute_query(
                 """
-                INSERT INTO private_tags (name, cognito_user_id, cognito_username)
-                VALUES (:name, :cognito_user_id, :cognito_username)
+                INSERT INTO tags (name, created_by)
+                VALUES (:name, :cognito_user_id)
                 """,
                 {
-                    "name": name,
-                    "cognito_user_id": cognito_user_id,
-                    "cognito_username": cognito_username,
+                    "name": name.strip(),
+                    "cognito_user_id": cognito_user_id.strip(),
                 },
             )
             tag = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, name, cognito_user_id, cognito_username FROM private_tags 
-                    WHERE name = :name AND cognito_user_id = :cognito_user_id
+                    SELECT id, name, created_by as cognito_user_id FROM tags 
+                    WHERE name = :name AND created_by = :cognito_user_id
                     """,
-                    {"name": name, "cognito_user_id": cognito_user_id},
+                    {"name": name.strip(), "cognito_user_id": cognito_user_id.strip()},
                 ),
             )
             if not tag:  # Should not happen
@@ -1480,8 +1589,8 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, name, cognito_user_id, cognito_username FROM private_tags 
-                    WHERE name = :name AND cognito_user_id = :cognito_user_id
+                    SELECT id, name, created_by as cognito_user_id FROM tags 
+                    WHERE name = :name AND created_by = :cognito_user_id
                     """,
                     {"name": name, "cognito_user_id": cognito_user_id},
                 ),
@@ -1498,7 +1607,9 @@ class Database:
         try:
             return cast(
                 List[Dict[str, Any]],
-                self.execute_query("SELECT id, name FROM public_tags ORDER BY name"),
+                self.execute_query(
+                    "SELECT id, name FROM tags WHERE created_by IS NULL ORDER BY name"
+                ),
             )
         except Exception as e:
             logger.error(f"Error getting public tags: {str(e)}")
@@ -1511,8 +1622,8 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, name, cognito_user_id, cognito_username FROM private_tags 
-                    WHERE cognito_user_id = :cognito_user_id ORDER BY name
+                    SELECT id, name, created_by as cognito_user_id FROM tags 
+                    WHERE created_by = :cognito_user_id ORDER BY name
                     """,
                     {"cognito_user_id": cognito_user_id},
                 ),
@@ -1529,7 +1640,7 @@ class Database:
         try:
             result = self.execute_query(
                 """
-                INSERT INTO recipe_public_tags (recipe_id, tag_id) 
+                INSERT INTO recipe_tags (recipe_id, tag_id) 
                 VALUES (:recipe_id, :tag_id)
                 ON CONFLICT(recipe_id, tag_id) DO NOTHING
                 """,
@@ -1550,7 +1661,7 @@ class Database:
             # The check for tag ownership should happen in the handler before calling this.
             result = self.execute_query(
                 """
-                INSERT INTO recipe_private_tags (recipe_id, tag_id)
+                INSERT INTO recipe_tags (recipe_id, tag_id)
                 VALUES (:recipe_id, :tag_id)
                 ON CONFLICT(recipe_id, tag_id) DO NOTHING
                 """,
@@ -1568,7 +1679,7 @@ class Database:
         """Removes the association of a public tag from a recipe."""
         try:
             result = self.execute_query(
-                "DELETE FROM recipe_public_tags WHERE recipe_id = :recipe_id AND tag_id = :tag_id",
+                "DELETE FROM recipe_tags WHERE recipe_id = :recipe_id AND tag_id = :tag_id",
                 {"recipe_id": recipe_id, "tag_id": tag_id},
             )
             return result.get("rowCount", 0) > 0
@@ -1587,9 +1698,9 @@ class Database:
             # Ensure the user owns the private tag they are trying to remove from the recipe
             result = self.execute_query(
                 """
-                DELETE FROM recipe_private_tags
+                DELETE FROM recipe_tags
                 WHERE recipe_id = :recipe_id AND tag_id = :tag_id
-                  AND EXISTS (SELECT 1 FROM private_tags pt WHERE pt.id = :tag_id AND pt.cognito_user_id = :cognito_user_id)
+                  AND EXISTS (SELECT 1 FROM tags t WHERE t.id = :tag_id AND t.created_by = :cognito_user_id)
                 """,
                 {
                     "recipe_id": recipe_id,
@@ -1611,11 +1722,11 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT pt.id, pt.name
-                    FROM recipe_public_tags rpt
-                    JOIN public_tags pt ON rpt.tag_id = pt.id
-                    WHERE rpt.recipe_id = :recipe_id
-                    ORDER BY pt.name
+                    SELECT t.id, t.name
+                    FROM recipe_tags rt
+                    JOIN tags t ON rt.tag_id = t.id
+                    WHERE rt.recipe_id = :recipe_id AND t.created_by IS NULL
+                    ORDER BY t.name
                     """,
                     {"recipe_id": recipe_id},
                 ),
@@ -1633,11 +1744,11 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT pt.id, pt.name
-                    FROM recipe_private_tags rpt
-                    JOIN private_tags pt ON rpt.tag_id = pt.id
-                    WHERE rpt.recipe_id = :recipe_id AND pt.cognito_user_id = :cognito_user_id
-                    ORDER BY pt.name
+                    SELECT t.id, t.name
+                    FROM recipe_tags rt
+                    JOIN tags t ON rt.tag_id = t.id
+                    WHERE rt.recipe_id = :recipe_id AND t.created_by = :cognito_user_id
+                    ORDER BY t.name
                     """,
                     {"recipe_id": recipe_id, "cognito_user_id": cognito_user_id},
                 ),
@@ -1648,18 +1759,75 @@ class Database:
             )
             raise
 
+    @retry_on_db_locked()
+    def get_tag(self, tag_id: int) -> Optional[Dict[str, Any]]:
+        """Gets a tag by its ID from the unified tags table."""
+        try:
+            tag = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    """SELECT id, name, 
+                       CASE WHEN created_by IS NULL THEN 0 ELSE 1 END as is_private,
+                       created_by as created_by
+                       FROM tags WHERE id = :tag_id""",
+                    {"tag_id": tag_id},
+                ),
+            )
+            if tag:
+                result = tag[0]
+                # For compatibility, add cognito_user_id field for private tags
+                if result["is_private"] == 1:
+                    result["cognito_user_id"] = result["created_by"]
+                return result
+            return None
+        except Exception as e:
+            logger.error(f"Error getting tag by ID {tag_id}: {str(e)}")
+            raise
+
+    @retry_on_db_locked()
+    def add_recipe_tag(
+        self, recipe_id: int, tag_id: int, is_private: bool, user_id: str
+    ) -> bool:
+        """Generic method to add a tag to a recipe."""
+        try:
+            if is_private:
+                return self.add_private_tag_to_recipe(recipe_id, tag_id)
+            else:
+                return self.add_public_tag_to_recipe(recipe_id, tag_id)
+        except Exception as e:
+            logger.error(
+                f"Error adding {'private' if is_private else 'public'} tag {tag_id} to recipe {recipe_id} for user {user_id}: {str(e)}"
+            )
+            raise
+
+    @retry_on_db_locked()
+    def remove_recipe_tag(
+        self, recipe_id: int, tag_id: int, is_private: bool, user_id: str
+    ) -> bool:
+        """Generic method to remove a tag from a recipe."""
+        try:
+            if is_private:
+                return self.remove_private_tag_from_recipe(recipe_id, tag_id, user_id)
+            else:
+                return self.remove_public_tag_from_recipe(recipe_id, tag_id)
+        except Exception as e:
+            logger.error(
+                f"Error removing {'private' if is_private else 'public'} tag {tag_id} from recipe {recipe_id} for user {user_id}: {str(e)}"
+            )
+            raise
+
     # --- End Tag Management ---
 
     # --- Pagination Methods ---
-    
+
     @retry_on_db_locked()
     def get_recipes_count(self) -> int:
         """Get total count of recipes for pagination"""
         try:
             from .sql_queries import get_recipes_count_sql
+
             result = cast(
-                List[Dict[str, Any]],
-                self.execute_query(get_recipes_count_sql)
+                List[Dict[str, Any]], self.execute_query(get_recipes_count_sql)
             )
             return result[0]["total_count"] if result else 0
         except Exception as e:
@@ -1673,33 +1841,33 @@ class Database:
         offset: int = 0,
         sort_by: str = "name",
         sort_order: str = "asc",
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Get paginated recipes with full details including ingredients"""
         try:
             from .sql_queries import get_recipes_paginated_with_ingredients_sql
-            
+
             # Execute the complex query that gets recipes with their ingredients
             params = {
                 "limit": limit,
                 "offset": offset,
                 "sort_by": sort_by,
                 "sort_order": sort_order,
-                "cognito_user_id": user_id
+                "cognito_user_id": user_id,
             }
-            
+
             logger.info(f"Getting paginated recipes with params: {params}")
-            
+
             rows = cast(
                 List[Dict[str, Any]],
-                self.execute_query(get_recipes_paginated_with_ingredients_sql, params)
+                self.execute_query(get_recipes_paginated_with_ingredients_sql, params),
             )
-            
+
             # Group results by recipe ID and assemble full recipe objects
             recipes = {}
             for row in rows:
                 recipe_id = row["id"]
-                
+
                 if recipe_id not in recipes:
                     # Create the base recipe object
                     recipes[recipe_id] = {
@@ -1714,29 +1882,26 @@ class Database:
                         "rating_count": row.get("rating_count"),
                         "user_rating": row.get("user_rating"),
                         "ingredients": [],
-                        "public_tags": [],
-                        "private_tags": []
+                        "tags": [],
                     }
-                    
+
                     # Parse tags from GROUP_CONCAT format
                     if row.get("public_tags_data"):
                         for tag_data in row["public_tags_data"].split(":::"):
                             if tag_data and "|||" in tag_data:
                                 tag_id, tag_name = tag_data.split("|||", 1)
-                                recipes[recipe_id]["public_tags"].append({
-                                    "id": int(tag_id),
-                                    "name": tag_name
-                                })
-                    
+                                recipes[recipe_id]["tags"].append(
+                                    {"id": int(tag_id), "name": tag_name, "type": "public"}
+                                )
+
                     if row.get("private_tags_data"):
                         for tag_data in row["private_tags_data"].split(":::"):
                             if tag_data and "|||" in tag_data:
                                 tag_id, tag_name = tag_data.split("|||", 1)
-                                recipes[recipe_id]["private_tags"].append({
-                                    "id": int(tag_id),
-                                    "name": tag_name
-                                })
-                
+                                recipes[recipe_id]["tags"].append(
+                                    {"id": int(tag_id), "name": tag_name, "type": "private"}
+                                )
+
                 # Add ingredient if present
                 if row.get("recipe_ingredient_id"):
                     ingredient = {
@@ -1748,11 +1913,11 @@ class Database:
                         "unit_abbreviation": row.get("unit_abbreviation"),
                     }
                     recipes[recipe_id]["ingredients"].append(ingredient)
-            
+
             result = list(recipes.values())
             logger.info(f"Assembled {len(result)} recipes from {len(rows)} rows")
             return result
-            
+
         except Exception as e:
             logger.error(f"Error getting paginated recipes: {str(e)}")
             raise
@@ -1765,15 +1930,15 @@ class Database:
         offset: int = 0,
         sort_by: str = "name",
         sort_order: str = "asc",
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
     ) -> Tuple[List[Dict[str, Any]], int]:
         """Search recipes with pagination, returns (recipes, total_count)"""
         try:
             from .sql_queries import (
                 build_search_recipes_count_sql,
-                build_search_recipes_paginated_sql
+                build_search_recipes_paginated_sql,
             )
-            
+
             # Build query parameters
             query_params = {
                 "search_query": search_params.get("q"),
@@ -1783,19 +1948,19 @@ class Database:
                 "offset": offset,
                 "sort_by": sort_by,
                 "sort_order": sort_order,
-                "cognito_user_id": user_id
+                "cognito_user_id": user_id,
             }
-            
+
             # Handle ingredient filtering by converting names to IDs and paths
             must_ingredient_conditions = []
             must_not_ingredient_conditions = []
             has_invalid_ingredients = False
-            
+
             if search_params.get("ingredients"):
                 for i, ingredient_spec in enumerate(search_params["ingredients"]):
                     # Parse ingredient specification: "name" or "name:MUST" or "name:MUST_NOT"
                     ingredient_spec = ingredient_spec.strip()
-                    
+
                     if ":" in ingredient_spec:
                         ingredient_name, operator = ingredient_spec.split(":", 1)
                         ingredient_name = ingredient_name.strip()
@@ -1803,14 +1968,14 @@ class Database:
                     else:
                         ingredient_name = ingredient_spec
                         operator = "MUST"  # Default to MUST if no operator specified
-                    
+
                     ingredient = self.get_ingredient_by_name(ingredient_name)
                     if ingredient:
                         # Use path-based matching to include child ingredients
                         param_name = f"ingredient_path_{i}"
                         query_params[param_name] = f"%/{ingredient['id']}/%"
                         condition = f"i2.path LIKE :{param_name}"
-                        
+
                         if operator == "MUST_NOT":
                             must_not_ingredient_conditions.append(condition)
                         else:  # MUST or any other value defaults to MUST
@@ -1821,12 +1986,14 @@ class Database:
                             # Only fail for MUST ingredients that don't exist
                             # MUST_NOT for nonexistent ingredients should be ignored
                             has_invalid_ingredients = True
-                
+
                 # If any MUST ingredient doesn't exist, return no results
                 if has_invalid_ingredients:
-                    logger.info("Some MUST ingredients not found, returning empty results")
+                    logger.info(
+                        "Some MUST ingredients not found, returning empty results"
+                    )
                     return [], 0
-            
+
             # Handle tag filtering
             tag_conditions = []
             if search_params.get("tags"):
@@ -1835,52 +2002,67 @@ class Database:
                     if tag_name:
                         # Check if tag exists (both public and private)
                         public_tag = self.get_public_tag_by_name(tag_name)
-                        private_tag = self.get_private_tag_by_name(tag_name, user_id) if user_id else None
-                        
+                        private_tag = (
+                            self.get_private_tag_by_name_and_user(tag_name, user_id)
+                            if user_id
+                            else None
+                        )
+
                         if public_tag or private_tag:
                             # Recipe must have this tag (either public or private)
-                            public_param = f"public_tag_name_{i}"
-                            private_param = f"private_tag_name_{i}"
-                            query_params[public_param] = tag_name
-                            query_params[private_param] = tag_name
-                            
-                            condition = f"(pt2.name = :{public_param}"
+                            tag_param = f"tag_name_{i}"
+                            query_params[tag_param] = tag_name
+
+                            # Build condition for public tags (created_by IS NULL) or user's private tags
                             if user_id:
-                                condition += f" OR pvt2.name = :{private_param}"
-                            condition += ")"
+                                condition = f"(t3.name = :{tag_param} AND (t3.created_by IS NULL OR t3.created_by = :cognito_user_id))"
+                            else:
+                                condition = f"(t3.name = :{tag_param} AND t3.created_by IS NULL)"
                             tag_conditions.append(condition)
                         else:
                             # Tag doesn't exist, return no results
-                            logger.info(f"Tag not found: {tag_name}, returning empty results")
+                            logger.info(
+                                f"Tag not found: {tag_name}, returning empty results"
+                            )
                             return [], 0
-            
+
             logger.info(f"Searching recipes with params: {query_params}")
             logger.info(f"MUST ingredient conditions: {must_ingredient_conditions}")
-            logger.info(f"MUST_NOT ingredient conditions: {must_not_ingredient_conditions}")
+            logger.info(
+                f"MUST_NOT ingredient conditions: {must_not_ingredient_conditions}"
+            )
             logger.info(f"Tag conditions: {tag_conditions}")
-            
+
             # Build dynamic SQL queries
-            count_sql = build_search_recipes_count_sql(must_ingredient_conditions, must_not_ingredient_conditions, tag_conditions)
-            paginated_sql = build_search_recipes_paginated_sql(must_ingredient_conditions, must_not_ingredient_conditions, tag_conditions)
-            
+            count_sql = build_search_recipes_count_sql(
+                must_ingredient_conditions,
+                must_not_ingredient_conditions,
+                tag_conditions,
+            )
+            paginated_sql = build_search_recipes_paginated_sql(
+                must_ingredient_conditions,
+                must_not_ingredient_conditions,
+                tag_conditions,
+                sort_by,
+                sort_order,
+            )
+
             # Get total count first
             count_result = cast(
-                List[Dict[str, Any]],
-                self.execute_query(count_sql, query_params)
+                List[Dict[str, Any]], self.execute_query(count_sql, query_params)
             )
             total_count = count_result[0]["total_count"] if count_result else 0
-            
+
             # Get paginated results
             rows = cast(
-                List[Dict[str, Any]],
-                self.execute_query(paginated_sql, query_params)
+                List[Dict[str, Any]], self.execute_query(paginated_sql, query_params)
             )
-            
+
             # Group results by recipe ID and assemble full recipe objects
             recipes = {}
             for row in rows:
                 recipe_id = row["id"]
-                
+
                 if recipe_id not in recipes:
                     # Create the base recipe object
                     recipes[recipe_id] = {
@@ -1895,29 +2077,26 @@ class Database:
                         "rating_count": row.get("rating_count"),
                         "user_rating": row.get("user_rating"),
                         "ingredients": [],
-                        "public_tags": [],
-                        "private_tags": []
+                        "tags": [],
                     }
-                    
+
                     # Parse tags from GROUP_CONCAT format
                     if row.get("public_tags_data"):
                         for tag_data in row["public_tags_data"].split(":::"):
                             if tag_data and "|||" in tag_data:
                                 tag_id, tag_name = tag_data.split("|||", 1)
-                                recipes[recipe_id]["public_tags"].append({
-                                    "id": int(tag_id),
-                                    "name": tag_name
-                                })
-                    
+                                recipes[recipe_id]["tags"].append(
+                                    {"id": int(tag_id), "name": tag_name, "type": "public"}
+                                )
+
                     if row.get("private_tags_data"):
                         for tag_data in row["private_tags_data"].split(":::"):
                             if tag_data and "|||" in tag_data:
                                 tag_id, tag_name = tag_data.split("|||", 1)
-                                recipes[recipe_id]["private_tags"].append({
-                                    "id": int(tag_id),
-                                    "name": tag_name
-                                })
-                
+                                recipes[recipe_id]["tags"].append(
+                                    {"id": int(tag_id), "name": tag_name, "type": "private"}
+                                )
+
                 # Add ingredient if present
                 if row.get("recipe_ingredient_id"):
                     ingredient = {
@@ -1929,11 +2108,13 @@ class Database:
                         "unit_abbreviation": row.get("unit_abbreviation"),
                     }
                     recipes[recipe_id]["ingredients"].append(ingredient)
-            
+
             result = list(recipes.values())
-            logger.info(f"Found {len(result)} recipes from search (total: {total_count})")
+            logger.info(
+                f"Found {len(result)} recipes from search (total: {total_count})"
+            )
             return result, total_count
-            
+
         except Exception as e:
             logger.error(f"Error searching recipes with pagination: {str(e)}")
             raise
