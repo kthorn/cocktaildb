@@ -1882,8 +1882,7 @@ class Database:
                         "rating_count": row.get("rating_count"),
                         "user_rating": row.get("user_rating"),
                         "ingredients": [],
-                        "public_tags": [],
-                        "private_tags": [],
+                        "tags": [],
                     }
 
                     # Parse tags from GROUP_CONCAT format
@@ -1891,16 +1890,16 @@ class Database:
                         for tag_data in row["public_tags_data"].split(":::"):
                             if tag_data and "|||" in tag_data:
                                 tag_id, tag_name = tag_data.split("|||", 1)
-                                recipes[recipe_id]["public_tags"].append(
-                                    {"id": int(tag_id), "name": tag_name}
+                                recipes[recipe_id]["tags"].append(
+                                    {"id": int(tag_id), "name": tag_name, "type": "public"}
                                 )
 
                     if row.get("private_tags_data"):
                         for tag_data in row["private_tags_data"].split(":::"):
                             if tag_data and "|||" in tag_data:
                                 tag_id, tag_name = tag_data.split("|||", 1)
-                                recipes[recipe_id]["private_tags"].append(
-                                    {"id": int(tag_id), "name": tag_name}
+                                recipes[recipe_id]["tags"].append(
+                                    {"id": int(tag_id), "name": tag_name, "type": "private"}
                                 )
 
                 # Add ingredient if present
@@ -2011,15 +2010,14 @@ class Database:
 
                         if public_tag or private_tag:
                             # Recipe must have this tag (either public or private)
-                            public_param = f"public_tag_name_{i}"
-                            private_param = f"private_tag_name_{i}"
-                            query_params[public_param] = tag_name
-                            query_params[private_param] = tag_name
+                            tag_param = f"tag_name_{i}"
+                            query_params[tag_param] = tag_name
 
-                            condition = f"(pt3.name = :{public_param}"
+                            # Build condition for public tags (created_by IS NULL) or user's private tags
                             if user_id:
-                                condition += f" OR pvt3.name = :{private_param}"
-                            condition += ")"
+                                condition = f"(t3.name = :{tag_param} AND (t3.created_by IS NULL OR t3.created_by = :cognito_user_id))"
+                            else:
+                                condition = f"(t3.name = :{tag_param} AND t3.created_by IS NULL)"
                             tag_conditions.append(condition)
                         else:
                             # Tag doesn't exist, return no results
@@ -2079,8 +2077,7 @@ class Database:
                         "rating_count": row.get("rating_count"),
                         "user_rating": row.get("user_rating"),
                         "ingredients": [],
-                        "public_tags": [],
-                        "private_tags": [],
+                        "tags": [],
                     }
 
                     # Parse tags from GROUP_CONCAT format
@@ -2088,16 +2085,16 @@ class Database:
                         for tag_data in row["public_tags_data"].split(":::"):
                             if tag_data and "|||" in tag_data:
                                 tag_id, tag_name = tag_data.split("|||", 1)
-                                recipes[recipe_id]["public_tags"].append(
-                                    {"id": int(tag_id), "name": tag_name}
+                                recipes[recipe_id]["tags"].append(
+                                    {"id": int(tag_id), "name": tag_name, "type": "public"}
                                 )
 
                     if row.get("private_tags_data"):
                         for tag_data in row["private_tags_data"].split(":::"):
                             if tag_data and "|||" in tag_data:
                                 tag_id, tag_name = tag_data.split("|||", 1)
-                                recipes[recipe_id]["private_tags"].append(
-                                    {"id": int(tag_id), "name": tag_name}
+                                recipes[recipe_id]["tags"].append(
+                                    {"id": int(tag_id), "name": tag_name, "type": "private"}
                                 )
 
                 # Add ingredient if present

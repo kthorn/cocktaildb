@@ -67,6 +67,17 @@ class PrivateTagResponse(BaseModel):
         from_attributes = True
 
 
+class TagResponse(BaseModel):
+    """Response model for unified tag data with type field"""
+
+    id: int = Field(..., description="Tag ID")
+    name: str = Field(..., description="Tag name")
+    type: str = Field(..., description="Tag type: 'public' or 'private'")
+
+    class Config:
+        from_attributes = True
+
+
 class RecipeResponse(BaseModel):
     """Response model for recipe data - matches actual database schema"""
 
@@ -82,9 +93,11 @@ class RecipeResponse(BaseModel):
     ingredients: List[RecipeIngredientResponse] = Field(
         default=[], description="Recipe ingredients"
     )
-    public_tags: List[PublicTagResponse] = Field(default=[], description="Public tags")
+    tags: List[TagResponse] = Field(default=[], description="Unified tags with type field")
+    # Legacy fields for backward compatibility (can be removed when frontend is updated)
+    public_tags: List[PublicTagResponse] = Field(default=[], description="Public tags (deprecated)")
     private_tags: List[PrivateTagResponse] = Field(
-        default=[], description="Private tags (if user authenticated)"
+        default=[], description="Private tags (deprecated)"
     )
 
     class Config:
