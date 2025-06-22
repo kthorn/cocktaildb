@@ -226,6 +226,21 @@ class TestTagAPIEndpoints:
         # Should not be unauthorized (may fail due to other reasons like database constraints)
         assert response.status_code != status.HTTP_401_UNAUTHORIZED
 
+    def test_create_private_tag_response_structure(self, authenticated_client):
+        """Test that private tag creation returns correct response structure"""
+        tag_data = {"name": "response-structure-test-tag"}
+        response = authenticated_client.post("/tags/private", json=tag_data)
+        
+        # Should succeed and return expected structure
+        if response.status_code == status.HTTP_201_CREATED:
+            data = response.json()
+            # Verify response has required fields for PrivateTagResponse
+            assert "id" in data
+            assert "name" in data
+            assert "cognito_user_id" in data
+            # Verify response does NOT have cognito_username field (this was the bug)
+            assert "cognito_username" not in data
+
     def test_add_public_tag_to_recipe_unauthorized(self, test_client_memory):
         """Test adding public tag to recipe without authentication"""
         tag_data = {"tag_id": 1}

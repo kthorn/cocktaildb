@@ -1164,6 +1164,85 @@ footer {
     margin-top: var(--space-xs);
 }
 
+/* Existing tags section styles */
+#existing-tags-section {
+    margin-bottom: var(--space-md);
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+#public-tags-section,
+#private-tags-section {
+    margin-bottom: var(--space-md);
+}
+
+#public-tags-section h5,
+#private-tags-section h5 {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    margin-bottom: var(--space-xs);
+    color: var(--text-secondary);
+}
+
+.existing-tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-sm);
+}
+
+.existing-tag-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border: 1px solid #e0e0e0;
+    background: #f8f9fa;
+    color: var(--text-dark);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.existing-tag-btn:hover:not(:disabled) {
+    background: #e9ecef;
+    border-color: #dee2e6;
+    transform: translateY(-1px);
+}
+
+.existing-tag-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.existing-tag-btn.tag-already-added {
+    background: #f1f3f4;
+    color: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.existing-tag-btn .tag-icon {
+    font-size: 10px;
+}
+
+.existing-tag-btn .tag-name {
+    font-weight: 500;
+}
+
+.existing-tags-list .no-tags,
+.existing-tags-list .error,
+.existing-tags-list .auth-required {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    font-style: italic;
+    padding: var(--space-xs);
+}
+
+.existing-tags-list .error {
+    color: var(--danger-600);
+}
+
 /* Utility classes */
 .hidden {
     display: none;

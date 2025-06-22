@@ -62,7 +62,6 @@ class PrivateTagResponse(BaseModel):
     id: int = Field(..., description="Tag ID")
     name: str = Field(..., description="Tag name")
     cognito_user_id: str = Field(..., description="User ID who created the tag")
-    cognito_username: str = Field(..., description="Username who created the tag")
 
     class Config:
         from_attributes = True
