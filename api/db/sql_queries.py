@@ -187,9 +187,9 @@ search_recipes_paginated_sql = """
         ingredients i ON ri.ingredient_id = i.id
     WHERE
         (:search_query IS NULL OR 
-         r.name LIKE '%' || :search_query || '%' OR 
-         r.description LIKE '%' || :search_query || '%' OR 
-         r.instructions LIKE '%' || :search_query || '%')
+         remove_accents(LOWER(r.name)) LIKE '%' || remove_accents(LOWER(:search_query)) || '%' OR 
+         remove_accents(LOWER(r.description)) LIKE '%' || remove_accents(LOWER(:search_query)) || '%' OR 
+         remove_accents(LOWER(r.instructions)) LIKE '%' || remove_accents(LOWER(:search_query)) || '%')
     AND
         (:min_rating IS NULL OR COALESCE(r.avg_rating, 0) >= :min_rating)
     AND
@@ -222,9 +222,9 @@ search_recipes_count_sql = """
         ingredients i ON ri.ingredient_id = i.id
     WHERE
         (:search_query IS NULL OR 
-         r.name LIKE '%' || :search_query || '%' OR 
-         r.description LIKE '%' || :search_query || '%' OR 
-         r.instructions LIKE '%' || :search_query || '%')
+         remove_accents(LOWER(r.name)) LIKE '%' || remove_accents(LOWER(:search_query)) || '%' OR 
+         remove_accents(LOWER(r.description)) LIKE '%' || remove_accents(LOWER(:search_query)) || '%' OR 
+         remove_accents(LOWER(r.instructions)) LIKE '%' || remove_accents(LOWER(:search_query)) || '%')
     AND
         (:min_rating IS NULL OR COALESCE(r.avg_rating, 0) >= :min_rating)
     AND
@@ -333,9 +333,9 @@ def build_search_recipes_count_sql(must_conditions: List[str], must_not_conditio
     base_sql += """
     WHERE
         (:search_query IS NULL OR 
-         r.name LIKE '%' || :search_query || '%' OR 
-         r.description LIKE '%' || :search_query || '%' OR 
-         r.instructions LIKE '%' || :search_query || '%')
+         remove_accents(LOWER(r.name)) LIKE '%' || remove_accents(LOWER(:search_query)) || '%' OR 
+         remove_accents(LOWER(r.description)) LIKE '%' || remove_accents(LOWER(:search_query)) || '%' OR 
+         remove_accents(LOWER(r.instructions)) LIKE '%' || remove_accents(LOWER(:search_query)) || '%')
     AND
         (:min_rating IS NULL OR COALESCE(r.avg_rating, 0) >= :min_rating)
     AND

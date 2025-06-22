@@ -89,12 +89,11 @@ class TestPrivateTagCRUD:
         with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
             db = Database()
 
-            tag = db.create_private_tag("personal", "user123", "testuser")
+            tag = db.create_private_tag("personal", "user123")
 
             assert tag["id"] is not None
             assert tag["name"] == "personal"
             assert tag["cognito_user_id"] == "user123"
-            assert tag["cognito_username"] == "testuser"
 
     def test_create_private_tag_same_name_different_users(self, memory_db_with_schema):
         """Test creating private tags with same name for different users"""
@@ -102,10 +101,10 @@ class TestPrivateTagCRUD:
             db = Database()
 
             # User 1 creates "favorites" tag
-            tag1 = db.create_private_tag("favorites", "user1", "user1")
+            tag1 = db.create_private_tag("favorites", "user1")
 
             # User 2 creates "favorites" tag (should be allowed)
-            tag2 = db.create_private_tag("favorites", "user2", "user2")
+            tag2 = db.create_private_tag("favorites", "user2")
 
             assert tag1["id"] != tag2["id"]
             assert tag1["name"] == tag2["name"] == "favorites"
@@ -118,10 +117,10 @@ class TestPrivateTagCRUD:
             db = Database()
 
             # Create first tag
-            first_tag = db.create_private_tag("favorites", "user123", "testuser")
+            first_tag = db.create_private_tag("favorites", "user123")
 
             # Create duplicate (should return existing)
-            second_tag = db.create_private_tag("favorites", "user123", "testuser")
+            second_tag = db.create_private_tag("favorites", "user123")
 
             assert first_tag["id"] == second_tag["id"]
             assert first_tag["name"] == second_tag["name"]
@@ -133,7 +132,7 @@ class TestPrivateTagCRUD:
             db = Database()
 
             # Create tag
-            created_tag = db.create_private_tag("personal", "user123", "testuser")
+            created_tag = db.create_private_tag("personal", "user123")
 
             # Retrieve by name and user
             retrieved_tag = db.get_private_tag_by_name_and_user("personal", "user123")
@@ -149,7 +148,7 @@ class TestPrivateTagCRUD:
             db = Database()
 
             # Create tag for user1
-            db.create_private_tag("personal", "user1", "user1")
+            db.create_private_tag("personal", "user1")
 
             # Try to retrieve with user2
             result = db.get_private_tag_by_name_and_user("personal", "user2")
@@ -163,11 +162,11 @@ class TestPrivateTagCRUD:
             # Create tags for user1
             user1_tags = ["favorites", "to-try", "party-drinks"]
             for name in user1_tags:
-                db.create_private_tag(name, "user1", "user1")
+                db.create_private_tag(name, "user1")
 
             # Create tags for user2
-            db.create_private_tag("favorites", "user2", "user2")
-            db.create_private_tag("experimental", "user2", "user2")
+            db.create_private_tag("favorites", "user2")
+            db.create_private_tag("experimental", "user2")
 
             # Retrieve user1's tags
             result = db.get_private_tags("user1")
@@ -283,7 +282,7 @@ class TestRecipeTagAssociations:
 
             # Create recipe and tag
             recipe = db.create_recipe({"name": "Test Recipe", "instructions": "Test"})
-            tag = db.create_private_tag("favorites", "user123", "testuser")
+            tag = db.create_private_tag("favorites", "user123")
 
             # Associate tag with recipe
             result = db.add_private_tag_to_recipe(recipe["id"], tag["id"])
@@ -301,7 +300,7 @@ class TestRecipeTagAssociations:
             db = Database()
 
             recipe = db.create_recipe({"name": "Test Recipe", "instructions": "Test"})
-            tag = db.create_private_tag("favorites", "user123", "testuser")
+            tag = db.create_private_tag("favorites", "user123")
 
             # Add tag first time
             result1 = db.add_private_tag_to_recipe(recipe["id"], tag["id"])
@@ -339,7 +338,7 @@ class TestRecipeTagAssociations:
             db = Database()
 
             recipe = db.create_recipe({"name": "Test Recipe", "instructions": "Test"})
-            tag = db.create_private_tag("personal", "user123", "testuser")
+            tag = db.create_private_tag("personal", "user123")
 
             result = db.add_recipe_tag(
                 recipe["id"], tag["id"], is_private=True, user_id="user123"
@@ -396,7 +395,7 @@ class TestRecipeTagRemoval:
 
             # Create and associate tag
             recipe = db.create_recipe({"name": "Test Recipe", "instructions": "Test"})
-            tag = db.create_private_tag("favorites", "user123", "testuser")
+            tag = db.create_private_tag("favorites", "user123")
             db.add_private_tag_to_recipe(recipe["id"], tag["id"])
 
             # Verify tag is associated
@@ -420,7 +419,7 @@ class TestRecipeTagRemoval:
 
             # Create and associate tag for user1
             recipe = db.create_recipe({"name": "Test Recipe", "instructions": "Test"})
-            tag = db.create_private_tag("favorites", "user1", "user1")
+            tag = db.create_private_tag("favorites", "user1")
             db.add_private_tag_to_recipe(recipe["id"], tag["id"])
 
             # Try to remove with user2 (should fail)
@@ -455,7 +454,7 @@ class TestRecipeTagRemoval:
             db = Database()
 
             recipe = db.create_recipe({"name": "Test Recipe", "instructions": "Test"})
-            tag = db.create_private_tag("personal", "user123", "testuser")
+            tag = db.create_private_tag("personal", "user123")
             db.add_private_tag_to_recipe(recipe["id"], tag["id"])
 
             result = db.remove_recipe_tag(
@@ -479,7 +478,7 @@ class TestTagCascadeOperations:
             # Create recipe with both public and private tags
             recipe = db.create_recipe({"name": "Test Recipe", "instructions": "Test"})
             public_tag = db.create_public_tag("new_tag")
-            private_tag = db.create_private_tag("favorites", "user123", "testuser")
+            private_tag = db.create_private_tag("favorites", "user123")
 
             db.add_public_tag_to_recipe(recipe["id"], public_tag["id"])
             db.add_private_tag_to_recipe(recipe["id"], private_tag["id"])
@@ -635,8 +634,8 @@ class TestComplexTagScenarios:
             db.add_public_tag_to_recipe(recipe["id"], strong_tag["id"])
 
             # Add private tags
-            favorites_tag = db.create_private_tag("favorites", "user123", "testuser")
-            party_tag = db.create_private_tag("party", "user123", "testuser")
+            favorites_tag = db.create_private_tag("favorites", "user123")
+            party_tag = db.create_private_tag("party", "user123")
             db.add_private_tag_to_recipe(recipe["id"], favorites_tag["id"])
             db.add_private_tag_to_recipe(recipe["id"], party_tag["id"])
 
@@ -663,11 +662,11 @@ class TestComplexTagScenarios:
             recipe = db.create_recipe({"name": "Shared Recipe", "instructions": "Test"})
 
             # User1 adds private tags
-            user1_tag = db.create_private_tag("my-favorite", "user1", "user1")
+            user1_tag = db.create_private_tag("my-favorite", "user1")
             db.add_private_tag_to_recipe(recipe["id"], user1_tag["id"])
 
             # User2 adds private tags
-            user2_tag = db.create_private_tag("want-to-try", "user2", "user2")
+            user2_tag = db.create_private_tag("want-to-try", "user2")
             db.add_private_tag_to_recipe(recipe["id"], user2_tag["id"])
 
             # User1 should only see their private tags
@@ -713,7 +712,7 @@ class TestComplexTagScenarios:
             # Create many private tags
             private_tags = []
             for i in range(20):
-                tag = db.create_private_tag(f"private_tag_{i}", "user123", "testuser")
+                tag = db.create_private_tag(f"private_tag_{i}", "user123")
                 private_tags.append(tag)
                 db.add_private_tag_to_recipe(recipe["id"], tag["id"])
 

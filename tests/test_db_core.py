@@ -5,11 +5,7 @@ Tests for the main Database class including connection management, transactions,
 
 import os
 import sqlite3
-import tempfile
-import time
-from pathlib import Path
-from typing import Any, Dict, List
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 

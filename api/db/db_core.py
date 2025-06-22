@@ -4,6 +4,7 @@ import time
 import functools
 import os
 import re
+import unicodedata
 from typing import Dict, List, Optional, Any, Union, Tuple, cast
 
 from .db_utils import extract_all_ingredient_ids, assemble_ingredient_full_names
@@ -89,6 +90,17 @@ def smart_title_case(text: str) -> Optional[str]:
             i += 1
 
     return "".join(result)
+
+
+def remove_accents(text: str) -> str:
+    """
+    Remove accents from text for accent-insensitive search.
+    Normalizes to NFD (decomposed form) and removes combining characters.
+    """
+    if not text:
+        return text
+    # Normalize to NFD (decomposed form) and remove combining characters
+    return re.sub(r'[\u0300-\u036f]', '', unicodedata.normalize('NFD', text))
 
 
 def retry_on_db_locked(max_retries=3, initial_backoff=0.1):
@@ -212,6 +224,10 @@ class Database:
             "PRAGMA journal_mode = WAL"
         )  # Write-Ahead Logging for better concurrency
         conn.row_factory = sqlite3.Row  # Return rows as dictionaries
+        
+        # Register custom function for accent-insensitive search
+        conn.create_function("remove_accents", 1, remove_accents)
+        
         return conn
 
     @retry_on_db_locked()
@@ -1298,9 +1314,9 @@ class Database:
                 WHERE 1=1
             """
             params = {}
-            # Add name search condition if provided
+            # Add name search condition if provided (accent-insensitive)
             if search_params.get("name"):
-                query += " AND name LIKE :name"
+                query += " AND remove_accents(LOWER(name)) LIKE remove_accents(LOWER(:name))"
                 params["name"] = f"%{search_params['name']}%"
             # Add minimum rating condition if provided
             if search_params.get("min_rating"):

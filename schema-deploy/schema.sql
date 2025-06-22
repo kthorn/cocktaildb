@@ -48,8 +48,7 @@ CREATE TABLE ratings (
 CREATE TABLE private_tags (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT COLLATE NOCASE NOT NULL,
-  cognito_user_id TEXT NOT NULL,
-  cognito_username TEXT NOT NULL
+  cognito_user_id TEXT NOT NULL CHECK (cognito_user_id != '')
 );
 
 CREATE TABLE public_tags (

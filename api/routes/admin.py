@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
+from fastapi.background import BackgroundTasks
 import tempfile
 import sqlite3
 import os
@@ -12,7 +13,9 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 @router.get("/database/download")
 async def download_database(
-    user_info=Depends(require_authentication), db: Database = Depends(get_database)
+    background_tasks: BackgroundTasks,
+    user_info=Depends(require_authentication), 
+    db: Database = Depends(get_database)
 ):
     """
     Download a backup copy of the SQLite database.
@@ -29,24 +32,37 @@ async def download_database(
             # Close the file descriptor as we'll use SQLite to write to it
             os.close(temp_fd)
 
-            # Use the database's connection method and SQLite's backup API
-            # This works even while the database is being used
-            source_conn = db._get_connection()
+            # Get the source database path
+            source_db_path = db.db_path
+            
+            # Connect directly to source and destination databases
+            # Use a fresh connection without WAL mode for backup
+            source_conn = sqlite3.connect(source_db_path, timeout=30.0)
             backup_conn = sqlite3.connect(temp_db_path)
 
             try:
-                # Perform the backup
+                # Checkpoint WAL file first to ensure all data is in main db
+                # Use TRUNCATE mode to ensure WAL is fully flushed
+                source_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                
+                # Perform the backup using SQLite's backup API
                 source_conn.backup(backup_conn)
+                
+                # Ensure backup is fully written
+                backup_conn.execute("PRAGMA integrity_check")
+                
             finally:
                 source_conn.close()
                 backup_conn.close()
 
+            # Schedule cleanup of the temporary file
+            background_tasks.add_task(os.unlink, temp_db_path)
+            
             # Return the file as a download
             return FileResponse(
                 path=temp_db_path,
                 media_type="application/octet-stream",
                 filename="cocktaildb_backup.db",
-                background=None,  # Let FastAPI handle cleanup
             )
 
         except Exception:
