@@ -100,7 +100,7 @@ def remove_accents(text: str) -> str:
     if not text:
         return text
     # Normalize to NFD (decomposed form) and remove combining characters
-    return re.sub(r'[\u0300-\u036f]', '', unicodedata.normalize('NFD', text))
+    return re.sub(r"[\u0300-\u036f]", "", unicodedata.normalize("NFD", text))
 
 
 def retry_on_db_locked(max_retries=3, initial_backoff=0.1):
@@ -217,17 +217,18 @@ class Database:
         )
         # Enable foreign key constraints (must be done for each connection in SQLite)
         conn.execute("PRAGMA foreign_keys = ON")
-        # Set busy timeout to handle cases where the database is locked
+        # Optimize for concurrent access by multiple lambdas
         conn.execute("PRAGMA busy_timeout = 10000")  # 10 seconds in milliseconds
-        # Optimize for concurrent access
-        conn.execute(
-            "PRAGMA journal_mode = WAL"
-        )  # Write-Ahead Logging for better concurrency
+        conn.execute("PRAGMA journal_mode = DELETE")
+        conn.execute("PRAGMA synchronous = FULL")
+        conn.execute("PRAGMA locking_mode = NORMAL")
+        conn.execute("PRAGMA temp_store = MEMORY")
+        conn.execute("PRAGMA cache_size = -10000")
         conn.row_factory = sqlite3.Row  # Return rows as dictionaries
-        
+
         # Register custom function for accent-insensitive search
         conn.create_function("remove_accents", 1, remove_accents)
-        
+
         return conn
 
     @retry_on_db_locked()
@@ -1316,7 +1317,9 @@ class Database:
             params = {}
             # Add name search condition if provided (accent-insensitive)
             if search_params.get("name"):
-                query += " AND remove_accents(LOWER(name)) LIKE remove_accents(LOWER(:name))"
+                query += (
+                    " AND remove_accents(LOWER(name)) LIKE remove_accents(LOWER(:name))"
+                )
                 params["name"] = f"%{search_params['name']}%"
             # Add minimum rating condition if provided
             if search_params.get("min_rating"):
@@ -1329,9 +1332,9 @@ class Database:
                     query += """
                     AND EXISTS (
                     SELECT 1
-                    FROM recipe_public_tags rpt
-                    JOIN public_tags pt ON rpt.tag_id = pt.id
-                    WHERE rpt.recipe_id = recipes.id AND pt.name IN ({})
+                    FROM recipe_tags rt
+                    JOIN tags t ON rt.tag_id = t.id
+                    WHERE rt.recipe_id = recipes.id AND t.created_by IS NULL AND t.name IN ({})
                     )
                     """.format(",".join([":tag" + str(i) for i in range(len(tags))]))
                     for i, tag_name in enumerate(tags):
@@ -1483,14 +1486,15 @@ class Database:
             raise ValueError("Tag name cannot be empty")
         try:
             self.execute_query(
-                "INSERT INTO public_tags (name) VALUES (:name)", {"name": name}
+                "INSERT INTO tags (name, created_by) VALUES (:name, NULL)",
+                {"name": name},
             )
             # SQLite specific way to get last inserted ID if not returned directly
             # For this structure, we'll re-fetch. A more robust way would depend on DB specifics or ORM.
             tag = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name FROM public_tags WHERE name = :name",
+                    "SELECT id, name FROM tags WHERE name = :name AND created_by IS NULL",
                     {"name": name},
                 ),
             )
@@ -1515,7 +1519,7 @@ class Database:
             tag = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name FROM public_tags WHERE name = :name",
+                    "SELECT id, name FROM tags WHERE name = :name AND created_by IS NULL",
                     {"name": name},
                 ),
             )
@@ -1536,7 +1540,7 @@ class Database:
         try:
             self.execute_query(
                 """
-                INSERT INTO private_tags (name, cognito_user_id)
+                INSERT INTO tags (name, created_by)
                 VALUES (:name, :cognito_user_id)
                 """,
                 {
@@ -1548,8 +1552,8 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, name, cognito_user_id FROM private_tags 
-                    WHERE name = :name AND cognito_user_id = :cognito_user_id
+                    SELECT id, name, created_by as cognito_user_id FROM tags 
+                    WHERE name = :name AND created_by = :cognito_user_id
                     """,
                     {"name": name.strip(), "cognito_user_id": cognito_user_id.strip()},
                 ),
@@ -1583,8 +1587,8 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, name, cognito_user_id FROM private_tags 
-                    WHERE name = :name AND cognito_user_id = :cognito_user_id
+                    SELECT id, name, created_by as cognito_user_id FROM tags 
+                    WHERE name = :name AND created_by = :cognito_user_id
                     """,
                     {"name": name, "cognito_user_id": cognito_user_id},
                 ),
@@ -1601,7 +1605,9 @@ class Database:
         try:
             return cast(
                 List[Dict[str, Any]],
-                self.execute_query("SELECT id, name FROM public_tags ORDER BY name"),
+                self.execute_query(
+                    "SELECT id, name FROM tags WHERE created_by IS NULL ORDER BY name"
+                ),
             )
         except Exception as e:
             logger.error(f"Error getting public tags: {str(e)}")
@@ -1614,8 +1620,8 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, name, cognito_user_id FROM private_tags 
-                    WHERE cognito_user_id = :cognito_user_id ORDER BY name
+                    SELECT id, name, created_by as cognito_user_id FROM tags 
+                    WHERE created_by = :cognito_user_id ORDER BY name
                     """,
                     {"cognito_user_id": cognito_user_id},
                 ),
@@ -1632,7 +1638,7 @@ class Database:
         try:
             result = self.execute_query(
                 """
-                INSERT INTO recipe_public_tags (recipe_id, tag_id) 
+                INSERT INTO recipe_tags (recipe_id, tag_id) 
                 VALUES (:recipe_id, :tag_id)
                 ON CONFLICT(recipe_id, tag_id) DO NOTHING
                 """,
@@ -1653,7 +1659,7 @@ class Database:
             # The check for tag ownership should happen in the handler before calling this.
             result = self.execute_query(
                 """
-                INSERT INTO recipe_private_tags (recipe_id, tag_id)
+                INSERT INTO recipe_tags (recipe_id, tag_id)
                 VALUES (:recipe_id, :tag_id)
                 ON CONFLICT(recipe_id, tag_id) DO NOTHING
                 """,
@@ -1671,7 +1677,7 @@ class Database:
         """Removes the association of a public tag from a recipe."""
         try:
             result = self.execute_query(
-                "DELETE FROM recipe_public_tags WHERE recipe_id = :recipe_id AND tag_id = :tag_id",
+                "DELETE FROM recipe_tags WHERE recipe_id = :recipe_id AND tag_id = :tag_id",
                 {"recipe_id": recipe_id, "tag_id": tag_id},
             )
             return result.get("rowCount", 0) > 0
@@ -1690,9 +1696,9 @@ class Database:
             # Ensure the user owns the private tag they are trying to remove from the recipe
             result = self.execute_query(
                 """
-                DELETE FROM recipe_private_tags
+                DELETE FROM recipe_tags
                 WHERE recipe_id = :recipe_id AND tag_id = :tag_id
-                  AND EXISTS (SELECT 1 FROM private_tags pt WHERE pt.id = :tag_id AND pt.cognito_user_id = :cognito_user_id)
+                  AND EXISTS (SELECT 1 FROM tags t WHERE t.id = :tag_id AND t.created_by = :cognito_user_id)
                 """,
                 {
                     "recipe_id": recipe_id,
@@ -1714,11 +1720,11 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT pt.id, pt.name
-                    FROM recipe_public_tags rpt
-                    JOIN public_tags pt ON rpt.tag_id = pt.id
-                    WHERE rpt.recipe_id = :recipe_id
-                    ORDER BY pt.name
+                    SELECT t.id, t.name
+                    FROM recipe_tags rt
+                    JOIN tags t ON rt.tag_id = t.id
+                    WHERE rt.recipe_id = :recipe_id AND t.created_by IS NULL
+                    ORDER BY t.name
                     """,
                     {"recipe_id": recipe_id},
                 ),
@@ -1736,11 +1742,11 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT pt.id, pt.name
-                    FROM recipe_private_tags rpt
-                    JOIN private_tags pt ON rpt.tag_id = pt.id
-                    WHERE rpt.recipe_id = :recipe_id AND pt.cognito_user_id = :cognito_user_id
-                    ORDER BY pt.name
+                    SELECT t.id, t.name
+                    FROM recipe_tags rt
+                    JOIN tags t ON rt.tag_id = t.id
+                    WHERE rt.recipe_id = :recipe_id AND t.created_by = :cognito_user_id
+                    ORDER BY t.name
                     """,
                     {"recipe_id": recipe_id, "cognito_user_id": cognito_user_id},
                 ),
@@ -1753,28 +1759,25 @@ class Database:
 
     @retry_on_db_locked()
     def get_tag(self, tag_id: int) -> Optional[Dict[str, Any]]:
-        """Gets a tag by its ID from either public or private tags."""
+        """Gets a tag by its ID from the unified tags table."""
         try:
-            # First check public tags
-            public_tag = cast(
+            tag = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, 0 as is_private FROM public_tags WHERE id = :tag_id",
+                    """SELECT id, name, 
+                       CASE WHEN created_by IS NULL THEN 0 ELSE 1 END as is_private,
+                       created_by as created_by
+                       FROM tags WHERE id = :tag_id""",
                     {"tag_id": tag_id},
                 ),
             )
-            if public_tag:
-                return public_tag[0]
-
-            # Then check private tags
-            private_tag = cast(
-                List[Dict[str, Any]],
-                self.execute_query(
-                    "SELECT id, name, 1 as is_private, cognito_user_id FROM private_tags WHERE id = :tag_id",
-                    {"tag_id": tag_id},
-                ),
-            )
-            return private_tag[0] if private_tag else None
+            if tag:
+                result = tag[0]
+                # For compatibility, add cognito_user_id field for private tags
+                if result["is_private"] == 1:
+                    result["cognito_user_id"] = result["created_by"]
+                return result
+            return None
         except Exception as e:
             logger.error(f"Error getting tag by ID {tag_id}: {str(e)}")
             raise
