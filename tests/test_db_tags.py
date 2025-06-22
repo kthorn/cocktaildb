@@ -491,17 +491,12 @@ class TestTagCascadeOperations:
             db.delete_recipe(recipe["id"])
 
             # Verify tag associations were cascade deleted
-            public_associations = db.execute_query(
-                "SELECT COUNT(*) as count FROM recipe_public_tags WHERE recipe_id = ?",
-                (recipe["id"],),
-            )
-            private_associations = db.execute_query(
-                "SELECT COUNT(*) as count FROM recipe_private_tags WHERE recipe_id = ?",
+            tag_associations = db.execute_query(
+                "SELECT COUNT(*) as count FROM recipe_tags WHERE recipe_id = ?",
                 (recipe["id"],),
             )
 
-            assert public_associations[0]["count"] == 0
-            assert private_associations[0]["count"] == 0
+            assert tag_associations[0]["count"] == 0
 
             # Verify tags themselves still exist
             assert db.get_public_tag_by_name("new_tag") is not None
