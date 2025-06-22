@@ -134,9 +134,7 @@ class TestRatingSearch:
             # Should return no results since range is invalid
             assert data["pagination"]["total_count"] == 0
 
-    def test_search_recipes_rating_boundary_values(
-        self, test_client_with_data
-    ):
+    def test_search_recipes_rating_boundary_values(self, test_client_with_data):
         """Test searching with rating boundary values (0, 5)"""
         client, app = test_client_with_data
 
@@ -207,11 +205,9 @@ class TestRatingSearch:
                 if recipe.get("avg_rating") is not None:
                     assert recipe["avg_rating"] >= rating
 
-    def test_search_recipes_rating_with_no_ratings(
-        self, test_client_with_data
-    ):
+    def test_search_recipes_rating_with_no_ratings(self, test_client_with_data):
         """Test how rating filters handle recipes with no ratings"""
-
+        client, app = test_client_with_data
         # Test a range that should include unrated recipes if they're treated as 0
         response = client.get("/recipes/search?min_rating=0&max_rating=5")
 
@@ -238,11 +234,9 @@ class TestRatingSearch:
         # Should return 400 error for invalid parameter type
         assert response.status_code in [200, 400, 422]
 
-    def test_search_recipes_rating_filter_vs_no_filter(
-        self, test_client_with_data
-    ):
+    def test_search_recipes_rating_filter_vs_no_filter(self, test_client_with_data):
         """Test that rating filtering actually filters results"""
-
+        client, app = test_client_with_data
         # Get all recipes (no filter)
         all_response = client.get("/recipes/search")
         assert all_response.status_code == 200
@@ -259,11 +253,9 @@ class TestRatingSearch:
             <= all_data["pagination"]["total_count"]
         )
 
-    def test_search_recipes_multiple_rating_parameters(
-        self, test_client_with_data
-    ):
+    def test_search_recipes_multiple_rating_parameters(self, test_client_with_data):
         """Test with multiple min_rating or max_rating parameters"""
-
+        client, app = test_client_with_data
         # This tests how the API handles duplicate parameters
         # Most frameworks take the last value or the first value
         response = client.get("/recipes/search?min_rating=3.0&min_rating=4.0")

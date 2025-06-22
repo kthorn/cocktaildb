@@ -13,29 +13,21 @@ from conftest import assert_valid_response_structure
 class TestResponseStructureValidation:
     """Tests for complete response structure validation as required by API_SPEC.md"""
 
-    def test_search_response_includes_query_field(
-        self, test_client_with_data
-    ):
+    def test_search_response_includes_query_field(self, test_client_with_data):
         """Verify response includes query field matching the request parameter"""
         client, app = test_client_with_data
         # Test with search query
-        response = client.get(
-            "/recipes/search?q=gin&page=1&limit=10"
-        )
+        response = client.get("/recipes/search?q=gin&page=1&limit=10")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
         assert "query" in data, "Response must include 'query' field"
         assert data["query"] == "gin", "Query field must match request parameter"
 
-    def test_search_response_query_field_empty_search(
-        self, test_client_with_data
-    ):
+    def test_search_response_query_field_empty_search(self, test_client_with_data):
         """Test query field is present when no query provided"""
         client, app = test_client_with_data
-        response = client.get(
-            "/recipes/search?page=1&limit=10"
-        )
+        response = client.get("/recipes/search?page=1&limit=10")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -55,9 +47,7 @@ class TestResponseStructureValidation:
 
         special_query = "gin & tonic"
         encoded_query = quote(special_query)
-        response = client.get(
-            f"/recipes/search?q={encoded_query}&page=1&limit=10"
-        )
+        response = client.get(f"/recipes/search?q={encoded_query}&page=1&limit=10")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -68,9 +58,7 @@ class TestResponseStructureValidation:
     def test_recipe_complete_data_structure(self, test_client_with_data):
         client, app = test_client_with_data
         """Verify each recipe includes ALL required fields for infinite scroll (no N+1 queries)"""
-        response = client.get(
-            "/recipes/search?page=1&limit=10"
-        )
+        response = client.get("/recipes/search?page=1&limit=10")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -120,9 +108,7 @@ class TestResponseStructureValidation:
     def test_recipe_tag_structure_validation(self, test_client_with_data):
         client, app = test_client_with_data
         """Verify recipes include both public_tags and private_tags arrays"""
-        response = client.get(
-            "/recipes/search?page=1&limit=10"
-        )
+        response = client.get("/recipes/search?page=1&limit=10")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -154,7 +140,7 @@ class TestEmptySearchBehavior:
         # Get total recipe count from database
         cursor = db_with_test_data.execute("SELECT COUNT(*) as total FROM recipes")
         total_recipes = cursor.fetchone()["total"]
-
+        client, app = test_client_with_data
         # Test empty search
         response = client.get("/recipes/search")
         assert response.status_code == status.HTTP_200_OK
@@ -173,6 +159,7 @@ class TestEmptySearchBehavior:
         cursor = db_with_test_data.execute("SELECT COUNT(*) as total FROM recipes")
         total_recipes = cursor.fetchone()["total"]
 
+        client, app = test_client_with_data
         response = client.get("/recipes/search?limit=20")
         assert response.status_code == status.HTTP_200_OK
 
@@ -195,9 +182,7 @@ class TestSortingAndOrdering:
     def test_valid_sort_by_parameters(self, test_client_with_data, sort_by):
         client, app = test_client_with_data
         """Test all valid sort_by values: name, created_at, avg_rating"""
-        response = client.get(
-            f"/recipes/search?sort_by={sort_by}&limit=10"
-        )
+        response = client.get(f"/recipes/search?sort_by={sort_by}&limit=10")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -206,35 +191,27 @@ class TestSortingAndOrdering:
         assert len(data["recipes"]) >= 0
 
     @pytest.mark.parametrize("sort_order", ["asc", "desc"])
-    def test_valid_sort_order_parameters(
-        self, test_client_with_data, sort_order
-    ):
+    def test_valid_sort_order_parameters(self, test_client_with_data, sort_order):
         """Test all valid sort_order values: asc, desc"""
-        response = client.get(
-            f"/recipes/search?sort_order={sort_order}&limit=10"
-        )
+        client, app = test_client_with_data
+        response = client.get(f"/recipes/search?sort_order={sort_order}&limit=10")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
         assert "recipes" in data
 
-    def test_invalid_sort_parameters_return_error(
-        self, test_client_with_data
-    ):
+    def test_invalid_sort_parameters_return_error(self, test_client_with_data):
         """Test invalid sort parameters return proper error responses"""
+        client, app = test_client_with_data
         # Invalid sort_by
-        response = client.get(
-            "/recipes/search?sort_by=invalid"
-        )
+        response = client.get("/recipes/search?sort_by=invalid")
         assert response.status_code in [
             status.HTTP_400_BAD_REQUEST,
             status.HTTP_422_UNPROCESSABLE_ENTITY,
         ]
 
         # Invalid sort_order
-        response = client.get(
-            "/recipes/search?sort_order=invalid"
-        )
+        response = client.get("/recipes/search?sort_order=invalid")
         assert response.status_code in [
             status.HTTP_400_BAD_REQUEST,
             status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -291,10 +268,9 @@ class TestSortingAndOrdering:
                 "Sorting should be consistent across pages"
             )
 
-    def test_sorting_combined_with_search_filters(
-        self, test_client_with_data
-    ):
+    def test_sorting_combined_with_search_filters(self, test_client_with_data):
         """Test sorting combined with other search filters"""
+        client, app = test_client_with_data
         response = client.get(
             "/recipes/search?q=gin&sort_by=name&sort_order=asc&limit=10"
         )
@@ -317,15 +293,11 @@ class TestPaginationConsistency:
         client, app = test_client_with_data
         """Compare pagination structure between empty and filtered searches"""
         # Empty search
-        response1 = client.get(
-            "/recipes/search?page=1&limit=10"
-        )
+        response1 = client.get("/recipes/search?page=1&limit=10")
         assert response1.status_code == status.HTTP_200_OK
 
         # Filtered search
-        response2 = client.get(
-            "/recipes/search?q=gin&page=1&limit=10"
-        )
+        response2 = client.get("/recipes/search?q=gin&page=1&limit=10")
         assert response2.status_code == status.HTTP_200_OK
 
         data1 = response1.json()
@@ -348,10 +320,9 @@ class TestPaginationConsistency:
                 f"Filtered search missing pagination field: {field}"
             )
 
-    def test_pagination_metadata_mathematical_consistency(
-        self, test_client_with_data
-    ):
+    def test_pagination_metadata_mathematical_consistency(self, test_client_with_data):
         """Verify mathematical consistency of pagination metadata across search types"""
+        client, app = test_client_with_data
         response = client.get("/recipes/search?page=2&limit=5")
         assert response.status_code == status.HTTP_200_OK
 
@@ -378,9 +349,7 @@ class TestPaginationConsistency:
         client, app = test_client_with_data
         """Test that has_next/has_previous calculation is identical for all search types"""
         # Test first page
-        response = client.get(
-            "/recipes/search?page=1&limit=10"
-        )
+        response = client.get("/recipes/search?page=1&limit=10")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -444,14 +413,11 @@ class TestSearchParameterHandling:
             status.HTTP_422_UNPROCESSABLE_ENTITY,
         ]
 
-    def test_url_encoding_decoding_search_parameters(
-        self, test_client_with_data
-    ):
+    def test_url_encoding_decoding_search_parameters(self, test_client_with_data):
         """Validate URL encoding/decoding of search parameters"""
+        client, app = test_client_with_data
         encoded_query = "gin%20%26%20tonic"  # "gin & tonic" URL encoded
-        response = client.get(
-            f"/recipes/search?q={encoded_query}"
-        )
+        response = client.get(f"/recipes/search?q={encoded_query}")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -469,9 +435,7 @@ class TestEdgeCasesAndBoundaryConditions:
         client, app = test_client_with_data
         """Test pagination with exactly 0 results"""
         # Search for something that definitely won't exist
-        response = client.get(
-            "/recipes/search?q=xyznonexistentrecipe12345"
-        )
+        response = client.get("/recipes/search?q=xyznonexistentrecipe12345")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -489,12 +453,11 @@ class TestEdgeCasesAndBoundaryConditions:
         # Try to find a unique recipe name
         cursor = db_with_test_data.execute("SELECT name FROM recipes LIMIT 1")
         recipe = cursor.fetchone()
+        client, app = test_client_with_data
 
         if recipe:
             # Search for this specific recipe
-            response = client.get(
-                f"/recipes/search?q={recipe['name']}"
-            )
+            response = client.get(f"/recipes/search?q={recipe['name']}")
             assert response.status_code == status.HTTP_200_OK
 
             data = response.json()
@@ -503,11 +466,10 @@ class TestEdgeCasesAndBoundaryConditions:
                 assert data["pagination"]["has_next"] is False
                 assert data["pagination"]["has_previous"] is False
 
-    def test_requesting_page_beyond_available_pages(
-        self, test_client_with_data
-    ):
+    def test_requesting_page_beyond_available_pages(self, test_client_with_data):
         """Verify behavior when requesting page beyond available pages"""
         # First get total pages
+        client, app = test_client_with_data
         response = client.get("/recipes/search?limit=10")
         assert response.status_code == status.HTTP_200_OK
 
@@ -516,9 +478,7 @@ class TestEdgeCasesAndBoundaryConditions:
 
         # Request a page way beyond available pages
         beyond_page = total_pages + 10
-        response = client.get(
-            f"/recipes/search?page={beyond_page}&limit=10"
-        )
+        response = client.get(f"/recipes/search?page={beyond_page}&limit=10")
 
         # Should either return empty results or an error
         assert response.status_code in [
@@ -547,9 +507,7 @@ class TestEdgeCasesAndBoundaryConditions:
     def test_very_large_page_numbers(self, test_client_with_data):
         client, app = test_client_with_data
         """Validate handling of very large page numbers"""
-        response = client.get(
-            "/recipes/search?page=999999&limit=10"
-        )
+        response = client.get("/recipes/search?page=999999&limit=10")
 
         # Should handle gracefully - either return empty results or error
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
@@ -558,14 +516,11 @@ class TestEdgeCasesAndBoundaryConditions:
 class TestSpecialCharacterHandling:
     """Tests for special character handling in search parameters"""
 
-    def test_unicode_characters_in_search_queries(
-        self, test_client_with_data
-    ):
+    def test_unicode_characters_in_search_queries(self, test_client_with_data):
         """Test Unicode characters in search queries"""
+        client, app = test_client_with_data
         unicode_query = "café"
-        response = client.get(
-            f"/recipes/search?q={unicode_query}"
-        )
+        response = client.get(f"/recipes/search?q={unicode_query}")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -576,9 +531,7 @@ class TestSpecialCharacterHandling:
         client, app = test_client_with_data
         """Test search queries with SQL injection attempts"""
         injection_query = "'; DROP TABLE recipes; --"
-        response = client.get(
-            f"/recipes/search?q={injection_query}"
-        )
+        response = client.get(f"/recipes/search?q={injection_query}")
 
         # Should either work safely or return an error, but not crash
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
@@ -587,9 +540,7 @@ class TestSpecialCharacterHandling:
         client, app = test_client_with_data
         """Validate handling of extremely long search parameters"""
         long_query = "a" * 1000  # 1000 character query
-        response = client.get(
-            f"/recipes/search?q={long_query}"
-        )
+        response = client.get(f"/recipes/search?q={long_query}")
 
         # Should handle gracefully
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
@@ -598,10 +549,9 @@ class TestSpecialCharacterHandling:
 class TestErrorResponseFormat:
     """Tests for consistent error response format"""
 
-    def test_error_response_structure_consistency(
-        self, test_client_with_data
-    ):
+    def test_error_response_structure_consistency(self, test_client_with_data):
         """Test that error responses maintain consistent structure"""
+        client, app = test_client_with_data
         # Force an error with invalid parameters
         response = client.get("/recipes/search?page=0")
 
@@ -623,10 +573,9 @@ class TestErrorResponseFormat:
             data = response.json()
             assert isinstance(data, dict), "Error should provide structured information"
 
-    def test_http_status_codes_for_different_errors(
-        self, test_client_with_data
-    ):
+    def test_http_status_codes_for_different_errors(self, test_client_with_data):
         """Validate HTTP status codes for different error types"""
+        client, app = test_client_with_data
         # Parameter validation errors
         response = client.get("/recipes/search?page=-1")
         if response.status_code != status.HTTP_200_OK:
