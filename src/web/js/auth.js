@@ -39,11 +39,54 @@ export function initAuth() {
             userInfo.classList.add('hidden');
         }
     }
+    
+    // Check auth state periodically (every 30 seconds) to handle token expiration
+    setInterval(() => {
+        updateAuthUI();
+    }, 30000);
+    
+    // Also check when page becomes visible (e.g., switching tabs)
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            updateAuthUI();
+        }
+    });
 }
 
 // Check if user is authenticated
 export function isAuthenticated() {
-    return localStorage.getItem('token') !== null;
+    const token = localStorage.getItem('token');
+    const idToken = localStorage.getItem('id_token');
+    
+    if (!token || !idToken) {
+        return false;
+    }
+    
+    try {
+        // Check if the ID token is expired
+        const parts = idToken.split('.');
+        if (parts.length === 3) {
+            const payload = JSON.parse(atob(parts[1]));
+            const currentTime = Math.floor(Date.now() / 1000);
+            
+            // If token is expired, clear stored tokens and return false
+            if (payload.exp && payload.exp < currentTime) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('id_token');
+                localStorage.removeItem('username');
+                return false;
+            }
+        }
+    } catch (e) {
+        console.error('Error checking token expiration:', e);
+        // If we can't parse the token, consider it invalid
+        localStorage.removeItem('token');
+        localStorage.removeItem('id_token');
+        localStorage.removeItem('username');
+        return false;
+    }
+    
+    return true;
 }
 
 // Get user information
