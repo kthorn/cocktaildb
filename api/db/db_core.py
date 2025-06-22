@@ -2043,6 +2043,8 @@ class Database:
                 must_ingredient_conditions,
                 must_not_ingredient_conditions,
                 tag_conditions,
+                sort_by,
+                sort_order,
             )
 
             # Get total count first

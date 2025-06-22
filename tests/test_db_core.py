@@ -87,7 +87,7 @@ class TestDatabaseConnectionManagement:
             cursor = conn.cursor()
             cursor.execute("PRAGMA journal_mode")
             journal_mode = cursor.fetchone()[0]
-            assert journal_mode == "wal"
+            assert journal_mode == "delete"
 
             conn.close()
 

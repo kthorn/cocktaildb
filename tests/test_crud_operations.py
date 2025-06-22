@@ -25,6 +25,7 @@ class TestComplexIngredientCRUD:
         mock_auth = mocker.patch("api.dependencies.auth.get_user_from_lambda_event")
         from api.dependencies.auth import UserInfo
 
+        client, app = test_client_with_data
         mock_auth.return_value = UserInfo(
             user_id=mock_user["user_id"],
             username=mock_user.get("username"),
@@ -32,7 +33,6 @@ class TestComplexIngredientCRUD:
             groups=mock_user.get("cognito:groups", []),
             claims=mock_user,
         )
-
 
         # Create parent ingredient
         parent_data = {"name": "Test Spirits", "description": "Alcoholic spirits"}
@@ -71,9 +71,7 @@ class TestComplexIngredientCRUD:
                 assert delete_child_response.status_code in [200, 204]
 
                 # Delete parent (should succeed now that child is gone)
-                delete_parent_response = client.delete(
-                    f"/ingredients/{parent_id}"
-                )
+                delete_parent_response = client.delete(f"/ingredients/{parent_id}")
                 assert delete_parent_response.status_code in [200, 204]
 
 
@@ -160,9 +158,7 @@ class TestComplexRecipeCRUD:
                 update_data = {
                     "instructions": "Updated: Stir gently with ice, double strain, express lemon peel"
                 }
-                update_response = client.put(
-                    f"/recipes/{recipe_id}", json=update_data
-                )
+                update_response = client.put(f"/recipes/{recipe_id}", json=update_data)
 
                 if update_response.status_code == 200:
                     updated_recipe = update_response.json()
@@ -180,13 +176,12 @@ class TestComplexRecipeCRUD:
 class TestConcurrencyAndLocking:
     """Test concurrent operations and data consistency"""
 
-    def test_concurrent_recipe_updates(
-        self, test_client_with_data, mock_user, mocker
-    ):
+    def test_concurrent_recipe_updates(self, test_client_with_data, mock_user, mocker):
         """Test handling of concurrent recipe updates"""
         mock_auth = mocker.patch("api.dependencies.auth.get_user_from_lambda_event")
         from api.dependencies.auth import UserInfo
 
+        client, app = test_client_with_data
         mock_auth.return_value = UserInfo(
             user_id=mock_user["user_id"],
             username=mock_user.get("username"),
@@ -194,7 +189,6 @@ class TestConcurrencyAndLocking:
             groups=mock_user.get("cognito:groups", []),
             claims=mock_user,
         )
-
 
         # Create a recipe to test concurrent updates
         recipe_data = {

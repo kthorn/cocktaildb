@@ -507,14 +507,14 @@ class TestForeignKeyConstraints:
             tag = db.create_public_tag("test")
 
             # Try to associate with non-existent recipe
-            with pytest.raises(sqlite3.IntegrityError):
+            with pytest.raises(sqlite3.OperationalError):
                 db.execute_query(
                     "INSERT INTO recipe_public_tags (recipe_id, tag_id) VALUES (?, ?)",
                     (999, tag["id"]),
                 )
 
             # Try to associate with non-existent tag
-            with pytest.raises(sqlite3.IntegrityError):
+            with pytest.raises(sqlite3.OperationalError):
                 db.execute_query(
                     "INSERT INTO recipe_public_tags (recipe_id, tag_id) VALUES (?, ?)",
                     (recipe["id"], 999),

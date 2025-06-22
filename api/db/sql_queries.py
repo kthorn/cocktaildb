@@ -158,7 +158,7 @@ def build_search_recipes_count_sql(must_conditions: List[str], must_not_conditio
     
     return base_sql
 
-def build_search_recipes_paginated_sql(must_conditions: List[str], must_not_conditions: List[str], tag_conditions: List[str] = None) -> str:
+def build_search_recipes_paginated_sql(must_conditions: List[str], must_not_conditions: List[str], tag_conditions: List[str] = None, sort_by: str = "name", sort_order: str = "asc") -> str:
     """Build the paginated search SQL with optional ingredient filtering"""
     base_sql = """
     WITH search_results AS (
@@ -182,9 +182,9 @@ def build_search_recipes_paginated_sql(must_conditions: List[str], must_not_cond
             ingredients i ON ri.ingredient_id = i.id
         WHERE
             (:search_query IS NULL OR 
-             r.name LIKE '%' || :search_query || '%' OR 
-             r.description LIKE '%' || :search_query || '%' OR 
-             r.instructions LIKE '%' || :search_query || '%')
+             remove_accents(LOWER(r.name)) LIKE '%' || remove_accents(LOWER(:search_query)) || '%' OR 
+             remove_accents(LOWER(r.description)) LIKE '%' || remove_accents(LOWER(:search_query)) || '%' OR 
+             remove_accents(LOWER(r.instructions)) LIKE '%' || remove_accents(LOWER(:search_query)) || '%')
         AND
             (:min_rating IS NULL OR COALESCE(r.avg_rating, 0) >= :min_rating)
         AND
@@ -209,17 +209,22 @@ def build_search_recipes_paginated_sql(must_conditions: List[str], must_not_cond
             r.id, r.name, r.instructions, r.description, r.image_url, 
             r.source, r.source_url, r.avg_rating, r.rating_count,
             ur.rating
-        ORDER BY
-            CASE 
-                WHEN :sort_by = 'name' AND :sort_order = 'asc' THEN r.name
-                WHEN :sort_by = 'avg_rating' AND :sort_order = 'asc' THEN CAST(COALESCE(r.avg_rating, 0) AS TEXT)
-                WHEN :sort_by = 'created_at' AND :sort_order = 'asc' THEN r.id
-            END ASC,
-            CASE 
-                WHEN :sort_by = 'name' AND :sort_order = 'desc' THEN r.name
-                WHEN :sort_by = 'avg_rating' AND :sort_order = 'desc' THEN CAST(COALESCE(r.avg_rating, 0) AS TEXT)
-                WHEN :sort_by = 'created_at' AND :sort_order = 'desc' THEN r.id
-            END DESC
+"""
+    
+    # Add sorting based on parameters
+    if sort_by == "name":
+        sort_column = "r.name"
+    elif sort_by == "avg_rating":
+        sort_column = "COALESCE(r.avg_rating, 0)"
+    elif sort_by == "created_at":
+        sort_column = "r.id"
+    else:
+        sort_column = "r.name"  # default fallback
+    
+    sort_direction = "DESC" if sort_order == "desc" else "ASC"
+    
+    base_sql += f"""
+        ORDER BY {sort_column} {sort_direction}
         LIMIT :limit OFFSET :offset
     ),
     paginated_with_ingredients AS (
