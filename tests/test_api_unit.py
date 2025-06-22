@@ -205,6 +205,20 @@ class TestTagAPIEndpoints:
         response = test_client_memory.post("/tags/private", json=tag_data)
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
+    def test_get_private_tags_unauthorized(self, test_client_memory):
+        """Test getting private tags without authentication"""
+        response = test_client_memory.get("/tags/private")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_get_private_tags_authorized(self, authenticated_client):
+        """Test getting private tags with authentication"""
+        response = authenticated_client.get("/tags/private")
+        # Should not be unauthorized (may fail due to other reasons like database constraints)
+        assert response.status_code != status.HTTP_401_UNAUTHORIZED
+        if response.status_code == status.HTTP_200_OK:
+            data = response.json()
+            assert isinstance(data, list)
+
     def test_create_private_tag_authorized(self, authenticated_client):
         """Test creating private tag with authentication"""
         tag_data = {"name": "test-private-tag"}

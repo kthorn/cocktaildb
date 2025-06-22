@@ -80,7 +80,7 @@ async def create_private_tag(
     try:
         logger.info(f"Creating private tag: {tag_data.name}")
 
-        created_tag = db.create_private_tag(tag_data.name, user.user_id, user.username)
+        created_tag = db.create_private_tag(tag_data.name, user.user_id)
         return PrivateTagResponse(**created_tag)
 
     except Exception as e:
