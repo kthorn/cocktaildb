@@ -70,13 +70,13 @@ def production_db_path():
     return str(db_path)
 
 
-@pytest.fixture(scope="function")
-def temp_db_from_production(production_db_path, tmp_path):
-    """Create a temporary copy of production database for isolated tests using pytest's tmp_path"""
-    # Use pytest's native temporary directory
-    temp_db = tmp_path / "test_cocktaildb.db"
-    shutil.copy2(production_db_path, temp_db)
-    return str(temp_db)
+# @pytest.fixture(scope="function")
+# def temp_db_from_production(production_db_path, tmp_path):
+#     """DEPRECATED: Create a temporary copy of production database for isolated tests using pytest's tmp_path"""
+#     # Use pytest's native temporary directory
+#     temp_db = tmp_path / "test_cocktaildb.db"
+#     shutil.copy2(production_db_path, temp_db)
+#     return str(temp_db)
 
 
 @pytest.fixture(scope="function")
@@ -104,6 +104,44 @@ def memory_db_with_schema():
             with open(schema_path, "r") as f:
                 schema_sql = f.read()
             conn.executescript(schema_sql)
+            # Use DELETE journal mode for tests to avoid locking issues
+            conn.execute("PRAGMA journal_mode=DELETE")
+            conn.close()
+
+        yield temp_path
+    finally:
+        # Simple cleanup
+        if os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                # If we can't delete it immediately, that's okay
+                pass
+
+
+@pytest.fixture(scope="function")
+def test_db_with_data():
+    """Test database with schema and predictable test data for integration tests"""
+    import sqlite3
+    import tempfile
+    from pathlib import Path
+
+    # Create a temporary file-based database so we can initialize it
+    temp_fd, temp_path = tempfile.mkstemp(suffix=".db")
+    os.close(temp_fd)
+
+    try:
+        # Initialize schema
+        schema_path = Path(__file__).parent.parent / "schema-deploy" / "schema.sql"
+        if schema_path.exists():
+            conn = sqlite3.connect(temp_path)
+            with open(schema_path, "r") as f:
+                schema_sql = f.read()
+            conn.executescript(schema_sql)
+            
+            # Add predictable test data
+            _populate_test_data(conn)
+            
             # Use DELETE journal mode for tests to avoid locking issues
             conn.execute("PRAGMA journal_mode=DELETE")
             conn.close()
@@ -182,34 +220,62 @@ def test_client_memory_no_schema(test_settings, memory_db, monkeypatch):
     yield client
 
 
+# @pytest.fixture(scope="function")
+# def test_client_production_readonly(test_settings, production_db_path, monkeypatch):
+#     """DEPRECATED: Test client with production database (read-only tests)"""
+#     # Use monkeypatch to set environment variables
+#     monkeypatch.setenv("DB_PATH", production_db_path)
+#     monkeypatch.setenv("ENVIRONMENT", "test")
+# 
+#     # Import and create app after environment is configured
+#     from api.main import app
+# 
+#     client = TestClient(app)
+#     yield client
+
+
+# @pytest.fixture(scope="function")
+# def test_client_production_isolated(
+#     test_settings, temp_db_from_production, monkeypatch
+# ):
+#     """DEPRECATED: Test client with isolated copy of production database"""
+#     # Use monkeypatch to set environment variables
+#     monkeypatch.setenv("DB_PATH", temp_db_from_production)
+#     monkeypatch.setenv("ENVIRONMENT", "test")
+# 
+#     # Import and create app after environment is configured
+#     from api.main import app
+# 
+#     client = TestClient(app)
+#     yield client
+
+
 @pytest.fixture(scope="function")
-def test_client_production_readonly(test_settings, production_db_path, monkeypatch):
-    """Test client with production database (read-only tests)"""
+def test_client_with_data(test_settings, test_db_with_data, monkeypatch):
+    """Test client with fresh database and predictable test data for integration tests"""
     # Use monkeypatch to set environment variables
-    monkeypatch.setenv("DB_PATH", production_db_path)
+    monkeypatch.setenv("DB_PATH", test_db_with_data)
     monkeypatch.setenv("ENVIRONMENT", "test")
 
     # Import and create app after environment is configured
     from api.main import app
 
+    # Clear any existing dependency overrides
+    app.dependency_overrides.clear()
     client = TestClient(app)
-    yield client
+    yield client, app
+    # Clean up after test
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture(scope="function")
-def test_client_production_isolated(
-    test_settings, temp_db_from_production, monkeypatch
-):
-    """Test client with isolated copy of production database"""
-    # Use monkeypatch to set environment variables
-    monkeypatch.setenv("DB_PATH", temp_db_from_production)
-    monkeypatch.setenv("ENVIRONMENT", "test")
-
-    # Import and create app after environment is configured
-    from api.main import app
-
-    client = TestClient(app)
-    yield client
+def db_with_test_data(test_db_with_data):
+    """Direct database connection to test database with predictable data"""
+    import sqlite3
+    conn = sqlite3.connect(test_db_with_data)
+    conn.row_factory = sqlite3.Row  # Enable dict-like access
+    yield conn
+    conn.close()
 
 
 @pytest.fixture(scope="function")
@@ -270,13 +336,13 @@ def admin_client(test_client_memory_with_app, mock_admin_user):
         del app.dependency_overrides[require_authentication]
 
 
-@pytest.fixture(scope="function")
-def db_connection(temp_db_from_production):
-    """Direct database connection for test data inspection"""
-    conn = sqlite3.connect(temp_db_from_production)
-    conn.row_factory = sqlite3.Row  # Enable dict-like access
-    yield conn
-    conn.close()
+# @pytest.fixture(scope="function")
+# def db_connection(temp_db_from_production):
+#     """DEPRECATED: Direct database connection for test data inspection"""
+#     conn = sqlite3.connect(temp_db_from_production)
+#     conn.row_factory = sqlite3.Row  # Enable dict-like access
+#     yield conn
+#     conn.close()
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -566,3 +632,84 @@ def create_test_recipe_with_tags(
 
     db_connection.commit()
     return recipe_id
+
+
+def _populate_test_data(conn):
+    """Populate test database with predictable test data for integration tests"""
+    cursor = conn.cursor()
+    
+    # Add additional ingredients beyond what's already in schema.sql
+    cursor.execute("""
+        INSERT INTO ingredients (name, description, parent_id, path) VALUES
+        ('Bourbon', 'American whiskey made from corn', 1, '/1/8/'),
+        ('Rye Whiskey', 'Whiskey made from rye grain', 1, '/1/9/'),
+        ('Lemon Juice', 'Fresh citrus juice', 7, '/7/10/'),
+        ('Lime Juice', 'Fresh citrus juice', 7, '/7/11/'),
+        ('Simple Syrup', 'Sugar and water syrup', NULL, '/12/'),
+        ('Angostura Bitters', 'Aromatic bitters', NULL, '/13/')
+    """)
+    
+    # Add test recipes with predictable content
+    cursor.execute("""
+        INSERT INTO recipes (name, instructions, description, source, avg_rating, rating_count) VALUES
+        ('Test Old Fashioned', 'Muddle sugar with bitters, add whiskey and ice', 'Classic whiskey cocktail', 'Test Source', 4.5, 2),
+        ('Test Whiskey Sour', 'Shake whiskey, lemon juice, and simple syrup with ice', 'Tart whiskey cocktail', 'Test Source', 4.0, 1),
+        ('Test Daiquiri', 'Shake rum, lime juice, and simple syrup with ice', 'Classic rum cocktail', 'Test Source', 0, 0),
+        ('Test Gin Martini', 'Stir gin and vermouth with ice, strain', 'Classic gin cocktail', 'Test Source', 5.0, 1)
+    """)
+    
+    # Add recipe ingredients
+    cursor.execute("""
+        INSERT INTO recipe_ingredients (recipe_id, ingredient_id, unit_id, amount) VALUES
+        (1, 8, 1, 2.0),     -- Old Fashioned: 2 oz Bourbon
+        (1, 13, 5, 2),      -- Old Fashioned: 2 dashes Angostura Bitters
+        (1, 12, 3, 0.25),   -- Old Fashioned: 1/4 tsp Simple Syrup
+        (2, 8, 1, 2.0),     -- Whiskey Sour: 2 oz Bourbon
+        (2, 10, 1, 0.75),   -- Whiskey Sour: 0.75 oz Lemon Juice
+        (2, 12, 1, 0.5),    -- Whiskey Sour: 0.5 oz Simple Syrup
+        (3, 2, 1, 2.0),     -- Daiquiri: 2 oz Rum
+        (3, 11, 1, 0.75),   -- Daiquiri: 0.75 oz Lime Juice
+        (3, 12, 1, 0.5),    -- Daiquiri: 0.5 oz Simple Syrup
+        (4, 4, 1, 2.5),     -- Gin Martini: 2.5 oz Gin
+        (4, 1, 1, 0.5)      -- Gin Martini: 0.5 oz Vermouth (using Whiskey as placeholder)
+    """)
+    
+    # Add test ratings
+    cursor.execute("""
+        INSERT INTO ratings (cognito_user_id, cognito_username, recipe_id, rating) VALUES
+        ('test-user-1', 'testuser1', 1, 4),
+        ('test-user-2', 'testuser2', 1, 5),
+        ('test-user-1', 'testuser1', 2, 4),
+        ('test-user-1', 'testuser1', 4, 5)
+    """)
+    
+    # Add test tags (Note: Tiki=1, Classic=2 already exist from schema)
+    cursor.execute("""
+        INSERT INTO tags (name, created_by) VALUES
+        ('Whiskey', NULL),
+        ('Citrus', NULL),
+        ('Sweet', NULL),
+        ('Stirred', NULL),
+        ('Shaken', NULL),
+        ('My Favorite', 'test-user-1')
+    """)
+    
+    # Add recipe-tag associations (adjusting for existing tags: Tiki=1, Classic=2)
+    cursor.execute("""
+        INSERT INTO recipe_tags (recipe_id, tag_id) VALUES
+        (1, 2),  -- Old Fashioned: Classic
+        (1, 3),  -- Old Fashioned: Whiskey  
+        (1, 5),  -- Old Fashioned: Sweet
+        (1, 6),  -- Old Fashioned: Stirred
+        (2, 3),  -- Whiskey Sour: Whiskey
+        (2, 4),  -- Whiskey Sour: Citrus
+        (2, 7),  -- Whiskey Sour: Shaken
+        (3, 1),  -- Daiquiri: Tiki
+        (3, 4),  -- Daiquiri: Citrus
+        (3, 7),  -- Daiquiri: Shaken
+        (4, 2),  -- Gin Martini: Classic
+        (4, 6),  -- Gin Martini: Stirred
+        (1, 8)   -- Old Fashioned: My Favorite (private tag)
+    """)
+    
+    conn.commit()

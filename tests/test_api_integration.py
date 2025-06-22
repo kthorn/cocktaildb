@@ -13,14 +13,13 @@ from conftest import (
 )
 
 
-class TestProductionDataValidation:
-    """Test that production data is valid and well-structured"""
+class TestDataValidation:
+    """Test that database data is valid and well-structured"""
 
-    def test_ingredients_production_data_integrity(
-        self, test_client_production_readonly
-    ):
-        """Test ingredients production data structure and relationships"""
-        response = test_client_production_readonly.get("/ingredients")
+    def test_ingredients_data_integrity(self, test_client_with_data):
+        """Test ingredients data structure and relationships"""
+        client, app = test_client_with_data
+        response = client.get("/ingredients")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -31,11 +30,12 @@ class TestProductionDataValidation:
             for ingredient in data[:10]:  # Test first 10 ingredients
                 assert_ingredient_structure(ingredient)
 
-            # Test hierarchy relationships
+            # Test hierarchy relationships - should have both parent and child ingredients
             children = [ing for ing in data if ing.get("parent_id")]
             parents = [ing for ing in data if not ing.get("parent_id")]
 
             assert len(parents) > 0, "Should have root-level ingredients"
+            assert len(children) > 0, "Should have child ingredients"
 
             # Verify parent-child relationships
             for child in children[:5]:  # Test first 5 children
@@ -45,48 +45,49 @@ class TestProductionDataValidation:
                     f"Parent {parent_id} not found for child {child['name']}"
                 )
 
-    def test_recipes_production_data_integrity(self, test_client_production_readonly):
-        """Test recipes production data structure and completeness"""
-        response = test_client_production_readonly.get("/recipes")
+    def test_recipes_data_integrity(self, test_client_with_data):
+        """Test recipes data structure and completeness"""
+        client, app = test_client_with_data
+        response = client.get("/recipes")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
         recipes = data if isinstance(data, list) else data.get("recipes", [])
 
-        if recipes:
-            # Test detailed recipe structure
-            recipe_id = recipes[0]["id"]
-            detail_response = test_client_production_readonly.get(
-                f"/recipes/{recipe_id}"
+        assert len(recipes) > 0, "Should have test recipes"
+        
+        # Test detailed recipe structure
+        recipe_id = recipes[0]["id"]
+        detail_response = client.get(f"/recipes/{recipe_id}")
+        assert detail_response.status_code == status.HTTP_200_OK
+
+        recipe_detail = detail_response.json()
+        assert_recipe_structure(recipe_detail)
+
+        # Verify ingredients are properly structured
+        if recipe_detail.get("ingredients"):
+            ingredient = recipe_detail["ingredients"][0]
+            expected_keys = [
+                "ingredient_id",
+                "ingredient_name",
+                "unit_name",
+            ]
+            assert_valid_response_structure(ingredient, expected_keys)
+            # Check that either quantity or amount is present
+            assert "quantity" in ingredient or "amount" in ingredient, (
+                "Ingredient should have either 'quantity' or 'amount' field"
             )
-            assert detail_response.status_code == status.HTTP_200_OK
 
-            recipe_detail = detail_response.json()
-            assert_recipe_structure(recipe_detail)
-
-            # Verify ingredients are properly structured
-            if recipe_detail.get("ingredients"):
-                ingredient = recipe_detail["ingredients"][0]
-                expected_keys = [
-                    "ingredient_id",
-                    "ingredient_name",
-                    "unit_name",
-                ]
-                assert_valid_response_structure(ingredient, expected_keys)
-                # Check that either quantity or amount is present
-                assert "quantity" in ingredient or "amount" in ingredient, (
-                    "Ingredient should have either 'quantity' or 'amount' field"
-                )
-
-    def test_units_production_data_completeness(self, test_client_production_readonly):
-        """Test that essential cocktail units exist in production data"""
-        response = test_client_production_readonly.get("/units")
+    def test_units_data_completeness(self, test_client_with_data):
+        """Test that essential cocktail units exist in test data"""
+        client, app = test_client_with_data
+        response = client.get("/units")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
         # Handle both possible response formats: direct list or dict with "units" key
         units = data if isinstance(data, list) else data.get("units", [])
-        assert len(units) > 0, "Should have units in production database"
+        assert len(units) > 0, "Should have units in test database"
 
         # Test unit structure and validate conversion factors
         unit_names = [unit["name"].lower() for unit in units]
@@ -94,12 +95,9 @@ class TestProductionDataValidation:
             unit["abbreviation"].lower() for unit in units if unit.get("abbreviation")
         ]
 
-        # Essential cocktail units that should exist in production
-        expected_units = [
-            "ounce",
-            "dash",
-        ]  # Removed "ml" as it doesn't exist in production
-        expected_abbrevs = ["oz"]  # Removed "ml" abbreviation
+        # Essential cocktail units that should exist from schema
+        expected_units = ["ounce", "dash", "tablespoon", "teaspoon"]
+        expected_abbrevs = ["oz", "dash", "tbsp", "tsp"]
 
         for unit in expected_units:
             assert any(unit in name for name in unit_names), (
@@ -122,45 +120,42 @@ class TestProductionDataValidation:
 
 
 class TestSearchAndPaginationFunctionality:
-    """Test search and pagination with production data"""
+    """Test search and pagination with test data"""
 
-    def test_ingredients_endpoint_functionality(self, test_client_production_readonly):
+    def test_ingredients_endpoint_functionality(self, test_client_with_data):
         """Test ingredients endpoint returns all ingredients (no search functionality)"""
+        client, app = test_client_with_data
         # Test basic ingredients endpoint
-        response = test_client_production_readonly.get("/ingredients")
+        response = client.get("/ingredients")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
         assert isinstance(data, list), "Ingredients endpoint should return a list"
+        assert len(data) > 0, "Should have test ingredients"
 
-        if data:
-            # Verify ingredient structure
-            ingredient = data[0]
-            expected_keys = ["id", "name"]
-            assert_valid_response_structure(ingredient, expected_keys)
+        # Verify ingredient structure
+        ingredient = data[0]
+        expected_keys = ["id", "name"]
+        assert_valid_response_structure(ingredient, expected_keys)
 
-            # Verify that adding search parameters doesn't change results
-            # (since search is not implemented for ingredients)
-            search_response = test_client_production_readonly.get(
-                "/ingredients?search=gin"
-            )
-            assert search_response.status_code == status.HTTP_200_OK
-            search_data = search_response.json()
+        # Verify that adding search parameters doesn't change results
+        # (since search is not implemented for ingredients)
+        search_response = client.get("/ingredients?search=gin")
+        assert search_response.status_code == status.HTTP_200_OK
+        search_data = search_response.json()
 
-            # Should return the same results as without search parameter
-            assert len(search_data) == len(data), (
-                "Search parameter should be ignored for ingredients endpoint"
-            )
+        # Should return the same results as without search parameter
+        assert len(search_data) == len(data), (
+            "Search parameter should be ignored for ingredients endpoint"
+        )
 
 
 class TestDataConsistencyAndIntegrity:
-    """Test data consistency and integrity with production data"""
+    """Test data consistency and integrity with test data"""
 
-    def test_database_referential_integrity(
-        self, test_client_production_readonly, db_connection
-    ):
+    def test_database_referential_integrity(self, test_client_with_data, db_with_test_data):
         """Test referential integrity across all tables"""
-        cursor = db_connection.cursor()
+        cursor = db_with_test_data.cursor()
 
         # Test ingredient parent references
         cursor.execute("""
@@ -201,11 +196,9 @@ class TestDataConsistencyAndIntegrity:
             f"Found invalid unit references: {invalid_unit_refs}"
         )
 
-    def test_data_quality_constraints(
-        self, test_client_production_readonly, db_connection
-    ):
+    def test_data_quality_constraints(self, test_client_with_data, db_with_test_data):
         """Test data quality and business rule constraints"""
-        cursor = db_connection.cursor()
+        cursor = db_with_test_data.cursor()
 
         # Test rating value constraints
         cursor.execute(
@@ -231,23 +224,21 @@ class TestDataConsistencyAndIntegrity:
             f"Found recipes with empty names: {empty_recipe_names}"
         )
 
-    def test_schema_completeness(self, test_client_production_readonly, db_connection):
+    def test_schema_completeness(self, test_client_with_data, db_with_test_data):
         """Test that database schema has all expected tables"""
-        cursor = db_connection.cursor()
+        cursor = db_with_test_data.cursor()
 
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = [row[0] for row in cursor.fetchall()]
 
         expected_tables = [
             "ingredients",
-            "recipes",
+            "recipes", 
             "recipe_ingredients",
             "units",
             "ratings",
-            "private_tags",
-            "public_tags",
-            "recipe_private_tags",
-            "recipe_public_tags",
+            "tags",
+            "recipe_tags",
         ]
 
         for table in expected_tables:
@@ -257,14 +248,12 @@ class TestDataConsistencyAndIntegrity:
 class TestComplexIntegrationScenarios:
     """Test complex integration scenarios that span multiple endpoints"""
 
-    def test_recipe_with_ingredients_and_ratings_flow(
-        self, test_client_production_readonly
-    ):
+    def test_recipe_with_ingredients_and_ratings_flow(self, test_client_with_data):
         """Test complete recipe workflow with ingredients and ratings"""
+        client, app = test_client_with_data
+        
         # Get a recipe with detailed information
-        recipes_response = test_client_production_readonly.get(
-            "/recipes?limit=1"
-        )
+        recipes_response = client.get("/recipes?limit=1")
         assert recipes_response.status_code == status.HTTP_200_OK
 
         recipes_data = recipes_response.json()
@@ -274,15 +263,12 @@ class TestComplexIntegrationScenarios:
             if isinstance(recipes_data, list)
             else recipes_data.get("recipes", [])
         )
-        if not recipes:
-            pytest.skip("No recipes available for integration test")
+        assert len(recipes) > 0, "Should have test recipes available"
 
         recipe_id = recipes[0]["id"]
 
         # Get detailed recipe with ingredients
-        recipe_detail_response = test_client_production_readonly.get(
-            f"/recipes/{recipe_id}"
-        )
+        recipe_detail_response = client.get(f"/recipes/{recipe_id}")
         assert recipe_detail_response.status_code == status.HTTP_200_OK
         recipe_detail = recipe_detail_response.json()
 
@@ -299,9 +285,7 @@ class TestComplexIntegrationScenarios:
                     assert len(ingredient["unit_name"]) > 0
 
         # Get ratings for this recipe
-        ratings_response = test_client_production_readonly.get(
-            f"/recipes/{recipe_id}/ratings"
-        )
+        ratings_response = client.get(f"/recipes/{recipe_id}/ratings")
         assert ratings_response.status_code == status.HTTP_200_OK
 
         ratings_data = ratings_response.json()
@@ -326,9 +310,10 @@ class TestComplexIntegrationScenarios:
             assert "user_id" in user_rating
             assert "recipe_id" in user_rating
 
-    def test_ingredient_hierarchy_navigation(self, test_client_production_readonly):
+    def test_ingredient_hierarchy_navigation(self, test_client_with_data):
         """Test navigating ingredient hierarchies"""
-        response = test_client_production_readonly.get("/ingredients")
+        client, app = test_client_with_data
+        response = client.get("/ingredients")
         assert response.status_code == status.HTTP_200_OK
 
         ingredients = response.json()
@@ -337,40 +322,17 @@ class TestComplexIntegrationScenarios:
         hierarchical_ingredients = [
             ing
             for ing in ingredients
-            if ing.get("ingredient_path") and ing["ingredient_path"].count("/") > 1
+            if ing.get("path") and ing["path"].count("/") > 2  # More than just root level
         ]
 
-        if hierarchical_ingredients:
-            for ingredient in hierarchical_ingredients[:3]:  # Test first 3
-                # Verify full name includes hierarchy information
-                if ingredient.get("full_name"):
-                    assert ingredient["name"] in ingredient["full_name"]
-
-                    # If it has a parent, full name should be longer than just the name
-                    if ingredient.get("parent_id"):
-                        assert len(ingredient["full_name"]) > len(ingredient["name"])
-
-
-class TestPerformanceWithProductionData:
-    """Performance tests with production data volumes"""
-
-    def test_endpoint_response_times(self, test_client_production_readonly):
-        """Test that key endpoints respond within reasonable time limits"""
-        import time
-
-        endpoints_and_limits = [
-            ("/ingredients", 3.0),
-            ("/recipes?limit=50", 5.0),
-            ("/units", 2.0),
-        ]
-
-        for endpoint, time_limit in endpoints_and_limits:
-            start_time = time.time()
-            response = test_client_production_readonly.get(endpoint)
-            end_time = time.time()
-
-            assert response.status_code == status.HTTP_200_OK
-            response_time = end_time - start_time
-            assert response_time < time_limit, (
-                f"{endpoint} took {response_time:.2f}s, should be under {time_limit}s"
-            )
+        assert len(hierarchical_ingredients) > 0, "Should have hierarchical ingredients in test data"
+        
+        for ingredient in hierarchical_ingredients[:3]:  # Test first 3
+            # Verify path structure
+            assert ingredient["path"].startswith("/"), "Path should start with /"
+            assert ingredient["path"].endswith("/"), "Path should end with /"
+            
+            # If it has a parent, verify parent exists
+            if ingredient.get("parent_id"):
+                parent = next((ing for ing in ingredients if ing["id"] == ingredient["parent_id"]), None)
+                assert parent is not None, f"Parent {ingredient['parent_id']} not found"

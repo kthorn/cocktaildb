@@ -9,11 +9,12 @@ class TestIngredientSearch:
     """Test search functionality with ingredient filters"""
 
     def test_search_recipes_with_aperol_ingredient(
-        self, test_client_production_readonly
+        self, test_client_with_data
     ):
         """Test searching recipes by Aperol ingredient"""
+        client, app = test_client_with_data
         # Search for recipes containing Aperol
-        response = test_client_production_readonly.get(
+        response = client.get(
             "/recipes/search?ingredients=Aperol"
         )
 
@@ -40,10 +41,10 @@ class TestIngredientSearch:
         assert len(aperol_ingredients) > 0, "Recipe should contain Aperol ingredient"
 
     def test_search_recipes_with_nonexistent_ingredient(
-        self, test_client_production_readonly
+        self, test_client_with_data
     ):
         """Test searching recipes by nonexistent ingredient"""
-        response = test_client_production_readonly.get(
+        response = client.get(
             "/recipes/search?ingredients=NonexistentIngredient123"
         )
 
@@ -55,12 +56,12 @@ class TestIngredientSearch:
         assert len(data["recipes"]) == 0
 
     def test_search_recipes_with_multiple_ingredients(
-        self, test_client_production_readonly
+        self, test_client_with_data
     ):
         """Test searching recipes with multiple ingredient filters"""
         # Test with two ingredients that are likely to appear together in cocktails
         # Using Aperol and Prosecco which should appear in some Italian cocktails
-        response = test_client_production_readonly.get(
+        response = client.get(
             "/recipes/search?ingredients=Lime Juice,Simple Syrup"
         )
         assert response.status_code == 200
@@ -90,10 +91,10 @@ class TestIngredientSearch:
             )
 
     def test_search_recipes_without_ingredients_returns_all(
-        self, test_client_production_readonly
+        self, test_client_with_data
     ):
         """Test that search without ingredient filter returns all recipes"""
-        response = test_client_production_readonly.get("/recipes/search")
+        response = client.get("/recipes/search")
 
         assert response.status_code == 200
         data = response.json()
@@ -105,16 +106,16 @@ class TestIngredientSearch:
         assert len(data["recipes"]) > 0
 
     def test_search_recipes_ingredient_filter_vs_no_filter_difference(
-        self, test_client_production_readonly
+        self, test_client_with_data
     ):
         """Test that ingredient filtering actually filters results"""
         # Get all recipes (no filter)
-        all_response = test_client_production_readonly.get("/recipes/search")
+        all_response = client.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
 
         # Get recipes with Aperol filter
-        aperol_response = test_client_production_readonly.get(
+        aperol_response = client.get(
             "/recipes/search?ingredients=Aperol"
         )
         assert aperol_response.status_code == 200
@@ -136,11 +137,11 @@ class TestIngredientSearch:
         )  # We know there's only 1 Aperol recipe
 
     def test_search_recipes_multiple_ingredients_and_logic(
-        self, test_client_production_readonly
+        self, test_client_with_data
     ):
         """Test that multiple ingredients use AND logic (recipe must contain ALL ingredients)"""
         # Find two ingredients that might appear together
-        response = test_client_production_readonly.get(
+        response = client.get(
             "/recipes/search?ingredients=Bourbon,Simple Syrup"
         )
 
@@ -175,13 +176,13 @@ class TestIngredientSearch:
             )
 
     def test_search_recipes_hierarchical_ingredient_matching(
-        self, test_client_production_readonly
+        self, test_client_with_data
     ):
         """Test that searching for parent ingredient matches recipes with child ingredients"""
         # Search for "Whiskey" should match recipes containing "Bourbon" (child of Whiskey)
 
         # First, find a recipe that contains Bourbon
-        bourbon_response = test_client_production_readonly.get(
+        bourbon_response = client.get(
             "/recipes/search?ingredients=Bourbon"
         )
         assert bourbon_response.status_code == 200
@@ -189,7 +190,7 @@ class TestIngredientSearch:
 
         if bourbon_data["pagination"]["total_count"] > 0:
             # Now search for Whiskey (parent of Bourbon)
-            whiskey_response = test_client_production_readonly.get(
+            whiskey_response = client.get(
                 "/recipes/search?ingredients=Whiskey"
             )
             assert whiskey_response.status_code == 200
@@ -212,7 +213,7 @@ class TestIngredientSearch:
             )
 
     def test_search_recipes_case_insensitive_ingredients(
-        self, test_client_production_readonly
+        self, test_client_with_data
     ):
         """Test that ingredient search is case-insensitive"""
         # Test different cases of the same ingredient
@@ -220,7 +221,7 @@ class TestIngredientSearch:
 
         expected_count = None
         for ingredient_case in test_cases:
-            response = test_client_production_readonly.get(
+            response = client.get(
                 f"/recipes/search?ingredients={ingredient_case}"
             )
             assert response.status_code == 200
@@ -235,11 +236,11 @@ class TestIngredientSearch:
                 )
 
     def test_search_recipes_ingredient_name_with_spaces(
-        self, test_client_production_readonly
+        self, test_client_with_data
     ):
         """Test searching for ingredients with spaces in their names"""
         # Test with "Simple Syrup" which has a space
-        response = test_client_production_readonly.get(
+        response = client.get(
             "/recipes/search?ingredients=Simple Syrup"
         )
         assert response.status_code == 200
@@ -262,17 +263,17 @@ class TestIngredientSearch:
             )
 
     def test_search_recipes_must_not_contain_ingredient(
-        self, test_client_production_readonly
+        self, test_client_with_data
     ):
         """Test MUST_NOT logic - exclude recipes containing specific ingredients"""
         # First, get all recipes to establish baseline
-        all_response = test_client_production_readonly.get("/recipes/search")
+        all_response = client.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
         total_recipes = all_data["pagination"]["total_count"]
 
         # Find recipes that contain Aperol
-        aperol_response = test_client_production_readonly.get(
+        aperol_response = client.get(
             "/recipes/search?ingredients=Aperol"
         )
         assert aperol_response.status_code == 200
@@ -282,7 +283,7 @@ class TestIngredientSearch:
         if aperol_count > 0:
             # Test MUST_NOT Aperol - should return recipes that DON'T contain Aperol
             # Using the format: ingredient_name:MUST_NOT
-            must_not_response = test_client_production_readonly.get(
+            must_not_response = client.get(
                 "/recipes/search?ingredients=Aperol:MUST_NOT"
             )
             assert must_not_response.status_code == 200
@@ -303,11 +304,11 @@ class TestIngredientSearch:
                 )
 
     def test_search_recipes_mixed_must_and_must_not(
-        self, test_client_production_readonly
+        self, test_client_with_data
     ):
         """Test combination of MUST and MUST_NOT ingredients"""
         # Search for recipes that MUST contain Whiskey but MUST NOT contain Aperol
-        response = test_client_production_readonly.get(
+        response = client.get(
             "/recipes/search?ingredients=Whiskey:MUST,Aperol:MUST_NOT"
         )
         assert response.status_code == 200
@@ -343,17 +344,17 @@ class TestIngredientSearch:
             )
 
     def test_search_recipes_must_not_nonexistent_ingredient(
-        self, test_client_production_readonly
+        self, test_client_with_data
     ):
         """Test MUST_NOT with nonexistent ingredient should return all recipes"""
         # Get baseline count
-        all_response = test_client_production_readonly.get("/recipes/search")
+        all_response = client.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
         total_recipes = all_data["pagination"]["total_count"]
 
         # MUST_NOT nonexistent ingredient should return all recipes
-        response = test_client_production_readonly.get(
+        response = client.get(
             "/recipes/search?ingredients=NonexistentIngredient123:MUST_NOT"
         )
         assert response.status_code == 200

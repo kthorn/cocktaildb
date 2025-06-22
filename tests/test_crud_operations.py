@@ -18,7 +18,7 @@ class TestComplexIngredientCRUD:
     """Test complex CRUD operations for ingredients"""
 
     def test_ingredient_hierarchy_crud_workflow(
-        self, test_client_production_isolated, mock_user, mocker
+        self, test_client_with_data, mock_user, mocker
     ):
         """Test complete CRUD workflow with ingredient hierarchy"""
         # Mock authentication using pytest-mock
@@ -33,7 +33,6 @@ class TestComplexIngredientCRUD:
             claims=mock_user,
         )
 
-        client = test_client_production_isolated
 
         # Create parent ingredient
         parent_data = {"name": "Test Spirits", "description": "Alcoholic spirits"}
@@ -82,11 +81,11 @@ class TestComplexRecipeCRUD:
     """Test complex CRUD operations for recipes"""
 
     def test_recipe_with_ingredients_crud_workflow(
-        self, temp_db_from_production, mock_user, mocker, monkeypatch
+        self, db_with_test_data, mock_user, mocker, monkeypatch
     ):
         """Test complete CRUD workflow for recipes with ingredients"""
         # Set up isolated database environment
-        monkeypatch.setenv("DB_PATH", temp_db_from_production)
+        monkeypatch.setenv("DB_PATH", db_with_test_data)
         monkeypatch.setenv("ENVIRONMENT", "test")
 
         # Import and create app after environment is configured
@@ -182,7 +181,7 @@ class TestConcurrencyAndLocking:
     """Test concurrent operations and data consistency"""
 
     def test_concurrent_recipe_updates(
-        self, test_client_production_isolated, mock_user, mocker
+        self, test_client_with_data, mock_user, mocker
     ):
         """Test handling of concurrent recipe updates"""
         mock_auth = mocker.patch("api.dependencies.auth.get_user_from_lambda_event")
@@ -196,7 +195,6 @@ class TestConcurrencyAndLocking:
             claims=mock_user,
         )
 
-        client = test_client_production_isolated
 
         # Create a recipe to test concurrent updates
         recipe_data = {
@@ -234,9 +232,9 @@ class TestConcurrencyAndLocking:
 class TestComplexQueries:
     """Test complex query operations and edge cases"""
 
-    def test_deep_ingredient_hierarchy_queries(self, test_client_production_isolated):
+    def test_deep_ingredient_hierarchy_queries(self, test_client_with_data):
+        client, app = test_client_with_data
         """Test querying ingredients with deep hierarchy"""
-        client = test_client_production_isolated
 
         # Get ingredients with hierarchy
         response = client.get("/ingredients")
