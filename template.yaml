@@ -829,7 +829,7 @@ Resources:
       Timeout: 300 # 5 minutes, adjust if needed for large DBs
       Environment:
         Variables:
-          DB_PATH: /mnt/efs/cocktaildb.db # Path to the DB on EFS
+          DB_PATH: !Sub /mnt/efs/${DatabaseName}.db
           BACKUP_BUCKET: !Ref BackupBucket
       VpcConfig:
         SecurityGroupIds:
