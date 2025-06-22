@@ -1095,7 +1095,7 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating, created_at
+                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating
                     FROM ratings 
                     WHERE recipe_id = :recipe_id AND cognito_user_id = :user_id
                     """,
@@ -1509,16 +1509,14 @@ class Database:
             raise
 
     @retry_on_db_locked()
-    def create_private_tag(
-        self, name: str, cognito_user_id: str
-    ) -> Dict[str, Any]:
+    def create_private_tag(self, name: str, cognito_user_id: str) -> Dict[str, Any]:
         """Creates a new private tag for a user. Returns the created tag."""
         # Validate inputs
         if not name or not name.strip():
             raise ValueError("Tag name cannot be empty")
         if not cognito_user_id or not cognito_user_id.strip():
             raise ValueError("User ID cannot be empty")
-        
+
         try:
             self.execute_query(
                 """
@@ -1756,7 +1754,7 @@ class Database:
             private_tag = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, 1 as is_private, cognito_user_id as created_by FROM private_tags WHERE id = :tag_id",
+                    "SELECT id, name, 1 as is_private, cognito_user_id FROM private_tags WHERE id = :tag_id",
                     {"tag_id": tag_id},
                 ),
             )
