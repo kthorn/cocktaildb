@@ -676,18 +676,6 @@ Resources:
             RestApiId: !Ref CocktailAPI
             Path: /openapi.json
             Method: get
-        GetDocs:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /docs
-            Method: get
-        GetRedoc:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /redoc
-            Method: get
 
   # Custom resource to create sqlite db on EFS
   SchemaDeployFunction:
