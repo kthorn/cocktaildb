@@ -16,7 +16,7 @@ from .sql_queries import (
 
 # Configure logging
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 
 def smart_title_case(text: str) -> Optional[str]:
@@ -560,13 +560,21 @@ class Database:
     def search_ingredients(self, search_term: str) -> List[Dict[str, Any]]:
         """Search ingredients by name - first exact match, then partial match (case-insensitive)"""
         try:
+            search_start = time.time()
+            logger.debug(f"Searching for ingredient: '{search_term}'")
+
             # First try exact match
+            exact_query_start = time.time()
             exact_result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
                     "SELECT id, name, description, parent_id, path FROM ingredients WHERE LOWER(name) = LOWER(?)",
                     (search_term,),
                 ),
+            )
+            exact_query_duration = time.time() - exact_query_start
+            logger.debug(
+                f"Exact match query for '{search_term}' took {exact_query_duration:.3f}s"
             )
 
             # Mark exact matches
@@ -575,9 +583,14 @@ class Database:
 
             # If exact match found, return it
             if exact_result:
+                search_duration = time.time() - search_start
+                logger.debug(
+                    f"Found exact match for '{search_term}' in {search_duration:.3f}s"
+                )
                 return exact_result
 
             # Otherwise, fall back to partial match
+            partial_query_start = time.time()
             partial_result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
@@ -585,16 +598,67 @@ class Database:
                     (f"%{search_term}%",),
                 ),
             )
+            partial_query_duration = time.time() - partial_query_start
+            logger.debug(
+                f"Partial match query for '{search_term}' took {partial_query_duration:.3f}s"
+            )
 
             # Mark partial matches
             for ingredient in partial_result:
                 ingredient["exact_match"] = False
 
+            search_duration = time.time() - search_start
+            logger.debug(
+                f"Partial match search for '{search_term}' completed in {search_duration:.3f}s, found {len(partial_result)} matches"
+            )
             return partial_result
         except Exception as e:
             logger.error(
                 f"Error searching ingredients with term '{search_term}': {str(e)}"
             )
+            raise
+
+    def search_ingredients_batch(self, ingredient_names: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Batch search for ingredients by name - returns mapping of names to ingredient data"""
+        try:
+            if not ingredient_names:
+                return {}
+                
+            search_start = time.time()
+            logger.info(f"Batch searching for {len(ingredient_names)} ingredients")
+            
+            # Create case-insensitive lookup for exact matches
+            unique_names = list(set(name.lower() for name in ingredient_names))
+            placeholders = ",".join("?" for _ in unique_names)
+            
+            exact_results = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    f"SELECT id, name, description, parent_id, path FROM ingredients WHERE LOWER(name) IN ({placeholders})",
+                    tuple(unique_names),
+                ),
+            )
+            
+            # Build mapping from lowercase name to ingredient data
+            results_map = {}
+            for ingredient in exact_results:
+                ingredient["exact_match"] = True
+                results_map[ingredient["name"].lower()] = ingredient
+                
+            # Map back to original case names
+            final_results = {}
+            for original_name in ingredient_names:
+                lower_name = original_name.lower()
+                if lower_name in results_map:
+                    final_results[original_name] = results_map[lower_name]
+                    
+            search_duration = time.time() - search_start
+            logger.info(f"Batch ingredient search completed in {search_duration:.3f}s, found {len(final_results)}/{len(ingredient_names)} ingredients")
+            
+            return final_results
+            
+        except Exception as e:
+            logger.error(f"Error in batch ingredient search: {str(e)}")
             raise
 
     def get_ingredient(self, ingredient_id: int) -> Optional[Dict[str, Any]]:
@@ -1050,6 +1114,98 @@ class Database:
         if result:
             return result
         return self.get_unit_by_abbreviation(name)
+
+    def validate_units_batch(self, unit_names: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Batch validate units by name or abbreviation - returns mapping of names to unit data"""
+        try:
+            if not unit_names:
+                return {}
+                
+            validation_start = time.time()
+            logger.info(f"Batch validating {len(unit_names)} units")
+            
+            # Create case-insensitive lookup for exact matches by name or abbreviation
+            unique_names = list(set(name.lower() for name in unit_names))
+            placeholders = ",".join("?" for _ in unique_names)
+            
+            # Query for both name and abbreviation matches
+            unit_results = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    f"""
+                    SELECT id, name, abbreviation, conversion_to_ml 
+                    FROM units 
+                    WHERE LOWER(name) IN ({placeholders}) OR LOWER(abbreviation) IN ({placeholders})
+                    """,
+                    tuple(unique_names) + tuple(unique_names),  # Parameters for both IN clauses
+                ),
+            )
+            
+            # Build mapping from lowercase name/abbreviation to unit data
+            results_map = {}
+            for unit in unit_results:
+                unit_name_lower = unit["name"].lower()
+                unit_abbr_lower = unit["abbreviation"].lower() if unit["abbreviation"] else None
+                
+                # Map both name and abbreviation to this unit
+                results_map[unit_name_lower] = unit
+                if unit_abbr_lower:
+                    results_map[unit_abbr_lower] = unit
+                    
+            # Map back to original case names
+            final_results = {}
+            for original_name in unit_names:
+                lower_name = original_name.lower()
+                if lower_name in results_map:
+                    final_results[original_name] = results_map[lower_name]
+                    
+            validation_duration = time.time() - validation_start
+            logger.info(f"Batch unit validation completed in {validation_duration:.3f}s, found {len(final_results)}/{len(unit_names)} units")
+            
+            return final_results
+            
+        except Exception as e:
+            logger.error(f"Error in batch unit validation: {str(e)}")
+            raise
+
+    def check_recipe_names_batch(self, recipe_names: List[str]) -> Dict[str, bool]:
+        """Batch check for duplicate recipe names - returns mapping of names to exists status"""
+        try:
+            if not recipe_names:
+                return {}
+                
+            check_start = time.time()
+            logger.info(f"Batch checking {len(recipe_names)} recipe names for duplicates")
+            
+            # Create case-insensitive lookup
+            unique_names = list(set(name.lower() for name in recipe_names))
+            placeholders = ",".join("?" for _ in unique_names)
+            
+            existing_results = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    f"SELECT LOWER(name) as name_lower FROM recipes WHERE LOWER(name) IN ({placeholders})",
+                    tuple(unique_names),
+                ),
+            )
+            
+            # Build set of existing names
+            existing_names = {row["name_lower"] for row in existing_results}
+            
+            # Map back to original case names
+            final_results = {}
+            for original_name in recipe_names:
+                lower_name = original_name.lower()
+                final_results[original_name] = lower_name in existing_names
+                    
+            check_duration = time.time() - check_start
+            logger.info(f"Batch recipe name check completed in {check_duration:.3f}s, found {len(existing_names)} duplicates")
+            
+            return final_results
+            
+        except Exception as e:
+            logger.error(f"Error in batch recipe name check: {str(e)}")
+            raise
 
     @retry_on_db_locked()
     def delete_recipe(self, recipe_id: int) -> bool:

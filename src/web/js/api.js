@@ -194,6 +194,10 @@ class CocktailAPI {
         return this._request(`/recipes/${id}`, 'DELETE');
     }
 
+    async bulkUploadRecipes(recipesData) {
+        return this._request('/recipes/bulk', 'POST', recipesData);
+    }
+
     // Search recipes with various criteria
     async searchRecipes(searchQuery, page = 1, limit = 20) {
         // Build query string from the search parameters

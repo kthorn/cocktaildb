@@ -108,7 +108,7 @@ class TestBulkUploadModels:
         assert ingredient.ingredient_name == "Gin"
         assert ingredient.amount is None
         assert ingredient.unit_name is None
-        
+
         # Test backward compatibility with unit_id
         legacy_data = {"ingredient_name": "Vodka", "amount": 2.0, "unit_id": 1}
         ingredient = BulkRecipeIngredient(**legacy_data)
@@ -125,7 +125,9 @@ class TestBulkUploadModels:
             "name": "Test Cocktail",
             "instructions": "Mix ingredients",
             "description": "A test cocktail",
-            "ingredients": [{"ingredient_name": "Vodka", "amount": 2.0, "unit_name": "oz"}],
+            "ingredients": [
+                {"ingredient_name": "Vodka", "amount": 2.0, "unit_name": "oz"}
+            ],
         }
 
         recipe = BulkRecipeCreate(**recipe_data)
@@ -218,7 +220,11 @@ class TestBulkUploadValidation:
                     "description": "A simple vodka cocktail",
                     "ingredients": [
                         {"ingredient_name": "Vodka", "amount": 2.0, "unit_name": "oz"},
-                        {"ingredient_name": "Lime Juice", "amount": 0.5, "unit_name": "oz"},
+                        {
+                            "ingredient_name": "Lime Juice",
+                            "amount": 0.5,
+                            "unit_name": "oz",
+                        },
                     ],
                 },
                 {
@@ -227,7 +233,11 @@ class TestBulkUploadValidation:
                     "description": "A simple gin cocktail",
                     "ingredients": [
                         {"ingredient_name": "Gin", "amount": 1.5, "unit_name": "oz"},
-                        {"ingredient_name": "Lime Juice", "amount": 0.75, "unit_name": "oz"},
+                        {
+                            "ingredient_name": "Lime Juice",
+                            "amount": 0.75,
+                            "unit_name": "oz",
+                        },
                     ],
                 },
             ]
@@ -400,7 +410,11 @@ class TestBulkUploadValidation:
                     "name": "Invalid Recipe 1",
                     "instructions": "Mix ingredients",
                     "ingredients": [
-                        {"ingredient_name": "NonExistent", "amount": 2.0, "unit_name": "oz"}
+                        {
+                            "ingredient_name": "NonExistent",
+                            "amount": 2.0,
+                            "unit_name": "oz",
+                        }
                     ],
                 },
                 {
@@ -449,7 +463,11 @@ class TestBulkUploadValidation:
                     "name": "Bad Recipe",
                     "instructions": "Mix ingredients",
                     "ingredients": [
-                        {"ingredient_name": "NonExistent", "amount": 2.0, "unit_name": "oz"}
+                        {
+                            "ingredient_name": "NonExistent",
+                            "amount": 2.0,
+                            "unit_name": "oz",
+                        }
                     ],
                 },
             ]
@@ -611,7 +629,11 @@ class TestBulkUploadIngredientSearch:
                     "name": "Test Recipe",
                     "instructions": "Mix ingredients",
                     "ingredients": [
-                        {"ingredient_name": "St-Germain", "amount": 0.5, "unit_name": "oz"}
+                        {
+                            "ingredient_name": "St-Germain",
+                            "amount": 0.5,
+                            "unit_name": "oz",
+                        }
                     ],
                 }
             ]
@@ -684,7 +706,10 @@ class TestBulkUploadDocumentation:
                     assert ingredient.ingredient_name is not None
                     assert ingredient.amount is not None
                     # Check that either unit_name or unit_id is present (backward compatibility)
-                    assert ingredient.unit_name is not None or ingredient.unit_id is not None
+                    assert (
+                        ingredient.unit_name is not None
+                        or ingredient.unit_id is not None
+                    )
 
         except Exception as e:
             pytest.fail(

@@ -2,7 +2,10 @@
 <html lang="en">
 
     <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Admin - Cocktail Database</title>
+        <link rel="stylesheet" href="styles.css">
     </head>
 
     <body>
@@ -22,6 +25,37 @@
                         <p style="color: var(--text-light); margin-top: var(--space-sm);">
                             Download a backup copy of the current SQLite database.
                         </p>
+                    </div>
+
+                    <div class="card-container">
+                        <h3>Bulk Recipe Upload</h3>
+                        <div class="form-actions">
+                            <button id="download-template-btn" class="btn btn-secondary">
+                                Download JSON Template
+                            </button>
+                        </div>
+                        <p style="color: var(--text-light); margin-top: var(--space-sm);">
+                            Download a JSON template with the correct format for bulk recipe uploads.
+                        </p>
+                        
+                        <div style="margin-top: var(--space-md);">
+                            <label for="recipe-file-input" class="form-label">Upload Recipe JSON File:</label>
+                            <input type="file" id="recipe-file-input" accept=".json" class="form-control" style="margin-bottom: var(--space-sm);">
+                            <button id="upload-recipes-btn" class="btn btn-primary" disabled>
+                                Upload Recipes
+                            </button>
+                        </div>
+                        
+                        <div id="upload-progress" style="display: none; margin-top: var(--space-sm);">
+                            <div class="progress-bar">
+                                <div class="progress-fill"></div>
+                            </div>
+                            <p style="color: var(--text-light); margin-top: var(--space-xs);">
+                                Uploading recipes...
+                            </p>
+                        </div>
+                        
+                        <div id="upload-results" style="margin-top: var(--space-md);"></div>
                     </div>
                 </div>
             </section>

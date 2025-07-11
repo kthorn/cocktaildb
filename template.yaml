@@ -505,6 +505,14 @@ Resources:
             Method: post
             Auth:
               Authorizer: CognitoAuthorizer
+        BulkUploadRecipes:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/bulk
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
         PutRecipe:
           Type: Api
           Properties:
