@@ -21,7 +21,6 @@ class RecipeIngredient(BaseModel):
     ingredient_id: int = Field(..., description="Ingredient ID")
     amount: Optional[float] = Field(None, description="Quantity amount")
     unit_id: Optional[int] = Field(None, description="Unit ID")
-    notes: Optional[str] = Field(None, description="Additional notes")
 
 
 class RecipeCreate(BaseModel):

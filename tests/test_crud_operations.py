@@ -128,15 +128,13 @@ class TestComplexRecipeCRUD:
                 "ingredients": [
                     {
                         "ingredient_id": ingredients[0]["id"],
-                        "quantity": 2.5,
+                        "amount": 2.5,
                         "unit_id": units[0]["id"],
-                        "notes": "London Dry Gin",
                     },
                     {
                         "ingredient_id": ingredients[1]["id"],
-                        "quantity": 0.5,
+                        "amount": 0.5,
                         "unit_id": units[0]["id"],
-                        "notes": "Dry Vermouth",
                     },
                 ],
             }

@@ -376,12 +376,11 @@ def sample_recipe_data():
         "name": "Test Martini",
         "instructions": "Stir gin and vermouth with ice. Strain into glass.",
         "ingredients": [
-            {"ingredient_id": 1, "quantity": 2.0, "unit_id": 1, "notes": "Dry gin"},
+            {"ingredient_id": 1, "amount": 2.0, "unit_id": 1},
             {
                 "ingredient_id": 2,
-                "quantity": 0.5,
+                "amount": 0.5,
                 "unit_id": 1,
-                "notes": "Dry vermouth",
             },
         ],
         "tags": ["classic", "gin", "martini"],
@@ -455,7 +454,7 @@ def assert_complete_recipe_structure(
     # Ingredient data completeness
     if "ingredients" in recipe and recipe["ingredients"]:
         for ingredient in recipe["ingredients"]:
-            ingredient_fields = ["id", "name", "amount", "unit", "notes"]
+            ingredient_fields = ["id", "name", "amount", "unit"]
             for field in ingredient_fields:
                 assert field in ingredient, f"Ingredient must include '{field}' field"
 

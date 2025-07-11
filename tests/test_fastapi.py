@@ -54,9 +54,8 @@ class TestModelsAndValidation:
                 "ingredients": [
                     {
                         "ingredient_id": 1,
-                        "quantity": 2.0,
-                        "unit_id": 1,
-                        "notes": "Test notes"
+                        "amount": 2.0,
+                        "unit_id": 1
                     }
                 ]
             }

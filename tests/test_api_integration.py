@@ -73,9 +73,9 @@ class TestDataValidation:
                 "unit_name",
             ]
             assert_valid_response_structure(ingredient, expected_keys)
-            # Check that either quantity or amount is present
-            assert "quantity" in ingredient or "amount" in ingredient, (
-                "Ingredient should have either 'quantity' or 'amount' field"
+            # Check that amount is present
+            assert "amount" in ingredient, (
+                "Ingredient should have 'amount' field"
             )
 
     def test_units_data_completeness(self, test_client_with_data):
@@ -278,9 +278,9 @@ class TestComplexIntegrationScenarios:
             # Verify ingredient details are complete
             for ingredient in recipe_detail["ingredients"][:3]:  # Check first 3
                 assert "ingredient_name" in ingredient
-                assert "quantity" in ingredient or "amount" in ingredient
-                quantity = ingredient.get("quantity") or ingredient.get("amount", 0)
-                assert quantity > 0
+                assert "amount" in ingredient
+                amount = ingredient.get("amount", 0)
+                assert amount > 0
                 if ingredient.get("unit_name"):
                     assert len(ingredient["unit_name"]) > 0
 
