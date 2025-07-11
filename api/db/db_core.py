@@ -1044,14 +1044,12 @@ class Database:
             )
             raise
 
-    def get_unit_by_name_or_abbreviation(
-        self, unit_name: str, unit_abbreviation: str
-    ) -> Optional[Dict[str, Any]]:
+    def get_unit_by_name_or_abbreviation(self, name: str) -> Optional[Dict[str, Any]]:
         """Get a unit by exact name or abbreviation match (case-insensitive)"""
-        result = self.get_unit_by_name(unit_name)
+        result = self.get_unit_by_name(name)
         if result:
             return result
-        return self.get_unit_by_abbreviation(unit_abbreviation)
+        return self.get_unit_by_abbreviation(name)
 
     @retry_on_db_locked()
     def delete_recipe(self, recipe_id: int) -> bool:

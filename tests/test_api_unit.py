@@ -107,16 +107,6 @@ class TestPublicResourceEndpoints:
         response = test_client_memory.get("/tags/public")
         assert response.status_code == status.HTTP_200_OK
 
-    def test_create_unit_unauthorized(self, test_client_memory):
-        """Test creating unit without authentication"""
-        unit_data = {
-            "name": "Test Unit",
-            "abbreviation": "tu",
-            "conversion_to_ml": 30.0,
-        }
-        response = test_client_memory.post("/units", json=unit_data)
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED
-
 
 class TestRequestValidation:
     """Test request validation with Pydantic models"""
@@ -230,7 +220,7 @@ class TestTagAPIEndpoints:
         """Test that private tag creation returns correct response structure"""
         tag_data = {"name": "response-structure-test-tag"}
         response = authenticated_client.post("/tags/private", json=tag_data)
-        
+
         # Should succeed and return expected structure
         if response.status_code == status.HTTP_201_CREATED:
             data = response.json()

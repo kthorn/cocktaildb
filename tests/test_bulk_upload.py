@@ -95,19 +95,26 @@ class TestBulkUploadModels:
         """Test BulkRecipeIngredient model validation"""
         from api.models.requests import BulkRecipeIngredient
 
-        # Valid data
-        valid_data = {"ingredient_name": "Vodka", "amount": 2.0, "unit_id": 1}
+        # Valid data with unit_name
+        valid_data = {"ingredient_name": "Vodka", "amount": 2.0, "unit_name": "oz"}
         ingredient = BulkRecipeIngredient(**valid_data)
         assert ingredient.ingredient_name == "Vodka"
         assert ingredient.amount == 2.0
-        assert ingredient.unit_id == 1
+        assert ingredient.unit_name == "oz"
 
         # Test with minimal data (only ingredient_name required)
         minimal_data = {"ingredient_name": "Gin"}
         ingredient = BulkRecipeIngredient(**minimal_data)
         assert ingredient.ingredient_name == "Gin"
         assert ingredient.amount is None
-        assert ingredient.unit_id is None
+        assert ingredient.unit_name is None
+        
+        # Test backward compatibility with unit_id
+        legacy_data = {"ingredient_name": "Vodka", "amount": 2.0, "unit_id": 1}
+        ingredient = BulkRecipeIngredient(**legacy_data)
+        assert ingredient.ingredient_name == "Vodka"
+        assert ingredient.amount == 2.0
+        assert ingredient.unit_id == 1
 
     def test_bulk_recipe_create_model(self):
         """Test BulkRecipeCreate model validation"""
@@ -118,7 +125,7 @@ class TestBulkUploadModels:
             "name": "Test Cocktail",
             "instructions": "Mix ingredients",
             "description": "A test cocktail",
-            "ingredients": [{"ingredient_name": "Vodka", "amount": 2.0, "unit_id": 1}],
+            "ingredients": [{"ingredient_name": "Vodka", "amount": 2.0, "unit_name": "oz"}],
         }
 
         recipe = BulkRecipeCreate(**recipe_data)
@@ -137,14 +144,14 @@ class TestBulkUploadModels:
                     "name": "Test Recipe 1",
                     "instructions": "Mix ingredients",
                     "ingredients": [
-                        {"ingredient_name": "Vodka", "amount": 2.0, "unit_id": 1}
+                        {"ingredient_name": "Vodka", "amount": 2.0, "unit_name": "oz"}
                     ],
                 },
                 {
                     "name": "Test Recipe 2",
                     "instructions": "Shake ingredients",
                     "ingredients": [
-                        {"ingredient_name": "Gin", "amount": 1.5, "unit_id": 1}
+                        {"ingredient_name": "Gin", "amount": 1.5, "unit_name": "oz"}
                     ],
                 },
             ]
@@ -210,8 +217,8 @@ class TestBulkUploadValidation:
                     "instructions": "Mix vodka and lime juice",
                     "description": "A simple vodka cocktail",
                     "ingredients": [
-                        {"ingredient_name": "Vodka", "amount": 2.0, "unit_id": 1},
-                        {"ingredient_name": "Lime Juice", "amount": 0.5, "unit_id": 1},
+                        {"ingredient_name": "Vodka", "amount": 2.0, "unit_name": "oz"},
+                        {"ingredient_name": "Lime Juice", "amount": 0.5, "unit_name": "oz"},
                     ],
                 },
                 {
@@ -219,8 +226,8 @@ class TestBulkUploadValidation:
                     "instructions": "Mix gin and lime juice",
                     "description": "A simple gin cocktail",
                     "ingredients": [
-                        {"ingredient_name": "Gin", "amount": 1.5, "unit_id": 1},
-                        {"ingredient_name": "Lime Juice", "amount": 0.75, "unit_id": 1},
+                        {"ingredient_name": "Gin", "amount": 1.5, "unit_name": "oz"},
+                        {"ingredient_name": "Lime Juice", "amount": 0.75, "unit_name": "oz"},
                     ],
                 },
             ]
@@ -257,7 +264,7 @@ class TestBulkUploadValidation:
                     "name": "Existing Recipe",  # This should fail
                     "instructions": "Different instructions",
                     "ingredients": [
-                        {"ingredient_name": "Vodka", "amount": 1.0, "unit_id": 1}
+                        {"ingredient_name": "Vodka", "amount": 1.0, "unit_name": "oz"}
                     ],
                 }
             ]
@@ -288,7 +295,7 @@ class TestBulkUploadValidation:
                         {
                             "ingredient_name": "NonExistent Ingredient",
                             "amount": 2.0,
-                            "unit_id": 1,
+                            "unit_name": "oz",
                         }
                     ],
                 }
@@ -329,7 +336,7 @@ class TestBulkUploadValidation:
                         {
                             "ingredient_name": "Premium",  # This is a partial match, should fail
                             "amount": 2.0,
-                            "unit_id": 1,
+                            "unit_name": "oz",
                         }
                     ],
                 }
@@ -348,8 +355,8 @@ class TestBulkUploadValidation:
             == "ingredient_not_found"
         )
 
-    def test_bulk_upload_invalid_unit_id(self, authenticated_client):
-        """Test bulk upload validation for invalid unit IDs"""
+    def test_bulk_upload_invalid_unit_name(self, authenticated_client):
+        """Test bulk upload validation for invalid unit names"""
         bulk_data = {
             "recipes": [
                 {
@@ -359,7 +366,7 @@ class TestBulkUploadValidation:
                         {
                             "ingredient_name": "Vodka",
                             "amount": 2.0,
-                            "unit_id": 999,  # Invalid unit ID
+                            "unit_name": "InvalidUnit",  # Invalid unit name
                         }
                     ],
                 }
@@ -386,14 +393,14 @@ class TestBulkUploadValidation:
                     "name": "Valid Recipe",
                     "instructions": "Mix ingredients",
                     "ingredients": [
-                        {"ingredient_name": "Vodka", "amount": 2.0, "unit_id": 1}
+                        {"ingredient_name": "Vodka", "amount": 2.0, "unit_name": "oz"}
                     ],
                 },
                 {
                     "name": "Invalid Recipe 1",
                     "instructions": "Mix ingredients",
                     "ingredients": [
-                        {"ingredient_name": "NonExistent", "amount": 2.0, "unit_id": 1}
+                        {"ingredient_name": "NonExistent", "amount": 2.0, "unit_name": "oz"}
                     ],
                 },
                 {
@@ -403,7 +410,7 @@ class TestBulkUploadValidation:
                         {
                             "ingredient_name": "Vodka",
                             "amount": 2.0,
-                            "unit_id": 999,  # Invalid unit
+                            "unit_name": "InvalidUnit",  # Invalid unit
                         }
                     ],
                 },
@@ -435,14 +442,14 @@ class TestBulkUploadValidation:
                     "name": "Good Recipe",
                     "instructions": "Mix ingredients",
                     "ingredients": [
-                        {"ingredient_name": "Vodka", "amount": 2.0, "unit_id": 1}
+                        {"ingredient_name": "Vodka", "amount": 2.0, "unit_name": "oz"}
                     ],
                 },
                 {
                     "name": "Bad Recipe",
                     "instructions": "Mix ingredients",
                     "ingredients": [
-                        {"ingredient_name": "NonExistent", "amount": 2.0, "unit_id": 1}
+                        {"ingredient_name": "NonExistent", "amount": 2.0, "unit_name": "oz"}
                     ],
                 },
             ]
@@ -484,7 +491,7 @@ class TestBulkUploadValidation:
                     "name": "TEST RECIPE",  # Different case, should still fail
                     "instructions": "Different instructions",
                     "ingredients": [
-                        {"ingredient_name": "Vodka", "amount": 1.0, "unit_id": 1}
+                        {"ingredient_name": "Vodka", "amount": 1.0, "unit_name": "oz"}
                     ],
                 }
             ]
@@ -510,7 +517,7 @@ class TestBulkUploadEndpointSecurity:
                     "name": "Test Recipe",
                     "instructions": "Mix ingredients",
                     "ingredients": [
-                        {"ingredient_name": "Vodka", "amount": 2.0, "unit_id": 1}
+                        {"ingredient_name": "Vodka", "amount": 2.0, "unit_name": "oz"}
                     ],
                 }
             ]
@@ -568,7 +575,7 @@ class TestBulkUploadIngredientSearch:
                         {
                             "ingredient_name": "Vodka",  # Exact match
                             "amount": 2.0,
-                            "unit_id": 1,
+                            "unit_name": "oz",
                         }
                     ],
                 }
@@ -604,7 +611,7 @@ class TestBulkUploadIngredientSearch:
                     "name": "Test Recipe",
                     "instructions": "Mix ingredients",
                     "ingredients": [
-                        {"ingredient_name": "St-Germain", "amount": 0.5, "unit_id": 1}
+                        {"ingredient_name": "St-Germain", "amount": 0.5, "unit_name": "oz"}
                     ],
                 }
             ]
@@ -650,7 +657,7 @@ class TestBulkUploadDocumentation:
                 "Ingredient should have ingredient_name"
             )
             assert "amount" in ingredient, "Ingredient should have amount"
-            assert "unit_id" in ingredient, "Ingredient should have unit_id"
+            assert "unit_name" in ingredient, "Ingredient should have unit_name"
 
     def test_bulk_upload_model_matches_template(self):
         """Test that the bulk upload models match the template format"""
@@ -676,7 +683,8 @@ class TestBulkUploadDocumentation:
                 for ingredient in recipe.ingredients:
                     assert ingredient.ingredient_name is not None
                     assert ingredient.amount is not None
-                    assert ingredient.unit_id is not None
+                    # Check that either unit_name or unit_id is present (backward compatibility)
+                    assert ingredient.unit_name is not None or ingredient.unit_id is not None
 
         except Exception as e:
             pytest.fail(
@@ -702,14 +710,14 @@ class TestBulkUploadPerformance:
                     "name": "Test Recipe 1",
                     "instructions": "Mix ingredients",
                     "ingredients": [
-                        {"ingredient_name": "Vodka", "amount": 2.0, "unit_id": 1}
+                        {"ingredient_name": "Vodka", "amount": 2.0, "unit_name": "oz"}
                     ],
                 },
                 {
                     "name": "Test Recipe 2",
                     "instructions": "Shake ingredients",
                     "ingredients": [
-                        {"ingredient_name": "Gin", "amount": 1.5, "unit_id": 1}
+                        {"ingredient_name": "Gin", "amount": 1.5, "unit_name": "oz"}
                     ],
                 },
             ]
@@ -744,7 +752,7 @@ class TestBulkUploadPerformance:
                         {
                             # Missing ingredient_name should fail
                             "amount": 2.0,
-                            "unit_id": 1,
+                            "unit_name": "oz",
                         }
                     ],
                 }

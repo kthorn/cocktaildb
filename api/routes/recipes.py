@@ -1,7 +1,7 @@
 """Recipes endpoints for the CocktailDB API"""
 
 import logging
-from typing import List, Optional, Dict, Any
+from typing import Optional
 from fastapi import APIRouter, Depends, Query, status
 
 from dependencies.auth import (
@@ -15,14 +15,10 @@ from models.requests import (
     RecipeCreate,
     RecipeUpdate,
     RatingCreate,
-    RecipeListParams,
-    PaginationParams,
-    SearchParams,
     BulkRecipeUpload,
 )
 from models.responses import (
     RecipeResponse,
-    RecipeListResponse,
     MessageResponse,
     RatingSummaryResponse,
     RatingResponse,
@@ -386,7 +382,9 @@ async def delete_recipe_rating(
     return await delete_rating_handler(recipe_id, db, user)
 
 
-@router.post("/bulk", response_model=BulkUploadResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/bulk", response_model=BulkUploadResponse, status_code=status.HTTP_201_CREATED
+)
 async def bulk_upload_recipes(
     bulk_data: BulkRecipeUpload,
     db: Database = Depends(get_db),
@@ -395,134 +393,210 @@ async def bulk_upload_recipes(
     """Bulk upload recipes (requires authentication)"""
     try:
         logger.info(f"Bulk uploading {len(bulk_data.recipes)} recipes")
-        
+
         validation_errors = []
         uploaded_recipes = []
-        
+        failed_recipe_indices = set()  # Track which recipes failed validation
+
         # Step 1: Validate all recipes before creating any
         for idx, recipe_data in enumerate(bulk_data.recipes):
             try:
                 # Check if recipe name already exists
                 existing_recipes = db.execute_query(
                     "SELECT name FROM recipes WHERE LOWER(name) = LOWER(?)",
-                    (recipe_data.name,)
+                    (recipe_data.name,),
                 )
                 if existing_recipes:
-                    validation_errors.append(BulkUploadValidationError(
-                        recipe_index=idx,
-                        recipe_name=recipe_data.name,
-                        error_type="duplicate_name",
-                        error_message=f"Recipe with name '{recipe_data.name}' already exists"
-                    ))
+                    validation_errors.append(
+                        BulkUploadValidationError(
+                            recipe_index=idx,
+                            recipe_name=recipe_data.name,
+                            error_type="duplicate_name",
+                            error_message=f"Recipe with name '{recipe_data.name}' already exists",
+                        )
+                    )
+                    failed_recipe_indices.add(idx)
                     continue
-                
+
                 # Check if all ingredients exist by name (exact match only)
                 for ingredient in recipe_data.ingredients:
                     # Use search_ingredients to find exact matches
-                    ingredient_matches = db.search_ingredients(ingredient.ingredient_name)
-                    
+                    ingredient_matches = db.search_ingredients(
+                        ingredient.ingredient_name
+                    )
+
                     # Filter for exact matches only
-                    exact_matches = [ing for ing in ingredient_matches if ing.get("exact_match", False)]
-                    
+                    exact_matches = [
+                        ing
+                        for ing in ingredient_matches
+                        if ing.get("exact_match", False)
+                    ]
+
                     if not exact_matches:
-                        validation_errors.append(BulkUploadValidationError(
-                            recipe_index=idx,
-                            recipe_name=recipe_data.name,
-                            error_type="ingredient_not_found",
-                            error_message=f"No exact match found for ingredient '{ingredient.ingredient_name}'"
-                        ))
-                        break
-                
-                # Check if units exist (if specified)
-                for ingredient in recipe_data.ingredients:
-                    if ingredient.unit_id is not None:
-                        unit_exists = db.execute_query(
-                            "SELECT id FROM units WHERE id = ?",
-                            (ingredient.unit_id,)
-                        )
-                        if not unit_exists:
-                            validation_errors.append(BulkUploadValidationError(
+                        validation_errors.append(
+                            BulkUploadValidationError(
                                 recipe_index=idx,
                                 recipe_name=recipe_data.name,
-                                error_type="invalid_unit",
-                                error_message=f"Unit with ID {ingredient.unit_id} does not exist"
-                            ))
-                            break
-                            
+                                error_type="ingredient_not_found",
+                                error_message=f"No exact match found for ingredient '{ingredient.ingredient_name}'",
+                            )
+                        )
+                        failed_recipe_indices.add(idx)
+                        break
+
+                # Check if units exist (if specified)
+                for ingredient in recipe_data.ingredients:
+                    unit_identifier = ingredient.get_unit_identifier()
+                    if unit_identifier is not None:
+                        if ingredient.unit_name is not None:
+                            # Use unit name lookup
+                            unit_result = db.get_unit_by_name_or_abbreviation(
+                                ingredient.unit_name
+                            )
+                            if not unit_result:
+                                validation_errors.append(
+                                    BulkUploadValidationError(
+                                        recipe_index=idx,
+                                        recipe_name=recipe_data.name,
+                                        error_type="invalid_unit",
+                                        error_message=f"Unit with name '{ingredient.unit_name}' does not exist",
+                                    )
+                                )
+                                failed_recipe_indices.add(idx)
+                                break
+                        elif ingredient.unit_id is not None:
+                            # Use unit ID lookup (backward compatibility)
+                            unit_exists = db.execute_query(
+                                "SELECT id FROM units WHERE id = ?",
+                                (ingredient.unit_id,),
+                            )
+                            if not unit_exists:
+                                validation_errors.append(
+                                    BulkUploadValidationError(
+                                        recipe_index=idx,
+                                        recipe_name=recipe_data.name,
+                                        error_type="invalid_unit",
+                                        error_message=f"Unit with ID {ingredient.unit_id} does not exist",
+                                    )
+                                )
+                                failed_recipe_indices.add(idx)
+                                break
+
             except Exception as e:
-                validation_errors.append(BulkUploadValidationError(
-                    recipe_index=idx,
-                    recipe_name=recipe_data.name,
-                    error_type="validation_error",
-                    error_message=f"Validation error: {str(e)}"
-                ))
-        
+                validation_errors.append(
+                    BulkUploadValidationError(
+                        recipe_index=idx,
+                        recipe_name=recipe_data.name,
+                        error_type="validation_error",
+                        error_message=f"Validation error: {str(e)}",
+                    )
+                )
+                failed_recipe_indices.add(idx)
+
         # Step 2: If there are validation errors, return them without creating any recipes
         if validation_errors:
-            logger.warning(f"Bulk upload validation failed with {len(validation_errors)} errors")
+            logger.warning(
+                f"Bulk upload validation failed with {len(validation_errors)} errors"
+            )
             return BulkUploadResponse(
                 uploaded_count=0,
-                failed_count=len(validation_errors),
+                failed_count=len(failed_recipe_indices),
                 validation_errors=validation_errors,
-                uploaded_recipes=[]
+                uploaded_recipes=[],
             )
-        
+
         # Step 3: Create all recipes (all validations passed)
         for idx, recipe_data in enumerate(bulk_data.recipes):
             try:
-                # Convert ingredient names to IDs
+                # Convert ingredient names to IDs and unit names to IDs
                 converted_ingredients = []
                 for ingredient in recipe_data.ingredients:
                     # Get the ingredient by exact name match
-                    ingredient_matches = db.search_ingredients(ingredient.ingredient_name)
-                    exact_matches = [ing for ing in ingredient_matches if ing.get("exact_match", False)]
-                    
+                    ingredient_matches = db.search_ingredients(
+                        ingredient.ingredient_name
+                    )
+                    exact_matches = [
+                        ing
+                        for ing in ingredient_matches
+                        if ing.get("exact_match", False)
+                    ]
+
                     if exact_matches:
                         # Use the first exact match (there should be only one)
                         ingredient_id = exact_matches[0]["id"]
-                        converted_ingredients.append({
-                            "ingredient_id": ingredient_id,
-                            "amount": ingredient.amount,
-                            "unit_id": ingredient.unit_id
-                        })
+
+                        # Handle unit conversion
+                        unit_id = None
+                        if ingredient.unit_name is not None:
+                            # Convert unit name to ID
+                            unit_result = db.get_unit_by_name_or_abbreviation(
+                                ingredient.unit_name
+                            )
+                            if unit_result:
+                                unit_id = unit_result["id"]
+                            else:
+                                # This shouldn't happen since we validated above, but just in case
+                                raise ValueError(
+                                    f"Unit '{ingredient.unit_name}' not found during conversion"
+                                )
+                        elif ingredient.unit_id is not None:
+                            # Use unit ID directly (backward compatibility)
+                            unit_id = ingredient.unit_id
+
+                        converted_ingredients.append(
+                            {
+                                "ingredient_id": ingredient_id,
+                                "amount": ingredient.amount,
+                                "unit_id": unit_id,
+                            }
+                        )
                     else:
                         # This shouldn't happen since we validated above, but just in case
-                        raise ValueError(f"Ingredient '{ingredient.ingredient_name}' not found during conversion")
-                
+                        raise ValueError(
+                            f"Ingredient '{ingredient.ingredient_name}' not found during conversion"
+                        )
+
                 # Prepare data for database
                 recipe_dict = {
                     "name": recipe_data.name,
                     "instructions": recipe_data.instructions,
                     "description": recipe_data.description,
                     "ingredients": converted_ingredients,
-                    "created_by": user.user_id
+                    "created_by": user.user_id,
                 }
-                
+
                 # Create the recipe
                 created_recipe = db.create_recipe(recipe_dict)
-                
+
                 # Get the full recipe data with ingredients for response
                 full_recipe = db.get_recipe(created_recipe["id"], user.user_id)
                 uploaded_recipes.append(RecipeResponse(**full_recipe))
-                
+
             except Exception as e:
-                logger.error(f"Error creating recipe {idx} ('{recipe_data.name}'): {str(e)}")
-                validation_errors.append(BulkUploadValidationError(
-                    recipe_index=idx,
-                    recipe_name=recipe_data.name,
-                    error_type="creation_error",
-                    error_message=f"Failed to create recipe: {str(e)}"
-                ))
-        
-        logger.info(f"Bulk upload completed: {len(uploaded_recipes)} uploaded, {len(validation_errors)} failed")
-        
+                logger.error(
+                    f"Error creating recipe {idx} ('{recipe_data.name}'): {str(e)}"
+                )
+                validation_errors.append(
+                    BulkUploadValidationError(
+                        recipe_index=idx,
+                        recipe_name=recipe_data.name,
+                        error_type="creation_error",
+                        error_message=f"Failed to create recipe: {str(e)}",
+                    )
+                )
+                failed_recipe_indices.add(idx)
+
+        logger.info(
+            f"Bulk upload completed: {len(uploaded_recipes)} uploaded, {len(validation_errors)} failed"
+        )
+
         return BulkUploadResponse(
             uploaded_count=len(uploaded_recipes),
-            failed_count=len(validation_errors),
+            failed_count=len(failed_recipe_indices),
             validation_errors=validation_errors,
-            uploaded_recipes=uploaded_recipes
+            uploaded_recipes=uploaded_recipes,
         )
-        
+
     except Exception as e:
         logger.error(f"Error in bulk upload: {str(e)}")
         raise DatabaseException("Failed to bulk upload recipes", detail=str(e))
