@@ -568,15 +568,15 @@ class Database:
                     (search_term,),
                 ),
             )
-            
+
             # Mark exact matches
             for ingredient in exact_result:
                 ingredient["exact_match"] = True
-            
+
             # If exact match found, return it
             if exact_result:
                 return exact_result
-            
+
             # Otherwise, fall back to partial match
             partial_result = cast(
                 List[Dict[str, Any]],
@@ -585,14 +585,16 @@ class Database:
                     (f"%{search_term}%",),
                 ),
             )
-            
+
             # Mark partial matches
             for ingredient in partial_result:
                 ingredient["exact_match"] = False
-                
+
             return partial_result
         except Exception as e:
-            logger.error(f"Error searching ingredients with term '{search_term}': {str(e)}")
+            logger.error(
+                f"Error searching ingredients with term '{search_term}': {str(e)}"
+            )
             raise
 
     def get_ingredient(self, ingredient_id: int) -> Optional[Dict[str, Any]]:
@@ -1007,6 +1009,49 @@ class Database:
         except Exception as e:
             logger.error(f"Error getting units by type {unit_type}: {str(e)}")
             raise
+
+    def get_unit_by_name(self, unit_name: str) -> Optional[Dict[str, Any]]:
+        """Get a unit by exact name match (case-insensitive)"""
+        try:
+            result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id, name, abbreviation, conversion_to_ml FROM units WHERE LOWER(name) = LOWER(?)",
+                    (unit_name,),
+                ),
+            )
+            return result[0] if result else None
+        except Exception as e:
+            logger.error(f"Error getting unit by name '{unit_name}': {str(e)}")
+            raise
+
+    def get_unit_by_abbreviation(
+        self, unit_abbreviation: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get a unit by exact name match (case-insensitive)"""
+        try:
+            result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id, name, abbreviation, conversion_to_ml FROM units WHERE LOWER(abbreviation) = LOWER(?)",
+                    (unit_abbreviation,),
+                ),
+            )
+            return result[0] if result else None
+        except Exception as e:
+            logger.error(
+                f"Error getting unit by abbreviation '{unit_abbreviation}': {str(e)}"
+            )
+            raise
+
+    def get_unit_by_name_or_abbreviation(
+        self, unit_name: str, unit_abbreviation: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get a unit by exact name or abbreviation match (case-insensitive)"""
+        result = self.get_unit_by_name(unit_name)
+        if result:
+            return result
+        return self.get_unit_by_abbreviation(unit_abbreviation)
 
     @retry_on_db_locked()
     def delete_recipe(self, recipe_id: int) -> bool:
@@ -1929,7 +1974,11 @@ class Database:
                             if tag_data and "|||" in tag_data:
                                 tag_id, tag_name = tag_data.split("|||", 1)
                                 recipes[recipe_id]["tags"].append(
-                                    {"id": int(tag_id), "name": tag_name, "type": "public"}
+                                    {
+                                        "id": int(tag_id),
+                                        "name": tag_name,
+                                        "type": "public",
+                                    }
                                 )
 
                     if row.get("private_tags_data"):
@@ -1937,7 +1986,11 @@ class Database:
                             if tag_data and "|||" in tag_data:
                                 tag_id, tag_name = tag_data.split("|||", 1)
                                 recipes[recipe_id]["tags"].append(
-                                    {"id": int(tag_id), "name": tag_name, "type": "private"}
+                                    {
+                                        "id": int(tag_id),
+                                        "name": tag_name,
+                                        "type": "private",
+                                    }
                                 )
 
                 # Add ingredient if present
@@ -2124,7 +2177,11 @@ class Database:
                             if tag_data and "|||" in tag_data:
                                 tag_id, tag_name = tag_data.split("|||", 1)
                                 recipes[recipe_id]["tags"].append(
-                                    {"id": int(tag_id), "name": tag_name, "type": "public"}
+                                    {
+                                        "id": int(tag_id),
+                                        "name": tag_name,
+                                        "type": "public",
+                                    }
                                 )
 
                     if row.get("private_tags_data"):
@@ -2132,7 +2189,11 @@ class Database:
                             if tag_data and "|||" in tag_data:
                                 tag_id, tag_name = tag_data.split("|||", 1)
                                 recipes[recipe_id]["tags"].append(
-                                    {"id": int(tag_id), "name": tag_name, "type": "private"}
+                                    {
+                                        "id": int(tag_id),
+                                        "name": tag_name,
+                                        "type": "private",
+                                    }
                                 )
 
                 # Add ingredient if present
