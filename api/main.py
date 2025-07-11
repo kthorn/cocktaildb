@@ -78,8 +78,8 @@ app = FastAPI(
     version=settings.api_version,
     debug=settings.debug,
     lifespan=lifespan,
-    docs_url="/docs" if settings.environment == "dev" else None,
-    redoc_url="/redoc" if settings.environment == "dev" else None,
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 # Add CORS middleware for Lambda responses (API Gateway handles OPTIONS)
