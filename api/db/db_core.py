@@ -557,6 +557,35 @@ class Database:
             )
             return None
 
+    def search_ingredients(self, search_term: str) -> List[Dict[str, Any]]:
+        """Search ingredients by name - first exact match, then partial match (case-insensitive)"""
+        try:
+            # First try exact match
+            exact_result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id, name, description, parent_id, path FROM ingredients WHERE LOWER(name) = LOWER(?)",
+                    (search_term,),
+                ),
+            )
+            
+            # If exact match found, return it
+            if exact_result:
+                return exact_result
+            
+            # Otherwise, fall back to partial match
+            partial_result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id, name, description, parent_id, path FROM ingredients WHERE LOWER(name) LIKE LOWER(?) ORDER BY name",
+                    (f"%{search_term}%",),
+                ),
+            )
+            return partial_result
+        except Exception as e:
+            logger.error(f"Error searching ingredients with term '{search_term}': {str(e)}")
+            raise
+
     def get_ingredient(self, ingredient_id: int) -> Optional[Dict[str, Any]]:
         """Get a single ingredient by ID"""
         try:

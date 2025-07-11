@@ -485,6 +485,12 @@ Resources:
             RestApiId: !Ref CocktailAPI
             Path: /ingredients/{ingredientId}
             Method: get
+        SearchIngredients:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ingredients/search
+            Method: get
         GetRecipes:
           Type: Api
           Properties:
