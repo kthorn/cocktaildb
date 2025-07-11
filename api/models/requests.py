@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 class IngredientCreate(BaseModel):
     """Request model for creating an ingredient"""
 
-    name: str = Field(..., description="Ingredient name")
+    name: str = Field(..., min_length=1, description="Ingredient name")
     description: Optional[str] = Field(None, description="Ingredient description")
     parent_id: Optional[int] = Field(
         None, description="Parent ingredient ID for hierarchy"
@@ -143,6 +143,24 @@ class SearchParams(PaginationParams):
         None, description="Maximum average rating", ge=0, le=5
     )
     tags: Optional[List[str]] = Field(None, description="Tag filter list")
+
+
+class BulkIngredientCreate(BaseModel):
+    """Ingredient specification for bulk upload"""
+    
+    name: str = Field(..., min_length=1, description="Ingredient name")
+    description: Optional[str] = Field(None, description="Ingredient description")
+    parent_name: Optional[str] = Field(None, description="Parent ingredient name (will be looked up by exact match)")
+    # Kept for backward compatibility - deprecated in favor of parent_name
+    parent_id: Optional[int] = Field(None, description="Parent ingredient ID (deprecated, use parent_name)")
+
+
+class BulkIngredientUpload(BaseModel):
+    """Request model for bulk ingredient upload"""
+
+    ingredients: List[BulkIngredientCreate] = Field(
+        ..., description="List of ingredients to upload", min_length=1
+    )
 
 
 class BulkRecipeUpload(BaseModel):

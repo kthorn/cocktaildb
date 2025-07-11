@@ -245,6 +245,18 @@ class BulkUploadValidationError(BaseModel):
         from_attributes = True
 
 
+class BulkIngredientUploadValidationError(BaseModel):
+    """Response model for bulk ingredient upload validation errors"""
+
+    ingredient_index: int = Field(..., description="Index of the ingredient with the error")
+    ingredient_name: str = Field(..., description="Name of the ingredient with the error")
+    error_type: str = Field(..., description="Type of validation error")
+    error_message: str = Field(..., description="Detailed error message")
+
+    class Config:
+        from_attributes = True
+
+
 class BulkUploadResponse(BaseModel):
     """Response model for bulk recipe upload results"""
 
@@ -255,6 +267,22 @@ class BulkUploadResponse(BaseModel):
     )
     uploaded_recipes: List[RecipeResponse] = Field(
         default=[], description="List of successfully uploaded recipes"
+    )
+
+    class Config:
+        from_attributes = True
+
+
+class BulkIngredientUploadResponse(BaseModel):
+    """Response model for bulk ingredient upload results"""
+
+    uploaded_count: int = Field(..., description="Number of ingredients successfully uploaded")
+    failed_count: int = Field(..., description="Number of ingredients that failed validation")
+    validation_errors: List[BulkIngredientUploadValidationError] = Field(
+        default=[], description="List of validation errors"
+    )
+    uploaded_ingredients: List[IngredientResponse] = Field(
+        default=[], description="List of successfully uploaded ingredients"
     )
 
     class Config:

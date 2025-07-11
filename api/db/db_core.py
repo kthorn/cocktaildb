@@ -661,6 +661,45 @@ class Database:
             logger.error(f"Error in batch ingredient search: {str(e)}")
             raise
 
+    def check_ingredient_names_batch(self, ingredient_names: List[str]) -> Dict[str, bool]:
+        """Batch check for duplicate ingredient names - returns mapping of names to exists status"""
+        try:
+            if not ingredient_names:
+                return {}
+                
+            check_start = time.time()
+            logger.info(f"Batch checking {len(ingredient_names)} ingredient names for duplicates")
+            
+            # Create case-insensitive lookup
+            unique_names = list(set(name.lower() for name in ingredient_names))
+            placeholders = ",".join("?" for _ in unique_names)
+            
+            existing_results = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    f"SELECT LOWER(name) as name_lower FROM ingredients WHERE LOWER(name) IN ({placeholders})",
+                    tuple(unique_names),
+                ),
+            )
+            
+            # Build set of existing names
+            existing_names = {row["name_lower"] for row in existing_results}
+            
+            # Map back to original case names
+            final_results = {}
+            for original_name in ingredient_names:
+                lower_name = original_name.lower()
+                final_results[original_name] = lower_name in existing_names
+                    
+            check_duration = time.time() - check_start
+            logger.info(f"Batch ingredient name check completed in {check_duration:.3f}s, found {len(existing_names)}/{len(ingredient_names)} duplicates")
+            
+            return final_results
+            
+        except Exception as e:
+            logger.error(f"Error in batch ingredient name check: {str(e)}")
+            raise
+
     def get_ingredient(self, ingredient_id: int) -> Optional[Dict[str, Any]]:
         """Get a single ingredient by ID"""
         try:
