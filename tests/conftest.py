@@ -279,6 +279,34 @@ def db_with_test_data(test_db_with_data):
 
 
 @pytest.fixture(scope="function")
+def db_instance(memory_db_with_schema, monkeypatch):
+    """Database instance with environment properly configured"""
+    from api.db.db_core import Database
+    
+    # Set environment variable for Database class
+    monkeypatch.setenv("DB_PATH", memory_db_with_schema)
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    
+    # Create and return Database instance
+    db = Database()
+    yield db
+
+
+@pytest.fixture(scope="function")
+def db_instance_with_data(test_db_with_data, monkeypatch):
+    """Database instance with environment properly configured and test data"""
+    from api.db.db_core import Database
+    
+    # Set environment variable for Database class
+    monkeypatch.setenv("DB_PATH", test_db_with_data)
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    
+    # Create and return Database instance
+    db = Database()
+    yield db
+
+
+@pytest.fixture(scope="function")
 def authenticated_client(test_client_memory_with_app, mock_user):
     """Test client with mocked authentication using FastAPI dependency override"""
     from dependencies.auth import UserInfo, require_authentication

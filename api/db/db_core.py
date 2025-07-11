@@ -569,6 +569,10 @@ class Database:
                 ),
             )
             
+            # Mark exact matches
+            for ingredient in exact_result:
+                ingredient["exact_match"] = True
+            
             # If exact match found, return it
             if exact_result:
                 return exact_result
@@ -581,6 +585,11 @@ class Database:
                     (f"%{search_term}%",),
                 ),
             )
+            
+            # Mark partial matches
+            for ingredient in partial_result:
+                ingredient["exact_match"] = False
+                
             return partial_result
         except Exception as e:
             logger.error(f"Error searching ingredients with term '{search_term}': {str(e)}")

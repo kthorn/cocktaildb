@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
@@ -12,6 +11,7 @@ class IngredientResponse(BaseModel):
     description: Optional[str] = Field(None, description="Ingredient description")
     parent_id: Optional[int] = Field(None, description="Parent ingredient ID")
     path: Optional[str] = Field(None, description="Ingredient hierarchy path")
+    exact_match: Optional[bool] = Field(None, description="Whether this was an exact match for search queries")
 
     class Config:
         from_attributes = True
@@ -228,6 +228,34 @@ class PaginatedSearchResponse(BaseModel):
     recipes: List[RecipeResponse] = Field(..., description="List of matching recipes with full details")
     pagination: PaginationMetadata = Field(..., description="Pagination metadata")
     query: Optional[str] = Field(None, description="Search query used")
+
+    class Config:
+        from_attributes = True
+
+
+class BulkUploadValidationError(BaseModel):
+    """Response model for bulk upload validation errors"""
+
+    recipe_index: int = Field(..., description="Index of the recipe with the error")
+    recipe_name: str = Field(..., description="Name of the recipe with the error")
+    error_type: str = Field(..., description="Type of validation error")
+    error_message: str = Field(..., description="Detailed error message")
+
+    class Config:
+        from_attributes = True
+
+
+class BulkUploadResponse(BaseModel):
+    """Response model for bulk recipe upload results"""
+
+    uploaded_count: int = Field(..., description="Number of recipes successfully uploaded")
+    failed_count: int = Field(..., description="Number of recipes that failed validation")
+    validation_errors: List[BulkUploadValidationError] = Field(
+        default=[], description="List of validation errors"
+    )
+    uploaded_recipes: List[RecipeResponse] = Field(
+        default=[], description="List of successfully uploaded recipes"
+    )
 
     class Config:
         from_attributes = True

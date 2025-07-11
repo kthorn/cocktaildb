@@ -23,12 +23,27 @@ class RecipeIngredient(BaseModel):
     unit_id: Optional[int] = Field(None, description="Unit ID")
 
 
+class BulkRecipeIngredient(BaseModel):
+    """Recipe ingredient specification for bulk upload using ingredient names"""
+    ingredient_name: str = Field(..., description="Ingredient name (will be looked up by exact match)")
+    amount: Optional[float] = Field(None, description="Quantity amount")
+    unit_id: Optional[int] = Field(None, description="Unit ID")
+
+
 class RecipeCreate(BaseModel):
     """Request model for creating a recipe"""
     name: str = Field(..., description="Recipe name")
     instructions: Optional[str] = Field(None, description="Recipe instructions")
     description: Optional[str] = Field(None, description="Recipe description")
     ingredients: List[RecipeIngredient] = Field(default=[], description="Recipe ingredients")
+
+
+class BulkRecipeCreate(BaseModel):
+    """Request model for creating a recipe in bulk upload using ingredient names"""
+    name: str = Field(..., description="Recipe name")
+    instructions: Optional[str] = Field(None, description="Recipe instructions")
+    description: Optional[str] = Field(None, description="Recipe description")
+    ingredients: List[BulkRecipeIngredient] = Field(default=[], description="Recipe ingredients")
 
 
 class RecipeUpdate(BaseModel):
@@ -95,3 +110,8 @@ class SearchParams(PaginationParams):
     min_rating: Optional[float] = Field(None, description="Minimum average rating", ge=0, le=5)
     max_rating: Optional[float] = Field(None, description="Maximum average rating", ge=0, le=5)
     tags: Optional[List[str]] = Field(None, description="Tag filter list")
+
+
+class BulkRecipeUpload(BaseModel):
+    """Request model for bulk recipe upload"""
+    recipes: List[BulkRecipeCreate] = Field(..., description="List of recipes to upload", min_length=1)

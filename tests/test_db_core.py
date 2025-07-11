@@ -15,11 +15,9 @@ from api.db.db_core import Database, retry_on_db_locked
 class TestDatabaseConnection:
     """Test database connection and initialization"""
 
-    def test_database_initialization_success(self, memory_db_with_schema):
+    def test_database_initialization_success(self, db_instance, memory_db_with_schema):
         """Test successful database initialization"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = Database()
-            assert db.db_path == memory_db_with_schema
+        assert db_instance.db_path == memory_db_with_schema
 
     def test_database_initialization_with_missing_file(self):
         """Test database initialization with missing database file"""
@@ -44,52 +42,52 @@ class TestDatabaseConnection:
                 db = Database()
                 assert db.db_path == "/mnt/efs/cocktaildb.db"
 
-    def test_connection_retry_mechanism(self, memory_db_with_schema):
+    def test_connection_retry_mechanism(self, memory_db_with_schema, monkeypatch):
         """Test connection retry mechanism with temporary failures"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            # Mock _get_connection to fail twice then succeed
-            with patch.object(Database, "_get_connection") as mock_conn:
-                mock_conn.side_effect = [
-                    sqlite3.OperationalError("database is locked"),
-                    sqlite3.OperationalError("database is locked"),
-                    MagicMock(),  # Success on third try
-                ]
+        monkeypatch.setenv("DB_PATH", memory_db_with_schema)
+        
+        # Mock _get_connection to fail twice then succeed
+        with patch.object(Database, "_get_connection") as mock_conn:
+            mock_conn.side_effect = [
+                sqlite3.OperationalError("database is locked"),
+                sqlite3.OperationalError("database is locked"),
+                MagicMock(),  # Success on third try
+            ]
 
-                with patch("time.sleep"):  # Speed up test
-                    db = Database()
-                    # Should succeed after retries
-                    assert mock_conn.call_count == 3
+            with patch("time.sleep"):  # Speed up test
+                db = Database()
+                # Should succeed after retries
+                assert mock_conn.call_count == 3
 
-    def test_connection_max_retries_exceeded(self, memory_db_with_schema):
+    def test_connection_max_retries_exceeded(self, memory_db_with_schema, monkeypatch):
         """Test behavior when max retries are exceeded"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            with patch.object(Database, "_get_connection") as mock_conn:
-                mock_conn.side_effect = sqlite3.OperationalError("database is locked")
+        monkeypatch.setenv("DB_PATH", memory_db_with_schema)
+        
+        with patch.object(Database, "_get_connection") as mock_conn:
+            mock_conn.side_effect = sqlite3.OperationalError("database is locked")
 
-                with patch("time.sleep"):  # Speed up test
-                    with pytest.raises(sqlite3.OperationalError):
-                        Database()
+            with patch("time.sleep"):  # Speed up test
+                with pytest.raises(sqlite3.OperationalError):
+                    Database()
 
 
 class TestDatabaseConnectionManagement:
     """Test database connection configuration and settings"""
 
-    def test_get_connection_settings(self, memory_db_with_schema):
+    def test_get_connection_settings(self, db_instance):
         """Test that connection has proper SQLite settings"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = Database()
-            conn = db._get_connection()
+        conn = db_instance._get_connection()
 
-            # Verify row factory is set
-            assert conn.row_factory == sqlite3.Row
+        # Verify row factory is set
+        assert conn.row_factory == sqlite3.Row
 
-            # Verify timeout and journal mode
-            cursor = conn.cursor()
-            cursor.execute("PRAGMA journal_mode")
-            journal_mode = cursor.fetchone()[0]
-            assert journal_mode == "delete"
+        # Verify timeout and journal mode
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA journal_mode")
+        journal_mode = cursor.fetchone()[0]
+        assert journal_mode == "delete"
 
-            conn.close()
+        conn.close()
 
 
 class TestRetryDecorator:
@@ -174,117 +172,96 @@ class TestRetryDecorator:
 class TestDatabaseQueryExecution:
     """Test database query execution methods"""
 
-    def test_execute_query_select(self, memory_db_with_schema):
+    def test_execute_query_select(self, db_instance):
         """Test executing SELECT queries"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = Database()
+        # Insert test data
+        db_instance.execute_query(
+            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            ("Test Ingredient", "Test Description"),
+        )
 
-            # Insert test data
-            db.execute_query(
-                "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-                ("Test Ingredient", "Test Description"),
-            )
+        # Test SELECT query
+        result = db_instance.execute_query(
+            "SELECT * FROM ingredients WHERE name = ?", ("Test Ingredient",)
+        )
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0]["name"] == "Test Ingredient"
 
-            # Test SELECT query
-            result = db.execute_query(
-                "SELECT * FROM ingredients WHERE name = ?", ("Test Ingredient",)
-            )
-            assert isinstance(result, list)
-            assert len(result) == 1
-            assert result[0]["name"] == "Test Ingredient"
-
-    def test_execute_query_insert(self, memory_db_with_schema):
+    def test_execute_query_insert(self, db_instance):
         """Test executing INSERT queries"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = Database()
+        result = db_instance.execute_query(
+            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            ("Test Ingredient Insert", "Test Description"),
+        )
+        assert isinstance(result, dict)
+        assert "rowCount" in result
+        assert result["rowCount"] == 1
 
-            result = db.execute_query(
-                "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-                ("Test Ingredient", "Test Description"),
-            )
-            assert isinstance(result, dict)
-            assert "rowCount" in result
-            assert result["rowCount"] == 1
-
-    def test_execute_query_update(self, memory_db_with_schema):
+    def test_execute_query_update(self, db_instance):
         """Test executing UPDATE queries"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = Database()
+        # Insert test data
+        db_instance.execute_query(
+            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            ("Test Ingredient Update", "Test Description"),
+        )
 
-            # Insert test data
-            db.execute_query(
-                "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-                ("Test Ingredient", "Test Description"),
-            )
+        # Update data
+        result = db_instance.execute_query(
+            "UPDATE ingredients SET description = ? WHERE name = ?",
+            ("Updated Description", "Test Ingredient Update"),
+        )
+        assert result["rowCount"] == 1
 
-            # Update data
-            result = db.execute_query(
-                "UPDATE ingredients SET description = ? WHERE name = ?",
-                ("Updated Description", "Test Ingredient"),
-            )
-            assert result["rowCount"] == 1
-
-    def test_execute_query_delete(self, memory_db_with_schema):
+    def test_execute_query_delete(self, db_instance):
         """Test executing DELETE queries"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = Database()
+        # Insert test data
+        db_instance.execute_query(
+            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            ("Test Ingredient Delete", "Test Description"),
+        )
 
-            # Insert test data
-            db.execute_query(
-                "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-                ("Test Ingredient", "Test Description"),
-            )
+        # Delete data
+        result = db_instance.execute_query(
+            "DELETE FROM ingredients WHERE name = ?", ("Test Ingredient Delete",)
+        )
+        assert result["rowCount"] == 1
 
-            # Delete data
-            result = db.execute_query(
-                "DELETE FROM ingredients WHERE name = ?", ("Test Ingredient",)
-            )
-            assert result["rowCount"] == 1
-
-    def test_execute_query_with_named_parameters(self, memory_db_with_schema):
+    def test_execute_query_with_named_parameters(self, db_instance):
         """Test executing queries with named parameters"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = Database()
+        result = db_instance.execute_query(
+            "INSERT INTO ingredients (name, description) VALUES (:name, :description)",
+            {"name": "Test Ingredient Named", "description": "Test Description"},
+        )
+        assert result["rowCount"] == 1
 
-            result = db.execute_query(
-                "INSERT INTO ingredients (name, description) VALUES (:name, :description)",
-                {"name": "Test Ingredient", "description": "Test Description"},
-            )
-            assert result["rowCount"] == 1
-
-    def test_execute_query_error_handling(self, memory_db_with_schema):
+    def test_execute_query_error_handling(self, db_instance):
         """Test error handling in query execution"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = Database()
+        # Test SQL syntax error
+        with pytest.raises(sqlite3.Error):
+            db_instance.execute_query("INVALID SQL STATEMENT")
 
-            # Test SQL syntax error
-            with pytest.raises(sqlite3.Error):
-                db.execute_query("INVALID SQL STATEMENT")
-
-    def test_execute_query_with_rollback(self, memory_db_with_schema):
+    def test_execute_query_with_rollback(self, db_instance):
         """Test that transactions are rolled back on error"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = Database()
+        # Insert valid data first
+        db_instance.execute_query(
+            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            ("Valid Ingredient", "Valid Description"),
+        )
 
-            # Insert valid data first
-            db.execute_query(
-                "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-                ("Valid Ingredient", "Valid Description"),
-            )
+        # Attempt invalid operation that should trigger rollback
+        with pytest.raises(sqlite3.Error):
+            with patch.object(db_instance, "_get_connection") as mock_conn:
+                mock_connection = MagicMock()
+                mock_cursor = MagicMock()
+                mock_connection.cursor.return_value = mock_cursor
+                mock_cursor.execute.side_effect = sqlite3.Error("Test error")
+                mock_conn.return_value = mock_connection
 
-            # Attempt invalid operation that should trigger rollback
-            with pytest.raises(sqlite3.Error):
-                with patch.object(db, "_get_connection") as mock_conn:
-                    mock_connection = MagicMock()
-                    mock_cursor = MagicMock()
-                    mock_connection.cursor.return_value = mock_cursor
-                    mock_cursor.execute.side_effect = sqlite3.Error("Test error")
-                    mock_conn.return_value = mock_connection
+                db_instance.execute_query("SELECT * FROM ingredients")
 
-                    db.execute_query("SELECT * FROM ingredients")
-
-            # Verify rollback was called
-            mock_connection.rollback.assert_called_once()
+        # Verify rollback was called
+        mock_connection.rollback.assert_called_once()
 
 
 class TestSmartTitleCase:
