@@ -52,6 +52,8 @@ class RecipeCreate(BaseModel):
     name: str = Field(..., description="Recipe name")
     instructions: Optional[str] = Field(None, description="Recipe instructions")
     description: Optional[str] = Field(None, description="Recipe description")
+    source: Optional[str] = Field(None, description="Recipe source")
+    source_url: Optional[str] = Field(None, description="Recipe source URL")
     ingredients: List[RecipeIngredient] = Field(
         default=[], description="Recipe ingredients"
     )
@@ -63,6 +65,8 @@ class BulkRecipeCreate(BaseModel):
     name: str = Field(..., description="Recipe name")
     instructions: Optional[str] = Field(None, description="Recipe instructions")
     description: Optional[str] = Field(None, description="Recipe description")
+    source: Optional[str] = Field(None, description="Recipe source")
+    source_url: Optional[str] = Field(None, description="Recipe source URL")
     ingredients: List[BulkRecipeIngredient] = Field(
         default=[], description="Recipe ingredients"
     )
@@ -74,6 +78,8 @@ class RecipeUpdate(BaseModel):
     name: Optional[str] = Field(None, description="Recipe name")
     instructions: Optional[str] = Field(None, description="Recipe instructions")
     description: Optional[str] = Field(None, description="Recipe description")
+    source: Optional[str] = Field(None, description="Recipe source")
+    source_url: Optional[str] = Field(None, description="Recipe source URL")
     ingredients: Optional[List[RecipeIngredient]] = Field(
         None, description="Recipe ingredients"
     )

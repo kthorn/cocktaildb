@@ -146,6 +146,8 @@ function downloadTemplate() {
                 name: "Example Cocktail",
                 description: "A delicious example cocktail",
                 instructions: "1. Add ingredients to shaker\n2. Shake well with ice\n3. Strain into glass\n4. Garnish and serve",
+                source: "Classic Cocktail Book",
+                source_url: "https://example.com/cocktail-recipes",
                 ingredients: [
                     {
                         ingredient_name: "Vodka",
@@ -168,6 +170,8 @@ function downloadTemplate() {
                 name: "Second Example",
                 description: "Another example recipe",
                 instructions: "1. Build ingredients in glass\n2. Stir gently\n3. Serve",
+                source: "Bartender's Guide",
+                source_url: "https://example.com/gin-tonic",
                 ingredients: [
                     {
                         ingredient_name: "Gin",

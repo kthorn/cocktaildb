@@ -596,6 +596,8 @@ async def bulk_upload_recipes(
                     "name": recipe_data.name,
                     "instructions": recipe_data.instructions,
                     "description": recipe_data.description,
+                    "source": recipe_data.source,
+                    "source_url": recipe_data.source_url,
                     "ingredients": converted_ingredients,
                     "created_by": user.user_id,
                 }
