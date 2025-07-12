@@ -110,10 +110,10 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
             <h5>Instructions</h5>
             <p>${recipe.instructions}</p>
         </div>
-        ${recipe.source ? `
+        ${recipe.source || recipe.source_url ? `
         <div class="recipe-source">
             <h5>Source</h5>
-            <p>${recipe.source_url ? `<a href="${recipe.source_url}" target="_blank" rel="noopener noreferrer">${recipe.source}</a>` : recipe.source}</p>
+            <p>${recipe.source_url ? `<a href="${recipe.source_url}" target="_blank" rel="noopener noreferrer">${recipe.source || recipe.source_url}</a>` : recipe.source}</p>
         </div>
         ` : ''}
         ${shouldShowActions ? `

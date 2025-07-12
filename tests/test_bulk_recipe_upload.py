@@ -204,6 +204,9 @@ class TestBulkUploadValidation:
         # First, create some test ingredients
         ingredient_data = [
             {"name": "Lime Juice", "description": "Fresh lime juice"},
+            {"name": "Dark Jamaican Rum", "parent_name": "Rum"},
+            {"name": "Green Chartreuse"},
+            {"name": "Apricot Liqueur"},
         ]
 
         # Create ingredients
@@ -240,6 +243,34 @@ class TestBulkUploadValidation:
                         },
                     ],
                 },
+                {
+                    "name": "Final Voyage",
+                    "description": "Four equal parts cocktail with dark rum, lime juice, Green Chartreuse, and apricot liqueur",
+                    "instructions": "Shake all ingredients with ice and strain into a cocktail or coupe glass.",
+                    "ingredients": [
+                        {
+                            "ingredient_name": "Dark Jamaican Rum",
+                            "amount": 0.75,
+                            "unit_name": "oz",
+                        },
+                        {
+                            "ingredient_name": "Lime juice",
+                            "amount": 0.75,
+                            "unit_name": "oz",
+                        },
+                        {
+                            "ingredient_name": "Green Chartreuse",
+                            "amount": 0.75,
+                            "unit_name": "oz",
+                        },
+                        {
+                            "ingredient_name": "Apricot Liqueur",
+                            "amount": 0.75,
+                            "unit_name": "oz",
+                        },
+                    ],
+                    "source_url": "http://kindredcocktails.com/cocktail/final-voyage",
+                },
             ]
         }
 
@@ -247,10 +278,10 @@ class TestBulkUploadValidation:
         assert response.status_code == 201
 
         response_data = response.json()
-        assert response_data["uploaded_count"] == 2
+        assert response_data["uploaded_count"] == 3
         assert response_data["failed_count"] == 0
         assert len(response_data["validation_errors"]) == 0
-        assert len(response_data["uploaded_recipes"]) == 2
+        assert len(response_data["uploaded_recipes"]) == 3
 
         # Verify recipes were created
         assert response_data["uploaded_recipes"][0]["name"] == "Test Vodka Cocktail"
