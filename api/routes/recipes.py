@@ -477,8 +477,6 @@ async def bulk_upload_recipes(
                             )
                         )
                         failed_recipe_indices.add(idx)
-                        break
-
                 # Check if units exist (using batch results)
                 for ingredient in recipe_data.ingredients:
                     if ingredient.unit_name is not None:
@@ -492,7 +490,6 @@ async def bulk_upload_recipes(
                                 )
                             )
                             failed_recipe_indices.add(idx)
-                            break
                     elif ingredient.unit_id is not None:
                         # Legacy unit ID validation (still needs individual query)
                         unit_exists = db.execute_query(

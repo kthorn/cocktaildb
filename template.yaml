@@ -491,6 +491,14 @@ Resources:
             RestApiId: !Ref CocktailAPI
             Path: /ingredients/search
             Method: get
+        BulkUploadIngredients:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ingredients/bulk
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
         GetRecipes:
           Type: Api
           Properties:

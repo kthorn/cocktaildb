@@ -11,6 +11,11 @@ function setupAdminPage() {
     const fileInput = document.getElementById('recipe-file-input');
     const uploadBtn = document.getElementById('upload-recipes-btn');
     
+    // Ingredient upload elements
+    const downloadIngredientTemplateBtn = document.getElementById('download-ingredient-template-btn');
+    const ingredientFileInput = document.getElementById('ingredient-file-input');
+    const uploadIngredientsBtn = document.getElementById('upload-ingredients-btn');
+    
     if (downloadBtn) {
         downloadBtn.addEventListener('click', downloadDatabase);
     }
@@ -25,6 +30,19 @@ function setupAdminPage() {
     
     if (uploadBtn) {
         uploadBtn.addEventListener('click', handleBulkUpload);
+    }
+    
+    // Ingredient upload event listeners
+    if (downloadIngredientTemplateBtn) {
+        downloadIngredientTemplateBtn.addEventListener('click', downloadIngredientTemplate);
+    }
+    
+    if (ingredientFileInput) {
+        ingredientFileInput.addEventListener('change', handleIngredientFileSelection);
+    }
+    
+    if (uploadIngredientsBtn) {
+        uploadIngredientsBtn.addEventListener('click', handleBulkIngredientUpload);
     }
     
     // Check authentication and show/hide admin tools accordingly
@@ -374,5 +392,214 @@ function displayUploadResults(result) {
     
     if (result.failed_count > 0) {
         showMessage(`${result.failed_count} recipes failed validation. See details below.`, 'error');
+    }
+}
+
+// Bulk ingredient upload functionality
+function downloadIngredientTemplate() {
+    const template = {
+        ingredients: [
+            {
+                name: "Vodka",
+                description: "A clear distilled spirit with a neutral taste",
+                parent_name: "Spirits"
+            },
+            {
+                name: "Lime Juice",
+                description: "Fresh lime juice for cocktails",
+            },
+        ]
+    };
+    
+    // Create and download the template
+    const blob = new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'cocktail-ingredients-template.json';
+    
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    
+    showMessage('Ingredient template downloaded successfully!', 'success');
+}
+
+function handleIngredientFileSelection(event) {
+    const file = event.target.files[0];
+    const uploadBtn = document.getElementById('upload-ingredients-btn');
+    
+    if (file) {
+        // Validate file type
+        if (!file.type.includes('json')) {
+            showMessage('Please select a JSON file', 'error');
+            event.target.value = '';
+            uploadBtn.disabled = true;
+            return;
+        }
+        
+        // Validate file size (limit to 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            showMessage('File too large. Please select a file smaller than 5MB', 'error');
+            event.target.value = '';
+            uploadBtn.disabled = true;
+            return;
+        }
+        
+        uploadBtn.disabled = false;
+    } else {
+        uploadBtn.disabled = true;
+    }
+}
+
+async function handleBulkIngredientUpload() {
+    const fileInput = document.getElementById('ingredient-file-input');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        showMessage('Please select a file first', 'error');
+        return;
+    }
+    
+    try {
+        // Read and parse the JSON file
+        const fileText = await readFile(file);
+        let ingredientsData;
+        
+        try {
+            ingredientsData = JSON.parse(fileText);
+        } catch (error) {
+            showMessage('Invalid JSON file. Please check the file format.', 'error');
+            return;
+        }
+        
+        // Validate JSON structure
+        if (!validateIngredientJsonStructure(ingredientsData)) {
+            return; // Error message already shown in validation
+        }
+        
+        // Show progress
+        showIngredientUploadProgress(true);
+        
+        // Upload ingredients
+        const result = await api.bulkUploadIngredients(ingredientsData);
+        
+        // Hide progress
+        showIngredientUploadProgress(false);
+        
+        // Display results
+        displayIngredientUploadResults(result);
+        
+        // Clear file input
+        fileInput.value = '';
+        document.getElementById('upload-ingredients-btn').disabled = true;
+        
+    } catch (error) {
+        showIngredientUploadProgress(false);
+        console.error('Error uploading ingredients:', error);
+        showMessage(`Error uploading ingredients: ${error.message}`, 'error');
+    }
+}
+
+function validateIngredientJsonStructure(data) {
+    // Check if it has the ingredients array
+    if (!data || !Array.isArray(data.ingredients)) {
+        showMessage('JSON file must contain an "ingredients" array', 'error');
+        return false;
+    }
+    
+    if (data.ingredients.length === 0) {
+        showMessage('Ingredients array cannot be empty', 'error');
+        return false;
+    }
+    
+    // Check each ingredient has required fields
+    for (let i = 0; i < data.ingredients.length; i++) {
+        const ingredient = data.ingredients[i];
+        
+        if (!ingredient.name || typeof ingredient.name !== 'string') {
+            showMessage(`Ingredient ${i + 1} must have a "name" field`, 'error');
+            return false;
+        }
+        
+        // Optional fields validation
+        if (ingredient.description && typeof ingredient.description !== 'string') {
+            showMessage(`Ingredient "${ingredient.name}" description must be a string`, 'error');
+            return false;
+        }
+        
+        if (ingredient.parent_name && typeof ingredient.parent_name !== 'string') {
+            showMessage(`Ingredient "${ingredient.name}" parent_name must be a string`, 'error');
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+function showIngredientUploadProgress(show) {
+    const progressDiv = document.getElementById('ingredient-upload-progress');
+    const uploadBtn = document.getElementById('upload-ingredients-btn');
+    
+    if (show) {
+        progressDiv.style.display = 'block';
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = 'Uploading...';
+    } else {
+        progressDiv.style.display = 'none';
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = 'Upload Ingredients';
+    }
+}
+
+function displayIngredientUploadResults(result) {
+    const resultsDiv = document.getElementById('ingredient-upload-results');
+    
+    let html = '<div class="upload-results">';
+    
+    // Summary
+    html += '<h4>Upload Results</h4>';
+    html += `<p><strong>Successfully uploaded:</strong> ${result.uploaded_count} ingredients</p>`;
+    
+    if (result.failed_count > 0) {
+        html += `<p><strong>Failed:</strong> ${result.failed_count} ingredients</p>`;
+    }
+    
+    // Show successful ingredients
+    if (result.uploaded_ingredients && result.uploaded_ingredients.length > 0) {
+        html += '<div class="success-results" style="margin-top: var(--space-md);">';
+        html += '<h5 style="color: var(--success-color, #28a745);">Successfully Uploaded:</h5>';
+        html += '<ul>';
+        result.uploaded_ingredients.forEach(ingredient => {
+            html += `<li>${ingredient.name}${ingredient.description ? ` - ${ingredient.description}` : ''}</li>`;
+        });
+        html += '</ul>';
+        html += '</div>';
+    }
+    
+    // Show validation errors
+    if (result.validation_errors && result.validation_errors.length > 0) {
+        html += '<div class="error-results" style="margin-top: var(--space-md);">';
+        html += '<h5 style="color: var(--error-color, #dc3545);">Validation Errors:</h5>';
+        html += '<ul>';
+        result.validation_errors.forEach(error => {
+            html += `<li><strong>${error.ingredient_name}</strong> (Ingredient ${error.ingredient_index + 1}): ${error.error_message}</li>`;
+        });
+        html += '</ul>';
+        html += '</div>';
+    }
+    
+    html += '</div>';
+    
+    resultsDiv.innerHTML = html;
+    
+    // Show appropriate message
+    if (result.uploaded_count > 0) {
+        showMessage(`Successfully uploaded ${result.uploaded_count} ingredients!`, 'success');
+    }
+    
+    if (result.failed_count > 0) {
+        showMessage(`${result.failed_count} ingredients failed validation. See details below.`, 'error');
     }
 }

@@ -12,7 +12,12 @@ from dependencies.auth import (
 from db.database import get_database as get_db
 from db.db_core import Database
 from models.requests import IngredientCreate, IngredientUpdate, BulkIngredientUpload
-from models.responses import IngredientResponse, MessageResponse, BulkIngredientUploadResponse, BulkIngredientUploadValidationError
+from models.responses import (
+    IngredientResponse,
+    MessageResponse,
+    BulkIngredientUploadResponse,
+    BulkIngredientUploadValidationError,
+)
 from core.exceptions import NotFoundException, DatabaseException
 
 logger = logging.getLogger(__name__)
@@ -155,7 +160,9 @@ async def delete_ingredient(
 
 
 @router.post(
-    "/bulk", response_model=BulkIngredientUploadResponse, status_code=status.HTTP_201_CREATED
+    "/bulk",
+    response_model=BulkIngredientUploadResponse,
+    status_code=status.HTTP_201_CREATED,
 )
 async def bulk_upload_ingredients(
     bulk_data: BulkIngredientUpload,
@@ -167,7 +174,9 @@ async def bulk_upload_ingredients(
 
     start_time = time.time()
     try:
-        logger.info(f"Bulk ingredient upload started: {len(bulk_data.ingredients)} ingredients")
+        logger.info(
+            f"Bulk ingredient upload started: {len(bulk_data.ingredients)} ingredients"
+        )
 
         validation_errors = []
         uploaded_ingredients = []
@@ -190,13 +199,10 @@ async def bulk_upload_ingredients(
         logger.info(
             f"Batch validation: {len(all_ingredient_names)} ingredients, {len(all_parent_names)} unique parent names"
         )
-
-        # Batch validate ingredient names (check for duplicates)
         duplicate_names = db.check_ingredient_names_batch(all_ingredient_names)
-
-        # Batch validate parent names (check they exist)
-        valid_parents = db.search_ingredients_batch(all_parent_names) if all_parent_names else {}
-
+        valid_parents = (
+            db.search_ingredients_batch(all_parent_names) if all_parent_names else {}
+        )
         batch_validation_duration = time.time() - validation_start
         logger.info(f"Batch validation completed in {batch_validation_duration:.3f}s")
 
@@ -252,7 +258,9 @@ async def bulk_upload_ingredients(
                         failed_ingredient_indices.add(idx)
                         continue
 
-                ingredient_validation_duration = time.time() - ingredient_validation_start
+                ingredient_validation_duration = (
+                    time.time() - ingredient_validation_start
+                )
                 logger.info(
                     f"Ingredient {idx} validation took {ingredient_validation_duration:.3f}s"
                 )
@@ -272,7 +280,6 @@ async def bulk_upload_ingredients(
         logger.info(
             f"Individual validation completed in {individual_validation_duration:.3f}s"
         )
-
         validation_duration = time.time() - validation_start
         logger.info(f"Validation phase completed in {validation_duration:.3f}s")
 
@@ -362,5 +369,7 @@ async def bulk_upload_ingredients(
 
     except Exception as e:
         total_duration = time.time() - start_time
-        logger.error(f"Error in bulk ingredient upload after {total_duration:.3f}s: {str(e)}")
+        logger.error(
+            f"Error in bulk ingredient upload after {total_duration:.3f}s: {str(e)}"
+        )
         raise DatabaseException("Failed to bulk upload ingredients", detail=str(e))

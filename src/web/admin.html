@@ -57,6 +57,37 @@
                         
                         <div id="upload-results" style="margin-top: var(--space-md);"></div>
                     </div>
+
+                    <div class="card-container">
+                        <h3>Bulk Ingredient Upload</h3>
+                        <div class="form-actions">
+                            <button id="download-ingredient-template-btn" class="btn btn-secondary">
+                                Download JSON Template
+                            </button>
+                        </div>
+                        <p style="color: var(--text-light); margin-top: var(--space-sm);">
+                            Download a JSON template with the correct format for bulk ingredient uploads.
+                        </p>
+                        
+                        <div style="margin-top: var(--space-md);">
+                            <label for="ingredient-file-input" class="form-label">Upload Ingredient JSON File:</label>
+                            <input type="file" id="ingredient-file-input" accept=".json" class="form-control" style="margin-bottom: var(--space-sm);">
+                            <button id="upload-ingredients-btn" class="btn btn-primary" disabled>
+                                Upload Ingredients
+                            </button>
+                        </div>
+                        
+                        <div id="ingredient-upload-progress" style="display: none; margin-top: var(--space-sm);">
+                            <div class="progress-bar">
+                                <div class="progress-fill"></div>
+                            </div>
+                            <p style="color: var(--text-light); margin-top: var(--space-xs);">
+                                Uploading ingredients...
+                            </p>
+                        </div>
+                        
+                        <div id="ingredient-upload-results" style="margin-top: var(--space-md);"></div>
+                    </div>
                 </div>
             </section>
         </main>
