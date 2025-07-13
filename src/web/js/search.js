@@ -131,9 +131,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (reset) {
                     displayRecipes(allSearchResults, searchResultsContainer, true);
                 } else {
-                    // Append new results
-                    result.recipes.forEach(recipe => {
-                        const card = createRecipeCard(recipe, true);
+                    // Append new results using consistent displayRecipes approach
+                    const tempContainer = document.createElement('div');
+                    displayRecipes(result.recipes, tempContainer, true);
+                    Array.from(tempContainer.children).forEach(card => {
                         searchResultsContainer.appendChild(card);
                     });
                 }

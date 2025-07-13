@@ -27,7 +27,7 @@ async function loadRecipes() {
         let hasMore = true;
         
         while (hasMore) {
-            const result = await api.getRecipesWithFullData(page, 100); // Use larger page size for efficiency
+            const result = await api.getRecipesWithFullData(page, 10); // Use larger page size for efficiency
             
             if (result && result.recipes && result.recipes.length > 0) {
                 recipes = recipes.concat(result.recipes);
@@ -65,7 +65,7 @@ function displayRecipe(index) {
     try {
         // Use the already loaded full recipe data
         const recipe = recipes[index];
-        const recipeCard = createRecipeCard(recipe);
+        const recipeCard = createRecipeCard(recipe, true);
         
         document.getElementById('recipe-display').innerHTML = '';
         document.getElementById('recipe-display').appendChild(recipeCard);
