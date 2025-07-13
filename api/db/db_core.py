@@ -2412,3 +2412,222 @@ class Database:
             raise
 
     # --- End Pagination Methods ---
+
+    # --- User Ingredient Tracking Methods ---
+
+    @retry_on_db_locked()
+    def add_user_ingredient(self, user_id: str, ingredient_id: int) -> Dict[str, Any]:
+        """Add an ingredient to a user's inventory"""
+        try:
+            # Check if ingredient exists
+            ingredient = self.get_ingredient(ingredient_id)
+            if not ingredient:
+                raise ValueError(f"Ingredient with ID {ingredient_id} does not exist")
+
+            # Check if user already has this ingredient
+            existing = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id FROM user_ingredients WHERE cognito_user_id = :user_id AND ingredient_id = :ingredient_id",
+                    {"user_id": user_id, "ingredient_id": ingredient_id},
+                ),
+            )
+            
+            if existing:
+                # User already has this ingredient, raise exception
+                raise ValueError(f"Ingredient {ingredient_id} already exists in user's inventory")
+
+            # Add the ingredient to user's inventory
+            self.execute_query(
+                "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (:user_id, :ingredient_id)",
+                {"user_id": user_id, "ingredient_id": ingredient_id},
+            )
+
+            # Return the created record with ingredient details
+            return {
+                "ingredient_id": ingredient_id,
+                "ingredient_name": ingredient["name"],
+                "added_at": "now"  # SQLite CURRENT_TIMESTAMP
+            }
+
+        except Exception as e:
+            logger.error(f"Error adding ingredient {ingredient_id} to user {user_id}: {str(e)}")
+            raise
+
+    @retry_on_db_locked()
+    def remove_user_ingredient(self, user_id: str, ingredient_id: int) -> bool:
+        """Remove an ingredient from a user's inventory"""
+        try:
+            # Check if user has this ingredient
+            existing = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    "SELECT id FROM user_ingredients WHERE cognito_user_id = :user_id AND ingredient_id = :ingredient_id",
+                    {"user_id": user_id, "ingredient_id": ingredient_id},
+                ),
+            )
+            
+            if not existing:
+                return False
+
+            # Remove the ingredient from user's inventory
+            result = self.execute_query(
+                "DELETE FROM user_ingredients WHERE cognito_user_id = :user_id AND ingredient_id = :ingredient_id",
+                {"user_id": user_id, "ingredient_id": ingredient_id},
+            )
+
+            return result.get("rowCount", 0) > 0
+
+        except Exception as e:
+            logger.error(f"Error removing ingredient {ingredient_id} from user {user_id}: {str(e)}")
+            raise
+
+    @retry_on_db_locked()
+    def get_user_ingredients(self, user_id: str) -> List[Dict[str, Any]]:
+        """Get all ingredients for a user with full ingredient details"""
+        try:
+            result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    """
+                    SELECT ui.ingredient_id, ui.added_at, i.name, i.description, i.parent_id, i.path
+                    FROM user_ingredients ui
+                    JOIN ingredients i ON ui.ingredient_id = i.id
+                    WHERE ui.cognito_user_id = :user_id
+                    ORDER BY i.name
+                    """,
+                    {"user_id": user_id},
+                ),
+            )
+            return result
+
+        except Exception as e:
+            logger.error(f"Error getting ingredients for user {user_id}: {str(e)}")
+            raise
+
+    @retry_on_db_locked()
+    def add_user_ingredients_bulk(self, user_id: str, ingredient_ids: List[int]) -> Dict[str, Any]:
+        """Add multiple ingredients to a user's inventory"""
+        conn = None
+        try:
+            if not ingredient_ids:
+                return {"added_count": 0, "already_exists_count": 0, "failed_count": 0, "errors": []}
+
+            conn = self._get_connection()
+            conn.execute("BEGIN IMMEDIATE")
+            cursor = conn.cursor()
+
+            added_count = 0
+            already_exists_count = 0
+            failed_count = 0
+            errors = []
+
+            for ingredient_id in ingredient_ids:
+                try:
+                    # Check if ingredient exists
+                    ingredient_check = cast(
+                        List[Dict[str, Any]],
+                        self.execute_query(
+                            "SELECT id FROM ingredients WHERE id = :ingredient_id",
+                            {"ingredient_id": ingredient_id},
+                        ),
+                    )
+                    if not ingredient_check:
+                        errors.append(f"Ingredient with ID {ingredient_id} does not exist")
+                        failed_count += 1
+                        continue
+
+                    # Check if user already has this ingredient
+                    existing = cursor.execute(
+                        "SELECT id FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
+                        (user_id, ingredient_id),
+                    ).fetchone()
+                    
+                    if existing:
+                        already_exists_count += 1
+                        continue
+
+                    # Add the ingredient
+                    cursor.execute(
+                        "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
+                        (user_id, ingredient_id),
+                    )
+                    added_count += 1
+
+                except Exception as e:
+                    errors.append(f"Error adding ingredient {ingredient_id}: {str(e)}")
+                    failed_count += 1
+
+            conn.commit()
+            
+            return {
+                "added_count": added_count,
+                "already_exists_count": already_exists_count,
+                "failed_count": failed_count,
+                "errors": errors
+            }
+
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            logger.error(f"Error in bulk add ingredients for user {user_id}: {str(e)}")
+            raise
+        finally:
+            if conn:
+                conn.close()
+
+    @retry_on_db_locked()
+    def remove_user_ingredients_bulk(self, user_id: str, ingredient_ids: List[int]) -> Dict[str, Any]:
+        """Remove multiple ingredients from a user's inventory"""
+        conn = None
+        try:
+            if not ingredient_ids:
+                return {"removed_count": 0, "not_found_count": 0}
+
+            conn = self._get_connection()
+            conn.execute("BEGIN IMMEDIATE")
+            cursor = conn.cursor()
+
+            removed_count = 0
+            not_found_count = 0
+
+            for ingredient_id in ingredient_ids:
+                try:
+                    # Check if user has this ingredient
+                    existing = cursor.execute(
+                        "SELECT id FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
+                        (user_id, ingredient_id),
+                    ).fetchone()
+                    
+                    if not existing:
+                        not_found_count += 1
+                        continue
+
+                    # Remove the ingredient
+                    cursor.execute(
+                        "DELETE FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
+                        (user_id, ingredient_id),
+                    )
+                    removed_count += 1
+
+                except Exception as e:
+                    logger.error(f"Error removing ingredient {ingredient_id} for user {user_id}: {str(e)}")
+                    # Continue with other ingredients
+
+            conn.commit()
+            
+            return {
+                "removed_count": removed_count,
+                "not_found_count": not_found_count
+            }
+
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            logger.error(f"Error in bulk remove ingredients for user {user_id}: {str(e)}")
+            raise
+        finally:
+            if conn:
+                conn.close()
+
+    # --- End User Ingredient Tracking Methods ---

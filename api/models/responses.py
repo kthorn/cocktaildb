@@ -287,3 +287,43 @@ class BulkIngredientUploadResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class UserIngredientResponse(BaseModel):
+    """Response model for user ingredient data"""
+
+    ingredient_id: int = Field(..., description="Ingredient ID")
+    name: str = Field(..., description="Ingredient name")
+    description: Optional[str] = Field(None, description="Ingredient description")
+    parent_id: Optional[int] = Field(None, description="Parent ingredient ID")
+    path: Optional[str] = Field(None, description="Ingredient hierarchy path")
+    added_at: str = Field(..., description="When ingredient was added to user's inventory")
+
+    class Config:
+        from_attributes = True
+
+
+class UserIngredientListResponse(BaseModel):
+    """Response model for list of user ingredients"""
+
+    ingredients: List[UserIngredientResponse] = Field(
+        default=[], description="List of user's ingredients"
+    )
+    total_count: int = Field(..., description="Total number of ingredients in user's inventory")
+
+    class Config:
+        from_attributes = True
+
+
+class UserIngredientBulkResponse(BaseModel):
+    """Response model for bulk user ingredient operations"""
+
+    added_count: Optional[int] = Field(None, description="Number of ingredients added")
+    already_exists_count: Optional[int] = Field(None, description="Number of ingredients already in inventory")
+    removed_count: Optional[int] = Field(None, description="Number of ingredients removed")
+    not_found_count: Optional[int] = Field(None, description="Number of ingredients not found in inventory")
+    failed_count: Optional[int] = Field(None, description="Number of ingredients that failed to process")
+    errors: List[str] = Field(default=[], description="List of error messages")
+
+    class Config:
+        from_attributes = True

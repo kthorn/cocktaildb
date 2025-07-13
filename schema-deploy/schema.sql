@@ -72,6 +72,15 @@ CREATE TABLE recipe_ingredients (
   FOREIGN KEY (unit_id) REFERENCES units(id) ON DELETE SET NULL
 );
 
+CREATE TABLE user_ingredients (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  cognito_user_id TEXT NOT NULL,
+  ingredient_id INTEGER NOT NULL,
+  added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE,
+  UNIQUE(cognito_user_id, ingredient_id)
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_ingredients_parent_id ON ingredients(parent_id);
 CREATE INDEX idx_ingredients_path ON ingredients(path);
@@ -81,6 +90,8 @@ CREATE INDEX idx_recipe_tags_recipe_id ON recipe_tags(recipe_id);
 CREATE INDEX idx_recipe_tags_tag_id ON recipe_tags(tag_id);
 CREATE INDEX idx_ratings_cognito_user_id ON ratings(cognito_user_id);
 CREATE INDEX idx_ratings_recipe_id ON ratings(recipe_id);
+CREATE INDEX idx_user_ingredients_cognito_user_id ON user_ingredients(cognito_user_id);
+CREATE INDEX idx_user_ingredients_ingredient_id ON user_ingredients(ingredient_id);
 
 CREATE UNIQUE INDEX idx_public_tags ON tags(name) WHERE created_by IS NULL;
 CREATE UNIQUE INDEX idx_private_tags ON tags(name, created_by) WHERE created_by IS NOT NULL;

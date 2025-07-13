@@ -175,3 +175,25 @@ class BulkRecipeUpload(BaseModel):
     recipes: List[BulkRecipeCreate] = Field(
         ..., description="List of recipes to upload", min_length=1
     )
+
+
+class UserIngredientAdd(BaseModel):
+    """Request model for adding an ingredient to user's inventory"""
+
+    ingredient_id: int = Field(..., description="Ingredient ID to add to inventory")
+
+
+class UserIngredientBulkAdd(BaseModel):
+    """Request model for bulk adding ingredients to user's inventory"""
+
+    ingredient_ids: List[int] = Field(
+        ..., description="List of ingredient IDs to add to inventory", min_length=1
+    )
+
+
+class UserIngredientBulkRemove(BaseModel):
+    """Request model for bulk removing ingredients from user's inventory"""
+
+    ingredient_ids: List[int] = Field(
+        ..., description="List of ingredient IDs to remove from inventory", min_length=1
+    )
