@@ -863,6 +863,13 @@ footer {
 .star.filled {
     color: var(--warn-color);
 }
+.star.no-rating {
+    color: #ddd;
+}
+.star.zero-rating {
+    color: #999;
+    opacity: 0.6;
+}
 
 .star.half {
     position: relative;

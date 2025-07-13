@@ -148,17 +148,32 @@ export function createInteractiveRating(recipeId, currentRating, avgRating, coun
   container.className = 'star-rating interactive';
   container.dataset.recipeId = recipeId;
   
+  // Distinguish between no rating (null/undefined) and 0-star rating
+  const hasRating = currentRating !== null && currentRating !== undefined;
+  const ratingValue = currentRating ?? 0;
+  
   // Create 5 stars
   for (let i = 1; i <= 5; i++) {
     const star = document.createElement('span');
     star.className = 'star interactive';
-    star.textContent = i <= (currentRating || 0) ? '★' : '☆';
-    star.dataset.value = i;
     
-    // Add filled class if this star is filled based on current user rating
-    if (i <= (currentRating || 0)) {
-      star.classList.add('filled');
+    if (!hasRating) {
+      // No rating given - show empty outline stars
+      star.textContent = '☆';
+      star.classList.add('no-rating');
+    } else if (ratingValue === 0) {
+      // 0-star rating given - show grayed filled stars
+      star.textContent = '★';
+      star.classList.add('zero-rating');
+    } else {
+      // Normal rating - show filled/empty based on rating value
+      star.textContent = i <= ratingValue ? '★' : '☆';
+      if (i <= ratingValue) {
+        star.classList.add('filled');
+      }
     }
+    
+    star.dataset.value = i;
     
     // Add hover effect
     star.addEventListener('mouseover', () => {
@@ -180,12 +195,22 @@ export function createInteractiveRating(recipeId, currentRating, avgRating, coun
       container.querySelectorAll('.star').forEach(s => {
         const value = parseInt(s.dataset.value);
         s.classList.remove('hover');
-        if (value <= (currentRating || 0)) {
-          s.textContent = '★';
-          s.classList.add('filled');
-        } else {
+        
+        // Reset based on actual rating state
+        if (!hasRating) {
           s.textContent = '☆';
-          s.classList.remove('filled');
+          s.className = 'star interactive no-rating';
+        } else if (ratingValue === 0) {
+          s.textContent = '★';
+          s.className = 'star interactive zero-rating';
+        } else {
+          if (value <= ratingValue) {
+            s.textContent = '★';
+            s.className = 'star interactive filled';
+          } else {
+            s.textContent = '☆';
+            s.className = 'star interactive';
+          }
         }
       });
     });
@@ -199,6 +224,24 @@ export function createInteractiveRating(recipeId, currentRating, avgRating, coun
     
     container.appendChild(star);
   }
+  
+  // Add user rating indicator
+  const userIndicator = document.createElement('span');
+  userIndicator.className = 'user-rating-indicator';
+  if (!hasRating) {
+    userIndicator.textContent = ' (not rated)';
+    userIndicator.style.color = '#999';
+    userIndicator.style.fontSize = '0.8em';
+  } else if (ratingValue === 0) {
+    userIndicator.textContent = ' (0 stars)';
+    userIndicator.style.color = '#666';
+    userIndicator.style.fontSize = '0.8em';
+  } else {
+    userIndicator.textContent = ` (your rating: ${ratingValue})`;
+    userIndicator.style.color = '#666';
+    userIndicator.style.fontSize = '0.8em';
+  }
+  container.appendChild(userIndicator);
   
   // Add rating average and count
   const stats = document.createElement('span');

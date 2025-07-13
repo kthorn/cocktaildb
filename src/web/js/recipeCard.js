@@ -132,7 +132,7 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
             // The recipe object now directly contains user_rating if available
             const interactiveRating = createInteractiveRating(
                 recipe.id,
-                recipe.user_rating || 0, // Use user_rating from the recipe object
+                recipe.user_rating, // Use user_rating from the recipe object (don't default to 0)
                 recipe.avg_rating || 0,
                 recipe.rating_count || 0,
                 submitRating
