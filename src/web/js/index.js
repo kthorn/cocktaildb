@@ -86,5 +86,5 @@ document.getElementById('next-recipe').addEventListener('click', () => {
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    loadRecipes(1);
+    loadRecipes();
 }); 
