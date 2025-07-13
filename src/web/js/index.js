@@ -21,11 +21,26 @@ async function loadRecipes() {
         // Show loading message
         document.getElementById('recipe-display').innerHTML = '<p>Loading recipes...</p>';
         
-        // Use paginated API to get first page of recipes with full details
-        const result = await api.getRecipesWithFullData(1, 20);
+        // Load all recipes by fetching pages until we get them all
+        recipes = [];
+        let page = 1;
+        let hasMore = true;
         
-        if (result && result.recipes && result.recipes.length > 0) {
-            recipes = result.recipes;
+        while (hasMore) {
+            const result = await api.getRecipesWithFullData(page, 100); // Use larger page size for efficiency
+            
+            if (result && result.recipes && result.recipes.length > 0) {
+                recipes = recipes.concat(result.recipes);
+                
+                // Check if there are more pages
+                hasMore = result.pagination && result.pagination.has_next;
+                page++;
+            } else {
+                hasMore = false;
+            }
+        }
+        
+        if (recipes.length > 0) {
             displayRecipe(currentRecipeIndex);
         } else {
             document.getElementById('recipe-display').innerHTML = '<p>No recipes found.</p>';
