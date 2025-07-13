@@ -25,6 +25,7 @@ async function loadRecipes() {
         recipes = [];
         let page = 1;
         let hasMore = true;
+        let firstRecipeDisplayed = false;
         
         while (hasMore) {
             console.log(`Loading page ${page}...`);
@@ -34,6 +35,12 @@ async function loadRecipes() {
             if (result && result.recipes && result.recipes.length > 0) {
                 recipes = recipes.concat(result.recipes);
                 console.log(`Added ${result.recipes.length} recipes. Total: ${recipes.length}`);
+                
+                // Display the first recipe as soon as we have it
+                if (!firstRecipeDisplayed && recipes.length > 0) {
+                    displayRecipe(currentRecipeIndex);
+                    firstRecipeDisplayed = true;
+                }
                 
                 // Check if there are more pages
                 console.log('Pagination object:', result.pagination);
@@ -48,9 +55,7 @@ async function loadRecipes() {
         
         console.log(`Final recipe count: ${recipes.length}`);
         
-        if (recipes.length > 0) {
-            displayRecipe(currentRecipeIndex);
-        } else {
+        if (recipes.length === 0) {
             document.getElementById('recipe-display').innerHTML = '<p>No recipes found.</p>';
         }
         updateStats();
