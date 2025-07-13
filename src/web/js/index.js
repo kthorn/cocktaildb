@@ -27,18 +27,26 @@ async function loadRecipes() {
         let hasMore = true;
         
         while (hasMore) {
-            const result = await api.getRecipesWithFullData(page, 10); // Use larger page size for efficiency
+            console.log(`Loading page ${page}...`);
+            const result = await api.searchRecipesWithFullData({}, page, 10); // Empty search returns all recipes
+            console.log(`Page ${page} result:`, result);
             
             if (result && result.recipes && result.recipes.length > 0) {
                 recipes = recipes.concat(result.recipes);
+                console.log(`Added ${result.recipes.length} recipes. Total: ${recipes.length}`);
                 
                 // Check if there are more pages
-                hasMore = result.pagination && result.pagination.has_next;
+                console.log('Pagination object:', result.pagination);
+                hasMore = result.pagination && page < result.pagination.totalPages;
+                console.log(`Has more pages: ${hasMore}`);
                 page++;
             } else {
+                console.log('No more recipes found');
                 hasMore = false;
             }
         }
+        
+        console.log(`Final recipe count: ${recipes.length}`);
         
         if (recipes.length > 0) {
             displayRecipe(currentRecipeIndex);

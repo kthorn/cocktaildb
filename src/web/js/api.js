@@ -104,36 +104,11 @@ class CocktailAPI {
     }
 
     // Recipes API
-    async getRecipes(page = 1, limit = 20) {
-        const response = await this._request(`/recipes?page=${page}&limit=${limit}`);
-        // Handle paginated response format with metadata
-        if (response && typeof response === 'object' && response.recipes) {
-            return {
-                recipes: response.recipes,
-                pagination: {
-                    page: response.page || page,
-                    limit: response.limit || limit,
-                    total: response.total || response.recipes.length,
-                    totalPages: response.total_pages || Math.ceil((response.total || response.recipes.length) / limit)
-                }
-            };
-        }
-        // Fallback for direct array response (legacy format)
-        return {
-            recipes: response || [],
-            pagination: { page: 1, limit: limit, total: (response || []).length, totalPages: 1 }
-        };
-    }
 
     async getRecipe(id) {
         return this._request(`/recipes/${id}`);
     }
 
-    // Get all recipes with full details (ingredients, instructions, etc.)
-    // Now uses paginated endpoint that returns full details directly
-    async getRecipesWithFullData(page = 1, limit = 20) {
-        return this.getRecipes(page, limit);
-    }
 
     // Search recipes and return full details
     // Now uses paginated search endpoint that returns full details directly
@@ -141,46 +116,6 @@ class CocktailAPI {
         return this.searchRecipes(searchQuery, page, limit);
     }
 
-    // Legacy helper method - DEPRECATED
-    // Note: This method is no longer needed since paginated endpoints return full recipe details
-    // Keeping for backward compatibility with existing code
-    async enrichRecipes(basicRecipes, onBatchLoaded = null) {
-        console.warn('enrichRecipes() is deprecated - use paginated endpoints that return full details directly');
-        
-        if (!basicRecipes || basicRecipes.length === 0) {
-            return basicRecipes;
-        }
-
-        const fullRecipes = [];
-        const batchSize = 5; // Process 5 recipes at a time to prevent server overload
-        
-        for (let i = 0; i < basicRecipes.length; i += batchSize) {
-            const batch = basicRecipes.slice(i, i + batchSize);
-            const batchPromises = batch.map(async (recipe) => {
-                try {
-                    return await this.getRecipe(recipe.id);
-                } catch (error) {
-                    console.error(`Error fetching full recipe data for ${recipe.id}:`, error);
-                    return recipe; // Fallback to basic recipe data
-                }
-            });
-            
-            const batchResults = await Promise.all(batchPromises);
-            fullRecipes.push(...batchResults);
-            
-            // Call the callback with the current batch if provided
-            if (typeof onBatchLoaded === 'function') {
-                onBatchLoaded(batchResults, fullRecipes.length, basicRecipes.length);
-            }
-            
-            // Small delay between batches to be gentle on the backend
-            if (i + batchSize < basicRecipes.length) {
-                await new Promise(resolve => setTimeout(resolve, 50));
-            }
-        }
-        
-        return fullRecipes;
-    }
 
     async createRecipe(recipeData) {
         return this._request('/recipes', 'POST', recipeData);
@@ -265,34 +200,8 @@ class CocktailAPI {
         return this._request('/units');
     }
 
-    async createUnit(unitData) {
-        return this._request('/units', 'POST', unitData);
-    }
-
-    async getUnitsByType(type) {
-        return this._request(`/units?type=${type}`);
-    }
     
     // Ratings API
-    async getRatings(recipeId) {
-        try {
-            // Ensure recipeId is defined and build a proper URL
-            if (!recipeId) {
-                console.error('Recipe ID is required for getRatings');
-                return [];
-            }
-
-            // For debugging - log the full URL we're requesting
-            const url = `${this.baseUrl}/ratings/${recipeId}`;
-            console.log('Fetching ratings from:', url);
-            
-            // The handleResponse method now handles 404s for ratings
-            return this._request(`/ratings/${recipeId}`);
-        } catch (error) {
-            console.error(`Error getting ratings for recipe ${recipeId}:`, error);
-            return []; // Return empty array on error
-        }
-    }
     
     async setRating(recipeId, ratingData) {
         try {
@@ -306,14 +215,6 @@ class CocktailAPI {
         }
     }
     
-    async deleteRating(recipeId) {
-        try {
-            return this._request(`/ratings/${recipeId}`, 'DELETE');
-        } catch (error) {
-            console.error(`Error deleting rating for recipe ${recipeId}:`, error);
-            throw error;
-        }
-    }
 
     // Helper to check if user is authenticated
     isAuthenticated() {
@@ -384,36 +285,7 @@ class CocktailAPI {
         return this._request('/tags/private', 'POST', { name: tagName }, true);
     }
 
-    // Get current user info (requires authentication)
-    async getCurrentUserInfo() {
-        return this._request('/auth/me', 'GET', null, true);
-    }
 
-    // Get all recipes with full details and progressive loading support
-    // Now uses paginated endpoint - progressive loading handled by pagination
-    async getRecipesWithFullDataProgressive(onPageLoaded = null, page = 1, limit = 20) {
-        const result = await this.getRecipes(page, limit);
-        
-        // Call the callback with the loaded page if provided
-        if (typeof onPageLoaded === 'function') {
-            onPageLoaded(result.recipes, result.pagination);
-        }
-        
-        return result;
-    }
-
-    // Search recipes and return full details with progressive loading support
-    // Now uses paginated search endpoint - progressive loading handled by pagination
-    async searchRecipesWithFullDataProgressive(searchQuery, onPageLoaded = null, page = 1, limit = 20) {
-        const result = await this.searchRecipes(searchQuery, page, limit);
-        
-        // Call the callback with the loaded page if provided
-        if (typeof onPageLoaded === 'function') {
-            onPageLoaded(result.recipes, result.pagination);
-        }
-        
-        return result;
-    }
 }
 
 // Create and export the API instance
