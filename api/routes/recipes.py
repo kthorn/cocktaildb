@@ -130,6 +130,10 @@ async def search_recipes(
         None,
         description="Comma-separated ingredient names with optional operators (e.g., 'Vodka,Gin:MUST,Vermouth:MUST_NOT')",
     ),
+    inventory: Optional[bool] = Query(
+        None,
+        description="Filter recipes that can be made with user's ingredient inventory",
+    ),
     db: Database = Depends(get_db),
     user: Optional[UserInfo] = Depends(get_current_user_optional),
 ):
@@ -137,7 +141,7 @@ async def search_recipes(
     try:
         logger.info(f"Searching recipes: q='{q}', page={page}, limit={limit}")
         logger.info(
-            f"All search parameters: q={q}, min_rating={min_rating}, max_rating={max_rating}, tags={tags}, ingredients={ingredients}"
+            f"All search parameters: q={q}, min_rating={min_rating}, max_rating={max_rating}, tags={tags}, ingredients={ingredients}, inventory={inventory}"
         )
 
         # Validate sort parameters
@@ -160,6 +164,117 @@ async def search_recipes(
 
         # Build search parameters
         search_params = {}
+        if q and q.strip():
+            search_params["q"] = q.strip()
+        if min_rating is not None:
+            search_params["min_rating"] = min_rating
+        if max_rating is not None:
+            search_params["max_rating"] = max_rating
+        if tags:
+            search_params["tags"] = [
+                tag.strip() for tag in tags.split(",") if tag.strip()
+            ]
+        if ingredients:
+            search_params["ingredients"] = [
+                ing.strip() for ing in ingredients.split(",") if ing.strip()
+            ]
+        if inventory is True:
+            if user_id is None:
+                raise ValidationException("Inventory filtering requires authentication. Please log in to use this feature.")
+            search_params["inventory"] = True
+
+        logger.info(f"Search params: {search_params}")
+        logger.info(
+            f"Database search will be called with limit={limit}, offset={offset}"
+        )
+
+        # Get paginated search results
+        recipes_data, total_count = db.search_recipes_paginated(
+            search_params=search_params,
+            limit=limit,
+            offset=offset,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            user_id=user_id,
+        )
+
+        logger.info(
+            f"Database returned {len(recipes_data)} recipes, total_count={total_count}"
+        )
+
+        # Build pagination metadata
+        total_pages = max(1, (total_count + limit - 1) // limit)
+        pagination = PaginationMetadata(
+            page=page,
+            limit=limit,
+            total_pages=total_pages,
+            total_count=total_count,
+            has_next=page < total_pages,
+            has_previous=page > 1,
+        )
+
+        # Convert to response models
+        recipes = [RecipeResponse(**recipe) for recipe in recipes_data]
+
+        return PaginatedSearchResponse(recipes=recipes, pagination=pagination, query=q)
+
+    except ValidationException:
+        raise
+    except Exception as e:
+        logger.error(f"Error searching recipes: {str(e)}")
+        raise DatabaseException("Failed to search recipes", detail=str(e))
+
+
+@router.get("/search/inventory", response_model=PaginatedSearchResponse)
+async def search_recipes_with_inventory(
+    q: Optional[str] = Query(None, description="Search query"),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    limit: int = Query(20, ge=1, le=1000, description="Number of items per page"),
+    sort_by: str = Query(
+        "name", description="Sort field: name, created_at, avg_rating"
+    ),
+    sort_order: str = Query("asc", description="Sort order: asc, desc"),
+    min_rating: Optional[float] = Query(
+        None, description="Minimum average rating", ge=0, le=5
+    ),
+    max_rating: Optional[float] = Query(
+        None, description="Maximum average rating", ge=0, le=5
+    ),
+    tags: Optional[str] = Query(None, description="Comma-separated list of tags"),
+    ingredients: Optional[str] = Query(
+        None,
+        description="Comma-separated ingredient names with optional operators (e.g., 'Vodka,Gin:MUST,Vermouth:MUST_NOT')",
+    ),
+    db: Database = Depends(get_db),
+    user: UserInfo = Depends(require_authentication),
+):
+    """Search recipes that can be made with user's ingredient inventory (requires authentication)"""
+    try:
+        logger.info(f"Searching recipes with inventory: q='{q}', page={page}, limit={limit}")
+        logger.info(
+            f"All search parameters: q={q}, min_rating={min_rating}, max_rating={max_rating}, tags={tags}, ingredients={ingredients}"
+        )
+
+        # Validate sort parameters
+        valid_sort_fields = ["name", "created_at", "avg_rating"]
+        valid_sort_orders = ["asc", "desc"]
+
+        if sort_by not in valid_sort_fields:
+            raise ValidationException(
+                f"Invalid sort_by field. Must be one of: {valid_sort_fields}"
+            )
+
+        if sort_order not in valid_sort_orders:
+            raise ValidationException(
+                f"Invalid sort_order. Must be one of: {valid_sort_orders}"
+            )
+
+        # Calculate offset
+        offset = (page - 1) * limit
+        user_id = user.user_id
+
+        # Build search parameters - always include inventory filtering
+        search_params = {"inventory": True}
         if q and q.strip():
             search_params["q"] = q.strip()
         if min_rating is not None:
@@ -213,8 +328,8 @@ async def search_recipes(
     except ValidationException:
         raise
     except Exception as e:
-        logger.error(f"Error searching recipes: {str(e)}")
-        raise DatabaseException("Failed to search recipes", detail=str(e))
+        logger.error(f"Error searching recipes with inventory: {str(e)}")
+        raise DatabaseException("Failed to search recipes with inventory", detail=str(e))
 
 
 @router.post("", response_model=RecipeResponse, status_code=status.HTTP_201_CREATED)

@@ -284,6 +284,12 @@ document.addEventListener('DOMContentLoaded', () => {
             query.tags = tagsValue.split(',').map(tag => tag.trim());
         }
         
+        // Add inventory filter if checked
+        const inventoryCheckbox = document.getElementById('inventory-search');
+        if (inventoryCheckbox && inventoryCheckbox.checked) {
+            query.inventory = true;
+        }
+        
         // Add ingredient conditions
         const ingredientRows = ingredientQueryBuilder.querySelectorAll('.item-row');
         if (ingredientRows.length > 0) {

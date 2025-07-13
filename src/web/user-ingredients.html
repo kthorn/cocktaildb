@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <title>My Ingredients - Cocktail Database</title>
+        <!-- Prevent FOUC (Flash of Unstyled Content) with common.js fallback -->
+    </head>
+
+    <body>
+        <!-- Header will be loaded by common.js -->
+
+        <main>
+            <section class="page-header">
+                <h2>My Ingredients</h2>
+                <p>Manage your personal ingredient inventory</p>
+            </section>
+
+            <div class="auth-required-content">
+                <section class="current-ingredients">
+                    <div class="section-header">
+                        <h3>Your Current Ingredients</h3>
+                        <button id="remove-selected-btn" class="btn btn-danger" disabled>Remove Selected</button>
+                    </div>
+                    <div id="current-ingredients-list" class="ingredients-list">
+                        <div class="loading-placeholder">
+                            <p>Loading your ingredients...</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="add-ingredients">
+                    <div class="section-header">
+                        <h3>Add Ingredients</h3>
+                        <div class="controls">
+                            <input type="text" id="ingredient-search" placeholder="Search ingredients..." />
+                            <button id="add-selected-btn" class="btn btn-primary" disabled>Add Selected</button>
+                        </div>
+                    </div>
+                    <div id="available-ingredients-list" class="ingredients-list hierarchy">
+                        <div class="loading-placeholder">
+                            <p>Loading available ingredients...</p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="auth-required-message hidden">
+                <p>Please <button id="login-prompt-btn" class="btn btn-link">login</button> to manage your ingredients.</p>
+            </div>
+        </main>
+
+        <!-- Footer will be loaded by common.js -->
+
+        <script type="module" src="js/common.js"></script>
+        <script type="module" src="js/api.js"></script>
+        <script type="module" src="js/user-ingredients.js"></script>
+    </body>
+
+</html>

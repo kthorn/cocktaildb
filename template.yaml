@@ -505,6 +505,20 @@ Resources:
             RestApiId: !Ref CocktailAPI
             Path: /recipes
             Method: get
+        SearchRecipes:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/search
+            Method: get
+        SearchRecipesWithInventory:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/search/inventory
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
         PostRecipe:
           Type: Api
           Properties:
@@ -681,6 +695,49 @@ Resources:
             Auth:
               Authorizer: CognitoAuthorizer
         # --- END Tag Endpoints ---
+        
+        # --- User Ingredients Endpoints ---
+        GetUserIngredients:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /user-ingredients
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+        PostUserIngredient:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /user-ingredients
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+        DeleteUserIngredient:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /user-ingredients/{ingredientId}
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
+        BulkAddUserIngredients:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /user-ingredients/bulk
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+        BulkDeleteUserIngredients:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /user-ingredients/bulk
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
+        # --- END User Ingredients Endpoints ---
         
         # --- Admin Endpoints ---
         GetAdminDatabaseDownload:

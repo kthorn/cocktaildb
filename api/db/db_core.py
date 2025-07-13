@@ -2317,11 +2317,15 @@ class Database:
             )
             logger.info(f"Tag conditions: {tag_conditions}")
 
+            # Check if inventory filtering is requested
+            inventory_filter = search_params.get("inventory", False)
+            
             # Build dynamic SQL queries
             count_sql = build_search_recipes_count_sql(
                 must_ingredient_conditions,
                 must_not_ingredient_conditions,
                 tag_conditions,
+                inventory_filter,
             )
             paginated_sql = build_search_recipes_paginated_sql(
                 must_ingredient_conditions,
@@ -2329,6 +2333,7 @@ class Database:
                 tag_conditions,
                 sort_by,
                 sort_order,
+                inventory_filter,
             )
 
             # Get total count first

@@ -168,12 +168,36 @@ class CocktailAPI {
             queryParams.append('ingredients', ingredientsString);
         }
         
+        // Add inventory filter if requested
+        if (searchQuery.inventory) {
+            queryParams.append('inventory', 'true');
+        }
+        
         // Build the URL with query string
         const queryString = queryParams.toString();
-        const url = `${this.baseUrl}/recipes/search${queryString ? `?${queryString}` : ''}`;
+        
+        // Use different endpoint for inventory searches
+        let url;
+        let requiresAuth = false;
+        
+        if (searchQuery.inventory) {
+            // Remove inventory parameter from query string for the inventory endpoint
+            const inventoryParams = new URLSearchParams();
+            queryParams.forEach((value, key) => {
+                if (key !== 'inventory') {
+                    inventoryParams.append(key, value);
+                }
+            });
+            const inventoryQueryString = inventoryParams.toString();
+            url = `${this.baseUrl}/recipes/search/inventory${inventoryQueryString ? `?${inventoryQueryString}` : ''}`;
+            requiresAuth = true;
+        } else {
+            url = `${this.baseUrl}/recipes/search${queryString ? `?${queryString}` : ''}`;
+            requiresAuth = false;
+        }
         
         // Always use GET for recipe searches
-        const response = await fetch(url, this.getFetchOptions());
+        const response = await fetch(url, this.getFetchOptions('GET', null, requiresAuth));
         const data = await this.handleResponse(response);
         
         // Handle paginated search response format with metadata
@@ -283,6 +307,27 @@ class CocktailAPI {
     // Create a private tag (requires authentication)
     async createPrivateTag(tagName) {
         return this._request('/tags/private', 'POST', { name: tagName }, true);
+    }
+
+    // User Ingredients API
+    async getUserIngredients() {
+        return this._request('/user-ingredients', 'GET', null, true);
+    }
+
+    async addUserIngredient(ingredientId) {
+        return this._request('/user-ingredients', 'POST', { ingredient_id: ingredientId });
+    }
+
+    async removeUserIngredient(ingredientId) {
+        return this._request(`/user-ingredients/${ingredientId}`, 'DELETE');
+    }
+
+    async bulkAddUserIngredients(ingredientIds) {
+        return this._request('/user-ingredients/bulk', 'POST', { ingredient_ids: ingredientIds });
+    }
+
+    async bulkRemoveUserIngredients(ingredientIds) {
+        return this._request('/user-ingredients/bulk', 'DELETE', { ingredient_ids: ingredientIds });
     }
 
 
