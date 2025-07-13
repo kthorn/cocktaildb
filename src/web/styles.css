@@ -186,18 +186,14 @@ section, .card-container {
     color: var(--primary-color);
 }
 
-.cards-grid, #recipes-container {
+.cards-grid, #recipes-container, #search-results-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: var(--space-lg);
     margin-top: var(--space-md);
 }
 
-@media (max-width: 768px) {
-    .cards-grid, #recipes-container {
-        grid-template-columns: 1fr;
-    }
-}
+/* Grid styles moved to main responsive section below */
 
 /* Form styles - consolidated */
 .form-group {
@@ -255,7 +251,6 @@ button:hover, .btn:hover {
 /* Button variants */
 .btn-primary {
     background-color: var(--primary-color);
-    padding: 0.75rem 1.5rem;
 }
 
 .btn-primary:hover {
@@ -264,11 +259,40 @@ button:hover, .btn:hover {
 
 .btn-secondary {
     background-color: var(--secondary-color);
-    padding: 0.75rem 1.5rem;
 }
 
 .btn-secondary:hover {
     background-color: #666e6f;
+}
+
+/* Button sizes */
+.btn-large {
+    padding: 0.75rem 1.5rem;
+}
+
+.btn-small {
+    padding: 0.4rem 1rem;
+}
+
+/* Button styles */
+.btn-outline {
+    background-color: #f8f9fa;
+    color: var(--primary-color);
+    border: 1px solid #dee2e6;
+}
+
+.btn-outline:hover {
+    background-color: var(--bg-light-hover);
+}
+
+.btn-outline-danger {
+    background-color: #fff5f5;
+    color: #e74c3c;
+    border: 1px solid #ffcdd2;
+}
+
+.btn-outline-danger:hover {
+    background-color: #fee;
 }
 
 .btn-success {
@@ -418,26 +442,7 @@ button:hover, .btn:hover {
     flex-shrink: 0;
 }
 
-.card-actions button {
-    padding: 0.4rem 1rem;
-    background-color: #f8f9fa;
-    color: var(--primary-color);
-    border: 1px solid #dee2e6;
-}
-
-.card-actions button:hover {
-    background-color: var(--bg-light-hover);
-}
-
-.card-actions button:nth-child(2) {
-    background-color: #fff5f5;
-    color: #e74c3c;
-    border-color: #ffcdd2;
-}
-
-.card-actions button:nth-child(2):hover {
-    background-color: #fee;
-}
+/* Card action buttons use .btn-small.btn-outline and .btn-small.btn-outline-danger classes */
 
 /* Recipe meta information */
 .recipe-card .recipe-meta {
@@ -737,6 +742,16 @@ button:hover, .btn:hover {
     width: 100%;
 }
 
+.form-actions.modal-actions {
+    flex-direction: row;
+    justify-content: flex-end;
+    width: auto;
+}
+
+.form-actions.modal-actions button {
+    width: auto;
+}
+
 .form-content-wrapper {
     display: flex;
     gap: 1.5rem;
@@ -797,10 +812,6 @@ button:hover, .btn:hover {
 #search-results-container {
     position: relative;
     min-height: 200px;
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--space-lg);
-    margin-top: var(--space-md);
 }
 
 /* Empty message */
@@ -1154,14 +1165,9 @@ footer {
     opacity: 0.9;
 }
 
-.modal .form-actions {
+/* Modal form actions should use .form-actions.modal-actions and .btn-small classes */
+.form-actions.modal-actions {
     margin-top: 1.5rem;
-    justify-content: flex-end;
-}
-
-.modal .form-actions button {
-    padding: 0.4rem 0.9rem;
-    font-size: var(--text-sm);
 }
 
 .modal-content .form-group small {
@@ -1292,16 +1298,18 @@ footer {
 
 /* Responsive design */
 @media (max-width: 768px) {
-    nav ul {
-        flex-direction: column;
+    /* Grid layouts */
+    .cards-grid, #recipes-container, #search-results-container {
+        grid-template-columns: 1fr;
     }
 
     .quick-stats {
         grid-template-columns: 1fr;
     }
-    
-    #search-results-container {
-        grid-template-columns: 1fr;
+
+    /* Navigation */
+    nav ul {
+        flex-direction: column;
     }
     
     .carousel-container {
