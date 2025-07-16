@@ -167,10 +167,6 @@ class TestEmptySearchBehavior:
         pagination = data["pagination"]
 
         assert pagination["total_count"] == total_recipes
-        expected_total_pages = (
-            max(1, ((total_recipes - 1) // 20) + 1) if total_recipes > 0 else 1
-        )
-        assert pagination["total_pages"] == expected_total_pages
         assert pagination["page"] == 1
         assert pagination["limit"] == 20
 

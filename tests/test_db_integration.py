@@ -668,8 +668,12 @@ class TestComplexIntegrationScenarios:
             assert search_results[0]["name"] == "Premium Martini"
 
             # 8. Test pagination includes this recipe
-            paginated_results = db.get_recipes_paginated(
-                limit=10, offset=0, sort_by="avg_rating", sort_order="desc"
+            paginated_results = db.search_recipes_paginated(
+                search_params={},
+                limit=10,
+                offset=0,
+                sort_by="avg_rating",
+                sort_order="desc",
             )
             assert len(paginated_results) == 1
             assert paginated_results[0]["name"] == "Premium Martini"
@@ -742,11 +746,19 @@ class TestComplexIntegrationScenarios:
             assert len(search_results) == len(high_rated_recipes)
 
             # Verify pagination works correctly
-            page1 = db.get_recipes_paginated(
-                limit=10, offset=0, sort_by="name", sort_order="asc"
+            page1 = db.search_recipes_paginated(
+                search_params={},
+                limit=10,
+                offset=0,
+                sort_by="name",
+                sort_order="asc",
             )
-            page2 = db.get_recipes_paginated(
-                limit=10, offset=10, sort_by="name", sort_order="asc"
+            page2 = db.search_recipes_paginated(
+                search_params={},
+                limit=10,
+                offset=10,
+                sort_by="name",
+                sort_order="asc",
             )
 
             assert len(page1) == 10

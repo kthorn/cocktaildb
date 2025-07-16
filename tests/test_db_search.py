@@ -702,22 +702,6 @@ class TestSearchResultStructure:
 class TestPaginationOperations:
     """Test pagination functionality"""
 
-    def test_get_recipes_count(self, memory_db_with_schema):
-        """Test getting total recipe count"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = Database()
-
-            # Initially no recipes
-            count = db.get_recipes_count()
-            assert count == 0
-
-            # Add some recipes
-            for i in range(5):
-                db.create_recipe({"name": f"Recipe {i}", "instructions": "Test"})
-
-            count = db.get_recipes_count()
-            assert count == 5
-
     def test_get_recipes_paginated_basic(self, memory_db_with_schema):
         """Test basic paginated recipe retrieval"""
         with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
@@ -729,8 +713,8 @@ class TestPaginationOperations:
                 db.create_recipe({"name": name, "instructions": "Test"})
 
             # Test first page
-            page1 = db.get_recipes_paginated(
-                limit=3, offset=0, sort_by="name", sort_order="asc"
+            page1 = db.search_recipes_paginated(
+                search_params={}, limit=3, offset=0, sort_by="name", sort_order="asc"
             )
             assert len(page1) == 3
             assert page1[0]["name"] == "Recipe 00"
@@ -738,8 +722,8 @@ class TestPaginationOperations:
             assert page1[2]["name"] == "Recipe 02"
 
             # Test second page
-            page2 = db.get_recipes_paginated(
-                limit=3, offset=3, sort_by="name", sort_order="asc"
+            page2 = db.search_recipes_paginated(
+                search_params={}, limit=3, offset=3, sort_by="name", sort_order="asc"
             )
             assert len(page2) == 3
             assert page2[0]["name"] == "Recipe 03"
@@ -763,7 +747,7 @@ class TestPaginationOperations:
                 }
             )
 
-            results = db.get_recipes_paginated(limit=10, offset=0)
+            results = db.search_recipes_paginated(search_params={}, limit=10, offset=0)
 
             assert len(results) == 1
             recipe_result = results[0]
@@ -819,9 +803,7 @@ class TestPaginationOperations:
             db.create_recipe({"name": "Test Recipe", "instructions": "Test"})
 
             search_params = {"q": "nonexistent"}
-            results = db.search_recipes_paginated(
-                search_params, limit=10, offset=0
-            )
+            results = db.search_recipes_paginated(search_params, limit=10, offset=0)
 
             assert len(results) == 0
 
@@ -908,7 +890,7 @@ class TestSearchEdgeCases:
                 db.create_recipe({"name": f"Recipe {i}", "instructions": "Test"})
 
             # Request page beyond available data
-            results = db.get_recipes_paginated(limit=5, offset=10)
+            results = db.search_recipes_paginated(search_params={}, limit=5, offset=10)
 
             assert len(results) == 0
 
@@ -920,6 +902,6 @@ class TestSearchEdgeCases:
             db.create_recipe({"name": "Test Recipe", "instructions": "Test"})
 
             # Zero limit should return empty results
-            results = db.get_recipes_paginated(limit=0, offset=0)
+            results = db.search_recipes_paginated(search_params={}, limit=0, offset=0)
 
             assert len(results) == 0

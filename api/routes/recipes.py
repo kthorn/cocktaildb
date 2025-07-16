@@ -133,17 +133,10 @@ async def search_recipes(
 
         logger.info(f"Database returned {len(recipes_data)} recipes")
 
-        # Build pagination metadata - use proper count for basic listing, estimate for search
+        # Build pagination metadata
         has_next = len(recipes_data) == limit
-
-        # If no search parameters provided, get exact count (basic recipe listing)
-        if not search_params:
-            total_count = db.get_recipes_count()
-            total_pages = max(1, (total_count + limit - 1) // limit)
-        else:
-            # For search results, use result-length pagination
-            total_count = len(recipes_data)  # Show at least the returned count
-            total_pages = 0  # Unknown with result-length pagination
+        total_count = len(recipes_data)  # Show at least the returned count
+        total_pages = 0  # Unknown with result-length pagination
 
         pagination = PaginationMetadata(
             page=page,
