@@ -618,19 +618,21 @@ class Database:
             )
             raise
 
-    def search_ingredients_batch(self, ingredient_names: List[str]) -> Dict[str, Dict[str, Any]]:
+    def search_ingredients_batch(
+        self, ingredient_names: List[str]
+    ) -> Dict[str, Dict[str, Any]]:
         """Batch search for ingredients by name - returns mapping of names to ingredient data"""
         try:
             if not ingredient_names:
                 return {}
-                
+
             search_start = time.time()
             logger.info(f"Batch searching for {len(ingredient_names)} ingredients")
-            
+
             # Create case-insensitive lookup for exact matches
             unique_names = list(set(name.lower() for name in ingredient_names))
             placeholders = ",".join("?" for _ in unique_names)
-            
+
             exact_results = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
@@ -638,42 +640,48 @@ class Database:
                     tuple(unique_names),
                 ),
             )
-            
+
             # Build mapping from lowercase name to ingredient data
             results_map = {}
             for ingredient in exact_results:
                 ingredient["exact_match"] = True
                 results_map[ingredient["name"].lower()] = ingredient
-                
+
             # Map back to original case names
             final_results = {}
             for original_name in ingredient_names:
                 lower_name = original_name.lower()
                 if lower_name in results_map:
                     final_results[original_name] = results_map[lower_name]
-                    
+
             search_duration = time.time() - search_start
-            logger.info(f"Batch ingredient search completed in {search_duration:.3f}s, found {len(final_results)}/{len(ingredient_names)} ingredients")
-            
+            logger.info(
+                f"Batch ingredient search completed in {search_duration:.3f}s, found {len(final_results)}/{len(ingredient_names)} ingredients"
+            )
+
             return final_results
-            
+
         except Exception as e:
             logger.error(f"Error in batch ingredient search: {str(e)}")
             raise
 
-    def check_ingredient_names_batch(self, ingredient_names: List[str]) -> Dict[str, bool]:
+    def check_ingredient_names_batch(
+        self, ingredient_names: List[str]
+    ) -> Dict[str, bool]:
         """Batch check for duplicate ingredient names - returns mapping of names to exists status"""
         try:
             if not ingredient_names:
                 return {}
-                
+
             check_start = time.time()
-            logger.info(f"Batch checking {len(ingredient_names)} ingredient names for duplicates")
-            
+            logger.info(
+                f"Batch checking {len(ingredient_names)} ingredient names for duplicates"
+            )
+
             # Create case-insensitive lookup
             unique_names = list(set(name.lower() for name in ingredient_names))
             placeholders = ",".join("?" for _ in unique_names)
-            
+
             existing_results = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
@@ -681,21 +689,23 @@ class Database:
                     tuple(unique_names),
                 ),
             )
-            
+
             # Build set of existing names
             existing_names = {row["name_lower"] for row in existing_results}
-            
+
             # Map back to original case names
             final_results = {}
             for original_name in ingredient_names:
                 lower_name = original_name.lower()
                 final_results[original_name] = lower_name in existing_names
-                    
+
             check_duration = time.time() - check_start
-            logger.info(f"Batch ingredient name check completed in {check_duration:.3f}s, found {len(existing_names)}/{len(ingredient_names)} duplicates")
-            
+            logger.info(
+                f"Batch ingredient name check completed in {check_duration:.3f}s, found {len(existing_names)}/{len(ingredient_names)} duplicates"
+            )
+
             return final_results
-            
+
         except Exception as e:
             logger.error(f"Error in batch ingredient name check: {str(e)}")
             raise
@@ -817,59 +827,6 @@ class Database:
         finally:
             if conn:
                 conn.close()
-
-    def get_recipes(
-        self, cognito_user_id: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """Get all recipes for list view (optimized - only ingredient counts, not full details)"""
-        try:
-            start_time = time.time()
-
-            # Get basic recipe data
-            params = {"cognito_user_id": cognito_user_id}
-            recipes_result = cast(
-                List[Dict[str, Any]],
-                self.execute_query(get_all_recipes_sql, params),
-            )
-
-            if not recipes_result:
-                return []
-
-            # Get ingredient counts efficiently for all recipes in one query
-            recipe_ids = [recipe["id"] for recipe in recipes_result]
-            placeholders = ",".join("?" for _ in recipe_ids)
-
-            ingredient_counts = cast(
-                List[Dict[str, Any]],
-                self.execute_query(
-                    f"""
-                    SELECT recipe_id, COUNT(*) as ingredient_count
-                    FROM recipe_ingredients
-                    WHERE recipe_id IN ({placeholders})
-                    GROUP BY recipe_id
-                    """,
-                    tuple(recipe_ids),
-                ),
-            )
-
-            # Create a lookup map for ingredient counts
-            count_map = {
-                row["recipe_id"]: row["ingredient_count"] for row in ingredient_counts
-            }
-
-            # Add ingredient_count to each recipe
-            for recipe in recipes_result:
-                recipe["ingredient_count"] = count_map.get(recipe["id"], 0)
-
-            total_time = time.time() - start_time
-            logger.info(
-                f"get_recipes: Total execution time: {total_time:.3f}s (optimized)"
-            )
-            return recipes_result
-
-        except Exception as e:
-            logger.error(f"Error getting recipes: {str(e)}")
-            raise
 
     def get_recipes_with_ingredients(
         self, cognito_user_id: Optional[str] = None
@@ -1159,14 +1116,14 @@ class Database:
         try:
             if not unit_names:
                 return {}
-                
+
             validation_start = time.time()
             logger.info(f"Batch validating {len(unit_names)} units")
-            
+
             # Create case-insensitive lookup for exact matches by name or abbreviation
             unique_names = list(set(name.lower() for name in unit_names))
             placeholders = ",".join("?" for _ in unique_names)
-            
+
             # Query for both name and abbreviation matches
             unit_results = cast(
                 List[Dict[str, Any]],
@@ -1176,33 +1133,38 @@ class Database:
                     FROM units 
                     WHERE LOWER(name) IN ({placeholders}) OR LOWER(abbreviation) IN ({placeholders})
                     """,
-                    tuple(unique_names) + tuple(unique_names),  # Parameters for both IN clauses
+                    tuple(unique_names)
+                    + tuple(unique_names),  # Parameters for both IN clauses
                 ),
             )
-            
+
             # Build mapping from lowercase name/abbreviation to unit data
             results_map = {}
             for unit in unit_results:
                 unit_name_lower = unit["name"].lower()
-                unit_abbr_lower = unit["abbreviation"].lower() if unit["abbreviation"] else None
-                
+                unit_abbr_lower = (
+                    unit["abbreviation"].lower() if unit["abbreviation"] else None
+                )
+
                 # Map both name and abbreviation to this unit
                 results_map[unit_name_lower] = unit
                 if unit_abbr_lower:
                     results_map[unit_abbr_lower] = unit
-                    
+
             # Map back to original case names
             final_results = {}
             for original_name in unit_names:
                 lower_name = original_name.lower()
                 if lower_name in results_map:
                     final_results[original_name] = results_map[lower_name]
-                    
+
             validation_duration = time.time() - validation_start
-            logger.info(f"Batch unit validation completed in {validation_duration:.3f}s, found {len(final_results)}/{len(unit_names)} units")
-            
+            logger.info(
+                f"Batch unit validation completed in {validation_duration:.3f}s, found {len(final_results)}/{len(unit_names)} units"
+            )
+
             return final_results
-            
+
         except Exception as e:
             logger.error(f"Error in batch unit validation: {str(e)}")
             raise
@@ -1212,14 +1174,16 @@ class Database:
         try:
             if not recipe_names:
                 return {}
-                
+
             check_start = time.time()
-            logger.info(f"Batch checking {len(recipe_names)} recipe names for duplicates")
-            
+            logger.info(
+                f"Batch checking {len(recipe_names)} recipe names for duplicates"
+            )
+
             # Create case-insensitive lookup
             unique_names = list(set(name.lower() for name in recipe_names))
             placeholders = ",".join("?" for _ in unique_names)
-            
+
             existing_results = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
@@ -1227,21 +1191,23 @@ class Database:
                     tuple(unique_names),
                 ),
             )
-            
+
             # Build set of existing names
             existing_names = {row["name_lower"] for row in existing_results}
-            
+
             # Map back to original case names
             final_results = {}
             for original_name in recipe_names:
                 lower_name = original_name.lower()
                 final_results[original_name] = lower_name in existing_names
-                    
+
             check_duration = time.time() - check_start
-            logger.info(f"Batch recipe name check completed in {check_duration:.3f}s, found {len(existing_names)} duplicates")
-            
+            logger.info(
+                f"Batch recipe name check completed in {check_duration:.3f}s, found {len(existing_names)} duplicates"
+            )
+
             return final_results
-            
+
         except Exception as e:
             logger.error(f"Error in batch recipe name check: {str(e)}")
             raise
@@ -2318,7 +2284,7 @@ class Database:
 
             # Check if inventory filtering is requested
             inventory_filter = search_params.get("inventory", False)
-            
+
             # Build dynamic SQL query
             paginated_sql = build_search_recipes_paginated_sql(
                 must_ingredient_conditions,
@@ -2394,9 +2360,7 @@ class Database:
                     recipes[recipe_id]["ingredients"].append(ingredient)
 
             result = list(recipes.values())
-            logger.info(
-                f"Found {len(result)} recipes from search"
-            )
+            logger.info(f"Found {len(result)} recipes from search")
             return result
 
         except Exception as e:
@@ -2424,10 +2388,12 @@ class Database:
                     {"user_id": user_id, "ingredient_id": ingredient_id},
                 ),
             )
-            
+
             if existing:
                 # User already has this ingredient, raise exception
-                raise ValueError(f"Ingredient {ingredient_id} already exists in user's inventory")
+                raise ValueError(
+                    f"Ingredient {ingredient_id} already exists in user's inventory"
+                )
 
             # Add the ingredient to user's inventory
             self.execute_query(
@@ -2439,11 +2405,13 @@ class Database:
             return {
                 "ingredient_id": ingredient_id,
                 "ingredient_name": ingredient["name"],
-                "added_at": "now"  # SQLite CURRENT_TIMESTAMP
+                "added_at": "now",  # SQLite CURRENT_TIMESTAMP
             }
 
         except Exception as e:
-            logger.error(f"Error adding ingredient {ingredient_id} to user {user_id}: {str(e)}")
+            logger.error(
+                f"Error adding ingredient {ingredient_id} to user {user_id}: {str(e)}"
+            )
             raise
 
     @retry_on_db_locked()
@@ -2458,7 +2426,7 @@ class Database:
                     {"user_id": user_id, "ingredient_id": ingredient_id},
                 ),
             )
-            
+
             if not existing:
                 return False
 
@@ -2471,7 +2439,9 @@ class Database:
             return result.get("rowCount", 0) > 0
 
         except Exception as e:
-            logger.error(f"Error removing ingredient {ingredient_id} from user {user_id}: {str(e)}")
+            logger.error(
+                f"Error removing ingredient {ingredient_id} from user {user_id}: {str(e)}"
+            )
             raise
 
     @retry_on_db_locked()
@@ -2498,12 +2468,19 @@ class Database:
             raise
 
     @retry_on_db_locked()
-    def add_user_ingredients_bulk(self, user_id: str, ingredient_ids: List[int]) -> Dict[str, Any]:
+    def add_user_ingredients_bulk(
+        self, user_id: str, ingredient_ids: List[int]
+    ) -> Dict[str, Any]:
         """Add multiple ingredients to a user's inventory"""
         conn = None
         try:
             if not ingredient_ids:
-                return {"added_count": 0, "already_exists_count": 0, "failed_count": 0, "errors": []}
+                return {
+                    "added_count": 0,
+                    "already_exists_count": 0,
+                    "failed_count": 0,
+                    "errors": [],
+                }
 
             conn = self._get_connection()
             conn.execute("BEGIN IMMEDIATE")
@@ -2525,7 +2502,9 @@ class Database:
                         ),
                     )
                     if not ingredient_check:
-                        errors.append(f"Ingredient with ID {ingredient_id} does not exist")
+                        errors.append(
+                            f"Ingredient with ID {ingredient_id} does not exist"
+                        )
                         failed_count += 1
                         continue
 
@@ -2534,7 +2513,7 @@ class Database:
                         "SELECT id FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
                         (user_id, ingredient_id),
                     ).fetchone()
-                    
+
                     if existing:
                         already_exists_count += 1
                         continue
@@ -2551,12 +2530,12 @@ class Database:
                     failed_count += 1
 
             conn.commit()
-            
+
             return {
                 "added_count": added_count,
                 "already_exists_count": already_exists_count,
                 "failed_count": failed_count,
-                "errors": errors
+                "errors": errors,
             }
 
         except Exception as e:
@@ -2569,7 +2548,9 @@ class Database:
                 conn.close()
 
     @retry_on_db_locked()
-    def remove_user_ingredients_bulk(self, user_id: str, ingredient_ids: List[int]) -> Dict[str, Any]:
+    def remove_user_ingredients_bulk(
+        self, user_id: str, ingredient_ids: List[int]
+    ) -> Dict[str, Any]:
         """Remove multiple ingredients from a user's inventory"""
         conn = None
         try:
@@ -2590,7 +2571,7 @@ class Database:
                         "SELECT id FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
                         (user_id, ingredient_id),
                     ).fetchone()
-                    
+
                     if not existing:
                         not_found_count += 1
                         continue
@@ -2603,20 +2584,21 @@ class Database:
                     removed_count += 1
 
                 except Exception as e:
-                    logger.error(f"Error removing ingredient {ingredient_id} for user {user_id}: {str(e)}")
+                    logger.error(
+                        f"Error removing ingredient {ingredient_id} for user {user_id}: {str(e)}"
+                    )
                     # Continue with other ingredients
 
             conn.commit()
-            
-            return {
-                "removed_count": removed_count,
-                "not_found_count": not_found_count
-            }
+
+            return {"removed_count": removed_count, "not_found_count": not_found_count}
 
         except Exception as e:
             if conn:
                 conn.rollback()
-            logger.error(f"Error in bulk remove ingredients for user {user_id}: {str(e)}")
+            logger.error(
+                f"Error in bulk remove ingredients for user {user_id}: {str(e)}"
+            )
             raise
         finally:
             if conn:

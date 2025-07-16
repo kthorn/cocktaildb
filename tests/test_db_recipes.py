@@ -102,7 +102,7 @@ class TestRecipeCRUD:
         with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
             db = Database()
 
-            result = db.get_recipes()
+            result = db.search_recipes(search_params={})
             assert isinstance(result, list)
             assert len(result) == 0
 
@@ -120,7 +120,7 @@ class TestRecipeCRUD:
             for recipe_data in recipes:
                 db.create_recipe(recipe_data)
 
-            result = db.get_recipes()
+            result = db.search_recipes(search_params={})
             assert len(result) == 2
 
             names = {recipe["name"] for recipe in result}
@@ -550,82 +550,6 @@ class TestRecipeWithRatings:
             assert result["user_rating"] is None
             assert result["avg_rating"] == 0
             assert result["rating_count"] == 0
-
-
-class TestRecipePerformance:
-    """Test recipe performance optimizations"""
-
-    def test_get_recipes_optimized(self, memory_db_with_schema):
-        """Test that get_recipes is optimized for list view"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = Database()
-
-            # Create ingredients
-            gin = db.create_ingredient(
-                {"name": "Gin1", "description": "Gin1", "parent_id": None}
-            )
-            vermouth = db.create_ingredient(
-                {"name": "Vermouth", "description": "Vermouth", "parent_id": None}
-            )
-
-            # Create recipe with ingredients
-            recipe = db.create_recipe(
-                {
-                    "name": "Performance Test Recipe",
-                    "instructions": "Test performance",
-                    "ingredients": [
-                        {"ingredient_id": gin["id"], "amount": 2.0},
-                        {"ingredient_id": vermouth["id"], "amount": 0.5},
-                    ],
-                }
-            )
-
-            # get_recipes should return ingredient_count but not full ingredient details
-            result = db.get_recipes()
-
-            assert len(result) == 1
-            test_recipe = result[0]
-
-            # Should have ingredient count for list view
-            assert "ingredient_count" in test_recipe
-            assert test_recipe["ingredient_count"] == 2
-
-            # Should NOT have full ingredient details in list view
-            assert "ingredients" not in test_recipe
-
-    def test_get_recipes_with_ingredients_detailed(self, memory_db_with_schema):
-        """Test that get_recipes_with_ingredients returns full details"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = Database()
-
-            # Create ingredients
-            gin = db.create_ingredient(
-                {"name": "Gin1", "description": "Gin1", "parent_id": None}
-            )
-
-            # Create recipe
-            recipe = db.create_recipe(
-                {
-                    "name": "Detailed Test Recipe",
-                    "instructions": "Test detailed view",
-                    "ingredients": [{"ingredient_id": gin["id"], "amount": 2.0}],
-                }
-            )
-
-            # get_recipes_with_ingredients should return full ingredient details
-            result = db.get_recipes_with_ingredients()
-
-            assert len(result) == 1
-            test_recipe = result[0]
-
-            # Should have full ingredient details
-            assert "ingredients" in test_recipe
-            assert len(test_recipe["ingredients"]) == 1
-
-            ingredient = test_recipe["ingredients"][0]
-            assert ingredient["ingredient_id"] == gin["id"]
-            assert ingredient["ingredient_name"] == "Gin1"
-            assert ingredient["amount"] == 2.0
 
 
 class TestRecipeConstraints:

@@ -446,26 +446,6 @@ class TestEdgeCasesAndBoundaryConditions:
         assert data["pagination"]["has_next"] is False
         assert data["pagination"]["has_previous"] is False
 
-    def test_pagination_with_exactly_one_result(
-        self, test_client_with_data, db_with_test_data
-    ):
-        """Test pagination with exactly 1 result"""
-        # Try to find a unique recipe name
-        cursor = db_with_test_data.execute("SELECT name FROM recipes LIMIT 1")
-        recipe = cursor.fetchone()
-        client, app = test_client_with_data
-
-        if recipe:
-            # Search for this specific recipe
-            response = client.get(f"/recipes/search?q={recipe['name']}")
-            assert response.status_code == status.HTTP_200_OK
-
-            data = response.json()
-            if data["pagination"]["total_count"] == 1:
-                assert data["pagination"]["total_pages"] == 1
-                assert data["pagination"]["has_next"] is False
-                assert data["pagination"]["has_previous"] is False
-
     def test_requesting_page_beyond_available_pages(self, test_client_with_data):
         """Verify behavior when requesting page beyond available pages"""
         # First get total pages

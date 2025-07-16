@@ -40,9 +40,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 
 
-# Removed get_recipes endpoint - now handled by search_recipes
-
-
 @router.get("", response_model=PaginatedSearchResponse)
 @router.get("/search", response_model=PaginatedSearchResponse)
 async def search_recipes(

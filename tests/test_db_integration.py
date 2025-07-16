@@ -44,7 +44,7 @@ class TestTransactionConsistency:
                 db.create_recipe(recipe_data)
 
             # Verify no recipe was created (transaction rolled back)
-            recipes = db.get_recipes()
+            recipes = db.search_recipes(search_params={})
             assert len(recipes) == 0
 
             # Verify no recipe_ingredients were created
@@ -340,7 +340,7 @@ class TestConcurrentAccess:
 
             # Verify in database
             final_db = Database()
-            all_recipes = final_db.get_recipes()
+            all_recipes = final_db.search_recipes(search_params={})
             assert len(all_recipes) == 10
 
     def test_concurrent_rating_updates(self, memory_db_with_schema):
@@ -727,7 +727,7 @@ class TestComplexIntegrationScenarios:
                 )
 
             # Verify data consistency
-            all_recipes = db.get_recipes()
+            all_recipes = db.search_recipes(search_params={})
             assert len(all_recipes) == 20
 
             # Verify all recipes have correct ingredient counts
