@@ -136,12 +136,9 @@ async def search_recipes(
         # Build pagination metadata
         has_next = len(recipes_data) == limit
         total_count = len(recipes_data)  # Show at least the returned count
-        total_pages = 0  # Unknown with result-length pagination
-
         pagination = PaginationMetadata(
             page=page,
             limit=limit,
-            total_pages=total_pages,
             total_count=total_count,
             has_next=has_next,
             has_previous=page > 1,

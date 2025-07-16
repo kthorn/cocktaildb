@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             // Call the API to search recipes with pagination
-            const result = await api.searchRecipesWithFullData(searchQuery, currentSearchPage, searchResultsPerPage);
+            const result = await api.searchRecipes(searchQuery, currentSearchPage, searchResultsPerPage);
             console.log('API result:', result);
             
             // Hide loading placeholder

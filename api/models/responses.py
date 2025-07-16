@@ -193,7 +193,6 @@ class PaginationMetadata(BaseModel):
 
     page: int = Field(..., description="Current page number (1-based)", ge=1)
     limit: int = Field(..., description="Number of items per page", ge=1, le=1000)
-    total_pages: int = Field(..., description="Total number of pages", ge=0)
     total_count: int = Field(..., description="Total number of items", ge=0)
     has_next: bool = Field(..., description="Whether there is a next page")
     has_previous: bool = Field(..., description="Whether there is a previous page")

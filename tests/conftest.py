@@ -509,7 +509,6 @@ def assert_search_response_structure(
     pagination_fields = [
         "page",
         "limit",
-        "total_pages",
         "total_count",
         "has_next",
         "has_previous",
@@ -533,7 +532,6 @@ def assert_pagination_mathematical_consistency(pagination: Dict[str, Any]):
     page = pagination["page"]
     limit = pagination["limit"]
     total_count = pagination["total_count"]
-    total_pages = pagination["total_pages"]
     has_next = pagination["has_next"]
     has_previous = pagination["has_previous"]
 
@@ -543,19 +541,11 @@ def assert_pagination_mathematical_consistency(pagination: Dict[str, Any]):
     assert isinstance(total_count, int) and total_count >= 0, (
         "total_count must be non-negative integer"
     )
-    assert isinstance(total_pages, int) and total_pages >= 1, (
-        "total_pages must be positive integer"
-    )
     assert isinstance(has_next, bool), "has_next must be boolean"
     assert isinstance(has_previous, bool), "has_previous must be boolean"
 
-    # Mathematical relationships
-    expected_total_pages = ((total_count - 1) // limit) + 1 if total_count > 0 else 1
-    assert total_pages == expected_total_pages, "total_pages calculation incorrect"
-
     # has_next/has_previous logic
     assert has_previous == (page > 1), "has_previous logic incorrect"
-    assert has_next == (page < total_pages), "has_next logic incorrect"
 
 
 def assert_sort_order_correctness(recipes: list, sort_by: str, sort_order: str = "asc"):

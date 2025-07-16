@@ -29,7 +29,7 @@ async function loadRecipes() {
         
         while (hasMore) {
             console.log(`Loading page ${page}...`);
-            const result = await api.searchRecipesWithFullData({}, page, 10); // Empty search returns all recipes
+            const result = await api.searchRecipes({}, page, 10); // Empty search returns all recipes
             console.log(`Page ${page} result:`, result);
             
             if (result && result.recipes && result.recipes.length > 0) {
@@ -44,7 +44,7 @@ async function loadRecipes() {
                 
                 // Check if there are more pages
                 console.log('Pagination object:', result.pagination);
-                hasMore = result.pagination && page < result.pagination.totalPages;
+                hasMore = result.pagination.has_next;
                 console.log(`Has more pages: ${hasMore}`);
                 page++;
             } else {

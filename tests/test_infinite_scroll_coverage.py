@@ -303,7 +303,6 @@ class TestPaginationConsistency:
         pagination_fields = [
             "page",
             "limit",
-            "total_pages",
             "total_count",
             "has_next",
             "has_previous",
@@ -325,21 +324,8 @@ class TestPaginationConsistency:
         data = response.json()
         pagination = data["pagination"]
 
-        # Mathematical relationships should hold
-        expected_total_pages = (
-            max(1, ((pagination["total_count"] - 1) // pagination["limit"]) + 1)
-            if pagination["total_count"] > 0
-            else 1
-        )
-        assert pagination["total_pages"] == expected_total_pages, (
-            "total_pages calculation incorrect"
-        )
-
         # has_next/has_previous logic
         assert pagination["has_previous"] == (pagination["page"] > 1)
-        assert pagination["has_next"] == (
-            pagination["page"] < pagination["total_pages"]
-        )
 
     def test_has_next_has_previous_calculation(self, test_client_with_data):
         client, app = test_client_with_data
@@ -354,10 +340,6 @@ class TestPaginationConsistency:
         assert pagination["has_previous"] is False, (
             "First page should not have previous"
         )
-        if pagination["total_pages"] > 1:
-            assert pagination["has_next"] is True, (
-                "First page should have next if more pages exist"
-            )
 
 
 class TestSearchParameterHandling:
@@ -436,9 +418,6 @@ class TestEdgeCasesAndBoundaryConditions:
 
         data = response.json()
         assert data["pagination"]["total_count"] == 0
-        assert (
-            data["pagination"]["total_pages"] == 1
-        )  # Should still be 1 even with 0 results
         assert data["pagination"]["has_next"] is False
         assert data["pagination"]["has_previous"] is False
 
@@ -450,10 +429,8 @@ class TestEdgeCasesAndBoundaryConditions:
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
-        total_pages = data["pagination"]["total_pages"]
-
         # Request a page way beyond available pages
-        beyond_page = total_pages + 10
+        beyond_page = 1000000
         response = client.get(f"/recipes/search?page={beyond_page}&limit=10")
 
         # Should either return empty results or an error
