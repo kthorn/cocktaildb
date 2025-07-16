@@ -2215,11 +2215,10 @@ class Database:
         sort_by: str = "name",
         sort_order: str = "asc",
         user_id: Optional[str] = None,
-    ) -> Tuple[List[Dict[str, Any]], int]:
-        """Search recipes with pagination, returns (recipes, total_count)"""
+    ) -> List[Dict[str, Any]]:
+        """Search recipes with pagination, returns recipes only"""
         try:
             from .sql_queries import (
-                build_search_recipes_count_sql,
                 build_search_recipes_paginated_sql,
             )
 
@@ -2276,7 +2275,7 @@ class Database:
                     logger.info(
                         "Some MUST ingredients not found, returning empty results"
                     )
-                    return [], 0
+                    return []
 
             # Handle tag filtering
             tag_conditions = []
@@ -2308,7 +2307,7 @@ class Database:
                             logger.info(
                                 f"Tag not found: {tag_name}, returning empty results"
                             )
-                            return [], 0
+                            return []
 
             logger.info(f"Searching recipes with params: {query_params}")
             logger.info(f"MUST ingredient conditions: {must_ingredient_conditions}")
@@ -2320,13 +2319,7 @@ class Database:
             # Check if inventory filtering is requested
             inventory_filter = search_params.get("inventory", False)
             
-            # Build dynamic SQL queries
-            count_sql = build_search_recipes_count_sql(
-                must_ingredient_conditions,
-                must_not_ingredient_conditions,
-                tag_conditions,
-                inventory_filter,
-            )
+            # Build dynamic SQL query
             paginated_sql = build_search_recipes_paginated_sql(
                 must_ingredient_conditions,
                 must_not_ingredient_conditions,
@@ -2335,12 +2328,6 @@ class Database:
                 sort_order,
                 inventory_filter,
             )
-
-            # Get total count first
-            count_result = cast(
-                List[Dict[str, Any]], self.execute_query(count_sql, query_params)
-            )
-            total_count = count_result[0]["total_count"] if count_result else 0
 
             # Get paginated results
             rows = cast(
@@ -2408,9 +2395,9 @@ class Database:
 
             result = list(recipes.values())
             logger.info(
-                f"Found {len(result)} recipes from search (total: {total_count})"
+                f"Found {len(result)} recipes from search"
             )
-            return result, total_count
+            return result
 
         except Exception as e:
             logger.error(f"Error searching recipes with pagination: {str(e)}")

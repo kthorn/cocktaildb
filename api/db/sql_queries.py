@@ -111,86 +111,6 @@ get_recipes_paginated_with_ingredients_sql = """
 """
 
 # Dynamic SQL generation function for ingredient filtering
-def build_search_recipes_count_sql(must_conditions: List[str], must_not_conditions: List[str], tag_conditions: List[str] = None, inventory_filter: bool = False) -> str:
-    """Build the count SQL with optional ingredient and tag filtering"""
-    if tag_conditions is None:
-        tag_conditions = []
-    
-    base_sql = """
-    SELECT COUNT(DISTINCT r.id) as total_count
-    FROM
-        recipes r
-    LEFT JOIN
-        recipe_ingredients ri ON r.id = ri.recipe_id
-    LEFT JOIN
-        ingredients i ON ri.ingredient_id = i.id"""
-    
-    # Add tag joins if needed
-    if tag_conditions:
-        base_sql += """
-    LEFT JOIN
-        recipe_tags rt2 ON r.id = rt2.recipe_id
-    LEFT JOIN
-        tags t2 ON rt2.tag_id = t2.id"""
-    
-    base_sql += """
-    WHERE
-        (:search_query IS NULL OR 
-         remove_accents(LOWER(r.name)) LIKE '%' || remove_accents(LOWER(:search_query)) || '%' OR 
-         remove_accents(LOWER(r.description)) LIKE '%' || remove_accents(LOWER(:search_query)) || '%' OR 
-         remove_accents(LOWER(r.instructions)) LIKE '%' || remove_accents(LOWER(:search_query)) || '%')
-    AND
-        (:min_rating IS NULL OR COALESCE(r.avg_rating, 0) >= :min_rating)
-    AND
-        (:max_rating IS NULL OR COALESCE(r.avg_rating, 0) <= :max_rating)"""
-    
-    # Add MUST ingredient filtering - recipe must contain ALL of the specified ingredients
-    for condition in must_conditions:
-        base_sql += f" AND r.id IN (SELECT DISTINCT ri2.recipe_id FROM recipe_ingredients ri2 JOIN ingredients i2 ON ri2.ingredient_id = i2.id WHERE {condition})"
-    
-    # Add MUST_NOT ingredient filtering - recipe must NOT contain ANY of the specified ingredients
-    for condition in must_not_conditions:
-        base_sql += f" AND r.id NOT IN (SELECT DISTINCT ri2.recipe_id FROM recipe_ingredients ri2 JOIN ingredients i2 ON ri2.ingredient_id = i2.id WHERE {condition})"
-    
-    # Add tag filtering - recipe must have ALL of the specified tags
-    for condition in tag_conditions:
-        base_sql += f" AND r.id IN (SELECT DISTINCT rt3.recipe_id FROM recipe_tags rt3 JOIN tags t3 ON rt3.tag_id = t3.id WHERE {condition})"
-    
-    # Add inventory filtering - recipe can be made with user's inventory
-    if inventory_filter:
-        base_sql += """ AND r.id IN (
-            SELECT r_inv.id 
-            FROM recipes r_inv
-            LEFT JOIN recipe_ingredients ri_inv ON r_inv.id = ri_inv.recipe_id
-            LEFT JOIN ingredients i_inv ON ri_inv.ingredient_id = i_inv.id
-            WHERE r_inv.id = r.id
-            GROUP BY r_inv.id
-            HAVING COUNT(DISTINCT ri_inv.ingredient_id) <= (
-                SELECT COUNT(DISTINCT ui.ingredient_id)
-                FROM user_ingredients ui
-                LEFT JOIN ingredients i_user ON ui.ingredient_id = i_user.id
-                WHERE ui.cognito_user_id = :cognito_user_id
-                AND EXISTS (
-                    SELECT 1 FROM recipe_ingredients ri_check 
-                    LEFT JOIN ingredients i_check ON ri_check.ingredient_id = i_check.id
-                    WHERE ri_check.recipe_id = r_inv.id
-                    AND (i_check.path LIKE '%/' || i_user.id || '/%' OR i_user.path LIKE '%/' || i_check.id || '/%')
-                )
-            )
-            AND NOT EXISTS (
-                SELECT 1 FROM recipe_ingredients ri_missing
-                LEFT JOIN ingredients i_missing ON ri_missing.ingredient_id = i_missing.id
-                WHERE ri_missing.recipe_id = r_inv.id
-                AND NOT EXISTS (
-                    SELECT 1 FROM user_ingredients ui_check
-                    LEFT JOIN ingredients i_available ON ui_check.ingredient_id = i_available.id
-                    WHERE ui_check.cognito_user_id = :cognito_user_id
-                    AND (i_missing.path LIKE '%/' || i_available.id || '/%' OR i_available.path LIKE '%/' || i_missing.id || '/%')
-                )
-            )
-        )"""
-    
-    return base_sql
 
 def build_search_recipes_paginated_sql(must_conditions: List[str], must_not_conditions: List[str], tag_conditions: List[str] = None, sort_by: str = "name", sort_order: str = "asc", inventory_filter: bool = False) -> str:
     """Build the paginated search SQL with optional ingredient filtering"""
@@ -256,7 +176,7 @@ def build_search_recipes_paginated_sql(must_conditions: List[str], must_not_cond
                     SELECT 1 FROM recipe_ingredients ri_check 
                     LEFT JOIN ingredients i_check ON ri_check.ingredient_id = i_check.id
                     WHERE ri_check.recipe_id = r_inv.id
-                    AND (i_check.path LIKE '%/' || i_user.id || '/%' OR i_user.path LIKE '%/' || i_check.id || '/%')
+                    AND i_check.id = i_user.id
                 )
             )
             AND NOT EXISTS (
@@ -267,7 +187,7 @@ def build_search_recipes_paginated_sql(must_conditions: List[str], must_not_cond
                     SELECT 1 FROM user_ingredients ui_check
                     LEFT JOIN ingredients i_available ON ui_check.ingredient_id = i_available.id
                     WHERE ui_check.cognito_user_id = :cognito_user_id
-                    AND (i_missing.path LIKE '%/' || i_available.id || '/%' OR i_available.path LIKE '%/' || i_missing.id || '/%')
+                    AND i_missing.id = i_available.id
                 )
             )
         )"""

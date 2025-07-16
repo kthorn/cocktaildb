@@ -791,11 +791,10 @@ class TestPaginationOperations:
 
             # Search with pagination
             search_params = {"q": "martini"}
-            results, total_count = db.search_recipes_paginated(
+            results = db.search_recipes_paginated(
                 search_params, limit=3, offset=0, sort_by="name", sort_order="asc"
             )
 
-            assert total_count == 10  # 10 martini recipes total
             assert len(results) == 3  # First page of 3
             assert all("Martini" in recipe["name"] for recipe in results)
 
@@ -805,11 +804,10 @@ class TestPaginationOperations:
             assert results[2]["name"] == "Martini 02"
 
             # Get second page
-            results_page2, total_count2 = db.search_recipes_paginated(
+            results_page2 = db.search_recipes_paginated(
                 search_params, limit=3, offset=3, sort_by="name", sort_order="asc"
             )
 
-            assert total_count2 == 10  # Same total
             assert len(results_page2) == 3
             assert results_page2[0]["name"] == "Martini 03"
 
@@ -821,11 +819,10 @@ class TestPaginationOperations:
             db.create_recipe({"name": "Test Recipe", "instructions": "Test"})
 
             search_params = {"q": "nonexistent"}
-            results, total_count = db.search_recipes_paginated(
+            results = db.search_recipes_paginated(
                 search_params, limit=10, offset=0
             )
 
-            assert total_count == 0
             assert len(results) == 0
 
 

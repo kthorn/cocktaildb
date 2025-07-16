@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 // Update pagination state
-                totalSearchPages = result.pagination.totalPages;
+                totalSearchPages = result.pagination.has_next ? currentSearchPage + 1 : currentSearchPage;
                 
                 // Display results
                 if (reset) {
@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 // Setup infinite scroll if there are more pages
-                setupInfiniteScroll();
+                setupInfiniteScroll(result.pagination.has_next);
                 
                 // Hide no results message if we have results
                 if (allSearchResults.length > 0) {
@@ -150,7 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     emptyResults.querySelector('p').textContent = 'No recipes found matching your criteria.';
                 }
                 
-                console.log(`Search page ${currentSearchPage} of ${totalSearchPages} loaded (${result.recipes.length} recipes)`);
+                console.log(`Search page ${currentSearchPage} loaded (${result.recipes.length} recipes), has_next: ${result.pagination.has_next}`);
                 console.log('Pagination info:', result.pagination);
             } else if (reset) {
                 // Show no results message
@@ -170,9 +170,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Setup infinite scroll for search results
-    function setupInfiniteScroll() {
-        console.log(`Setting up infinite scroll: page ${currentSearchPage} of ${totalSearchPages}`);
-        if (currentSearchPage < totalSearchPages) {
+    function setupInfiniteScroll(hasNext) {
+        console.log(`Setting up infinite scroll: page ${currentSearchPage}, has_next: ${hasNext}`);
+        if (hasNext) {
             isInfiniteScrollEnabled = true;
             console.log('Infinite scroll enabled');
             
@@ -207,21 +207,19 @@ document.addEventListener('DOMContentLoaded', () => {
             existingIndicator.remove();
         }
         
-        // Only add if there are more pages to load
-        if (currentSearchPage < totalSearchPages) {
-            const loadingIndicator = document.createElement('div');
-            loadingIndicator.id = 'infinite-scroll-loading';
-            loadingIndicator.className = 'infinite-scroll-loading hidden';
-            loadingIndicator.innerHTML = '<p>Loading more results...</p>';
-            
-            // Add after the search results container
-            searchResultsContainer.parentNode.insertBefore(loadingIndicator, searchResultsContainer.nextSibling);
-        }
+        // Add loading indicator
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.id = 'infinite-scroll-loading';
+        loadingIndicator.className = 'infinite-scroll-loading hidden';
+        loadingIndicator.innerHTML = '<p>Loading more results...</p>';
+        
+        // Add after the search results container
+        searchResultsContainer.parentNode.insertBefore(loadingIndicator, searchResultsContainer.nextSibling);
     }
     
     // Handle scroll event for infinite scroll
     function handleScroll() {
-        if (!isInfiniteScrollEnabled || isSearching || currentSearchPage >= totalSearchPages) {
+        if (!isInfiniteScrollEnabled || isSearching) {
             return;
         }
         
@@ -245,7 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Load more search results (next page) for infinite scroll
     async function loadMoreSearchResults() {
-        if (currentSearchPage >= totalSearchPages || isSearching) return;
+        if (isSearching) return;
         
         // Show loading indicator
         const loadingIndicator = document.getElementById('infinite-scroll-loading');
