@@ -110,13 +110,6 @@ class CocktailAPI {
     }
 
 
-    // Search recipes and return full details
-    // Now uses paginated search endpoint that returns full details directly
-    async searchRecipesWithFullData(searchQuery, page = 1, limit = 20) {
-        return this.searchRecipes(searchQuery, page, limit);
-    }
-
-
     async createRecipe(recipeData) {
         return this._request('/recipes', 'POST', recipeData);
     }
@@ -208,7 +201,7 @@ class CocktailAPI {
                     page: data.pagination.page || page,
                     limit: data.pagination.limit || limit,
                     total: data.pagination.total_count || data.recipes.length,
-                    totalPages: data.pagination.total_pages || Math.ceil((data.pagination.total_count || data.recipes.length) / limit)
+                    hasNext: data.pagination.has_next || false
                 }
             };
         }
