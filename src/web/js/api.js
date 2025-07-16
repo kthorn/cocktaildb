@@ -201,7 +201,7 @@ class CocktailAPI {
                     page: data.pagination.page || page,
                     limit: data.pagination.limit || limit,
                     total: data.pagination.total_count || data.recipes.length,
-                    hasNext: data.pagination.has_next || false
+                    has_next: data.pagination.has_next || false
                 }
             };
         }
