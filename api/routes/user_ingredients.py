@@ -1,7 +1,6 @@
 """User ingredient endpoints for the CocktailDB API"""
 
 import logging
-from typing import List
 from fastapi import APIRouter, Depends, status, HTTPException
 
 from dependencies.auth import UserInfo, require_authentication
@@ -49,6 +48,28 @@ async def add_user_ingredient(
     except Exception as e:
         logger.error(f"Error adding ingredient to user inventory: {str(e)}")
         raise DatabaseException("Failed to add ingredient to inventory", detail=str(e))
+
+
+@router.delete("/bulk", response_model=UserIngredientBulkResponse)
+async def remove_user_ingredients_bulk(
+    bulk_data: UserIngredientBulkRemove,
+    db: Database = Depends(get_db),
+    user: UserInfo = Depends(require_authentication),
+):
+    """Remove multiple ingredients from user's inventory (requires authentication)"""
+    try:
+        logger.info(f"Bulk removing {len(bulk_data.ingredient_ids)} ingredients from user {user.user_id}")
+
+        result = db.remove_user_ingredients_bulk(user.user_id, bulk_data.ingredient_ids)
+        
+        return UserIngredientBulkResponse(
+            removed_count=result["removed_count"],
+            not_found_count=result["not_found_count"]
+        )
+
+    except Exception as e:
+        logger.error(f"Error bulk removing ingredients from user inventory: {str(e)}")
+        raise DatabaseException("Failed to bulk remove ingredients from inventory", detail=str(e))
 
 
 @router.delete("/{ingredient_id}", response_model=MessageResponse)
@@ -133,25 +154,3 @@ async def add_user_ingredients_bulk(
     except Exception as e:
         logger.error(f"Error bulk adding ingredients to user inventory: {str(e)}")
         raise DatabaseException("Failed to bulk add ingredients to inventory", detail=str(e))
-
-
-@router.delete("/bulk", response_model=UserIngredientBulkResponse)
-async def remove_user_ingredients_bulk(
-    bulk_data: UserIngredientBulkRemove,
-    db: Database = Depends(get_db),
-    user: UserInfo = Depends(require_authentication),
-):
-    """Remove multiple ingredients from user's inventory (requires authentication)"""
-    try:
-        logger.info(f"Bulk removing {len(bulk_data.ingredient_ids)} ingredients from user {user.user_id}")
-
-        result = db.remove_user_ingredients_bulk(user.user_id, bulk_data.ingredient_ids)
-        
-        return UserIngredientBulkResponse(
-            removed_count=result["removed_count"],
-            not_found_count=result["not_found_count"]
-        )
-
-    except Exception as e:
-        logger.error(f"Error bulk removing ingredients from user inventory: {str(e)}")
-        raise DatabaseException("Failed to bulk remove ingredients from inventory", detail=str(e))
