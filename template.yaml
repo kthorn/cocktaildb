@@ -499,12 +499,6 @@ Resources:
             Method: post
             Auth:
               Authorizer: CognitoAuthorizer
-        GetRecipes:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CocktailAPI
-            Path: /recipes
-            Method: get
         SearchRecipes:
           Type: Api
           Properties:

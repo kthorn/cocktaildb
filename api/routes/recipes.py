@@ -22,7 +22,6 @@ from models.responses import (
     MessageResponse,
     RatingSummaryResponse,
     RatingResponse,
-    PaginatedRecipeResponse,
     PaginatedSearchResponse,
     PaginationMetadata,
     BulkUploadResponse,
@@ -40,7 +39,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 
 
-@router.get("", response_model=PaginatedSearchResponse)
 @router.get("/search", response_model=PaginatedSearchResponse)
 async def search_recipes(
     q: Optional[str] = Query(None, description="Search query"),
@@ -154,6 +152,47 @@ async def search_recipes(
     except Exception as e:
         logger.error(f"Error searching recipes: {str(e)}")
         raise DatabaseException("Failed to search recipes", detail=str(e))
+
+
+@router.get("/search/inventory", response_model=PaginatedSearchResponse)
+async def search_recipes_with_inventory(
+    q: Optional[str] = Query(None, description="Search query"),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    limit: int = Query(20, ge=1, le=1000, description="Number of items per page"),
+    sort_by: str = Query(
+        "name", description="Sort field: name, created_at, avg_rating"
+    ),
+    sort_order: str = Query("asc", description="Sort order: asc, desc"),
+    min_rating: Optional[float] = Query(
+        None, description="Minimum average rating", ge=0, le=5
+    ),
+    max_rating: Optional[float] = Query(
+        None, description="Maximum average rating", ge=0, le=5
+    ),
+    tags: Optional[str] = Query(None, description="Comma-separated list of tags"),
+    ingredients: Optional[str] = Query(
+        None,
+        description="Comma-separated ingredient names with optional operators (e.g., 'Vodka,Gin:MUST,Vermouth:MUST_NOT')",
+    ),
+    db: Database = Depends(get_db),
+    user: UserInfo = Depends(require_authentication),
+):
+    """Search recipes that can be made with user's ingredient inventory (requires authentication)"""
+    # Reuse the existing search_recipes function with inventory=True
+    return await search_recipes(
+        q=q,
+        page=page,
+        limit=limit,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        min_rating=min_rating,
+        max_rating=max_rating,
+        tags=tags,
+        ingredients=ingredients,
+        inventory=True,  # Force inventory=True for this endpoint
+        db=db,
+        user=user,
+    )
 
 
 @router.post("", response_model=RecipeResponse, status_code=status.HTTP_201_CREATED)
