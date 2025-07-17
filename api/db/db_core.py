@@ -2262,7 +2262,8 @@ class Database:
 
     @retry_on_db_locked()
     def add_user_ingredient(self, user_id: str, ingredient_id: int) -> Dict[str, Any]:
-        """Add an ingredient to a user's inventory"""
+        """Add an ingredient to a user's inventory, including all parent ingredients"""
+        conn = None
         try:
             # Check if ingredient exists
             ingredient = self.get_ingredient(ingredient_id)
@@ -2284,28 +2285,69 @@ class Database:
                     f"Ingredient {ingredient_id} already exists in user's inventory"
                 )
 
-            # Add the ingredient to user's inventory
-            self.execute_query(
-                "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (:user_id, :ingredient_id)",
-                {"user_id": user_id, "ingredient_id": ingredient_id},
+            # Get all parent ingredients from the path
+            parent_ingredient_ids = []
+            ingredient_path = ingredient["path"]
+            
+            # Parse the path to extract parent IDs
+            # Path format is like "/1/23/45/" where 1, 23, 45 are ingredient IDs
+            if ingredient_path:
+                # Split by '/' and filter out empty strings
+                path_parts = [part for part in ingredient_path.split("/") if part]
+                # All parts except the last one are parent IDs
+                parent_ingredient_ids = [int(part) for part in path_parts[:-1]]
+
+            # Start a transaction to add all ingredients
+            conn = self._get_connection()
+            conn.execute("BEGIN IMMEDIATE")
+            cursor = conn.cursor()
+
+            # Add all parent ingredients first (if they don't already exist)
+            for parent_id in parent_ingredient_ids:
+                try:
+                    # Use INSERT OR IGNORE to add parent ingredient only if it doesn't exist
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
+                        (user_id, parent_id)
+                    )
+                    if cursor.rowcount > 0:
+                        logger.info(f"Added parent ingredient {parent_id} to user {user_id}")
+                except Exception as e:
+                    logger.warning(f"Error adding parent ingredient {parent_id} to user {user_id}: {str(e)}")
+                    # Continue with other parents - don't fail the entire operation
+
+            # Add the main ingredient
+            cursor.execute(
+                "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
+                (user_id, ingredient_id)
             )
+
+            conn.commit()
+            conn.close()
+            conn = None
 
             # Return the created record with ingredient details
             return {
                 "ingredient_id": ingredient_id,
                 "ingredient_name": ingredient["name"],
                 "added_at": "now",  # SQLite CURRENT_TIMESTAMP
+                "parents_added": len(parent_ingredient_ids),
             }
 
         except Exception as e:
+            if conn:
+                conn.rollback()
             logger.error(
                 f"Error adding ingredient {ingredient_id} to user {user_id}: {str(e)}"
             )
             raise
+        finally:
+            if conn:
+                conn.close()
 
     @retry_on_db_locked()
     def remove_user_ingredient(self, user_id: str, ingredient_id: int) -> bool:
-        """Remove an ingredient from a user's inventory"""
+        """Remove an ingredient from a user's inventory, but prevent removing parents if children exist"""
         try:
             # Check if user has this ingredient
             existing = cast(
@@ -2318,6 +2360,42 @@ class Database:
 
             if not existing:
                 return False
+
+            # Get the ingredient details to check for child ingredients
+            ingredient = self.get_ingredient(ingredient_id)
+            if not ingredient:
+                return False
+
+            # Check if this ingredient has any child ingredients in the user's inventory
+            # Child ingredients would have paths that start with this ingredient's path
+            ingredient_path = ingredient["path"]
+            if ingredient_path:
+                # Look for child ingredients in user's inventory
+                child_ingredients = cast(
+                    List[Dict[str, Any]],
+                    self.execute_query(
+                        """
+                        SELECT ui.ingredient_id, i.name, i.path
+                        FROM user_ingredients ui
+                        JOIN ingredients i ON ui.ingredient_id = i.id
+                        WHERE ui.cognito_user_id = :user_id 
+                        AND i.path LIKE :child_path_pattern
+                        AND i.id != :ingredient_id
+                        """,
+                        {
+                            "user_id": user_id,
+                            "child_path_pattern": f"{ingredient_path}%",
+                            "ingredient_id": ingredient_id,
+                        },
+                    ),
+                )
+
+                if child_ingredients:
+                    # Get child ingredient names for the error message
+                    child_names = [child["name"] for child in child_ingredients]
+                    raise ValueError(
+                        f"Cannot remove ingredient '{ingredient['name']}' because it has child ingredients in your inventory: {', '.join(child_names)}. Please remove the child ingredients first."
+                    )
 
             # Remove the ingredient from user's inventory
             result = self.execute_query(

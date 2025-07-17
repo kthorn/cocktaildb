@@ -516,3 +516,223 @@ class TestDatabaseUserIngredients:
         # Check that ingredients are sorted by name
         ingredient_names = [ingredient["name"] for ingredient in user_ingredients]
         assert ingredient_names == ["Apple", "Banana", "Zucchini"]
+
+    def test_add_user_ingredient_with_parents(self, db_instance):
+        """Test that adding an ingredient also adds all parent ingredients"""
+        # Create a hierarchical ingredient structure
+        # Root: Spirits
+        spirits = db_instance.create_ingredient({
+            "name": "Spirits",
+            "description": "Alcoholic beverages",
+            "parent_id": None
+        })
+        
+        # Child: Gin (under Spirits)
+        gin = db_instance.create_ingredient({
+            "name": "Gin",
+            "description": "Juniper-flavored spirit",
+            "parent_id": spirits["id"]
+        })
+        
+        # Grandchild: London Dry Gin (under Gin)
+        london_dry = db_instance.create_ingredient({
+            "name": "London Dry Gin",
+            "description": "A specific type of gin",
+            "parent_id": gin["id"]
+        })
+        
+        user_id = "test-user-123"
+        
+        # Add the London Dry Gin to user's inventory
+        result = db_instance.add_user_ingredient(user_id, london_dry["id"])
+        
+        # Check that the result includes parent information
+        assert result["ingredient_id"] == london_dry["id"]
+        assert result["ingredient_name"] == "London Dry Gin"
+        assert result["parents_added"] == 2  # Spirits and Gin
+        
+        # Verify that all ingredients (parent and child) are in user's inventory
+        user_ingredients = db_instance.get_user_ingredients(user_id)
+        ingredient_names = [ing["name"] for ing in user_ingredients]
+        
+        assert len(user_ingredients) == 3
+        assert "Spirits" in ingredient_names
+        assert "Gin" in ingredient_names
+        assert "London Dry Gin" in ingredient_names
+
+    def test_add_user_ingredient_with_existing_parent(self, db_instance):
+        """Test that adding an ingredient doesn't error when parent already exists"""
+        # Create hierarchical ingredients
+        spirits = db_instance.create_ingredient({
+            "name": "Spirits",
+            "description": "Alcoholic beverages",
+            "parent_id": None
+        })
+        
+        gin = db_instance.create_ingredient({
+            "name": "Gin",
+            "description": "Juniper-flavored spirit",
+            "parent_id": spirits["id"]
+        })
+        
+        vodka = db_instance.create_ingredient({
+            "name": "Vodka",
+            "description": "Clear spirit",
+            "parent_id": spirits["id"]
+        })
+        
+        user_id = "test-user-123"
+        
+        # Add gin first (this will add Spirits as well)
+        db_instance.add_user_ingredient(user_id, gin["id"])
+        
+        # Add vodka (Spirits already exists, shouldn't cause error)
+        result = db_instance.add_user_ingredient(user_id, vodka["id"])
+        
+        assert result["ingredient_id"] == vodka["id"]
+        assert result["ingredient_name"] == "Vodka"
+        assert result["parents_added"] == 1  # Only Spirits counted, even though it already existed
+        
+        # Verify final state
+        user_ingredients = db_instance.get_user_ingredients(user_id)
+        ingredient_names = [ing["name"] for ing in user_ingredients]
+        
+        assert len(user_ingredients) == 3
+        assert "Spirits" in ingredient_names
+        assert "Gin" in ingredient_names
+        assert "Vodka" in ingredient_names
+
+    def test_remove_user_ingredient_with_children_fails(self, db_instance):
+        """Test that removing a parent ingredient fails when children exist"""
+        # Create hierarchical ingredients
+        spirits = db_instance.create_ingredient({
+            "name": "Spirits",
+            "description": "Alcoholic beverages",
+            "parent_id": None
+        })
+        
+        gin = db_instance.create_ingredient({
+            "name": "Gin",
+            "description": "Juniper-flavored spirit",
+            "parent_id": spirits["id"]
+        })
+        
+        vodka = db_instance.create_ingredient({
+            "name": "Vodka",
+            "description": "Clear spirit",
+            "parent_id": spirits["id"]
+        })
+        
+        user_id = "test-user-123"
+        
+        # Add gin (this will add Spirits as well)
+        db_instance.add_user_ingredient(user_id, gin["id"])
+        
+        # Add vodka (Spirits already exists)
+        db_instance.add_user_ingredient(user_id, vodka["id"])
+        
+        # Try to remove Spirits - should fail because Gin and Vodka exist
+        with pytest.raises(ValueError) as exc_info:
+            db_instance.remove_user_ingredient(user_id, spirits["id"])
+        
+        assert "Cannot remove ingredient 'Spirits'" in str(exc_info.value)
+        assert "has child ingredients" in str(exc_info.value)
+        assert "Gin" in str(exc_info.value)
+        assert "Vodka" in str(exc_info.value)
+        
+        # Verify Spirits is still in user's inventory
+        user_ingredients = db_instance.get_user_ingredients(user_id)
+        ingredient_names = [ing["name"] for ing in user_ingredients]
+        assert "Spirits" in ingredient_names
+
+    def test_remove_user_ingredient_hierarchy_order(self, db_instance):
+        """Test that ingredients must be removed in proper order (children first, then parents)"""
+        # Create hierarchical ingredients
+        spirits = db_instance.create_ingredient({
+            "name": "Spirits",
+            "description": "Alcoholic beverages",
+            "parent_id": None
+        })
+        
+        gin = db_instance.create_ingredient({
+            "name": "Gin",
+            "description": "Juniper-flavored spirit",
+            "parent_id": spirits["id"]
+        })
+        
+        london_dry = db_instance.create_ingredient({
+            "name": "London Dry Gin",
+            "description": "A specific type of gin",
+            "parent_id": gin["id"]
+        })
+        
+        user_id = "test-user-123"
+        
+        # Add London Dry Gin (adds all parents)
+        db_instance.add_user_ingredient(user_id, london_dry["id"])
+        
+        # Try to remove Gin - should fail because London Dry Gin exists
+        with pytest.raises(ValueError) as exc_info:
+            db_instance.remove_user_ingredient(user_id, gin["id"])
+        assert "London Dry Gin" in str(exc_info.value)
+        
+        # Try to remove Spirits - should fail because Gin exists
+        with pytest.raises(ValueError) as exc_info:
+            db_instance.remove_user_ingredient(user_id, spirits["id"])
+        assert "Gin" in str(exc_info.value)
+        
+        # Remove London Dry Gin first - should succeed
+        result = db_instance.remove_user_ingredient(user_id, london_dry["id"])
+        assert result is True
+        
+        # Now remove Gin - should succeed
+        result = db_instance.remove_user_ingredient(user_id, gin["id"])
+        assert result is True
+        
+        # Finally remove Spirits - should succeed
+        result = db_instance.remove_user_ingredient(user_id, spirits["id"])
+        assert result is True
+        
+        # Verify all ingredients are removed
+        user_ingredients = db_instance.get_user_ingredients(user_id)
+        assert len(user_ingredients) == 0
+
+    def test_remove_user_ingredient_leaf_node_succeeds(self, db_instance):
+        """Test that removing a leaf ingredient (no children) succeeds"""
+        # Create hierarchical ingredients
+        spirits = db_instance.create_ingredient({
+            "name": "Spirits",
+            "description": "Alcoholic beverages",
+            "parent_id": None
+        })
+        
+        gin = db_instance.create_ingredient({
+            "name": "Gin",
+            "description": "Juniper-flavored spirit",
+            "parent_id": spirits["id"]
+        })
+        
+        vodka = db_instance.create_ingredient({
+            "name": "Vodka",
+            "description": "Clear spirit",
+            "parent_id": spirits["id"]
+        })
+        
+        user_id = "test-user-123"
+        
+        # Add both gin and vodka
+        db_instance.add_user_ingredient(user_id, gin["id"])
+        db_instance.add_user_ingredient(user_id, vodka["id"])
+        
+        # Remove vodka (leaf node) - should succeed
+        result = db_instance.remove_user_ingredient(user_id, vodka["id"])
+        assert result is True
+        
+        # Verify vodka is removed but gin and spirits remain
+        user_ingredients = db_instance.get_user_ingredients(user_id)
+        ingredient_names = [ing["name"] for ing in user_ingredients]
+        
+        assert len(user_ingredients) == 2
+        assert "Spirits" in ingredient_names
+        assert "Gin" in ingredient_names
+        assert "Vodka" not in ingredient_names

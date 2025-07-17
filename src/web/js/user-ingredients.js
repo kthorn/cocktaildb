@@ -74,7 +74,8 @@ class UserIngredientsManager {
             this.renderAvailableIngredients();
         } catch (error) {
             console.error('Error loading ingredients:', error);
-            this.showError('Failed to load ingredients');
+            const errorMessage = error.message || 'Failed to load ingredients';
+            this.showError(errorMessage);
         }
     }
 
@@ -315,7 +316,8 @@ class UserIngredientsManager {
             this.showSuccess(`Added ${ingredientIds.length} ingredient(s) to your inventory`);
         } catch (error) {
             console.error('Error adding ingredients:', error);
-            this.showError('Failed to add ingredients');
+            const errorMessage = error.message || 'Failed to add ingredients';
+            this.showError(errorMessage);
         }
     }
 
@@ -336,7 +338,8 @@ class UserIngredientsManager {
             this.showSuccess(`Removed ${ingredientIds.length} ingredient(s) from your inventory`);
         } catch (error) {
             console.error('Error removing ingredients:', error);
-            this.showError('Failed to remove ingredients');
+            const errorMessage = error.message || 'Failed to remove ingredients';
+            this.showError(errorMessage);
         }
     }
 
