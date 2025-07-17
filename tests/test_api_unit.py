@@ -60,11 +60,6 @@ class TestIngredientEndpoints:
 class TestRecipeEndpoints:
     """Test recipe-related endpoints"""
 
-    def test_get_recipes_public_access(self, test_client_memory):
-        """Test getting recipes without authentication"""
-        response = test_client_memory.get("/recipes")
-        assert response.status_code == status.HTTP_200_OK
-
     def test_create_recipe_unauthorized(self, test_client_memory):
         """Test creating recipe without authentication"""
         recipe_data = {"name": "Test Recipe", "instructions": "Test instructions"}

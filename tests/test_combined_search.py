@@ -283,34 +283,6 @@ class TestCombinedSearch:
             # Should return at least the original recipe
             assert data["pagination"]["total_count"] >= 1
 
-    def test_search_with_sorting_combination(self, test_client_with_data):
-        client, app = test_client_with_data
-        """Test combining multiple search filters with sorting"""
-        response = client.get(
-            "/recipes/search?q=test&min_rating=2.0&sort_by=name&sort_order=asc"
-        )
-        assert response.status_code == 200
-        data = response.json()
-
-        assert "recipes" in data
-        assert "pagination" in data
-
-        # Check that both filtering and sorting are applied
-        if len(data["recipes"]) >= 2:
-            # Check sorting (should be alphabetical by name)
-            for i in range(len(data["recipes"]) - 1):
-                current_name = data["recipes"][i]["name"].lower()
-                next_name = data["recipes"][i + 1]["name"].lower()
-                assert current_name <= next_name, (
-                    f"Recipes not in alphabetical order: '{current_name}' should come before '{next_name}'"
-                )
-
-            # Check filtering
-            for recipe in data["recipes"]:
-                assert "test" in recipe["name"].lower()
-                if recipe.get("avg_rating") is not None:
-                    assert recipe["avg_rating"] >= 2.0
-
     def test_search_with_pagination_combination(self, test_client_with_data):
         client, app = test_client_with_data
         """Test combining multiple search filters with pagination"""

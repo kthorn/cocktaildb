@@ -90,7 +90,7 @@ class TestRecipePagination:
 
     def test_get_recipes_with_page_parameter(self, test_client_memory):
         """Test getting recipes with page parameter"""
-        response = test_client_memory.get("/recipes?page=1")
+        response = test_client_memory.get("/recipes/search?page=1")
 
         # Should handle page parameter gracefully
         assert response.status_code in [
@@ -105,7 +105,7 @@ class TestRecipePagination:
 
     def test_get_recipes_with_limit_parameter(self, test_client_memory):
         """Test getting recipes with limit parameter"""
-        response = test_client_memory.get("/recipes?limit=5")
+        response = test_client_memory.get("/recipes/search?limit=5")
 
         # Should handle limit parameter gracefully
         assert response.status_code in [
@@ -120,7 +120,7 @@ class TestRecipePagination:
 
     def test_get_recipes_with_page_and_limit(self, test_client_memory):
         """Test getting recipes with both page and limit parameters"""
-        response = test_client_memory.get("/recipes?page=2&limit=3")
+        response = test_client_memory.get("/recipes/search?page=2&limit=3")
 
         # Should handle both parameters gracefully
         assert response.status_code in [
@@ -136,7 +136,7 @@ class TestRecipePagination:
 
     def test_get_recipes_invalid_page(self, test_client_memory):
         """Test getting recipes with invalid page parameter"""
-        response = test_client_memory.get("/recipes?page=0")
+        response = test_client_memory.get("/recipes/search?page=0")
 
         # Should reject invalid page numbers
         if response.status_code == 422:
@@ -150,7 +150,7 @@ class TestRecipePagination:
 
     def test_get_recipes_invalid_limit(self, test_client_memory):
         """Test getting recipes with invalid limit parameter"""
-        response = test_client_memory.get("/recipes?limit=-1")
+        response = test_client_memory.get("/recipes/search?limit=-1")
 
         # Should reject invalid limit values
         if response.status_code == 422:
@@ -164,7 +164,7 @@ class TestRecipePagination:
 
     def test_pagination_metadata_consistency(self, test_client_memory):
         """Test pagination metadata is mathematically consistent"""
-        response = test_client_memory.get("/recipes?page=1&limit=5")
+        response = test_client_memory.get("/recipes/search?page=1&limit=5")
 
         if response.status_code == 200:
             data = response.json()
@@ -224,7 +224,7 @@ class TestPaginationPerformance:
 
     def test_paginated_recipes_include_full_data(self, test_client_memory):
         """Test that paginated recipe responses include full recipe details"""
-        response = test_client_memory.get("/recipes?page=1&limit=5")
+        response = test_client_memory.get("/recipes/search?page=1&limit=5")
 
         if response.status_code == 200:
             data = response.json()
@@ -246,7 +246,7 @@ class TestPaginationPerformance:
         import time
 
         start_time = time.time()
-        response = test_client_memory.get("/recipes?page=1&limit=10")
+        response = test_client_memory.get("/recipes/search?page=1&limit=10")
         end_time = time.time()
 
         # Should respond within reasonable time (generous for test environment)
@@ -281,7 +281,7 @@ class TestPaginationEdgeCases:
 
     def test_large_page_number(self, test_client_memory):
         """Test requesting a page number beyond available data"""
-        response = test_client_memory.get("/recipes?page=9999&limit=10")
+        response = test_client_memory.get("/recipes/search?page=9999&limit=10")
 
         # Should handle gracefully, either return empty results or error
         assert response.status_code in [200, 404, 422]
@@ -294,7 +294,7 @@ class TestPaginationEdgeCases:
 
     def test_maximum_limit_enforcement(self, test_client_memory):
         """Test that excessively large limit values are handled"""
-        response = test_client_memory.get("/recipes?page=1&limit=10000")
+        response = test_client_memory.get("/recipes/search?page=1&limit=10000")
 
         # Should either enforce a maximum limit or handle gracefully
         assert response.status_code in [200, 422]

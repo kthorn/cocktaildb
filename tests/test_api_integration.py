@@ -48,14 +48,14 @@ class TestDataValidation:
     def test_recipes_data_integrity(self, test_client_with_data):
         """Test recipes data structure and completeness"""
         client, app = test_client_with_data
-        response = client.get("/recipes")
+        response = client.get("/recipes/search")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
         recipes = data if isinstance(data, list) else data.get("recipes", [])
 
         assert len(recipes) > 0, "Should have test recipes"
-        
+
         # Test detailed recipe structure
         recipe_id = recipes[0]["id"]
         detail_response = client.get(f"/recipes/{recipe_id}")
@@ -74,9 +74,7 @@ class TestDataValidation:
             ]
             assert_valid_response_structure(ingredient, expected_keys)
             # Check that amount is present
-            assert "amount" in ingredient, (
-                "Ingredient should have 'amount' field"
-            )
+            assert "amount" in ingredient, "Ingredient should have 'amount' field"
 
     def test_units_data_completeness(self, test_client_with_data):
         """Test that essential cocktail units exist in test data"""
@@ -153,7 +151,9 @@ class TestSearchAndPaginationFunctionality:
 class TestDataConsistencyAndIntegrity:
     """Test data consistency and integrity with test data"""
 
-    def test_database_referential_integrity(self, test_client_with_data, db_with_test_data):
+    def test_database_referential_integrity(
+        self, test_client_with_data, db_with_test_data
+    ):
         """Test referential integrity across all tables"""
         cursor = db_with_test_data.cursor()
 
@@ -233,7 +233,7 @@ class TestDataConsistencyAndIntegrity:
 
         expected_tables = [
             "ingredients",
-            "recipes", 
+            "recipes",
             "recipe_ingredients",
             "units",
             "ratings",
@@ -251,9 +251,9 @@ class TestComplexIntegrationScenarios:
     def test_recipe_with_ingredients_and_ratings_flow(self, test_client_with_data):
         """Test complete recipe workflow with ingredients and ratings"""
         client, app = test_client_with_data
-        
+
         # Get a recipe with detailed information
-        recipes_response = client.get("/recipes?limit=1")
+        recipes_response = client.get("/recipes/search?limit=1")
         assert recipes_response.status_code == status.HTTP_200_OK
 
         recipes_data = recipes_response.json()
@@ -322,17 +322,27 @@ class TestComplexIntegrationScenarios:
         hierarchical_ingredients = [
             ing
             for ing in ingredients
-            if ing.get("path") and ing["path"].count("/") > 2  # More than just root level
+            if ing.get("path")
+            and ing["path"].count("/") > 2  # More than just root level
         ]
 
-        assert len(hierarchical_ingredients) > 0, "Should have hierarchical ingredients in test data"
-        
+        assert len(hierarchical_ingredients) > 0, (
+            "Should have hierarchical ingredients in test data"
+        )
+
         for ingredient in hierarchical_ingredients[:3]:  # Test first 3
             # Verify path structure
             assert ingredient["path"].startswith("/"), "Path should start with /"
             assert ingredient["path"].endswith("/"), "Path should end with /"
-            
+
             # If it has a parent, verify parent exists
             if ingredient.get("parent_id"):
-                parent = next((ing for ing in ingredients if ing["id"] == ingredient["parent_id"]), None)
+                parent = next(
+                    (
+                        ing
+                        for ing in ingredients
+                        if ing["id"] == ingredient["parent_id"]
+                    ),
+                    None,
+                )
                 assert parent is not None, f"Parent {ingredient['parent_id']} not found"

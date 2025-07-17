@@ -515,7 +515,7 @@ class TestBulkUploadValidation:
         assert len(response_data["uploaded_recipes"]) == 0
 
         # Verify no recipes were actually created
-        recipes_response = authenticated_client.get("/recipes")
+        recipes_response = authenticated_client.get("/recipes/search")
         assert recipes_response.status_code == 200
         recipes_data = recipes_response.json()
         recipe_names = [recipe["name"] for recipe in recipes_data["recipes"]]
