@@ -16,28 +16,27 @@ class TestDatabaseUserIngredients:
         # First insert a test ingredient
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Test Ingredient", "Test Description")
+            ("Test Ingredient", "Test Description"),
         )
-        
+
         # Get the ingredient ID
         ingredient_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Ingredient",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient",)
         )
         ingredient_id = ingredient_result[0]["id"]
-        
+
         # Add ingredient to user's inventory
         user_id = "test-user-123"
         result = db_instance.add_user_ingredient(user_id, ingredient_id)
-        
+
         assert result["ingredient_id"] == ingredient_id
         assert result["ingredient_name"] == "Test Ingredient"
         assert "added_at" in result
-        
+
         # Verify ingredient was added to database
         check_result = db_instance.execute_query(
             "SELECT * FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
-            (user_id, ingredient_id)
+            (user_id, ingredient_id),
         )
         assert len(check_result) == 1
         assert check_result[0]["cognito_user_id"] == user_id
@@ -48,34 +47,33 @@ class TestDatabaseUserIngredients:
         # Insert test ingredient
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Test Ingredient", "Test Description")
+            ("Test Ingredient", "Test Description"),
         )
-        
+
         ingredient_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Ingredient",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient",)
         )
         ingredient_id = ingredient_result[0]["id"]
-        
+
         user_id = "test-user-123"
-        
+
         # Add ingredient first time
         db_instance.add_user_ingredient(user_id, ingredient_id)
-        
+
         # Add the same ingredient again - should raise ValueError
         with pytest.raises(ValueError) as exc_info:
             db_instance.add_user_ingredient(user_id, ingredient_id)
-        
+
         assert "already exists" in str(exc_info.value)
 
     def test_add_user_ingredient_nonexistent_ingredient(self, db_instance):
         """Test adding a nonexistent ingredient to user's inventory"""
         user_id = "test-user-123"
         nonexistent_id = 999999
-        
+
         with pytest.raises(ValueError) as exc_info:
             db_instance.add_user_ingredient(user_id, nonexistent_id)
-        
+
         assert "does not exist" in str(exc_info.value)
 
     def test_remove_user_ingredient_success(self, db_instance):
@@ -83,29 +81,28 @@ class TestDatabaseUserIngredients:
         # Insert test ingredient
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Test Ingredient", "Test Description")
+            ("Test Ingredient", "Test Description"),
         )
-        
+
         ingredient_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Ingredient",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient",)
         )
         ingredient_id = ingredient_result[0]["id"]
-        
+
         user_id = "test-user-123"
-        
+
         # Add ingredient to user's inventory
         db_instance.add_user_ingredient(user_id, ingredient_id)
-        
+
         # Remove ingredient from user's inventory
         result = db_instance.remove_user_ingredient(user_id, ingredient_id)
-        
+
         assert result is True
-        
+
         # Verify ingredient was removed from database
         check_result = db_instance.execute_query(
             "SELECT * FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
-            (user_id, ingredient_id)
+            (user_id, ingredient_id),
         )
         assert len(check_result) == 0
 
@@ -114,20 +111,19 @@ class TestDatabaseUserIngredients:
         # Insert test ingredient
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Test Ingredient", "Test Description")
+            ("Test Ingredient", "Test Description"),
         )
-        
+
         ingredient_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Ingredient",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient",)
         )
         ingredient_id = ingredient_result[0]["id"]
-        
+
         user_id = "test-user-123"
-        
+
         # Try to remove ingredient that was never added
         result = db_instance.remove_user_ingredient(user_id, ingredient_id)
-        
+
         assert result is False
 
     def test_get_user_ingredients_success(self, db_instance):
@@ -135,41 +131,39 @@ class TestDatabaseUserIngredients:
         # Insert test ingredients
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Test Ingredient 1", "Test Description 1")
+            ("Test Ingredient 1", "Test Description 1"),
         )
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Test Ingredient 2", "Test Description 2")
+            ("Test Ingredient 2", "Test Description 2"),
         )
-        
+
         ingredient1_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Ingredient 1",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 1",)
         )
         ingredient2_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Ingredient 2",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 2",)
         )
-        
+
         ingredient1_id = ingredient1_result[0]["id"]
         ingredient2_id = ingredient2_result[0]["id"]
-        
+
         user_id = "test-user-123"
-        
+
         # Add ingredients to user's inventory
         db_instance.add_user_ingredient(user_id, ingredient1_id)
         db_instance.add_user_ingredient(user_id, ingredient2_id)
-        
+
         # Get all user ingredients
         result = db_instance.get_user_ingredients(user_id)
-        
+
         assert len(result) == 2
-        
+
         # Check that both ingredients are returned with correct structure
         ingredient_names = [ingredient["name"] for ingredient in result]
         assert "Test Ingredient 1" in ingredient_names
         assert "Test Ingredient 2" in ingredient_names
-        
+
         # Check structure of returned ingredients
         for ingredient in result:
             assert "ingredient_id" in ingredient
@@ -182,9 +176,9 @@ class TestDatabaseUserIngredients:
     def test_get_user_ingredients_empty(self, db_instance):
         """Test getting ingredients for a user with no ingredients"""
         user_id = "test-user-123"
-        
+
         result = db_instance.get_user_ingredients(user_id)
-        
+
         assert result == []
 
     def test_add_user_ingredients_bulk_success(self, db_instance):
@@ -192,52 +186,49 @@ class TestDatabaseUserIngredients:
         # Insert test ingredients
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Test Ingredient 1", "Test Description 1")
+            ("Test Ingredient 1", "Test Description 1"),
         )
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Test Ingredient 2", "Test Description 2")
+            ("Test Ingredient 2", "Test Description 2"),
         )
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Test Ingredient 3", "Test Description 3")
+            ("Test Ingredient 3", "Test Description 3"),
         )
-        
+
         # Get ingredient IDs
         ingredient1_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Ingredient 1",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 1",)
         )
         ingredient2_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Ingredient 2",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 2",)
         )
         ingredient3_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Ingredient 3",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 3",)
         )
-        
+
         ingredient_ids = [
             ingredient1_result[0]["id"],
             ingredient2_result[0]["id"],
-            ingredient3_result[0]["id"]
+            ingredient3_result[0]["id"],
         ]
-        
+
         user_id = "test-user-123"
-        
+
         # Add ingredients in bulk
         result = db_instance.add_user_ingredients_bulk(user_id, ingredient_ids)
-        
+
         assert result["added_count"] == 3
         assert result["already_exists_count"] == 0
         assert result["failed_count"] == 0
         assert result["errors"] == []
-        
+
         # Verify all ingredients were added
         for ingredient_id in ingredient_ids:
             check_result = db_instance.execute_query(
                 "SELECT * FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
-                (user_id, ingredient_id)
+                (user_id, ingredient_id),
             )
             assert len(check_result) == 1
 
@@ -246,35 +237,33 @@ class TestDatabaseUserIngredients:
         # Insert test ingredients
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Test Ingredient 1", "Test Description 1")
+            ("Test Ingredient 1", "Test Description 1"),
         )
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Test Ingredient 2", "Test Description 2")
+            ("Test Ingredient 2", "Test Description 2"),
         )
-        
+
         ingredient1_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Ingredient 1",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 1",)
         )
         ingredient2_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Ingredient 2",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 2",)
         )
-        
+
         ingredient1_id = ingredient1_result[0]["id"]
         ingredient2_id = ingredient2_result[0]["id"]
         nonexistent_id = 999999
-        
+
         user_id = "test-user-123"
-        
+
         # Add one ingredient first
         db_instance.add_user_ingredient(user_id, ingredient1_id)
-        
+
         # Bulk add: one already exists, one new, one nonexistent
         ingredient_ids = [ingredient1_id, ingredient2_id, nonexistent_id]
         result = db_instance.add_user_ingredients_bulk(user_id, ingredient_ids)
-        
+
         assert result["added_count"] == 1  # ingredient2 added
         assert result["already_exists_count"] == 1  # ingredient1 already exists
         assert result["failed_count"] == 1  # nonexistent ingredient failed
@@ -286,54 +275,51 @@ class TestDatabaseUserIngredients:
         # Insert test ingredients
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Test Ingredient 1", "Test Description 1")
+            ("Test Ingredient 1", "Test Description 1"),
         )
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Test Ingredient 2", "Test Description 2")
+            ("Test Ingredient 2", "Test Description 2"),
         )
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Test Ingredient 3", "Test Description 3")
+            ("Test Ingredient 3", "Test Description 3"),
         )
-        
+
         # Get ingredient IDs
         ingredient1_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Ingredient 1",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 1",)
         )
         ingredient2_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Ingredient 2",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 2",)
         )
         ingredient3_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Ingredient 3",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 3",)
         )
-        
+
         ingredient_ids = [
             ingredient1_result[0]["id"],
             ingredient2_result[0]["id"],
-            ingredient3_result[0]["id"]
+            ingredient3_result[0]["id"],
         ]
-        
+
         user_id = "test-user-123"
-        
+
         # Add ingredients to user's inventory
         for ingredient_id in ingredient_ids:
             db_instance.add_user_ingredient(user_id, ingredient_id)
-        
+
         # Remove ingredients in bulk
         result = db_instance.remove_user_ingredients_bulk(user_id, ingredient_ids)
-        
+
         assert result["removed_count"] == 3
         assert result["not_found_count"] == 0
-        
+
         # Verify all ingredients were removed
         for ingredient_id in ingredient_ids:
             check_result = db_instance.execute_query(
                 "SELECT * FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
-                (user_id, ingredient_id)
+                (user_id, ingredient_id),
             )
             assert len(check_result) == 0
 
@@ -342,35 +328,33 @@ class TestDatabaseUserIngredients:
         # Insert test ingredients
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Test Ingredient 1", "Test Description 1")
+            ("Test Ingredient 1", "Test Description 1"),
         )
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Test Ingredient 2", "Test Description 2")
+            ("Test Ingredient 2", "Test Description 2"),
         )
-        
+
         ingredient1_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Ingredient 1",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 1",)
         )
         ingredient2_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Ingredient 2",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 2",)
         )
-        
+
         ingredient1_id = ingredient1_result[0]["id"]
         ingredient2_id = ingredient2_result[0]["id"]
         nonexistent_id = 999999
-        
+
         user_id = "test-user-123"
-        
+
         # Add only one ingredient to user's inventory
         db_instance.add_user_ingredient(user_id, ingredient1_id)
-        
+
         # Bulk remove: one exists, one doesn't exist in user's inventory, one nonexistent ingredient
         ingredient_ids = [ingredient1_id, ingredient2_id, nonexistent_id]
         result = db_instance.remove_user_ingredients_bulk(user_id, ingredient_ids)
-        
+
         assert result["removed_count"] == 1  # ingredient1 removed
         assert result["not_found_count"] == 2  # ingredient2 and nonexistent not found
 
@@ -379,140 +363,149 @@ class TestDatabaseUserIngredients:
         # Insert test ingredient
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Test Ingredient", "Test Description")
+            ("Test Ingredient", "Test Description"),
         )
-        
+
         ingredient_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Ingredient",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient",)
         )
         ingredient_id = ingredient_result[0]["id"]
-        
+
         user1_id = "test-user-123"
         user2_id = "test-user-456"
-        
+
         # Add ingredient to user1's inventory
         db_instance.add_user_ingredient(user1_id, ingredient_id)
-        
+
         # Check user1 has the ingredient
         user1_ingredients = db_instance.get_user_ingredients(user1_id)
         assert len(user1_ingredients) == 1
         assert user1_ingredients[0]["ingredient_id"] == ingredient_id
-        
+
         # Check user2 doesn't have the ingredient
         user2_ingredients = db_instance.get_user_ingredients(user2_id)
         assert len(user2_ingredients) == 0
-        
+
         # Add ingredient to user2's inventory
         db_instance.add_user_ingredient(user2_id, ingredient_id)
-        
+
         # Check both users have the ingredient independently
         user1_ingredients = db_instance.get_user_ingredients(user1_id)
         user2_ingredients = db_instance.get_user_ingredients(user2_id)
-        
+
         assert len(user1_ingredients) == 1
         assert len(user2_ingredients) == 1
         assert user1_ingredients[0]["ingredient_id"] == ingredient_id
         assert user2_ingredients[0]["ingredient_id"] == ingredient_id
-        
+
         # Remove ingredient from user1's inventory
         db_instance.remove_user_ingredient(user1_id, ingredient_id)
-        
+
         # Check user1 doesn't have it but user2 still does
         user1_ingredients = db_instance.get_user_ingredients(user1_id)
         user2_ingredients = db_instance.get_user_ingredients(user2_id)
-        
+
         assert len(user1_ingredients) == 0
         assert len(user2_ingredients) == 1
 
     def test_user_ingredients_with_hierarchical_ingredients(self, db_instance):
         """Test user ingredients with hierarchical ingredient structure"""
-        # Insert hierarchical ingredients
-        db_instance.execute_query(
-            "INSERT INTO ingredients (name, description, parent_id, path) VALUES (?, ?, ?, ?)",
-            ("Test Spirits", "Alcoholic beverages", None, "/1/")
+        # Create hierarchical ingredients using create_ingredient to avoid name conflicts
+        spirits = db_instance.create_ingredient(
+            {
+                "name": "Test Spirits Hierarchy",
+                "description": "Alcoholic beverages",
+                "parent_id": None,
+            }
         )
-        
-        # Get the spirits ID for the parent reference
-        spirits_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Spirits",)
+
+        gin = db_instance.create_ingredient(
+            {
+                "name": "Test Gin Hierarchy",
+                "description": "Juniper-flavored spirit",
+                "parent_id": spirits["id"],
+            }
         )
-        spirits_id = spirits_result[0]["id"]
-        
-        db_instance.execute_query(
-            "INSERT INTO ingredients (name, description, parent_id, path) VALUES (?, ?, ?, ?)",
-            ("Test Gin", "Juniper-flavored spirit", spirits_id, f"/{spirits_id}/2/")
-        )
-        
-        gin_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Test Gin",)
-        )
-        
-        gin_id = gin_result[0]["id"]
-        
+
+        spirits_id = spirits["id"]
+        gin_id = gin["id"]
+
         user_id = "test-user-123"
-        
+
         # Add gin to user's inventory
         db_instance.add_user_ingredient(user_id, gin_id)
-        
+
         # Get user ingredients
         user_ingredients = db_instance.get_user_ingredients(user_id)
-        
-        assert len(user_ingredients) == 1
-        gin_ingredient = user_ingredients[0]
-        assert gin_ingredient["name"] == "Test Gin"
+
+        # Should have 2 ingredients: Test Spirits (parent) and Test Gin (child)
+        assert len(user_ingredients) == 2
+
+        # Find the gin ingredient in the results
+        gin_ingredient = next(
+            (ing for ing in user_ingredients if ing["name"] == "Test Gin Hierarchy"),
+            None,
+        )
+        assert gin_ingredient is not None
         assert gin_ingredient["parent_id"] == spirits_id
-        assert gin_ingredient["path"] == f"/{spirits_id}/2/"
+        assert gin_ingredient["path"] == f"/{spirits_id}/{gin_id}/"
+
+        # Find the spirits ingredient in the results
+        spirits_ingredient = next(
+            (
+                ing
+                for ing in user_ingredients
+                if ing["name"] == "Test Spirits Hierarchy"
+            ),
+            None,
+        )
+        assert spirits_ingredient is not None
+        assert spirits_ingredient["parent_id"] is None
 
     def test_get_user_ingredients_sorted_by_name(self, db_instance):
         """Test that get_user_ingredients returns ingredients sorted by name"""
         # Insert test ingredients in non-alphabetical order
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Zucchini", "Green vegetable")
+            ("Zucchini", "Green vegetable"),
         )
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Apple", "Red fruit")
+            ("Apple", "Red fruit"),
         )
         db_instance.execute_query(
             "INSERT INTO ingredients (name, description) VALUES (?, ?)",
-            ("Banana", "Yellow fruit")
+            ("Banana", "Yellow fruit"),
         )
-        
+
         # Get ingredient IDs
         zucchini_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Zucchini",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Zucchini",)
         )
         apple_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Apple",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Apple",)
         )
         banana_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
-            ("Banana",)
+            "SELECT id FROM ingredients WHERE name = ?", ("Banana",)
         )
-        
+
         ingredient_ids = [
             zucchini_result[0]["id"],
             apple_result[0]["id"],
-            banana_result[0]["id"]
+            banana_result[0]["id"],
         ]
-        
+
         user_id = "test-user-123"
-        
+
         # Add ingredients to user's inventory
         for ingredient_id in ingredient_ids:
             db_instance.add_user_ingredient(user_id, ingredient_id)
-        
+
         # Get user ingredients
         user_ingredients = db_instance.get_user_ingredients(user_id)
-        
+
         assert len(user_ingredients) == 3
-        
+
         # Check that ingredients are sorted by name
         ingredient_names = [ingredient["name"] for ingredient in user_ingredients]
         assert ingredient_names == ["Apple", "Banana", "Zucchini"]
@@ -520,179 +513,205 @@ class TestDatabaseUserIngredients:
     def test_add_user_ingredient_with_parents(self, db_instance):
         """Test that adding an ingredient also adds all parent ingredients"""
         # Create a hierarchical ingredient structure
-        # Root: Spirits
-        spirits = db_instance.create_ingredient({
-            "name": "Spirits",
-            "description": "Alcoholic beverages",
-            "parent_id": None
-        })
-        
-        # Child: Gin (under Spirits)
-        gin = db_instance.create_ingredient({
-            "name": "Gin",
-            "description": "Juniper-flavored spirit",
-            "parent_id": spirits["id"]
-        })
-        
-        # Grandchild: London Dry Gin (under Gin)
-        london_dry = db_instance.create_ingredient({
-            "name": "London Dry Gin",
-            "description": "A specific type of gin",
-            "parent_id": gin["id"]
-        })
-        
+        # Root: Test Spirits
+        spirits = db_instance.create_ingredient(
+            {
+                "name": "Test Spirits Parent",
+                "description": "Alcoholic beverages",
+                "parent_id": None,
+            }
+        )
+
+        # Child: Test Gin (under Spirits)
+        gin = db_instance.create_ingredient(
+            {
+                "name": "Test Gin Parent",
+                "description": "Juniper-flavored spirit",
+                "parent_id": spirits["id"],
+            }
+        )
+
+        # Grandchild: Test London Dry Gin (under Gin)
+        london_dry = db_instance.create_ingredient(
+            {
+                "name": "Test London Dry Gin",
+                "description": "A specific type of gin",
+                "parent_id": gin["id"],
+            }
+        )
+
         user_id = "test-user-123"
-        
+
         # Add the London Dry Gin to user's inventory
         result = db_instance.add_user_ingredient(user_id, london_dry["id"])
-        
+
         # Check that the result includes parent information
         assert result["ingredient_id"] == london_dry["id"]
-        assert result["ingredient_name"] == "London Dry Gin"
+        assert result["ingredient_name"] == "Test London Dry Gin"
         assert result["parents_added"] == 2  # Spirits and Gin
-        
+
         # Verify that all ingredients (parent and child) are in user's inventory
         user_ingredients = db_instance.get_user_ingredients(user_id)
         ingredient_names = [ing["name"] for ing in user_ingredients]
-        
+
         assert len(user_ingredients) == 3
-        assert "Spirits" in ingredient_names
-        assert "Gin" in ingredient_names
-        assert "London Dry Gin" in ingredient_names
+        assert "Test Spirits Parent" in ingredient_names
+        assert "Test Gin Parent" in ingredient_names
+        assert "Test London Dry Gin" in ingredient_names
 
     def test_add_user_ingredient_with_existing_parent(self, db_instance):
         """Test that adding an ingredient doesn't error when parent already exists"""
         # Create hierarchical ingredients
-        spirits = db_instance.create_ingredient({
-            "name": "Spirits",
-            "description": "Alcoholic beverages",
-            "parent_id": None
-        })
-        
-        gin = db_instance.create_ingredient({
-            "name": "Gin",
-            "description": "Juniper-flavored spirit",
-            "parent_id": spirits["id"]
-        })
-        
-        vodka = db_instance.create_ingredient({
-            "name": "Vodka",
-            "description": "Clear spirit",
-            "parent_id": spirits["id"]
-        })
-        
+        spirits = db_instance.create_ingredient(
+            {
+                "name": "Test Spirits Existing",
+                "description": "Alcoholic beverages",
+                "parent_id": None,
+            }
+        )
+
+        gin = db_instance.create_ingredient(
+            {
+                "name": "Test Gin Existing",
+                "description": "Juniper-flavored spirit",
+                "parent_id": spirits["id"],
+            }
+        )
+
+        vodka = db_instance.create_ingredient(
+            {
+                "name": "Test Vodka Existing",
+                "description": "Clear spirit",
+                "parent_id": spirits["id"],
+            }
+        )
+
         user_id = "test-user-123"
-        
+
         # Add gin first (this will add Spirits as well)
         db_instance.add_user_ingredient(user_id, gin["id"])
-        
+
         # Add vodka (Spirits already exists, shouldn't cause error)
         result = db_instance.add_user_ingredient(user_id, vodka["id"])
-        
+
         assert result["ingredient_id"] == vodka["id"]
-        assert result["ingredient_name"] == "Vodka"
-        assert result["parents_added"] == 1  # Only Spirits counted, even though it already existed
-        
+        assert result["ingredient_name"] == "Test Vodka Existing"
+        assert (
+            result["parents_added"] == 1
+        )  # Only Spirits counted, even though it already existed
+
         # Verify final state
         user_ingredients = db_instance.get_user_ingredients(user_id)
         ingredient_names = [ing["name"] for ing in user_ingredients]
-        
+
         assert len(user_ingredients) == 3
-        assert "Spirits" in ingredient_names
-        assert "Gin" in ingredient_names
-        assert "Vodka" in ingredient_names
+        assert "Test Spirits Existing" in ingredient_names
+        assert "Test Gin Existing" in ingredient_names
+        assert "Test Vodka Existing" in ingredient_names
 
     def test_remove_user_ingredient_with_children_fails(self, db_instance):
         """Test that removing a parent ingredient fails when children exist"""
         # Create hierarchical ingredients
-        spirits = db_instance.create_ingredient({
-            "name": "Spirits",
-            "description": "Alcoholic beverages",
-            "parent_id": None
-        })
-        
-        gin = db_instance.create_ingredient({
-            "name": "Gin",
-            "description": "Juniper-flavored spirit",
-            "parent_id": spirits["id"]
-        })
-        
-        vodka = db_instance.create_ingredient({
-            "name": "Vodka",
-            "description": "Clear spirit",
-            "parent_id": spirits["id"]
-        })
-        
+        spirits = db_instance.create_ingredient(
+            {
+                "name": "Test Spirits Children",
+                "description": "Alcoholic beverages",
+                "parent_id": None,
+            }
+        )
+
+        gin = db_instance.create_ingredient(
+            {
+                "name": "Test Gin Children",
+                "description": "Juniper-flavored spirit",
+                "parent_id": spirits["id"],
+            }
+        )
+
+        vodka = db_instance.create_ingredient(
+            {
+                "name": "Test Vodka Children",
+                "description": "Clear spirit",
+                "parent_id": spirits["id"],
+            }
+        )
+
         user_id = "test-user-123"
-        
+
         # Add gin (this will add Spirits as well)
         db_instance.add_user_ingredient(user_id, gin["id"])
-        
+
         # Add vodka (Spirits already exists)
         db_instance.add_user_ingredient(user_id, vodka["id"])
-        
+
         # Try to remove Spirits - should fail because Gin and Vodka exist
         with pytest.raises(ValueError) as exc_info:
             db_instance.remove_user_ingredient(user_id, spirits["id"])
-        
-        assert "Cannot remove ingredient 'Spirits'" in str(exc_info.value)
-        assert "has child ingredients" in str(exc_info.value)
-        assert "Gin" in str(exc_info.value)
-        assert "Vodka" in str(exc_info.value)
-        
+
+        assert "Cannot remove ingredient 'Test Spirits Children'" in str(exc_info.value)
+        assert "has child ingredients in your inventory" in str(exc_info.value)
+        assert "Test Gin Children" in str(exc_info.value)
+        assert "Test Vodka Children" in str(exc_info.value)
+
         # Verify Spirits is still in user's inventory
         user_ingredients = db_instance.get_user_ingredients(user_id)
         ingredient_names = [ing["name"] for ing in user_ingredients]
-        assert "Spirits" in ingredient_names
+        assert "Test Spirits Children" in ingredient_names
 
     def test_remove_user_ingredient_hierarchy_order(self, db_instance):
         """Test that ingredients must be removed in proper order (children first, then parents)"""
         # Create hierarchical ingredients
-        spirits = db_instance.create_ingredient({
-            "name": "Spirits",
-            "description": "Alcoholic beverages",
-            "parent_id": None
-        })
-        
-        gin = db_instance.create_ingredient({
-            "name": "Gin",
-            "description": "Juniper-flavored spirit",
-            "parent_id": spirits["id"]
-        })
-        
-        london_dry = db_instance.create_ingredient({
-            "name": "London Dry Gin",
-            "description": "A specific type of gin",
-            "parent_id": gin["id"]
-        })
-        
+        spirits = db_instance.create_ingredient(
+            {
+                "name": "Test Spirits",
+                "description": "Alcoholic beverages",
+                "parent_id": None,
+            }
+        )
+
+        gin = db_instance.create_ingredient(
+            {
+                "name": "Test Gin",
+                "description": "Juniper-flavored spirit",
+                "parent_id": spirits["id"],
+            }
+        )
+
+        london_dry = db_instance.create_ingredient(
+            {
+                "name": "Test London Dry Gin",
+                "description": "A specific type of gin",
+                "parent_id": gin["id"],
+            }
+        )
+
         user_id = "test-user-123"
-        
+
         # Add London Dry Gin (adds all parents)
         db_instance.add_user_ingredient(user_id, london_dry["id"])
-        
+
         # Try to remove Gin - should fail because London Dry Gin exists
         with pytest.raises(ValueError) as exc_info:
             db_instance.remove_user_ingredient(user_id, gin["id"])
-        assert "London Dry Gin" in str(exc_info.value)
-        
+        assert "Test London Dry Gin" in str(exc_info.value)
+
         # Try to remove Spirits - should fail because Gin exists
         with pytest.raises(ValueError) as exc_info:
             db_instance.remove_user_ingredient(user_id, spirits["id"])
-        assert "Gin" in str(exc_info.value)
-        
+        assert "Test Gin" in str(exc_info.value)
+
         # Remove London Dry Gin first - should succeed
         result = db_instance.remove_user_ingredient(user_id, london_dry["id"])
         assert result is True
-        
+
         # Now remove Gin - should succeed
         result = db_instance.remove_user_ingredient(user_id, gin["id"])
         assert result is True
-        
+
         # Finally remove Spirits - should succeed
         result = db_instance.remove_user_ingredient(user_id, spirits["id"])
         assert result is True
-        
+
         # Verify all ingredients are removed
         user_ingredients = db_instance.get_user_ingredients(user_id)
         assert len(user_ingredients) == 0
@@ -700,39 +719,45 @@ class TestDatabaseUserIngredients:
     def test_remove_user_ingredient_leaf_node_succeeds(self, db_instance):
         """Test that removing a leaf ingredient (no children) succeeds"""
         # Create hierarchical ingredients
-        spirits = db_instance.create_ingredient({
-            "name": "Spirits",
-            "description": "Alcoholic beverages",
-            "parent_id": None
-        })
-        
-        gin = db_instance.create_ingredient({
-            "name": "Gin",
-            "description": "Juniper-flavored spirit",
-            "parent_id": spirits["id"]
-        })
-        
-        vodka = db_instance.create_ingredient({
-            "name": "Vodka",
-            "description": "Clear spirit",
-            "parent_id": spirits["id"]
-        })
-        
+        spirits = db_instance.create_ingredient(
+            {
+                "name": "Test Spirits",
+                "description": "Alcoholic beverages",
+                "parent_id": None,
+            }
+        )
+
+        gin = db_instance.create_ingredient(
+            {
+                "name": "Test Gin",
+                "description": "Juniper-flavored spirit",
+                "parent_id": spirits["id"],
+            }
+        )
+
+        vodka = db_instance.create_ingredient(
+            {
+                "name": "Test Vodka",
+                "description": "Clear spirit",
+                "parent_id": spirits["id"],
+            }
+        )
+
         user_id = "test-user-123"
-        
+
         # Add both gin and vodka
         db_instance.add_user_ingredient(user_id, gin["id"])
         db_instance.add_user_ingredient(user_id, vodka["id"])
-        
+
         # Remove vodka (leaf node) - should succeed
         result = db_instance.remove_user_ingredient(user_id, vodka["id"])
         assert result is True
-        
+
         # Verify vodka is removed but gin and spirits remain
         user_ingredients = db_instance.get_user_ingredients(user_id)
         ingredient_names = [ing["name"] for ing in user_ingredients]
-        
+
         assert len(user_ingredients) == 2
-        assert "Spirits" in ingredient_names
-        assert "Gin" in ingredient_names
-        assert "Vodka" not in ingredient_names
+        assert "Test Spirits" in ingredient_names
+        assert "Test Gin" in ingredient_names
+        assert "Test Vodka" not in ingredient_names
