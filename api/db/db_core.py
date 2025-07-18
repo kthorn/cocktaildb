@@ -2288,7 +2288,7 @@ class Database:
             # Get all parent ingredients from the path
             parent_ingredient_ids = []
             ingredient_path = ingredient["path"]
-            
+
             # Parse the path to extract parent IDs
             # Path format is like "/1/23/45/" where 1, 23, 45 are ingredient IDs
             if ingredient_path:
@@ -2308,18 +2308,22 @@ class Database:
                     # Use INSERT OR IGNORE to add parent ingredient only if it doesn't exist
                     cursor.execute(
                         "INSERT OR IGNORE INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
-                        (user_id, parent_id)
+                        (user_id, parent_id),
                     )
                     if cursor.rowcount > 0:
-                        logger.info(f"Added parent ingredient {parent_id} to user {user_id}")
+                        logger.info(
+                            f"Added parent ingredient {parent_id} to user {user_id}"
+                        )
                 except Exception as e:
-                    logger.warning(f"Error adding parent ingredient {parent_id} to user {user_id}: {str(e)}")
+                    logger.warning(
+                        f"Error adding parent ingredient {parent_id} to user {user_id}: {str(e)}"
+                    )
                     # Continue with other parents - don't fail the entire operation
 
             # Add the main ingredient
             cursor.execute(
                 "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
-                (user_id, ingredient_id)
+                (user_id, ingredient_id),
             )
 
             conn.commit()
@@ -2518,11 +2522,18 @@ class Database:
     def remove_user_ingredients_bulk(
         self, user_id: str, ingredient_ids: List[int]
     ) -> Dict[str, Any]:
-        """Remove multiple ingredients from a user's inventory"""
+        """Remove multiple ingredients from a user's inventory with parent-child validation"""
         conn = None
         try:
             if not ingredient_ids:
+                logger.info(
+                    f"Bulk remove called for user {user_id} with empty ingredient list"
+                )
                 return {"removed_count": 0, "not_found_count": 0}
+
+            logger.info(
+                f"Starting bulk remove for user {user_id} with {len(ingredient_ids)} ingredients: {ingredient_ids}"
+            )
 
             conn = self._get_connection()
             conn.execute("BEGIN IMMEDIATE")
@@ -2530,10 +2541,96 @@ class Database:
 
             removed_count = 0
             not_found_count = 0
+            validation_errors = []
 
+            # First pass: validate all ingredients and check for parent-child conflicts
+            logger.info(
+                f"Validating {len(ingredient_ids)} ingredients for parent-child conflicts"
+            )
             for ingredient_id in ingredient_ids:
                 try:
                     # Check if user has this ingredient
+                    existing = cursor.execute(
+                        "SELECT id FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
+                        (user_id, ingredient_id),
+                    ).fetchone()
+
+                    if not existing:
+                        logger.debug(
+                            f"Ingredient {ingredient_id} not found in user {user_id} inventory"
+                        )
+                        not_found_count += 1
+                        continue
+
+                    # Get the ingredient details to check for child ingredients
+                    ingredient = cursor.execute(
+                        "SELECT id, name, path FROM ingredients WHERE id = ?",
+                        (ingredient_id,),
+                    ).fetchone()
+
+                    if not ingredient:
+                        logger.warning(
+                            f"Ingredient {ingredient_id} not found in ingredients table"
+                        )
+                        not_found_count += 1
+                        continue
+
+                    ingredient_name = ingredient[1]
+                    ingredient_path = ingredient[2]
+
+                    logger.debug(
+                        f"Validating ingredient {ingredient_id} ({ingredient_name}) with path: {ingredient_path}"
+                    )
+
+                    # Check if this ingredient has any child ingredients in the user's inventory
+                    if ingredient_path:
+                        # Look for child ingredients in user's inventory
+                        child_ingredients = cursor.execute(
+                            """
+                            SELECT ui.ingredient_id, i.name, i.path
+                            FROM user_ingredients ui
+                            JOIN ingredients i ON ui.ingredient_id = i.id
+                            WHERE ui.cognito_user_id = ? 
+                            AND i.path LIKE ?
+                            AND i.id != ?
+                            """,
+                            (user_id, f"{ingredient_path}%", ingredient_id),
+                        ).fetchall()
+
+                        if child_ingredients:
+                            child_names = [child[1] for child in child_ingredients]
+                            error_msg = f"Cannot remove ingredient '{ingredient_name}' because it has child ingredients in your inventory: {', '.join(child_names)}. Please remove the child ingredients first."
+                            logger.warning(
+                                f"Parent-child validation failed for ingredient {ingredient_id}: {error_msg}"
+                            )
+                            validation_errors.append(error_msg)
+                            continue
+
+                    logger.debug(
+                        f"Ingredient {ingredient_id} ({ingredient_name}) passed validation"
+                    )
+
+                except Exception as e:
+                    error_msg = f"Error validating ingredient {ingredient_id}: {str(e)}"
+                    logger.error(error_msg)
+                    validation_errors.append(error_msg)
+
+            # If there are validation errors, rollback and raise exception
+            if validation_errors:
+                conn.rollback()
+                error_summary = f"Validation failed for {len(validation_errors)} ingredients: {'; '.join(validation_errors)}"
+                logger.error(
+                    f"Bulk remove validation failed for user {user_id}: {error_summary}"
+                )
+                raise ValueError(error_summary)
+
+            # Second pass: remove ingredients that passed validation
+            logger.info(
+                f"Validation passed. Proceeding to remove ingredients for user {user_id}"
+            )
+            for ingredient_id in ingredient_ids:
+                try:
+                    # Check if user has this ingredient (re-check in case something changed)
                     existing = cursor.execute(
                         "SELECT id FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
                         (user_id, ingredient_id),
@@ -2549,6 +2646,9 @@ class Database:
                         (user_id, ingredient_id),
                     )
                     removed_count += 1
+                    logger.debug(
+                        f"Successfully removed ingredient {ingredient_id} for user {user_id}"
+                    )
 
                 except Exception as e:
                     logger.error(
@@ -2557,6 +2657,9 @@ class Database:
                     # Continue with other ingredients
 
             conn.commit()
+            logger.info(
+                f"Bulk remove completed for user {user_id}: {removed_count} removed, {not_found_count} not found"
+            )
 
             return {"removed_count": removed_count, "not_found_count": not_found_count}
 

@@ -4,10 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
+### Environment Setup
+- **Activate environment**: `mamba activate cocktaildb` (required for all Python commands)
+
 ### FastAPI Development (New)
-- **Run FastAPI locally**: `cd api && python main.py` or `uvicorn api.main:app --reload`
+- **Run FastAPI locally**: `mamba activate cocktaildb && cd api && python main.py` or `mamba activate cocktaildb && uvicorn api.main:app --reload`
 - **Run with Docker**: `docker-compose up --build`
-- **FastAPI tests**: `pytest tests/test_fastapi.py -v`
+- **FastAPI tests**: `mamba activate cocktaildb && pytest tests/test_fastapi.py -v`
 - **API documentation**: Access `/docs` or `/redoc` in dev environment
 
 ### Deployment
@@ -35,9 +38,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Local testing**: Use `sam local` commands with template.yaml
 
 ### Testing
-- **Run tests**: `python -m pytest tests/` 
-- **Test database**: `python tests/test_db.py`
-- **FastAPI tests**: `pytest tests/test_fastapi.py`
+- **Run tests**: `mamba activate cocktaildb && python -m pytest tests/` 
+- **Test database**: `mamba activate cocktaildb && python tests/test_db.py`
+- **FastAPI tests**: `mamba activate cocktaildb && pytest tests/test_fastapi.py`
 - **Download test database**: `./scripts/download-test-db.sh`
 
 ## Architecture Overview
