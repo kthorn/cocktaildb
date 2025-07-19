@@ -338,8 +338,21 @@ class UserIngredientsManager {
             this.showSuccess(`Removed ${ingredientIds.length} ingredient(s) from your inventory`);
         } catch (error) {
             console.error('Error removing ingredients:', error);
-            const errorMessage = error.message || 'Failed to remove ingredients';
-            this.showError(errorMessage);
+            
+            // Extract specific error message from the response
+            let errorMessage = error.message || 'Failed to remove ingredients from inventory';
+            
+            // Check if this is a parent-child validation error
+            if (errorMessage.includes('Cannot remove ingredient') && errorMessage.includes('child ingredients')) {
+                // This is already a specific parent-child error message, use it as-is
+                this.showError(errorMessage);
+            } else if (errorMessage.includes('Validation failed')) {
+                // This might be a validation error with multiple issues
+                this.showError(errorMessage);
+            } else {
+                // Generic error with more helpful context
+                this.showError(`Unable to remove selected ingredients: ${errorMessage}`);
+            }
         }
     }
 

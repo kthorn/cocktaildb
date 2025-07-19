@@ -67,6 +67,10 @@ async def remove_user_ingredients_bulk(
             not_found_count=result["not_found_count"]
         )
 
+    except ValueError as e:
+        # This is a validation error (e.g., parent-child constraint violation)
+        logger.warning(f"Validation error during bulk remove for user {user.user_id}: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error bulk removing ingredients from user inventory: {str(e)}")
         raise DatabaseException("Failed to bulk remove ingredients from inventory", detail=str(e))

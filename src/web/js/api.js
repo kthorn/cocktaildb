@@ -26,7 +26,9 @@ class CocktailAPI {
         try {
             const data = await response.json();
             if (response.status >= 400) {
-                throw new Error(data.error || `API error: ${response.status}`);
+                // For FastAPI HTTPException, the specific error message is in 'detail' field
+                const errorMessage = data.detail || data.error || `API error: ${response.status}`;
+                throw new Error(errorMessage);
             }
             return data;
         } catch (e) {

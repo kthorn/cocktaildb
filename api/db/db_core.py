@@ -2522,7 +2522,7 @@ class Database:
     def remove_user_ingredients_bulk(
         self, user_id: str, ingredient_ids: List[int]
     ) -> Dict[str, Any]:
-        """Remove multiple ingredients from a user's inventory with parent-child validation"""
+        """Remove multiple ingredients from a user's inventory with ordered deletion (children first, then parents)"""
         conn = None
         try:
             if not ingredient_ids:
@@ -2542,11 +2542,12 @@ class Database:
             removed_count = 0
             not_found_count = 0
             validation_errors = []
-
-            # First pass: validate all ingredients and check for parent-child conflicts
+            
+            # First pass: validate all ingredients exist and collect their details
             logger.info(
-                f"Validating {len(ingredient_ids)} ingredients for parent-child conflicts"
+                f"Validating {len(ingredient_ids)} ingredients for existence and collecting details"
             )
+            valid_ingredients = []
             for ingredient_id in ingredient_ids:
                 try:
                     # Check if user has this ingredient
@@ -2562,7 +2563,7 @@ class Database:
                         not_found_count += 1
                         continue
 
-                    # Get the ingredient details to check for child ingredients
+                    # Get the ingredient details
                     ingredient = cursor.execute(
                         "SELECT id, name, path FROM ingredients WHERE id = ?",
                         (ingredient_id,),
@@ -2575,12 +2576,40 @@ class Database:
                         not_found_count += 1
                         continue
 
-                    ingredient_name = ingredient[1]
-                    ingredient_path = ingredient[2]
-
+                    valid_ingredients.append({
+                        'id': ingredient[0],
+                        'name': ingredient[1],
+                        'path': ingredient[2] or ""
+                    })
                     logger.debug(
-                        f"Validating ingredient {ingredient_id} ({ingredient_name}) with path: {ingredient_path}"
+                        f"Ingredient {ingredient_id} ({ingredient[1]}) found with path: {ingredient[2]}"
                     )
+
+                except Exception as e:
+                    error_msg = f"Error validating ingredient {ingredient_id}: {str(e)}"
+                    logger.error(error_msg)
+                    validation_errors.append(error_msg)
+
+            if validation_errors:
+                conn.rollback()
+                error_summary = f"Validation failed for {len(validation_errors)} ingredients: {'; '.join(validation_errors)}"
+                logger.error(
+                    f"Bulk remove validation failed for user {user_id}: {error_summary}"
+                )
+                raise ValueError(error_summary)
+
+            # Create a set of ingredient IDs being removed for quick lookup
+            ingredient_ids_to_remove = set(ing['id'] for ing in valid_ingredients)
+
+            # Second pass: check for parent-child conflicts only for ingredients that won't be removed
+            logger.info(
+                f"Checking for parent-child conflicts for {len(valid_ingredients)} valid ingredients"
+            )
+            for ingredient in valid_ingredients:
+                try:
+                    ingredient_id = ingredient['id']
+                    ingredient_name = ingredient['name']
+                    ingredient_path = ingredient['path']
 
                     # Check if this ingredient has any child ingredients in the user's inventory
                     if ingredient_path:
@@ -2598,13 +2627,25 @@ class Database:
                         ).fetchall()
 
                         if child_ingredients:
-                            child_names = [child[1] for child in child_ingredients]
-                            error_msg = f"Cannot remove ingredient '{ingredient_name}' because it has child ingredients in your inventory: {', '.join(child_names)}. Please remove the child ingredients first."
-                            logger.warning(
-                                f"Parent-child validation failed for ingredient {ingredient_id}: {error_msg}"
-                            )
-                            validation_errors.append(error_msg)
-                            continue
+                            # Check if any child ingredients are NOT being removed
+                            children_not_being_removed = []
+                            for child in child_ingredients:
+                                child_id = child[0]
+                                child_name = child[1]
+                                if child_id not in ingredient_ids_to_remove:
+                                    children_not_being_removed.append(child_name)
+
+                            if children_not_being_removed:
+                                error_msg = f"Cannot remove ingredient '{ingredient_name}' because it has child ingredients in your inventory that are not being removed: {', '.join(children_not_being_removed)}. Please include these child ingredients in the removal or remove them first."
+                                logger.warning(
+                                    f"Parent-child validation failed for ingredient {ingredient_id}: {error_msg}"
+                                )
+                                validation_errors.append(error_msg)
+                                continue
+                            else:
+                                logger.debug(
+                                    f"Ingredient {ingredient_id} ({ingredient_name}) has children but they are all being removed"
+                                )
 
                     logger.debug(
                         f"Ingredient {ingredient_id} ({ingredient_name}) passed validation"
@@ -2624,20 +2665,31 @@ class Database:
                 )
                 raise ValueError(error_summary)
 
-            # Second pass: remove ingredients that passed validation
+            # Third pass: sort ingredients by path depth (deepest first) to ensure children are deleted before parents
             logger.info(
-                f"Validation passed. Proceeding to remove ingredients for user {user_id}"
+                f"Sorting ingredients by path depth for ordered deletion"
             )
-            for ingredient_id in ingredient_ids:
+            valid_ingredients.sort(key=lambda x: len(x['path'].split('/')) if x['path'] else 0, reverse=True)
+
+            # Fourth pass: remove ingredients in sorted order (children first, then parents)
+            logger.info(
+                f"Proceeding to remove {len(valid_ingredients)} ingredients in sorted order for user {user_id}"
+            )
+            for ingredient in valid_ingredients:
                 try:
-                    # Check if user has this ingredient (re-check in case something changed)
+                    ingredient_id = ingredient['id']
+                    ingredient_name = ingredient['name']
+
+                    # Check if user still has this ingredient (re-check in case something changed)
                     existing = cursor.execute(
                         "SELECT id FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
                         (user_id, ingredient_id),
                     ).fetchone()
 
                     if not existing:
-                        not_found_count += 1
+                        logger.debug(
+                            f"Ingredient {ingredient_id} no longer in user {user_id} inventory, skipping"
+                        )
                         continue
 
                     # Remove the ingredient
@@ -2647,7 +2699,7 @@ class Database:
                     )
                     removed_count += 1
                     logger.debug(
-                        f"Successfully removed ingredient {ingredient_id} for user {user_id}"
+                        f"Successfully removed ingredient {ingredient_id} ({ingredient_name}) for user {user_id}"
                     )
 
                 except Exception as e:
