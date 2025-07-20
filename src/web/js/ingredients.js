@@ -129,6 +129,20 @@ window.loadIngredients = async function() {
     }
 };
 
+// Update page elements based on authentication status
+function updatePageBasedOnAuth() {
+    const titleElement = document.getElementById('ingredients-title');
+    const formSection = document.querySelector('.ingredient-form');
+    
+    if (isAuthenticated()) {
+        if (titleElement) titleElement.textContent = 'Manage Ingredients';
+        if (formSection) formSection.style.display = 'block';
+    } else {
+        if (titleElement) titleElement.textContent = 'Ingredients';
+        if (formSection) formSection.style.display = 'none';
+    }
+}
+
 // Display notification to the user
 function showNotification(message, type = 'info') {
     const notification = document.createElement('div');
@@ -150,13 +164,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Authentication is now initialized in common.js
     // initAuth(); // Remove this line
     
+    // Update page title and form visibility based on authentication
+    updatePageBasedOnAuth();
+    
     const ingredientForm = document.getElementById('ingredient-form');
     const ingredientsContainer = document.getElementById('ingredients-container');
     const searchInput = document.getElementById('ingredient-search');
     const parentSearchInput = document.getElementById('ingredient-parent-search');
     const parentSelect = document.getElementById('ingredient-parent');
     const parentAutocompleteDropdown = document.getElementById('parent-autocomplete-dropdown');
-    const loadingIndicator = document.getElementById('parent-loading-indicator');
     const searchStatus = document.getElementById('parent-search-status');
 
     if (!ingredientForm || !ingredientsContainer || !searchInput || !parentSearchInput || !parentSelect || !parentAutocompleteDropdown) {
@@ -229,19 +245,45 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Handle search
+    // Handle search in hierarchical view
     searchInput.addEventListener('input', (e) => {
         const searchTerm = e.target.value.toLowerCase();
-        const ingredientCards = document.querySelectorAll('.ingredient-card');
+        const hierarchyItems = document.querySelectorAll('.hierarchy-item');
 
-        ingredientCards.forEach(card => {
-            const name = card.querySelector('.ingredient-name').textContent.toLowerCase();
-            const description = card.querySelector('.ingredient-description').textContent.toLowerCase();
+        if (!searchTerm.trim()) {
+            // Show all items when search is empty
+            hierarchyItems.forEach(item => {
+                item.style.display = 'block';
+            });
+            return;
+        }
+
+        // Filter hierarchy items based on search term
+        hierarchyItems.forEach(item => {
+            const nameElement = item.querySelector('.tree-name');
+            const descriptionElement = item.querySelector('.tree-description');
+            
+            const name = nameElement ? nameElement.textContent.toLowerCase() : '';
+            const description = descriptionElement ? descriptionElement.textContent.toLowerCase() : '';
 
             if (name.includes(searchTerm) || description.includes(searchTerm)) {
-                card.style.display = 'block';
+                item.style.display = 'block';
+                // Show parent items when child matches
+                let parent = item.parentElement.closest('.hierarchy-item');
+                while (parent) {
+                    parent.style.display = 'block';
+                    // Expand parent to show matching child
+                    const toggle = parent.querySelector('.tree-toggle');
+                    const children = parent.querySelector('.tree-children');
+                    if (toggle && children) {
+                        children.style.display = 'block';
+                        toggle.textContent = '▼';
+                        parent.classList.add('expanded');
+                    }
+                    parent = parent.parentElement.closest('.hierarchy-item');
+                }
             } else {
-                card.style.display = 'none';
+                item.style.display = 'none';
             }
         });
     });
@@ -260,7 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    // Display ingredients in the container
+    // Display ingredients in hierarchical tree view
     window.displayIngredients = function(ingredients) {
         ingredientsContainer.innerHTML = '';
 
@@ -269,37 +311,110 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Build hierarchy structure
+        const hierarchy = buildHierarchy(ingredients);
+        ingredientsContainer.innerHTML = renderHierarchyHTML(hierarchy, 0);
+        
+        // Add click listeners for expand/collapse
+        bindToggleEvents();
+    };
+
+    // Build hierarchy structure from flat ingredient list
+    function buildHierarchy(ingredients) {
+        const ingredientMap = new Map();
+        const rootIngredients = [];
+
+        // First pass: create map of all ingredients
         ingredients.forEach(ingredient => {
-            const card = document.createElement('div');
-            card.className = 'ingredient-card';
+            ingredientMap.set(ingredient.id, {
+                ...ingredient,
+                children: []
+            });
+        });
+
+        // Second pass: build parent-child relationships
+        ingredients.forEach(ingredient => {
+            const parentId = ingredient.parent_id;
             
-            // Get parent name if parent_id exists
-            let parentInfo = '';
-            if (ingredient.parent_id) {
-                const parent = ingredients.find(ing => ing.id === ingredient.parent_id);
-                if (parent) {
-                    parentInfo = `<span class="ingredient-parent-info"> (Parent: ${parent.name})</span>`;
-                }
+            if (parentId && ingredientMap.has(parentId)) {
+                ingredientMap.get(parentId).children.push(ingredientMap.get(ingredient.id));
+            } else {
+                rootIngredients.push(ingredientMap.get(ingredient.id));
             }
+        });
+
+        // Sort each level by name
+        const sortHierarchy = (items) => {
+            items.sort((a, b) => a.name.localeCompare(b.name));
+            items.forEach(item => {
+                if (item.children.length > 0) {
+                    sortHierarchy(item.children);
+                }
+            });
+        };
+
+        sortHierarchy(rootIngredients);
+        return rootIngredients;
+    }
+
+    // Render hierarchy as HTML with expand/collapse functionality
+    function renderHierarchyHTML(hierarchy, level = 0) {
+        if (hierarchy.length === 0) return '';
+
+        const isRoot = level === 0;
+        const listClass = isRoot ? 'hierarchy-root' : 'hierarchy-children';
+        
+        let html = `<ul class="${listClass}" style="margin-left: ${level * 20}px;">`;
+        
+        hierarchy.forEach(ingredient => {
+            const hasChildren = ingredient.children && ingredient.children.length > 0;
             
             // Only show action buttons if user is authenticated
             const actionButtons = isAuthenticated() ? `
-                <div class="card-actions">
-                    <button onclick="editIngredient(${ingredient.id})">Edit</button>
-                    <button onclick="deleteIngredient(${ingredient.id})">Delete</button>
+                <div class="tree-actions">
+                    <button class="btn-small btn-outline" onclick="editIngredient(${ingredient.id})">Edit</button>
+                    <button class="btn-small btn-outline-danger" onclick="deleteIngredient(${ingredient.id})">Delete</button>
                 </div>
             ` : '';
             
-            card.innerHTML = `
-                <div class="ingredient-card-content">
-                    <span class="ingredient-name">${ingredient.name}</span>${parentInfo}
-                    <p class="ingredient-description">${ingredient.description || 'No description'}</p>
-                </div>
-                ${actionButtons}
+            html += `
+                <li class="hierarchy-item ${hasChildren ? 'has-children' : ''}">
+                    <div class="ingredient-tree-row">
+                        ${hasChildren ? `<button class="tree-toggle" onclick="toggleHierarchyItem(this)">▶</button>` : '<span class="tree-spacer">‣</span>'}
+                        <div class="tree-content">
+                            <div class="tree-info">
+                                <span class="tree-name">${ingredient.name}</span>
+                                ${ingredient.description ? `<span class="tree-description">${ingredient.description}</span>` : ''}
+                            </div>
+                            ${actionButtons}
+                        </div>
+                    </div>
+                    ${hasChildren ? `<div class="tree-children" style="display: none;">${renderHierarchyHTML(ingredient.children, level + 1)}</div>` : ''}
+                </li>
             `;
-            ingredientsContainer.appendChild(card);
         });
-    };
+        
+        html += '</ul>';
+        return html;
+    }
+
+    // Bind toggle events for expand/collapse
+    function bindToggleEvents() {
+        // Make toggle function globally accessible
+        window.toggleHierarchyItem = function(button) {
+            const item = button.closest('.hierarchy-item');
+            const children = item.querySelector('.tree-children');
+            
+            if (children) {
+                const isExpanded = children.style.display !== 'none';
+                children.style.display = isExpanded ? 'none' : 'block';
+                button.textContent = isExpanded ? '▶' : '▼';
+                
+                // Update has-children class for styling
+                item.classList.toggle('expanded', !isExpanded);
+            }
+        };
+    }
 
     // Setup autocomplete for parent ingredient search
     function setupParentAutocomplete() {
@@ -417,7 +532,7 @@ document.addEventListener('DOMContentLoaded', () => {
         parentSearchInput.addEventListener('focus', updateParentAutocomplete);
         
         // Blur event listener for parent search
-        parentSearchInput.addEventListener('blur', (e) => {
+        parentSearchInput.addEventListener('blur', () => {
             // Delay hiding to allow click events on dropdown items
             setTimeout(() => {
                 parentAutocompleteDropdown.style.display = 'none';

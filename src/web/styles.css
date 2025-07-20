@@ -1645,3 +1645,115 @@ footer {
     border-radius: var(--radius-md);
     border-left: 4px solid var(--danger-color);
 }
+
+/* Ingredient tree view styles */
+.ingredient-tree-row {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    margin-bottom: 2px;
+    border-radius: 4px;
+    background-color: var(--bg-white);
+    border: 1px solid var(--border-lighter);
+    font-size: 13px;
+    line-height: 1.3;
+}
+
+.ingredient-tree-row:hover {
+    background-color: var(--bg-light);
+}
+
+.tree-toggle {
+    background: none;
+    border: none;
+    font-size: 12px;
+    color: var(--text-medium);
+    cursor: pointer;
+    padding: 2px 4px;
+    margin-right: 6px;
+    min-width: 16px;
+    text-align: center;
+    border-radius: 2px;
+}
+
+.tree-toggle:hover {
+    background-color: var(--border-lighter);
+    color: var(--text-dark);
+}
+
+.tree-spacer {
+    color: var(--text-light);
+    font-size: 10px;
+    margin-right: 10px;
+    min-width: 16px;
+    text-align: center;
+}
+
+.tree-content {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    justify-content: space-between;
+}
+
+.tree-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.tree-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-dark);
+    line-height: 1.2;
+}
+
+.tree-description {
+    font-size: 11px;
+    color: var(--text-medium);
+    font-style: italic;
+    margin-top: 2px;
+    line-height: 1.2;
+}
+
+.tree-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+
+.tree-actions .btn-small {
+    font-size: 11px;
+    padding: 2px 6px;
+    min-height: auto;
+    line-height: 1.2;
+}
+
+.tree-children {
+    margin-left: 8px;
+}
+
+.hierarchy-item.expanded > .ingredient-tree-row .tree-toggle {
+    color: var(--primary-color);
+}
+
+/* Smaller ingredients container for tree view */
+#ingredients-container {
+    font-size: 13px;
+}
+
+#ingredients-container .hierarchy-root {
+    margin: 0;
+    padding: 0;
+}
+
+/* Override ingredient form title when in tree view */
+.ingredients-section h2 {
+    font-size: 1.4rem;
+}
+
+.ingredients-section h3 {
+    font-size: 1.1rem;
+}
