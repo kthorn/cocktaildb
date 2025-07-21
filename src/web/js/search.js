@@ -266,14 +266,23 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Add name search if provided
         const nameValue = nameSearch.value.trim();
+        console.log('Name search value:', nameValue);
         if (nameValue) {
             query.name = nameValue;
+            console.log('Added name to query:', query.name);
         }
         
         // Add rating filter if selected (other than 'all')
-        const selectedRating = document.querySelector('input[name="rating-filter"]:checked').value;
-        if (selectedRating !== 'all') {
-            query.rating = parseFloat(selectedRating);
+        const selectedRatingElement = document.querySelector('input[name="rating-filter"]:checked');
+        console.log('Selected rating element:', selectedRatingElement);
+        if (selectedRatingElement) {
+            const selectedRating = selectedRatingElement.value;
+            console.log('Selected rating value:', selectedRating);
+            if (selectedRating !== 'all') {
+                query.rating = parseFloat(selectedRating);
+            }
+        } else {
+            console.log('No rating filter selected, skipping rating filter');
         }
         
         // Add tags if provided
@@ -314,6 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
+        console.log('Final search query object:', query);
         return query;
     }
 
@@ -386,7 +396,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function setupIngredientRow(row) {
         const ingredientSearchInput = row.querySelector('.ingredient-search');
         const autocompleteDropdown = row.querySelector('.autocomplete-dropdown');
-        const ingredientIdInput = row.querySelector('.ingredient-id');
         const removeButton = row.querySelector('.remove-row');
         const searchStatus = row.querySelector('.search-status');
         
@@ -556,7 +565,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const items = row.querySelectorAll('.autocomplete-item');
         const searchInput = row.querySelector('.ingredient-search');
-        const idInput = row.querySelector('.ingredient-id');
         const dropdown = row.querySelector('.autocomplete-dropdown');
         
         if (activeIngredientIndex >= 0 && activeIngredientIndex < items.length) {

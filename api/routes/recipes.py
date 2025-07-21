@@ -118,6 +118,10 @@ async def search_recipes(
         logger.info(
             f"Database search will be called with limit={limit}, offset={offset}"
         )
+        
+        # Debug: Log the exact search query being passed to database
+        if search_params.get("q"):
+            logger.info(f"Search query 'q' parameter: '{search_params['q']}'")
 
         # Get paginated search results
         recipes_data = db.search_recipes_paginated(

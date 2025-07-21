@@ -112,7 +112,15 @@ get_recipes_paginated_with_ingredients_sql = """
 
 # Dynamic SQL generation function for ingredient filtering
 
-def build_search_recipes_paginated_sql(must_conditions: List[str], must_not_conditions: List[str], tag_conditions: List[str] = None, sort_by: str = "name", sort_order: str = "asc", inventory_filter: bool = False) -> str:
+
+def build_search_recipes_paginated_sql(
+    must_conditions: List[str],
+    must_not_conditions: List[str],
+    tag_conditions: List[str] = None,
+    sort_by: str = "name",
+    sort_order: str = "asc",
+    inventory_filter: bool = False,
+) -> str:
     """Build the paginated search SQL with optional ingredient filtering"""
     base_sql = """
     WITH search_results AS (
@@ -136,9 +144,7 @@ def build_search_recipes_paginated_sql(must_conditions: List[str], must_not_cond
             ingredients i ON ri.ingredient_id = i.id
         WHERE
             (:search_query IS NULL OR 
-             remove_accents(LOWER(r.name)) LIKE '%' || remove_accents(LOWER(:search_query)) || '%' OR 
-             remove_accents(LOWER(r.description)) LIKE '%' || remove_accents(LOWER(:search_query)) || '%' OR 
-             remove_accents(LOWER(r.instructions)) LIKE '%' || remove_accents(LOWER(:search_query)) || '%')
+             remove_accents(LOWER(r.name)) LIKE remove_accents(LOWER(:search_query_with_wildcards))) 
         AND
             (:min_rating IS NULL OR COALESCE(r.avg_rating, 0) >= :min_rating)
         AND
@@ -147,17 +153,17 @@ def build_search_recipes_paginated_sql(must_conditions: List[str], must_not_cond
     # Add MUST ingredient filtering - recipe must contain ALL of the specified ingredients
     for condition in must_conditions:
         base_sql += f" AND r.id IN (SELECT DISTINCT ri2.recipe_id FROM recipe_ingredients ri2 JOIN ingredients i2 ON ri2.ingredient_id = i2.id WHERE {condition})"
-    
+
     # Add MUST_NOT ingredient filtering - recipe must NOT contain ANY of the specified ingredients
     for condition in must_not_conditions:
         base_sql += f" AND r.id NOT IN (SELECT DISTINCT ri2.recipe_id FROM recipe_ingredients ri2 JOIN ingredients i2 ON ri2.ingredient_id = i2.id WHERE {condition})"
-    
+
     # Add tag filtering - recipe must have ALL of the specified tags
     if tag_conditions is None:
         tag_conditions = []
     for condition in tag_conditions:
         base_sql += f" AND r.id IN (SELECT DISTINCT rt3.recipe_id FROM recipe_tags rt3 JOIN tags t3 ON rt3.tag_id = t3.id WHERE {condition})"
-    
+
     # Add inventory filtering - recipe can be made with user's inventory
     if inventory_filter:
         base_sql += """ AND r.id IN (
@@ -198,7 +204,7 @@ def build_search_recipes_paginated_sql(must_conditions: List[str], must_not_cond
             r.source, r.source_url, r.avg_rating, r.rating_count,
             ur.rating
 """
-    
+
     # Add sorting based on parameters
     if sort_by == "name":
         sort_column = "r.name"
@@ -208,9 +214,9 @@ def build_search_recipes_paginated_sql(must_conditions: List[str], must_not_cond
         sort_column = "r.id"
     else:
         sort_column = "r.name"  # default fallback
-    
+
     sort_direction = "DESC" if sort_order == "desc" else "ASC"
-    
+
     base_sql += f"""
         ORDER BY {sort_column} {sort_direction}
         LIMIT :limit OFFSET :offset

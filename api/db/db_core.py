@@ -205,9 +205,6 @@ class Database:
                 params = query.get("parameters", {})
                 if sql is not None:  # Handle case where sql might be None
                     cursor.execute(sql, params)
-                else:
-                    logger.warning("Skipping query with None SQL statement")
-
             conn.commit()
         except Exception as e:
             if conn:
@@ -487,11 +484,6 @@ class Database:
     def search_ingredients(self, search_term: str) -> List[Dict[str, Any]]:
         """Search ingredients by name - first exact match, then partial match (case-insensitive)"""
         try:
-            search_start = time.time()
-            logger.debug(f"Searching for ingredient: '{search_term}'")
-
-            # First try exact match
-            exact_query_start = time.time()
             exact_result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
@@ -499,25 +491,12 @@ class Database:
                     (search_term,),
                 ),
             )
-            exact_query_duration = time.time() - exact_query_start
-            logger.debug(
-                f"Exact match query for '{search_term}' took {exact_query_duration:.3f}s"
-            )
-
             # Mark exact matches
             for ingredient in exact_result:
                 ingredient["exact_match"] = True
-
-            # If exact match found, return it
             if exact_result:
-                search_duration = time.time() - search_start
-                logger.debug(
-                    f"Found exact match for '{search_term}' in {search_duration:.3f}s"
-                )
                 return exact_result
-
             # Otherwise, fall back to partial match
-            partial_query_start = time.time()
             partial_result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
@@ -525,19 +504,9 @@ class Database:
                     (f"%{search_term}%",),
                 ),
             )
-            partial_query_duration = time.time() - partial_query_start
-            logger.debug(
-                f"Partial match query for '{search_term}' took {partial_query_duration:.3f}s"
-            )
-
             # Mark partial matches
             for ingredient in partial_result:
                 ingredient["exact_match"] = False
-
-            search_duration = time.time() - search_start
-            logger.debug(
-                f"Partial match search for '{search_term}' completed in {search_duration:.3f}s, found {len(partial_result)} matches"
-            )
             return partial_result
         except Exception as e:
             logger.error(
@@ -552,10 +521,6 @@ class Database:
         try:
             if not ingredient_names:
                 return {}
-
-            search_start = time.time()
-            logger.info(f"Batch searching for {len(ingredient_names)} ingredients")
-
             # Create case-insensitive lookup for exact matches
             unique_names = list(set(name.lower() for name in ingredient_names))
             placeholders = ",".join("?" for _ in unique_names)
@@ -580,12 +545,6 @@ class Database:
                 lower_name = original_name.lower()
                 if lower_name in results_map:
                     final_results[original_name] = results_map[lower_name]
-
-            search_duration = time.time() - search_start
-            logger.info(
-                f"Batch ingredient search completed in {search_duration:.3f}s, found {len(final_results)}/{len(ingredient_names)} ingredients"
-            )
-
             return final_results
 
         except Exception as e:
@@ -599,12 +558,6 @@ class Database:
         try:
             if not ingredient_names:
                 return {}
-
-            check_start = time.time()
-            logger.info(
-                f"Batch checking {len(ingredient_names)} ingredient names for duplicates"
-            )
-
             # Create case-insensitive lookup
             unique_names = list(set(name.lower() for name in ingredient_names))
             placeholders = ",".join("?" for _ in unique_names)
@@ -616,8 +569,6 @@ class Database:
                     tuple(unique_names),
                 ),
             )
-
-            # Build set of existing names
             existing_names = {row["name_lower"] for row in existing_results}
 
             # Map back to original case names
@@ -625,14 +576,7 @@ class Database:
             for original_name in ingredient_names:
                 lower_name = original_name.lower()
                 final_results[original_name] = lower_name in existing_names
-
-            check_duration = time.time() - check_start
-            logger.info(
-                f"Batch ingredient name check completed in {check_duration:.3f}s, found {len(existing_names)}/{len(ingredient_names)} duplicates"
-            )
-
             return final_results
-
         except Exception as e:
             logger.error(f"Error in batch ingredient name check: {str(e)}")
             raise
@@ -762,21 +706,15 @@ class Database:
         try:
             start_time = time.time()
             # 1. Get all recipes
-            recipes_start = time.time()
             params = {"cognito_user_id": cognito_user_id}
             recipes_result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(get_all_recipes_sql, params),
             )
-            recipes_end = time.time()
-            logger.info(
-                f"get_recipes_with_ingredients: Fetched {len(recipes_result)} recipes in {recipes_end - recipes_start:.3f}s"
-            )
             if not recipes_result:
                 return []
             # 2. Fetch all recipe ingredients across all recipes
             recipe_ids = [recipe["id"] for recipe in recipes_result]
-            ingredients_start = time.time()
             all_recipe_ingredients_list = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
@@ -784,21 +722,11 @@ class Database:
                     tuple(recipe_ids),
                 ),
             )
-            ingredients_end = time.time()
-            logger.info(
-                f"get_recipes_with_ingredients: Fetched {len(all_recipe_ingredients_list)} recipe ingredient entries in {ingredients_end - ingredients_start:.3f}s"
-            )
             # 3. Identify all necessary ingredient IDs (direct + ancestors) using the helper
-            ids_start = time.time()
             all_needed_ingredient_ids = extract_all_ingredient_ids(
                 all_recipe_ingredients_list
             )
-            ids_end = time.time()
-            logger.info(
-                f"get_recipes_with_ingredients: Identified {len(all_needed_ingredient_ids)} unique ingredient IDs in {ids_end - ids_start:.3f}s"
-            )
             # 4. Fetch names for all needed ingredients in one query
-            fetch_names_start = time.time()
             ingredient_names_map = {}
             if all_needed_ingredient_ids:
                 placeholders = ",".join("?" for _ in all_needed_ingredient_ids)
@@ -810,43 +738,20 @@ class Database:
                     ),
                 )
                 ingredient_names_map = {row["id"]: row["name"] for row in names_result}
-            fetch_names_end = time.time()
-            logger.info(
-                f"get_recipes_with_ingredients: Fetched {len(ingredient_names_map)} ingredient names in {fetch_names_end - fetch_names_start:.3f}s"
-            )
             # 5. Assemble full names using the helper method
-            assemble_names_start = time.time()
             assemble_ingredient_full_names(
                 all_recipe_ingredients_list, ingredient_names_map
             )
-            assemble_names_end = time.time()
-            logger.info(
-                f"get_recipes_with_ingredients: Assembled full names in {assemble_names_end - assemble_names_start:.3f}s"
-            )
             # 6. Group ingredients by recipe
-            grouping_start = time.time()
             recipe_ingredients_grouped = {recipe_id: [] for recipe_id in recipe_ids}
             for ing_data in all_recipe_ingredients_list:
                 recipe_id = ing_data["recipe_id"]
                 # Use the actual recipe_ingredient_id as 'id' for consistency if needed frontend
                 ing_data["id"] = ing_data["recipe_ingredient_id"]
                 recipe_ingredients_grouped[recipe_id].append(ing_data)
-            grouping_end = time.time()
-            logger.info(
-                f"get_recipes_with_ingredients: Grouped ingredients in {grouping_end - grouping_start:.3f}s"
-            )
             # 7. Combine recipes with their assembled ingredients
-            combine_start = time.time()
             for recipe in recipes_result:
                 recipe["ingredients"] = recipe_ingredients_grouped.get(recipe["id"], [])
-            combine_end = time.time()
-            logger.info(
-                f"get_recipes_with_ingredients: Combined recipes and ingredients in {combine_end - combine_start:.3f}s"
-            )
-            total_time = time.time() - start_time
-            logger.info(
-                f"get_recipes_with_ingredients: Total execution time: {total_time:.3f}s"
-            )
             return recipes_result
         except Exception as e:
             logger.error(f"Error getting recipes with ingredients: {str(e)}")
@@ -915,9 +820,6 @@ class Database:
                         )
             # Fetch ingredients separately
             recipe["ingredients"] = self._get_recipe_ingredients(recipe_id)
-            logger.info(
-                f"Final assembled recipe {recipe_id} with tags: {recipe.get('tags')} and ingredients."
-            )
             return recipe
 
         except Exception as e:
@@ -1043,10 +945,6 @@ class Database:
         try:
             if not unit_names:
                 return {}
-
-            validation_start = time.time()
-            logger.info(f"Batch validating {len(unit_names)} units")
-
             # Create case-insensitive lookup for exact matches by name or abbreviation
             unique_names = list(set(name.lower() for name in unit_names))
             placeholders = ",".join("?" for _ in unique_names)
@@ -1064,7 +962,6 @@ class Database:
                     + tuple(unique_names),  # Parameters for both IN clauses
                 ),
             )
-
             # Build mapping from lowercase name/abbreviation to unit data
             results_map = {}
             for unit in unit_results:
@@ -1084,12 +981,6 @@ class Database:
                 lower_name = original_name.lower()
                 if lower_name in results_map:
                     final_results[original_name] = results_map[lower_name]
-
-            validation_duration = time.time() - validation_start
-            logger.info(
-                f"Batch unit validation completed in {validation_duration:.3f}s, found {len(final_results)}/{len(unit_names)} units"
-            )
-
             return final_results
 
         except Exception as e:
@@ -1101,12 +992,6 @@ class Database:
         try:
             if not recipe_names:
                 return {}
-
-            check_start = time.time()
-            logger.info(
-                f"Batch checking {len(recipe_names)} recipe names for duplicates"
-            )
-
             # Create case-insensitive lookup
             unique_names = list(set(name.lower() for name in recipe_names))
             placeholders = ",".join("?" for _ in unique_names)
@@ -1118,21 +1003,12 @@ class Database:
                     tuple(unique_names),
                 ),
             )
-
-            # Build set of existing names
             existing_names = {row["name_lower"] for row in existing_results}
-
             # Map back to original case names
             final_results = {}
             for original_name in recipe_names:
                 lower_name = original_name.lower()
                 final_results[original_name] = lower_name in existing_names
-
-            check_duration = time.time() - check_start
-            logger.info(
-                f"Batch recipe name check completed in {check_duration:.3f}s, found {len(existing_names)} duplicates"
-            )
-
             return final_results
 
         except Exception as e:
@@ -1160,10 +1036,8 @@ class Database:
 
             # Note: We don't need to explicitly delete recipe_ingredients, ratings, or tags
             # because the ON DELETE CASCADE constraint will handle this automatically
-            # Delete the recipe
             cursor.execute("DELETE FROM recipes WHERE id = :id", {"id": recipe_id})
 
-            # Commit the transaction
             conn.commit()
             return True
         except Exception as e:
@@ -1188,12 +1062,9 @@ class Database:
             )
             if not existing:
                 return None
-
             conn = self._get_connection()
             conn.execute("BEGIN IMMEDIATE")
             cursor = conn.cursor()
-
-            # Update the main recipe details
             cursor.execute(
                 """
                 UPDATE recipes
@@ -2005,8 +1876,12 @@ class Database:
             )
 
             # Build query parameters
+            search_query = search_params.get("q")
             query_params = {
-                "search_query": search_params.get("q"),
+                "search_query": search_query,
+                "search_query_with_wildcards": f"%{search_query}%"
+                if search_query
+                else None,
                 "min_rating": search_params.get("min_rating"),
                 "max_rating": search_params.get("max_rating"),
                 "limit": limit,
@@ -2015,6 +1890,17 @@ class Database:
                 "sort_order": sort_order,
                 "cognito_user_id": user_id,
             }
+
+            # Debug: Log the exact search query parameter being used in SQL
+            if query_params.get("search_query"):
+                logger.info(
+                    f"SQL search_query parameter: '{query_params['search_query']}'"
+                )
+                logger.info(
+                    f"SQL search_query_with_wildcards parameter: '{query_params['search_query_with_wildcards']}'"
+                )
+            else:
+                logger.info("No search_query parameter provided to SQL")
 
             # Handle ingredient filtering by converting names to IDs and paths
             must_ingredient_conditions = []
@@ -2111,10 +1997,20 @@ class Database:
                 inventory_filter,
             )
 
+            # Debug: Log the SQL execution details
+            logger.info(f"Executing search with {len(query_params)} parameters")
+            if query_params.get("search_query"):
+                logger.info(
+                    f"About to execute SQL search for: '{query_params['search_query']}'"
+                )
+
             # Get paginated results
             rows = cast(
                 List[Dict[str, Any]], self.execute_query(paginated_sql, query_params)
             )
+
+            # Debug: Log the number of rows returned from database
+            logger.info(f"Database search returned {len(rows)} rows")
 
             # Group results by recipe ID and assemble full recipe objects
             recipes = {}

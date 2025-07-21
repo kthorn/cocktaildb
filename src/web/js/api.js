@@ -143,6 +143,7 @@ class CocktailAPI {
         
         // Add search filters to query params
         if (searchQuery.name) {
+            console.log('Adding name query parameter:', searchQuery.name);
             queryParams.append('q', searchQuery.name);
         }
         
@@ -170,6 +171,7 @@ class CocktailAPI {
         
         // Build the URL with query string
         const queryString = queryParams.toString();
+        console.log('Built query string:', queryString);
         
         // Use different endpoint for inventory searches
         let url;
@@ -190,6 +192,8 @@ class CocktailAPI {
             url = `${this.baseUrl}/recipes/search${queryString ? `?${queryString}` : ''}`;
             requiresAuth = false;
         }
+        
+        console.log('Final search URL:', url);
         
         // Always use GET for recipe searches
         const response = await fetch(url, this.getFetchOptions('GET', null, requiresAuth));
