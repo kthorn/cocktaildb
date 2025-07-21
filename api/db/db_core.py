@@ -19,79 +19,6 @@ logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 
-def smart_title_case(text: str) -> Optional[str]:
-    """
-    Convert text to title case while properly handling apostrophes and other special characters.
-    Unlike Python's built-in title(), this preserves the case after apostrophes.
-    """
-    if text is None:
-        return None
-    if text == "":
-        return None
-    if not text.strip():  # Only whitespace
-        return text
-
-    def title_case_part(part: str) -> str:
-        """Title case a part, handling hyphens and other separators"""
-        # Build result character by character, preserving Unicode
-        if not part:
-            return part
-
-        result = []
-        capitalize_next = True
-
-        for char in part:
-            if char.isalpha():
-                if capitalize_next:
-                    result.append(char.upper())
-                    capitalize_next = False
-                else:
-                    result.append(char.lower())
-            else:
-                result.append(char)
-                # Capitalize after non-letter characters (like hyphens)
-                capitalize_next = True
-
-        return "".join(result)
-
-    # First, handle the entire string to get basic title casing
-    # But we need to be smarter about apostrophes
-    result = []
-    i = 0
-    while i < len(text):
-        # Find the next word boundary or apostrophe
-        start = i
-        while i < len(text) and (text[i].isalnum() or text[i] in "-"):
-            i += 1
-
-        if start < i:  # We found a word part
-            word_part = text[start:i]
-            result.append(title_case_part(word_part))
-
-        # Handle apostrophes specially
-        if i < len(text) and text[i] == "'":
-            result.append("'")  # Add the apostrophe
-            i += 1
-            # The part after apostrophe should be lowercase
-            start = i
-            while i < len(text) and text[i].isalnum():
-                i += 1
-            if start < i:
-                result.append(text[start:i].lower())
-
-        # Handle other non-word characters
-        while (
-            i < len(text)
-            and not text[i].isalnum()
-            and text[i] != "'"
-            and text[i] != "-"
-        ):
-            result.append(text[i])
-            i += 1
-
-    return "".join(result)
-
-
 def remove_accents(text: str) -> str:
     """
     Remove accents from text for accent-insensitive search.
@@ -324,7 +251,7 @@ class Database:
                     VALUES (:name, :description, :parent_id)
                     """,
                     {
-                        "name": smart_title_case(data.get("name")),
+                        "name": data.get("name"),
                         "description": data.get("description"),
                         "parent_id": data.get("parent_id"),
                     },
@@ -434,7 +361,7 @@ class Database:
                     """,
                     {
                         "id": ingredient_id,
-                        "name": smart_title_case(data.get("name")),
+                        "name": data.get("name"),
                         "description": data.get("description"),
                         "parent_id": new_parent_id,
                         "path": new_path,
@@ -462,7 +389,7 @@ class Database:
                     """,
                     {
                         "id": ingredient_id,
-                        "name": smart_title_case(data.get("name")),
+                        "name": data.get("name"),
                         "description": data.get("description"),
                     },
                 )
@@ -779,7 +706,7 @@ class Database:
                 VALUES (:name, :instructions, :description, :image_url, :source, :source_url)
                 """,
                 {
-                    "name": smart_title_case(data["name"]) if data["name"] else None,
+                    "name": data["name"] if data["name"] else None,
                     "instructions": data.get("instructions"),
                     "description": data.get("description"),
                     "image_url": data.get("image_url"),
@@ -1280,7 +1207,7 @@ class Database:
                 """,
                 {
                     "id": recipe_id,
-                    "name": smart_title_case(data.get("name")),
+                    "name": data.get("name"),
                     "instructions": data.get("instructions"),
                     "description": data.get("description"),
                     "image_url": data.get("image_url"),
@@ -2542,7 +2469,7 @@ class Database:
             removed_count = 0
             not_found_count = 0
             validation_errors = []
-            
+
             # First pass: validate all ingredients exist and collect their details
             logger.info(
                 f"Validating {len(ingredient_ids)} ingredients for existence and collecting details"
@@ -2576,11 +2503,13 @@ class Database:
                         not_found_count += 1
                         continue
 
-                    valid_ingredients.append({
-                        'id': ingredient[0],
-                        'name': ingredient[1],
-                        'path': ingredient[2] or ""
-                    })
+                    valid_ingredients.append(
+                        {
+                            "id": ingredient[0],
+                            "name": ingredient[1],
+                            "path": ingredient[2] or "",
+                        }
+                    )
                     logger.debug(
                         f"Ingredient {ingredient_id} ({ingredient[1]}) found with path: {ingredient[2]}"
                     )
@@ -2599,7 +2528,7 @@ class Database:
                 raise ValueError(error_summary)
 
             # Create a set of ingredient IDs being removed for quick lookup
-            ingredient_ids_to_remove = set(ing['id'] for ing in valid_ingredients)
+            ingredient_ids_to_remove = set(ing["id"] for ing in valid_ingredients)
 
             # Second pass: check for parent-child conflicts only for ingredients that won't be removed
             logger.info(
@@ -2607,9 +2536,9 @@ class Database:
             )
             for ingredient in valid_ingredients:
                 try:
-                    ingredient_id = ingredient['id']
-                    ingredient_name = ingredient['name']
-                    ingredient_path = ingredient['path']
+                    ingredient_id = ingredient["id"]
+                    ingredient_name = ingredient["name"]
+                    ingredient_path = ingredient["path"]
 
                     # Check if this ingredient has any child ingredients in the user's inventory
                     if ingredient_path:
@@ -2666,10 +2595,11 @@ class Database:
                 raise ValueError(error_summary)
 
             # Third pass: sort ingredients by path depth (deepest first) to ensure children are deleted before parents
-            logger.info(
-                f"Sorting ingredients by path depth for ordered deletion"
+            logger.info(f"Sorting ingredients by path depth for ordered deletion")
+            valid_ingredients.sort(
+                key=lambda x: len(x["path"].split("/")) if x["path"] else 0,
+                reverse=True,
             )
-            valid_ingredients.sort(key=lambda x: len(x['path'].split('/')) if x['path'] else 0, reverse=True)
 
             # Fourth pass: remove ingredients in sorted order (children first, then parents)
             logger.info(
@@ -2677,8 +2607,8 @@ class Database:
             )
             for ingredient in valid_ingredients:
                 try:
-                    ingredient_id = ingredient['id']
-                    ingredient_name = ingredient['name']
+                    ingredient_id = ingredient["id"]
+                    ingredient_name = ingredient["name"]
 
                     # Check if user still has this ingredient (re-check in case something changed)
                     existing = cursor.execute(

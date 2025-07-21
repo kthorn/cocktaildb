@@ -346,3 +346,249 @@ class TestComplexIntegrationScenarios:
                     None,
                 )
                 assert parent is not None, f"Parent {ingredient['parent_id']} not found"
+
+
+class TestSpecialUnitsIntegration:
+    """Integration tests for special units in recipe creation and retrieval"""
+
+    def test_create_and_retrieve_recipe_with_to_top(self, test_client_with_data):
+        """Test creating and retrieving recipe with 'to top' unit"""
+        client, app = test_client_with_data
+        
+        # First get ingredients and units for the test
+        ingredients_response = client.get("/ingredients")
+        assert ingredients_response.status_code == status.HTTP_200_OK
+        ingredients = ingredients_response.json()
+        
+        units_response = client.get("/units")
+        assert units_response.status_code == status.HTTP_200_OK
+        units = units_response.json()
+        
+        # Find a suitable ingredient and 'to top' unit
+        test_ingredient = ingredients[0] if ingredients else None
+        to_top_unit = next((unit for unit in units if unit["name"] == "to top"), None)
+        
+        # Skip test if 'to top' unit doesn't exist (migrations not applied)
+        if not to_top_unit:
+            pytest.skip("'to top' unit not found - migrations may not be applied")
+        
+        assert test_ingredient is not None, "Need at least one ingredient for test"
+        
+        # Create recipe with 'to top' unit and null amount
+        recipe_data = {
+            "name": "Test To Top Recipe",
+            "instructions": "Test instructions",
+            "description": "Test recipe with to top unit",
+            "ingredients": [
+                {
+                    "ingredient_id": test_ingredient["id"],
+                    "amount": None,  # Null amount for 'to top'
+                    "unit_id": to_top_unit["id"]
+                }
+            ]
+        }
+        
+        # Create the recipe
+        create_response = client.post("/recipes", json=recipe_data)
+        assert create_response.status_code == status.HTTP_201_CREATED
+        created_recipe = create_response.json()
+        
+        # Retrieve the recipe and verify structure
+        get_response = client.get(f"/recipes/{created_recipe['id']}")
+        assert get_response.status_code == status.HTTP_200_OK
+        retrieved_recipe = get_response.json()
+        
+        # Verify the ingredient with 'to top' unit
+        assert len(retrieved_recipe["ingredients"]) == 1
+        ingredient = retrieved_recipe["ingredients"][0]
+        
+        assert ingredient["amount"] is None
+        assert ingredient["unit_name"] == "to top"
+        assert ingredient["ingredient_id"] == test_ingredient["id"]
+
+    def test_create_and_retrieve_recipe_with_to_rinse(self, test_client_with_data):
+        """Test creating and retrieving recipe with 'to rinse' unit"""
+        client, app = test_client_with_data
+        
+        # Get ingredients and units
+        ingredients_response = client.get("/ingredients")
+        assert ingredients_response.status_code == status.HTTP_200_OK
+        ingredients = ingredients_response.json()
+        
+        units_response = client.get("/units")
+        assert units_response.status_code == status.HTTP_200_OK
+        units = units_response.json()
+        
+        # Find suitable ingredient and 'to rinse' unit
+        test_ingredient = ingredients[0] if ingredients else None
+        to_rinse_unit = next((unit for unit in units if unit["name"] == "to rinse"), None)
+        
+        # Skip test if 'to rinse' unit doesn't exist
+        if not to_rinse_unit:
+            pytest.skip("'to rinse' unit not found - migrations may not be applied")
+            
+        assert test_ingredient is not None, "Need at least one ingredient for test"
+        
+        # Create recipe with 'to rinse' unit
+        recipe_data = {
+            "name": "Test To Rinse Recipe",
+            "instructions": "Test instructions with rinse",
+            "description": "Test recipe with to rinse unit",
+            "ingredients": [
+                {
+                    "ingredient_id": test_ingredient["id"],
+                    "amount": None,  # Null amount for 'to rinse'
+                    "unit_id": to_rinse_unit["id"]
+                }
+            ]
+        }
+        
+        # Create and retrieve recipe
+        create_response = client.post("/recipes", json=recipe_data)
+        assert create_response.status_code == status.HTTP_201_CREATED
+        created_recipe = create_response.json()
+        
+        get_response = client.get(f"/recipes/{created_recipe['id']}")
+        assert get_response.status_code == status.HTTP_200_OK
+        retrieved_recipe = get_response.json()
+        
+        # Verify the ingredient with 'to rinse' unit
+        assert len(retrieved_recipe["ingredients"]) == 1
+        ingredient = retrieved_recipe["ingredients"][0]
+        
+        assert ingredient["amount"] is None
+        assert ingredient["unit_name"] == "to rinse"
+        assert ingredient["ingredient_id"] == test_ingredient["id"]
+
+    def test_create_and_retrieve_recipe_with_each_unit(self, test_client_with_data):
+        """Test creating and retrieving recipe with 'each' unit"""
+        client, app = test_client_with_data
+        
+        # Get ingredients and units
+        ingredients_response = client.get("/ingredients")
+        assert ingredients_response.status_code == status.HTTP_200_OK
+        ingredients = ingredients_response.json()
+        
+        units_response = client.get("/units")
+        assert units_response.status_code == status.HTTP_200_OK
+        units = units_response.json()
+        
+        # Find suitable ingredient and 'each' unit
+        test_ingredient = ingredients[0] if ingredients else None
+        each_unit = next((unit for unit in units if unit["name"] == "each"), None)
+        
+        assert each_unit is not None, "'each' unit should exist in base schema"
+        assert test_ingredient is not None, "Need at least one ingredient for test"
+        
+        # Create recipe with 'each' unit
+        recipe_data = {
+            "name": "Test Each Recipe",
+            "instructions": "Test instructions with each unit",
+            "description": "Test recipe with each unit",
+            "ingredients": [
+                {
+                    "ingredient_id": test_ingredient["id"],
+                    "amount": 2.0,  # 2 items
+                    "unit_id": each_unit["id"]
+                }
+            ]
+        }
+        
+        # Create and retrieve recipe
+        create_response = client.post("/recipes", json=recipe_data)
+        assert create_response.status_code == status.HTTP_201_CREATED
+        created_recipe = create_response.json()
+        
+        get_response = client.get(f"/recipes/{created_recipe['id']}")
+        assert get_response.status_code == status.HTTP_200_OK
+        retrieved_recipe = get_response.json()
+        
+        # Verify the ingredient with 'each' unit
+        assert len(retrieved_recipe["ingredients"]) == 1
+        ingredient = retrieved_recipe["ingredients"][0]
+        
+        assert ingredient["amount"] == 2.0
+        assert ingredient["unit_name"] == "each"
+        assert ingredient["ingredient_id"] == test_ingredient["id"]
+
+    def test_mixed_special_units_recipe(self, test_client_with_data):
+        """Test recipe with multiple special units combined"""
+        client, app = test_client_with_data
+        
+        # Get ingredients and units
+        ingredients_response = client.get("/ingredients")
+        assert ingredients_response.status_code == status.HTTP_200_OK
+        ingredients = ingredients_response.json()
+        
+        units_response = client.get("/units")
+        assert units_response.status_code == status.HTTP_200_OK
+        units = units_response.json()
+        
+        # Need at least 3 ingredients for this test
+        if len(ingredients) < 3:
+            pytest.skip("Need at least 3 ingredients for mixed units test")
+        
+        # Find units
+        each_unit = next((unit for unit in units if unit["name"] == "each"), None)
+        to_top_unit = next((unit for unit in units if unit["name"] == "to top"), None)
+        ounce_unit = next((unit for unit in units if unit["name"] == "Ounce"), None)
+        
+        assert each_unit is not None, "'each' unit should exist"
+        
+        # Skip if special units don't exist
+        if not to_top_unit:
+            pytest.skip("'to top' unit not found - using available units only")
+        
+        # Build ingredients list based on available units
+        recipe_ingredients = [
+            {
+                "ingredient_id": ingredients[0]["id"],
+                "amount": 2.0,
+                "unit_id": ounce_unit["id"] if ounce_unit else each_unit["id"]
+            },
+            {
+                "ingredient_id": ingredients[1]["id"],
+                "amount": 1.0,
+                "unit_id": each_unit["id"]
+            }
+        ]
+        
+        # Add 'to top' ingredient if unit exists
+        if to_top_unit:
+            recipe_ingredients.append({
+                "ingredient_id": ingredients[2]["id"],
+                "amount": None,
+                "unit_id": to_top_unit["id"]
+            })
+        
+        # Create complex recipe
+        recipe_data = {
+            "name": "Mixed Special Units Recipe",
+            "instructions": "Test instructions for complex recipe",
+            "description": "Test recipe with mixed special and normal units",
+            "ingredients": recipe_ingredients
+        }
+        
+        # Create and retrieve recipe
+        create_response = client.post("/recipes", json=recipe_data)
+        assert create_response.status_code == status.HTTP_201_CREATED
+        created_recipe = create_response.json()
+        
+        get_response = client.get(f"/recipes/{created_recipe['id']}")
+        assert get_response.status_code == status.HTTP_200_OK
+        retrieved_recipe = get_response.json()
+        
+        # Verify all ingredients are properly structured
+        assert len(retrieved_recipe["ingredients"]) == len(recipe_ingredients)
+        
+        for ingredient in retrieved_recipe["ingredients"]:
+            # All ingredients should have proper structure
+            assert "ingredient_id" in ingredient
+            assert "unit_name" in ingredient
+            assert "amount" in ingredient  # Can be null
+            
+            # Verify special unit handling
+            if ingredient["unit_name"] == "each":
+                assert ingredient["amount"] is not None
+            elif ingredient["unit_name"] == "to top":
+                assert ingredient["amount"] is None

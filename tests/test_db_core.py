@@ -45,7 +45,7 @@ class TestDatabaseConnection:
     def test_connection_retry_mechanism(self, memory_db_with_schema, monkeypatch):
         """Test connection retry mechanism with temporary failures"""
         monkeypatch.setenv("DB_PATH", memory_db_with_schema)
-        
+
         # Mock _get_connection to fail twice then succeed
         with patch.object(Database, "_get_connection") as mock_conn:
             mock_conn.side_effect = [
@@ -62,7 +62,7 @@ class TestDatabaseConnection:
     def test_connection_max_retries_exceeded(self, memory_db_with_schema, monkeypatch):
         """Test behavior when max retries are exceeded"""
         monkeypatch.setenv("DB_PATH", memory_db_with_schema)
-        
+
         with patch.object(Database, "_get_connection") as mock_conn:
             mock_conn.side_effect = sqlite3.OperationalError("database is locked")
 
@@ -262,96 +262,3 @@ class TestDatabaseQueryExecution:
 
         # Verify rollback was called
         mock_connection.rollback.assert_called_once()
-
-
-class TestSmartTitleCase:
-    """Test the smart_title_case utility function"""
-
-    def test_smart_title_case_basic(self):
-        """Test basic title casing"""
-        from api.db.db_core import smart_title_case
-
-        assert smart_title_case("hello world") == "Hello World"
-        assert smart_title_case("gin") == "Gin"
-        assert smart_title_case("london dry gin") == "London Dry Gin"
-
-    def test_smart_title_case_apostrophes(self):
-        """Test title casing with apostrophes"""
-        from api.db.db_core import smart_title_case
-
-        # Single apostrophe cases
-        assert smart_title_case("st-germain's") == "St-Germain's"
-        assert smart_title_case("ST-GERMAIN'S") == "St-Germain's"
-        assert smart_title_case("o'reilly") == "O'reilly"
-        assert smart_title_case("don't") == "Don't"
-        assert smart_title_case("won't") == "Won't"
-        assert smart_title_case("can't") == "Can't"
-
-    def test_smart_title_case_complex_apostrophes(self):
-        """Test title casing with complex apostrophe cases"""
-        from api.db.db_core import smart_title_case
-
-        # The original failing test case
-        special_name = 'St-Germain\'s "Premium" Elderflower & Herbs (100%)'
-        result = smart_title_case(special_name.lower())
-        assert result == 'St-Germain\'s "Premium" Elderflower & Herbs (100%)'
-
-        # Multiple apostrophes
-        assert smart_title_case("o'reilly's bar") == "O'reilly's Bar"
-
-    def test_smart_title_case_special_characters(self):
-        """Test title casing with special characters"""
-        from api.db.db_core import smart_title_case
-
-        assert smart_title_case("jack & jill") == "Jack & Jill"
-        assert smart_title_case("salt-n-pepper") == "Salt-N-Pepper"
-        assert smart_title_case("café (french)") == "Café (French)"
-        assert smart_title_case("100% proof") == "100% Proof"
-        assert smart_title_case("whiskey #1") == "Whiskey #1"
-
-    def test_smart_title_case_unicode(self):
-        """Test title casing with unicode characters"""
-        from api.db.db_core import smart_title_case
-
-        assert smart_title_case("café liqueur") == "Café Liqueur"
-        assert smart_title_case("mezcal añejo") == "Mezcal Añejo"
-        assert smart_title_case("cocktail 🍸") == "Cocktail 🍸"
-
-    def test_smart_title_case_edge_cases(self):
-        """Test title casing edge cases"""
-        from api.db.db_core import smart_title_case
-
-        # Empty and None cases
-        assert smart_title_case("") is None
-        assert smart_title_case(None) is None
-
-        # Single character
-        assert smart_title_case("a") == "A"
-        assert smart_title_case("'") == "'"
-
-        # Already properly cased
-        assert smart_title_case("London Dry Gin") == "London Dry Gin"
-
-        # All caps
-        assert smart_title_case("VODKA") == "Vodka"
-
-        # Mixed case with apostrophe
-        assert smart_title_case("mCdOnAlD's") == "Mcdonald's"
-
-    def test_smart_title_case_whitespace(self):
-        """Test title casing with various whitespace"""
-        from api.db.db_core import smart_title_case
-
-        assert smart_title_case("  hello world  ") == "  Hello World  "
-        assert smart_title_case("hello\tworld") == "Hello\tWorld"
-        assert smart_title_case("hello\nworld") == "Hello\nWorld"
-        assert smart_title_case("hello  world") == "Hello  World"
-
-    def test_smart_title_case_numbers_and_punctuation(self):
-        """Test title casing with numbers and punctuation"""
-        from api.db.db_core import smart_title_case
-
-        assert smart_title_case("recipe #1: gin & tonic") == "Recipe #1: Gin & Tonic"
-        assert smart_title_case("50/50 split") == "50/50 Split"
-        assert smart_title_case("brand-new recipe") == "Brand-New Recipe"
-        assert smart_title_case("old-fashioned cocktail") == "Old-Fashioned Cocktail"

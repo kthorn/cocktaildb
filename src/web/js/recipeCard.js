@@ -5,10 +5,13 @@ import { generateStarRating, createInteractiveRating } from './common.js';
 
 /**
  * Formats a number into a string, converting decimals to common fractions if close.
- * @param {number} amount - The numeric amount to format
- * @returns {string} The formatted amount string
+ * @param {number|null|undefined} amount - The numeric amount to format
+ * @returns {string} The formatted amount string, or empty string for null/undefined
  */
 function formatAmount(amount) {
+    if (amount === null || amount === undefined) {
+        return ''; // Return empty string for null/undefined amounts
+    }
     if (typeof amount !== 'number' || isNaN(amount)) {
         return String(amount); // Return as string if not a valid number
     }
@@ -96,13 +99,27 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
             <h5>Ingredients</h5>
             <ul>
                 ${(recipe.ingredients || []).map(ing => {
-                    // Format with proper spaces between amount, unit and ingredient name
-                    const unitDisplay = ing.unit_name ? `${ing.unit_name} ` : '';
-                    
                     // Try multiple possible property names for ingredient full name
                     const ingredientName = ing.full_name || ing.ingredient_name || ing.name || 'Unknown ingredient';
                     
-                    return `<li>${formatAmount(ing.amount)} ${unitDisplay}${ingredientName}</li>`;
+                    // Special handling for specific units
+                    if (ing.unit_name === 'to top' && (ing.amount === null || ing.amount === undefined)) {
+                        return `<li>${ingredientName}, to top</li>`;
+                    }
+                    if (ing.unit_name === 'to rinse' && (ing.amount === null || ing.amount === undefined)) {
+                        return `<li>${ingredientName}, to rinse</li>`;
+                    }
+                    if (ing.unit_name === 'each' || ing.unit_name === 'Each') {
+                        // For 'each' unit, don't display the unit name
+                        const formattedAmount = formatAmount(ing.amount);
+                        return `<li>${formattedAmount ? formattedAmount + ' ' : ''}${ingredientName}</li>`;
+                    }
+                    
+                    // Default handling for all other units
+                    const formattedAmount = formatAmount(ing.amount);
+                    const unitDisplay = ing.unit_name ? ` ${ing.unit_name}` : '';
+                    
+                    return `<li>${formattedAmount}${unitDisplay} ${ingredientName}</li>`;
                 }).join('')}
             </ul>
         </div>
