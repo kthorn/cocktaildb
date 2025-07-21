@@ -1467,19 +1467,6 @@ class Database:
             else:
                 # Simple query without ingredient filtering
                 query += "SELECT * FROM recipe_data ORDER BY avg_rating DESC"
-
-            # Execute the query
-            # Log the final query with parameter placeholders
-            logger.info(f"Executing search query: {query}")
-
-            # Log the query with actual parameter values for debugging
-            debug_query = query
-            for param_name, param_value in params.items():
-                placeholder = f":{param_name}"
-                if placeholder in debug_query:
-                    debug_query = debug_query.replace(placeholder, str(param_value))
-
-            logger.debug(f"Search query with params: {debug_query}")
             recipes_result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(query, params),
@@ -1502,14 +1489,10 @@ class Database:
                         tuple(recipe_ids),
                     ),
                 )
-
-                # Create a lookup map for ingredient counts
                 count_map = {
                     row["recipe_id"]: row["ingredient_count"]
                     for row in ingredient_counts
                 }
-
-                # Add ingredient_count to each recipe
                 for recipe in recipes_result:
                     recipe["ingredient_count"] = count_map.get(recipe["id"], 0)
 
