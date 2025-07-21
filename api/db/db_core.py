@@ -1873,18 +1873,6 @@ class Database:
                 "sort_order": sort_order,
                 "cognito_user_id": user_id,
             }
-
-            # Debug: Log the exact search query parameter being used in SQL
-            if query_params.get("search_query"):
-                logger.info(
-                    f"SQL search_query parameter: '{query_params['search_query']}'"
-                )
-                logger.info(
-                    f"SQL search_query_with_wildcards parameter: '{query_params['search_query_with_wildcards']}'"
-                )
-            else:
-                logger.info("No search_query parameter provided to SQL")
-
             # Handle ingredient filtering by converting names to IDs and paths
             must_ingredient_conditions = []
             must_not_ingredient_conditions = []
@@ -1979,14 +1967,6 @@ class Database:
                 sort_order,
                 inventory_filter,
             )
-
-            # Debug: Log the SQL execution details
-            logger.info(f"Executing search with {len(query_params)} parameters")
-            if query_params.get("search_query"):
-                logger.info(
-                    f"About to execute SQL search for: '{query_params['search_query']}'"
-                )
-
             # Get paginated results
             rows = cast(
                 List[Dict[str, Any]], self.execute_query(paginated_sql, query_params)
