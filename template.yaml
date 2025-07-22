@@ -505,11 +505,11 @@ Resources:
             RestApiId: !Ref CocktailAPI
             Path: /recipes/search
             Method: get
-        SearchRecipesWithInventory:
+        SearchRecipesAuthenticated:
           Type: Api
           Properties:
             RestApiId: !Ref CocktailAPI
-            Path: /recipes/search/inventory
+            Path: /recipes/search/authenticated
             Method: get
             Auth:
               Authorizer: CognitoAuthorizer

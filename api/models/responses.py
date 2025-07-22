@@ -90,6 +90,7 @@ class RecipeResponse(BaseModel):
     source_url: Optional[str] = Field(None, description="Recipe source URL")
     avg_rating: Optional[float] = Field(None, description="Average rating")
     rating_count: Optional[int] = Field(None, description="Number of ratings")
+    user_rating: Optional[int] = Field(None, description="Current user's rating for this recipe (1-5, null if not rated)")
     ingredients: List[RecipeIngredientResponse] = Field(
         default=[], description="Recipe ingredients"
     )

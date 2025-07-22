@@ -158,8 +158,8 @@ async def search_recipes(
         raise DatabaseException("Failed to search recipes", detail=str(e))
 
 
-@router.get("/search/inventory", response_model=PaginatedSearchResponse)
-async def search_recipes_with_inventory(
+@router.get("/search/authenticated", response_model=PaginatedSearchResponse)
+async def search_recipes_authenticated(
     q: Optional[str] = Query(None, description="Search query"),
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     limit: int = Query(20, ge=1, le=1000, description="Number of items per page"),
@@ -178,11 +178,15 @@ async def search_recipes_with_inventory(
         None,
         description="Comma-separated ingredient names with optional operators (e.g., 'Vodka,Gin:MUST,Vermouth:MUST_NOT')",
     ),
+    inventory: Optional[bool] = Query(
+        False,
+        description="Filter recipes that can be made with user's ingredient inventory",
+    ),
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_authentication),
 ):
-    """Search recipes that can be made with user's ingredient inventory (requires authentication)"""
-    # Reuse the existing search_recipes function with inventory=True
+    """Search recipes with authentication (required) - includes user ratings and optional inventory filtering"""
+    # Reuse the existing search_recipes function
     return await search_recipes(
         q=q,
         page=page,
@@ -193,7 +197,7 @@ async def search_recipes_with_inventory(
         max_rating=max_rating,
         tags=tags,
         ingredients=ingredients,
-        inventory=True,  # Force inventory=True for this endpoint
+        inventory=inventory,
         db=db,
         user=user,
     )

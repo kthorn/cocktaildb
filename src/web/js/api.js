@@ -173,23 +173,24 @@ class CocktailAPI {
         const queryString = queryParams.toString();
         console.log('Built query string:', queryString);
         
-        // Use different endpoint for inventory searches
+        // Use authenticated endpoint for logged-in users, regular search for anonymous users
         let url;
         let requiresAuth = false;
         
-        if (searchQuery.inventory) {
-            // Remove inventory parameter from query string for the inventory endpoint
-            const inventoryParams = new URLSearchParams();
-            queryParams.forEach((value, key) => {
-                if (key !== 'inventory') {
-                    inventoryParams.append(key, value);
-                }
-            });
-            const inventoryQueryString = inventoryParams.toString();
-            url = `${this.baseUrl}/recipes/search/inventory${inventoryQueryString ? `?${inventoryQueryString}` : ''}`;
+        if (isAuthenticated()) {
+            // Authenticated users use the authenticated search endpoint
+            url = `${this.baseUrl}/recipes/search/authenticated${queryString ? `?${queryString}` : ''}`;
             requiresAuth = true;
         } else {
-            url = `${this.baseUrl}/recipes/search${queryString ? `?${queryString}` : ''}`;
+            // Anonymous users use regular search (remove inventory parameter if present)
+            const anonymousParams = new URLSearchParams();
+            queryParams.forEach((value, key) => {
+                if (key !== 'inventory') {
+                    anonymousParams.append(key, value);
+                }
+            });
+            const anonymousQueryString = anonymousParams.toString();
+            url = `${this.baseUrl}/recipes/search${anonymousQueryString ? `?${anonymousQueryString}` : ''}`;
             requiresAuth = false;
         }
         
