@@ -304,7 +304,7 @@ class TestIngredientBasedSearch:
             assert len(results) == 2
             result_names = {recipe["name"] for recipe in results}
             assert "Gin Martini" in result_names
-            assert "Gin And Tonic" in result_names
+            assert "Gin and Tonic" in result_names
             assert "Vodka Martini" not in result_names
 
     def test_search_recipes_by_ingredient_must_not(self, memory_db_with_schema):

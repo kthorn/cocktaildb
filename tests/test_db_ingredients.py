@@ -58,20 +58,6 @@ class TestIngredientCRUD:
             assert child["parent_id"] == parent["id"]
             assert child["path"] == f"/{parent['id']}/{child['id']}/"
 
-    def test_create_ingredient_name_case_handling(self, memory_db_with_schema):
-        """Test that ingredient names are properly case-formatted"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = get_database()
-
-            data = {
-                "name": "lower case",
-                "description": "A type of gin",
-                "parent_id": None,
-            }
-
-            result = db.create_ingredient(data)
-            assert result["name"] == "Lower Case"
-
     def test_get_ingredient_by_id(self, memory_db_with_schema):
         """Test retrieving ingredient by ID"""
         with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):

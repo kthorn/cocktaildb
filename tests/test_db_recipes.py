@@ -22,7 +22,7 @@ class TestRecipeCRUD:
             db = Database()
 
             recipe_data = {
-                "name": "simple martini",
+                "name": "Simple Martini",
                 "instructions": "Stir with ice and strain",
                 "description": "A classic martini",
                 "image_url": "http://example.com/martini.jpg",
