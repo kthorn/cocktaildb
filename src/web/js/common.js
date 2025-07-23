@@ -238,7 +238,7 @@ export function createInteractiveRating(recipeId, currentRating, avgRating, coun
     userIndicator.style.color = '#666';
     userIndicator.style.fontSize = '0.8em';
   } else {
-    userIndicator.textContent = ` (your rating: ${ratingValue})`;
+    userIndicator.textContent = ` (${ratingValue})`;
     userIndicator.style.color = '#666';
     userIndicator.style.fontSize = '0.8em';
   }

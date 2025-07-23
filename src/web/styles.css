@@ -391,7 +391,8 @@ button:hover, .btn:hover {
 
 /* Recipe components */
 .recipe-card .ingredients,
-.recipe-card .instructions {
+.recipe-card .instructions,
+.recipe-card .recipe-source {
     margin: var(--space-md) 0;
     font-family: Georgia, 'Times New Roman', Times, serif;
 }
@@ -425,6 +426,29 @@ button:hover, .btn:hover {
     color: var(--text-dark);
 }
 
+.recipe-card .recipe-source h5 {
+    font-size: 1.1rem;
+    color: var(--accent-color);
+    margin-bottom: var(--space-sm);
+    font-weight: 600;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.recipe-card .recipe-source p {
+    font-style: normal;
+    line-height: 1.5;
+    color: var(--text-dark);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.recipe-card .recipe-source a {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    display: inline-block;
+    max-width: 100%;
+}
+
 /* Card action buttons */
 .card-actions {
     display: flex;
@@ -447,21 +471,21 @@ button:hover, .btn:hover {
 /* Recipe meta information */
 .recipe-card .recipe-meta {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    gap: var(--space-xs);
     margin-bottom: 0.75rem;
 }
 
 .recipe-card .recipe-rating {
-    text-align: right;
+    text-align: left;
 }
 
 .recipe-card .recipe-tags {
-    flex: 1;
     display: flex;
     align-items: center;
     gap: var(--space-sm);
     min-width: 0;
+    width: 100%;
 }
 
 /* Stat cards */
@@ -862,7 +886,7 @@ footer {
 .star-rating {
     display: flex;
     align-items: center;
-    margin: var(--space-sm) 0;
+    margin: 0;
     font-size: 1.2rem;
 }
 
