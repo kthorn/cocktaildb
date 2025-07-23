@@ -1,6 +1,81 @@
 import { api } from './api.js';
 import { isAuthenticated } from './auth.js';
 
+// Shared utility functions for recipe management
+function isSpecialUnit(unitName) {
+    return unitName === 'to top' || unitName === 'to rinse';
+}
+
+function validateIngredientAmount(ingredientName, ingredientUnitName, amount) {
+    const unit = window.availableUnits?.find(u => u.name === ingredientUnitName);
+    const isSpecial = unit && isSpecialUnit(unit.name);
+    
+    // For special units, allow empty/null amounts, otherwise require positive numbers
+    if (!isSpecial && (isNaN(amount) || amount <= 0)) {
+        throw new Error(`Amount for "${ingredientName}" must be a positive number`);
+    }
+    
+    // Set amount to null for special units if empty or 0
+    return isSpecial && (isNaN(amount) || amount === 0) ? null : amount;
+}
+
+function setupAmountInputForUnit(amountInput, unitSelect) {
+    const updateAmountField = () => {
+        const selectedUnitName = unitSelect.value;
+        const isSpecial = isSpecialUnit(selectedUnitName);
+        
+        if (isSpecial) {
+            amountInput.removeAttribute('required');
+            amountInput.placeholder = 'Leave empty for special units';
+            amountInput.title = 'Amount not needed for this unit type';
+        } else {
+            amountInput.setAttribute('required', 'required');
+            amountInput.placeholder = 'Amount';
+            amountInput.title = '';
+        }
+    };
+    
+    unitSelect.addEventListener('change', updateAmountField);
+    return updateAmountField; // Return function so it can be called immediately for edit mode
+}
+
+function processIngredientData(ingredientInputs, availableIngredients) {
+    const ingredients = [];
+    
+    ingredientInputs.forEach(input => {
+        const ingredientName = input.querySelector('.ingredient-name').value;
+        const ingredientUnitName = input.querySelector('.ingredient-unit').value;
+        const amountInput = input.querySelector('.ingredient-amount');
+        const amount = parseFloat(amountInput.value);
+        
+        if (!ingredientName) {
+            throw new Error('Please select an ingredient');
+        }
+        if (!ingredientUnitName) {
+            throw new Error(`Please select a unit for "${ingredientName}"`);
+        }
+        
+        const finalAmount = validateIngredientAmount(ingredientName, ingredientUnitName, amount);
+        
+        const ingredient = availableIngredients.find(ing => ing.name === ingredientName);
+        const unit = window.availableUnits?.find(u => u.name === ingredientUnitName);
+        
+        if (!ingredient) {
+            throw new Error(`Ingredient "${ingredientName}" not found`);
+        }
+        if (!unit) {
+            throw new Error(`Unit "${ingredientUnitName}" not found`);
+        }
+        
+        ingredients.push({
+            ingredient_id: ingredient.id,
+            amount: finalAmount,
+            unit_id: unit.id
+        });
+    });
+    
+    return ingredients;
+}
 
 // Declare function in global scope
 let addIngredientInput;
@@ -43,7 +118,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const ingredients = [];
             const ingredientInputs = ingredientsList.querySelectorAll('.ingredient-input');
 
             if (ingredientInputs.length === 0) {
@@ -60,42 +134,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error('Recipe instructions are required');
             }
 
-            ingredientInputs.forEach(input => {
-                const ingredientName = input.querySelector('.ingredient-name').value;
-                const ingredientUnitName = input.querySelector('.ingredient-unit').value;
-                const amountInput = input.querySelector('.ingredient-amount');
-                const amount = parseFloat(amountInput.value);
-                
-                if (!ingredientName) {
-                    throw new Error('Please select an ingredient');
-                }
-
-                if (!ingredientUnitName) {
-                    throw new Error(`Please select a unit for "${ingredientName}"`);
-                }
-
-                if (isNaN(amount) || amount <= 0) {
-                    throw new Error(`Amount for "${ingredientName}" must be a positive number`);
-                }
-                
-                // Find the ingredient by name
-                const ingredient = availableIngredients.find(ing => ing.name === ingredientName);
-                if (!ingredient) {
-                    throw new Error(`Ingredient "${ingredientName}" not found`);
-                }
-
-                // Find the unit by name
-                const unit = window.availableUnits?.find(u => u.name === ingredientUnitName);
-                if (!unit) {
-                    throw new Error(`Unit "${ingredientUnitName}" not found`);
-                }
-
-                ingredients.push({
-                    ingredient_id: ingredient.id,
-                    amount: amount,
-                    unit_id: unit.id  // Send unit_id instead of unit name
-                });
-            });
+            // Use the shared function to process ingredient data
+            const ingredients = processIngredientData(ingredientInputs, availableIngredients);
 
             const recipeData = {
                 name: recipeName,
@@ -174,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
         div.innerHTML = `
             <div class="ingredient-fields">
                 <div class="form-group">
-                    <input type="number" class="ingredient-amount" name="ingredient-amount" placeholder="Amount" step="0.25" min="0" required>
+                    <input type="number" class="ingredient-amount" name="ingredient-amount" placeholder="Amount" step="0.25" min="0">
                 </div>
                 <div class="form-group">
                     <select class="ingredient-unit" name="ingredient-unit" required>
@@ -343,6 +383,11 @@ document.addEventListener('DOMContentLoaded', () => {
             searchInput.value = selectElement.options[selectElement.selectedIndex].text;
         });
 
+        // Use shared function to set up amount input behavior
+        const unitSelect = div.querySelector('.ingredient-unit');
+        const amountInput = div.querySelector('.ingredient-amount');
+        setupAmountInputForUnit(amountInput, unitSelect);
+
         ingredientsList.appendChild(div);
     };
 
@@ -424,22 +469,27 @@ async function editRecipe(id) {
                     searchInput.value = ingredient.ingredient_name;
                 }
                 
-                // Set amount and unit
+                // Set the unit first, then amount (order matters for proper field setup)
+                const unitSelect = lastInput.querySelector('.ingredient-unit');
                 const amountInput = lastInput.querySelector('.ingredient-amount');
-                if (amountInput && ingredient.amount !== undefined) {
-                    amountInput.value = ingredient.amount;
+                
+                if (ingredient.unit_name && window.availableUnits && unitSelect) {
+                    const matchingUnit = window.availableUnits.find(u => u.name === ingredient.unit_name);
+                    if (matchingUnit) {
+                        unitSelect.value = matchingUnit.name;
+                        // Trigger change event to update amount field properties
+                        unitSelect.dispatchEvent(new Event('change'));
+                    } else {
+                        console.warn(`Unit "${ingredient.unit_name}" not found in available units`);
+                    }
                 }
                 
-                // Set the unit by name if available
-                if (ingredient.unit_name && window.availableUnits) {
-                    const unitSelect = lastInput.querySelector('.ingredient-unit');
-                    if (unitSelect) {
-                        const matchingUnit = window.availableUnits.find(u => u.name === ingredient.unit_name);
-                        if (matchingUnit) {
-                            unitSelect.value = matchingUnit.name;
-                        } else {
-                            console.warn(`Unit "${ingredient.unit_name}" not found in available units`);
-                        }
+                // Set amount after unit is set (so special unit logic applies)
+                if (amountInput) {
+                    if (ingredient.amount !== undefined && ingredient.amount !== null) {
+                        amountInput.value = ingredient.amount;
+                    } else {
+                        amountInput.value = ''; // Clear for null amounts
                     }
                 }
             });

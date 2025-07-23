@@ -103,10 +103,10 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
                     const ingredientName = ing.full_name || ing.ingredient_name || ing.name || 'Unknown ingredient';
                     
                     // Special handling for specific units
-                    if (ing.unit_name === 'to top' && (ing.amount === null || ing.amount === undefined)) {
+                    if (ing.unit_name === 'to top' && (ing.amount === null || ing.amount === undefined || ing.amount === 0)) {
                         return `<li>${ingredientName}, to top</li>`;
                     }
-                    if (ing.unit_name === 'to rinse' && (ing.amount === null || ing.amount === undefined)) {
+                    if (ing.unit_name === 'to rinse' && (ing.amount === null || ing.amount === undefined || ing.amount === 0)) {
                         return `<li>${ingredientName}, to rinse</li>`;
                     }
                     if (ing.unit_name === 'each' || ing.unit_name === 'Each') {
