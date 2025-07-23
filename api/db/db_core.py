@@ -219,6 +219,19 @@ class Database:
     def create_ingredient(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new ingredient"""
         try:
+            # Validate required data types
+            name = data.get("name")
+            if not isinstance(name, str):
+                raise TypeError(f"Ingredient name must be a string, got {type(name).__name__}")
+            if not name.strip():
+                raise ValueError("Ingredient name cannot be empty or whitespace only")
+            
+            if data.get("description") is not None and not isinstance(data.get("description"), str):
+                raise TypeError(f"Ingredient description must be a string or None, got {type(data.get('description')).__name__}")
+            
+            if data.get("parent_id") is not None and not isinstance(data.get("parent_id"), int):
+                raise TypeError(f"Ingredient parent_id must be an integer or None, got {type(data.get('parent_id')).__name__}")
+            
             # SQLite doesn't have a direct equivalent to Postgres' add_ingredient function
             # We'll implement the path generation logic here
             parent_path = None

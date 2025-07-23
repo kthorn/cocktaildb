@@ -524,7 +524,7 @@ class TestIngredientEdgeCases:
         with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
             db = get_database()
 
-            with pytest.raises(Exception):  # Should fail due to NOT NULL constraint
+            with pytest.raises(ValueError, match="empty or whitespace only"):  # Should fail due to validation
                 db.create_ingredient(
                     {"name": "", "description": "Test", "parent_id": None}
                 )
