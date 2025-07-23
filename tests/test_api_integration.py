@@ -351,9 +351,9 @@ class TestComplexIntegrationScenarios:
 class TestSpecialUnitsIntegration:
     """Integration tests for special units in recipe creation and retrieval"""
 
-    def test_create_and_retrieve_recipe_with_to_top(self, test_client_with_data):
+    def test_create_and_retrieve_recipe_with_to_top(self, authenticated_client):
         """Test creating and retrieving recipe with 'to top' unit"""
-        client, app = test_client_with_data
+        client = authenticated_client
         
         # First get ingredients and units for the test
         ingredients_response = client.get("/ingredients")
@@ -406,9 +406,9 @@ class TestSpecialUnitsIntegration:
         assert ingredient["unit_name"] == "to top"
         assert ingredient["ingredient_id"] == test_ingredient["id"]
 
-    def test_create_and_retrieve_recipe_with_to_rinse(self, test_client_with_data):
+    def test_create_and_retrieve_recipe_with_to_rinse(self, authenticated_client):
         """Test creating and retrieving recipe with 'to rinse' unit"""
-        client, app = test_client_with_data
+        client = authenticated_client
         
         # Get ingredients and units
         ingredients_response = client.get("/ingredients")
@@ -460,9 +460,9 @@ class TestSpecialUnitsIntegration:
         assert ingredient["unit_name"] == "to rinse"
         assert ingredient["ingredient_id"] == test_ingredient["id"]
 
-    def test_create_and_retrieve_recipe_with_each_unit(self, test_client_with_data):
+    def test_create_and_retrieve_recipe_with_each_unit(self, authenticated_client):
         """Test creating and retrieving recipe with 'each' unit"""
-        client, app = test_client_with_data
+        client = authenticated_client
         
         # Get ingredients and units
         ingredients_response = client.get("/ingredients")
@@ -475,9 +475,9 @@ class TestSpecialUnitsIntegration:
         
         # Find suitable ingredient and 'each' unit
         test_ingredient = ingredients[0] if ingredients else None
-        each_unit = next((unit for unit in units if unit["name"] == "each"), None)
+        each_unit = next((unit for unit in units if unit["name"] == "Each"), None)
         
-        assert each_unit is not None, "'each' unit should exist in base schema"
+        assert each_unit is not None, "'Each' unit should exist in base schema"
         assert test_ingredient is not None, "Need at least one ingredient for test"
         
         # Create recipe with 'each' unit
@@ -508,12 +508,12 @@ class TestSpecialUnitsIntegration:
         ingredient = retrieved_recipe["ingredients"][0]
         
         assert ingredient["amount"] == 2.0
-        assert ingredient["unit_name"] == "each"
+        assert ingredient["unit_name"] == "Each"
         assert ingredient["ingredient_id"] == test_ingredient["id"]
 
-    def test_mixed_special_units_recipe(self, test_client_with_data):
+    def test_mixed_special_units_recipe(self, authenticated_client):
         """Test recipe with multiple special units combined"""
-        client, app = test_client_with_data
+        client = authenticated_client
         
         # Get ingredients and units
         ingredients_response = client.get("/ingredients")
@@ -529,11 +529,11 @@ class TestSpecialUnitsIntegration:
             pytest.skip("Need at least 3 ingredients for mixed units test")
         
         # Find units
-        each_unit = next((unit for unit in units if unit["name"] == "each"), None)
+        each_unit = next((unit for unit in units if unit["name"] == "Each"), None)
         to_top_unit = next((unit for unit in units if unit["name"] == "to top"), None)
         ounce_unit = next((unit for unit in units if unit["name"] == "Ounce"), None)
         
-        assert each_unit is not None, "'each' unit should exist"
+        assert each_unit is not None, "'Each' unit should exist"
         
         # Skip if special units don't exist
         if not to_top_unit:
@@ -588,7 +588,7 @@ class TestSpecialUnitsIntegration:
             assert "amount" in ingredient  # Can be null
             
             # Verify special unit handling
-            if ingredient["unit_name"] == "each":
+            if ingredient["unit_name"] == "Each":
                 assert ingredient["amount"] is not None
             elif ingredient["unit_name"] == "to top":
                 assert ingredient["amount"] is None

@@ -133,14 +133,16 @@ END;
 
 
 -- Insert common measurement units
-INSERT INTO units (name, abbreviation) VALUES
-  ('Ounce', 'oz'),
-  ('Tablespoon', 'tbsp'),
-  ('Teaspoon', 'tsp'),
-  ('Barspoon', 'bsp'),
-  ('Dash', 'dash'),
-  ('Each', 'each'),
-  ('Drop', 'drop');
+INSERT INTO units (name, abbreviation, conversion_to_ml) VALUES
+  ('Ounce', 'oz', 29.5735),
+  ('Tablespoon', 'tbsp', 14.7868),
+  ('Teaspoon', 'tsp', 4.92892),
+  ('Barspoon', 'bsp', 2.46446),
+  ('Dash', 'dash', 0.616115),
+  ('Each', 'each', NULL),
+  ('Drop', 'drop', 0.05),
+  ('to top', 'top', NULL),
+  ('to rinse', 'rinse', NULL);
 
 -- Insert base ingredients
 INSERT INTO ingredients (name, description, path) VALUES

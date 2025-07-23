@@ -13,7 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 # Add project root to Python path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # Test configuration
 TEST_DB_PATH = "tests/fixtures/test_cocktaildb.db"
@@ -138,10 +138,10 @@ def test_db_with_data():
             with open(schema_path, "r") as f:
                 schema_sql = f.read()
             conn.executescript(schema_sql)
-            
+
             # Add predictable test data
             _populate_test_data(conn)
-            
+
             # Use DELETE journal mode for tests to avoid locking issues
             conn.execute("PRAGMA journal_mode=DELETE")
             conn.close()
@@ -220,36 +220,6 @@ def test_client_memory_no_schema(test_settings, memory_db, monkeypatch):
     yield client
 
 
-# @pytest.fixture(scope="function")
-# def test_client_production_readonly(test_settings, production_db_path, monkeypatch):
-#     """DEPRECATED: Test client with production database (read-only tests)"""
-#     # Use monkeypatch to set environment variables
-#     monkeypatch.setenv("DB_PATH", production_db_path)
-#     monkeypatch.setenv("ENVIRONMENT", "test")
-# 
-#     # Import and create app after environment is configured
-#     from api.main import app
-# 
-#     client = TestClient(app)
-#     yield client
-
-
-# @pytest.fixture(scope="function")
-# def test_client_production_isolated(
-#     test_settings, temp_db_from_production, monkeypatch
-# ):
-#     """DEPRECATED: Test client with isolated copy of production database"""
-#     # Use monkeypatch to set environment variables
-#     monkeypatch.setenv("DB_PATH", temp_db_from_production)
-#     monkeypatch.setenv("ENVIRONMENT", "test")
-# 
-#     # Import and create app after environment is configured
-#     from api.main import app
-# 
-#     client = TestClient(app)
-#     yield client
-
-
 @pytest.fixture(scope="function")
 def test_client_with_data(test_settings, test_db_with_data, monkeypatch):
     """Test client with fresh database and predictable test data for integration tests"""
@@ -272,6 +242,7 @@ def test_client_with_data(test_settings, test_db_with_data, monkeypatch):
 def db_with_test_data(test_db_with_data):
     """Direct database connection to test database with predictable data"""
     import sqlite3
+
     conn = sqlite3.connect(test_db_with_data)
     conn.row_factory = sqlite3.Row  # Enable dict-like access
     yield conn
@@ -282,11 +253,11 @@ def db_with_test_data(test_db_with_data):
 def db_instance(memory_db_with_schema, monkeypatch):
     """Database instance with environment properly configured"""
     from api.db.db_core import Database
-    
+
     # Set environment variable for Database class
     monkeypatch.setenv("DB_PATH", memory_db_with_schema)
     monkeypatch.setenv("ENVIRONMENT", "test")
-    
+
     # Create and return Database instance
     db = Database()
     yield db
@@ -296,11 +267,11 @@ def db_instance(memory_db_with_schema, monkeypatch):
 def db_instance_with_data(test_db_with_data, monkeypatch):
     """Database instance with environment properly configured and test data"""
     from api.db.db_core import Database
-    
+
     # Set environment variable for Database class
     monkeypatch.setenv("DB_PATH", test_db_with_data)
     monkeypatch.setenv("ENVIRONMENT", "test")
-    
+
     # Create and return Database instance
     db = Database()
     yield db
@@ -654,7 +625,7 @@ def create_test_recipe_with_tags(
 def _populate_test_data(conn):
     """Populate test database with predictable test data for integration tests"""
     cursor = conn.cursor()
-    
+
     # Add additional ingredients beyond what's already in schema.sql
     cursor.execute("""
         INSERT INTO ingredients (name, description, parent_id, path) VALUES
@@ -665,7 +636,7 @@ def _populate_test_data(conn):
         ('Simple Syrup', 'Sugar and water syrup', NULL, '/12/'),
         ('Angostura Bitters', 'Aromatic bitters', NULL, '/13/')
     """)
-    
+
     # Add test recipes with predictable content
     cursor.execute("""
         INSERT INTO recipes (name, instructions, description, source, avg_rating, rating_count) VALUES
@@ -674,7 +645,7 @@ def _populate_test_data(conn):
         ('Test Daiquiri', 'Shake rum, lime juice, and simple syrup with ice', 'Classic rum cocktail', 'Test Source', 0, 0),
         ('Test Gin Martini', 'Stir gin and vermouth with ice, strain', 'Classic gin cocktail', 'Test Source', 5.0, 1)
     """)
-    
+
     # Add recipe ingredients
     cursor.execute("""
         INSERT INTO recipe_ingredients (recipe_id, ingredient_id, unit_id, amount) VALUES
@@ -690,7 +661,7 @@ def _populate_test_data(conn):
         (4, 4, 1, 2.5),     -- Gin Martini: 2.5 oz Gin
         (4, 1, 1, 0.5)      -- Gin Martini: 0.5 oz Vermouth (using Whiskey as placeholder)
     """)
-    
+
     # Add test ratings
     cursor.execute("""
         INSERT INTO ratings (cognito_user_id, cognito_username, recipe_id, rating) VALUES
@@ -699,7 +670,7 @@ def _populate_test_data(conn):
         ('test-user-1', 'testuser1', 2, 4),
         ('test-user-1', 'testuser1', 4, 5)
     """)
-    
+
     # Add test tags (Note: Tiki=1, Classic=2 already exist from schema)
     cursor.execute("""
         INSERT INTO tags (name, created_by) VALUES
@@ -710,7 +681,7 @@ def _populate_test_data(conn):
         ('Shaken', NULL),
         ('My Favorite', 'test-user-1')
     """)
-    
+
     # Add recipe-tag associations (adjusting for existing tags: Tiki=1, Classic=2)
     cursor.execute("""
         INSERT INTO recipe_tags (recipe_id, tag_id) VALUES
@@ -728,5 +699,5 @@ def _populate_test_data(conn):
         (4, 6),  -- Gin Martini: Stirred
         (1, 8)   -- Old Fashioned: My Favorite (private tag)
     """)
-    
+
     conn.commit()
