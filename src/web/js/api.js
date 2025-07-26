@@ -284,8 +284,16 @@ class CocktailAPI {
     // Remove a tag from a recipe
     // jsTagType should be 'public' or 'private'
     async removeTagFromRecipe(recipeId, tagId, jsTagType) {
+        // Validate parameters
+        const numericRecipeId = parseInt(recipeId);
+        const numericTagId = parseInt(tagId);
+        
+        if (isNaN(numericRecipeId) || isNaN(numericTagId)) {
+            throw new Error(`Invalid recipe ID (${recipeId}) or tag ID (${tagId})`);
+        }
+        
         const apiTagType = `${jsTagType}_tags`;
-        const path = `/recipes/${recipeId}/${apiTagType}/${tagId}`;
+        const path = `/recipes/${numericRecipeId}/${apiTagType}/${numericTagId}`;
         return this._request(path, 'DELETE');
     }
 

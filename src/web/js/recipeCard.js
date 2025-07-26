@@ -539,7 +539,11 @@ function openTagEditorModal(recipeId, recipeName, currentTagsJson) {
         const parsedTags = JSON.parse(currentTagsJson || '[]');
         currentRecipeTags = parsedTags.map(tag => {
             if (typeof tag === 'string') return { name: tag, type: 'public', id: undefined };
-            return { id: tag.id, name: tag.name, type: tag.type || 'public' };
+            return { 
+                id: tag.id ? parseInt(tag.id) : undefined, 
+                name: tag.name, 
+                type: tag.type || 'public' 
+            };
         });
         originalRecipeTagsForEdit = JSON.parse(JSON.stringify(currentRecipeTags));
     } catch (e) {
@@ -674,7 +678,12 @@ async function handleSaveTags() {
         }
 
         for (const tag of tagsToActuallyRemove) {
-            await api.removeTagFromRecipe(recipeId, tag.id, tag.type);
+            // Ensure tag ID is a valid integer
+            if (!tag.id || isNaN(parseInt(tag.id))) {
+                console.error('Invalid tag ID for removal:', tag);
+                continue;
+            }
+            await api.removeTagFromRecipe(recipeId, parseInt(tag.id), tag.type);
         }
         for (const tag of tagsToActuallyAdd) {
             await api.addTagToRecipe(recipeId, tag.name, tag.type);
@@ -754,6 +763,12 @@ document.addEventListener('click', async (e) => {
         const tagId = parseInt(removeTagButton.dataset.tagId);
         const tagType = removeTagButton.dataset.tagType;
         const tagName = removeTagButton.parentElement.textContent.replace('×', '').trim();
+        
+        // Validate that we have valid integer IDs
+        if (isNaN(recipeId) || isNaN(tagId)) {
+            alert('Invalid recipe or tag ID. Please refresh the page and try again.');
+            return;
+        }
         
         // Confirm removal
         if (!confirm(`Remove "${tagName}" from this recipe?`)) {
