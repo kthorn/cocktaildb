@@ -21,9 +21,7 @@ router = APIRouter(prefix="/tags", tags=["tags"])
 
 
 @router.get("/public", response_model=List[PublicTagResponse])
-async def get_public_tags(
-    db: Database = Depends(get_db), user: UserInfo = Depends(get_current_user_optional)
-):
+async def get_public_tags(db: Database = Depends(get_db)):
     """Get all public tags"""
     try:
         logger.info("Getting public tags")
@@ -40,12 +38,13 @@ async def get_public_tags(
 async def create_public_tag(
     tag_data: TagCreate,
     db: Database = Depends(get_db),
-    user: UserInfo = Depends(require_authentication),
+    user: UserInfo = Depends(require_authentication),  # User needed for authentication only
 ):
     """Create a new public tag (requires authentication)"""
     try:
         logger.info(f"Creating public tag: {tag_data.name}")
-
+        _ = user  # Satisfy linter - user is needed for auth dependency
+        
         created_tag = db.create_public_tag(tag_data.name)
         return PublicTagResponse(**created_tag)
 
@@ -86,6 +85,72 @@ async def create_private_tag(
     except Exception as e:
         logger.error(f"Error creating private tag: {str(e)}")
         raise DatabaseException("Failed to create private tag", detail=str(e))
+
+
+@router.delete("/public/{tag_id}", response_model=MessageResponse)
+async def delete_public_tag(
+    tag_id: int,
+    db: Database = Depends(get_db),
+    user: UserInfo = Depends(require_authentication),  # User needed for authentication only
+):
+    """Delete a public tag completely (admin only - requires authentication)"""
+    try:
+        logger.info(f"Deleting public tag {tag_id}")
+        _ = user  # Satisfy linter - user is needed for auth dependency
+        
+        success = db.delete_public_tag(tag_id)
+        if not success:
+            raise NotFoundException(f"Public tag with ID {tag_id} not found")
+            
+        return MessageResponse(message="Public tag deleted successfully")
+        
+    except NotFoundException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting public tag: {str(e)}")
+        raise DatabaseException("Failed to delete public tag", detail=str(e))
+
+
+@router.delete("/private/{tag_id}", response_model=MessageResponse)
+async def delete_private_tag(
+    tag_id: int,
+    db: Database = Depends(get_db),
+    user: UserInfo = Depends(require_authentication),
+):
+    """Delete a private tag completely (user can only delete their own tags)"""
+    try:
+        logger.info(f"Deleting private tag {tag_id} for user {user.user_id}")
+        
+        success = db.delete_private_tag(tag_id, user.user_id)
+        if not success:
+            raise NotFoundException(f"Private tag with ID {tag_id} not found or not owned by user")
+            
+        return MessageResponse(message="Private tag deleted successfully")
+        
+    except NotFoundException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting private tag: {str(e)}")
+        raise DatabaseException("Failed to delete private tag", detail=str(e))
+
+
+@router.get("/search", response_model=List[dict])
+async def search_tags(
+    q: str,
+    db: Database = Depends(get_db),
+    user: UserInfo = Depends(get_current_user_optional),
+):
+    """Search for tags by name, returning both public and user's private tags"""
+    try:
+        logger.info(f"Searching tags with query: {q}")
+        
+        user_id = user.user_id if user else None
+        tags = db.search_tags(q, user_id)
+        return tags
+        
+    except Exception as e:
+        logger.error(f"Error searching tags: {str(e)}")
+        raise DatabaseException("Failed to search tags", detail=str(e))
 
 
 # Recipe tag association endpoints

@@ -6,6 +6,12 @@ let availableIngredients = [];
 let activeRowIndex = null;
 let activeIngredientIndex = -1;
 
+// Tag autocomplete management
+let selectedTags = [];
+let tagSuggestions = [];
+let activeSuggestionIndex = -1;
+let tagSearchTimeout = null;
+
 // Search pagination state
 let currentSearchQuery = null;
 let currentSearchPage = 1;
@@ -36,12 +42,16 @@ document.addEventListener('DOMContentLoaded', () => {
     addIngredientRowBtn.addEventListener('click', addIngredientRow);
     setupInitialIngredientRow();
 
+    // Setup tag autocomplete
+    setupTagAutocomplete();
+
     // Check for URL query parameters
     const urlParams = new URLSearchParams(window.location.search);
     const tagFromUrl = urlParams.get('tag');
 
     if (tagFromUrl) {
-        tagsSearch.value = tagFromUrl;
+        // Add the tag from URL as a selected tag
+        addTagChip({ name: tagFromUrl, type: 'public', id: null });
         performSearch(); // Auto-search if tag is in URL
     }
 
@@ -285,10 +295,9 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('No rating filter selected, skipping rating filter');
         }
         
-        // Add tags if provided
-        const tagsValue = tagsSearch.value.trim();
-        if (tagsValue) {
-            query.tags = tagsValue.split(',').map(tag => tag.trim());
+        // Add selected tags
+        if (selectedTags.length > 0) {
+            query.tags = selectedTags.map(tag => tag.name);
         }
         
         // Add inventory filter if checked
@@ -573,5 +582,200 @@ document.addEventListener('DOMContentLoaded', () => {
             // No longer need to set ingredient ID since we use names directly
             dropdown.style.display = 'none';
         }
+    }
+
+    // Tag autocomplete functionality
+    function setupTagAutocomplete() {
+        const tagInput = document.getElementById('tags-search');
+        const dropdown = document.getElementById('tag-suggestions-dropdown');
+        
+        if (!tagInput || !dropdown) return;
+        
+        // Input event for tag search
+        tagInput.addEventListener('input', handleTagInput);
+        
+        // Keyboard navigation
+        tagInput.addEventListener('keydown', handleTagKeydown);
+        
+        // Click outside to close dropdown
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.tag-search-container')) {
+                hideTagDropdown();
+            }
+        });
+        
+        // Handle clicking on suggestions
+        dropdown.addEventListener('click', handleTagSuggestionClick);
+    }
+    
+    function handleTagInput(e) {
+        const query = e.target.value.trim();
+        
+        // Clear previous timeout
+        if (tagSearchTimeout) {
+            clearTimeout(tagSearchTimeout);
+        }
+        
+        if (query.length < 1) {
+            hideTagDropdown();
+            return;
+        }
+        
+        // Debounce the search
+        tagSearchTimeout = setTimeout(() => {
+            searchTags(query);
+        }, 300);
+    }
+    
+    async function searchTags(query) {
+        const dropdown = document.getElementById('tag-suggestions-dropdown');
+        
+        try {
+            dropdown.innerHTML = '<div class="loading">Searching tags...</div>';
+            showTagDropdown();
+            
+            const results = await api.searchTags(query);
+            
+            if (results.length === 0) {
+                dropdown.innerHTML = '<div class="no-results">No tags found</div>';
+                return;
+            }
+            
+            // Filter out already selected tags
+            const filteredResults = results.filter(tag => 
+                !selectedTags.some(selected => selected.name === tag.name && selected.type === tag.type)
+            );
+            
+            if (filteredResults.length === 0) {
+                dropdown.innerHTML = '<div class="no-results">All matching tags already selected</div>';
+                return;
+            }
+            
+            // Generate suggestions HTML
+            const html = filteredResults.map((tag, index) => `
+                <div class="tag-suggestion-item" data-index="${index}" data-tag-id="${tag.id}" data-tag-name="${tag.name}" data-tag-type="${tag.type}">
+                    <span class="tag-suggestion-name">${tag.name}</span>
+                    <span class="tag-suggestion-type ${tag.type}">${tag.type}</span>
+                </div>
+            `).join('');
+            
+            dropdown.innerHTML = html;
+            tagSuggestions = filteredResults;
+            activeSuggestionIndex = -1;
+            
+        } catch (error) {
+            console.error('Error searching tags:', error);
+            dropdown.innerHTML = '<div class="no-results">Error loading suggestions</div>';
+        }
+    }
+    
+    function handleTagKeydown(e) {
+        const dropdown = document.getElementById('tag-suggestions-dropdown');
+        
+        if (dropdown.classList.contains('hidden')) return;
+        
+        const items = dropdown.querySelectorAll('.tag-suggestion-item');
+        
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                activeSuggestionIndex = Math.min(activeSuggestionIndex + 1, items.length - 1);
+                updateSuggestionHighlight(items);
+                break;
+                
+            case 'ArrowUp':
+                e.preventDefault();
+                activeSuggestionIndex = Math.max(activeSuggestionIndex - 1, -1);
+                updateSuggestionHighlight(items);
+                break;
+                
+            case 'Enter':
+                e.preventDefault();
+                if (activeSuggestionIndex >= 0 && items[activeSuggestionIndex]) {
+                    selectTagSuggestion(items[activeSuggestionIndex]);
+                }
+                break;
+                
+            case 'Escape':
+                hideTagDropdown();
+                break;
+        }
+    }
+    
+    function updateSuggestionHighlight(items) {
+        items.forEach((item, index) => {
+            item.classList.toggle('highlighted', index === activeSuggestionIndex);
+        });
+    }
+    
+    function handleTagSuggestionClick(e) {
+        const item = e.target.closest('.tag-suggestion-item');
+        if (item) {
+            selectTagSuggestion(item);
+        }
+    }
+    
+    function selectTagSuggestion(item) {
+        const tagId = item.dataset.tagId;
+        const tagName = item.dataset.tagName;
+        const tagType = item.dataset.tagType;
+        
+        addTagChip({ id: parseInt(tagId), name: tagName, type: tagType });
+        
+        // Clear input and hide dropdown
+        document.getElementById('tags-search').value = '';
+        hideTagDropdown();
+    }
+    
+    function addTagChip(tag) {
+        // Check if tag is already selected
+        if (selectedTags.some(selected => selected.name === tag.name && selected.type === tag.type)) {
+            return;
+        }
+        
+        selectedTags.push(tag);
+        renderTagChips();
+    }
+    
+    function removeTagChip(index) {
+        selectedTags.splice(index, 1);
+        renderTagChips();
+    }
+    
+    function renderTagChips() {
+        const container = document.getElementById('selected-tags-chips');
+        
+        if (selectedTags.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+        
+        const html = selectedTags.map((tag, index) => `
+            <div class="search-tag-chip tag-${tag.type}" data-index="${index}">
+                ${tag.name}
+                <button class="search-tag-chip-remove" data-index="${index}" title="Remove tag">×</button>
+            </div>
+        `).join('');
+        
+        container.innerHTML = html;
+        
+        // Add event listeners to remove buttons
+        container.querySelectorAll('.search-tag-chip-remove').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const index = parseInt(e.target.dataset.index);
+                removeTagChip(index);
+            });
+        });
+    }
+    
+    function showTagDropdown() {
+        document.getElementById('tag-suggestions-dropdown').classList.remove('hidden');
+    }
+    
+    function hideTagDropdown() {
+        const dropdown = document.getElementById('tag-suggestions-dropdown');
+        dropdown.classList.add('hidden');
+        activeSuggestionIndex = -1;
     }
 }); 

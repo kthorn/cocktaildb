@@ -45,8 +45,19 @@ function setupAdminPage() {
         uploadIngredientsBtn.addEventListener('click', handleBulkIngredientUpload);
     }
     
+    // Tag management elements
+    const refreshTagsBtn = document.getElementById('refresh-tags-btn');
+    if (refreshTagsBtn) {
+        refreshTagsBtn.addEventListener('click', loadPublicTags);
+    }
+    
     // Check authentication and show/hide admin tools accordingly
     updateUIBasedOnAuth();
+    
+    // Load initial data if user is authenticated
+    if (isAuthenticated()) {
+        loadPublicTags();
+    }
 }
 
 function updateUIBasedOnAuth() {
@@ -605,5 +616,109 @@ function displayIngredientUploadResults(result) {
     
     if (result.failed_count > 0) {
         showMessage(`${result.failed_count} ingredients failed validation. See details below.`, 'error');
+    }
+}
+
+// Public tag management functionality
+async function loadPublicTags() {
+    const tagsList = document.getElementById('public-tags-list');
+    const refreshBtn = document.getElementById('refresh-tags-btn');
+    
+    if (!tagsList) return;
+    
+    try {
+        // Show loading state
+        tagsList.innerHTML = '<div class="loading-message"><p>Loading public tags...</p></div>';
+        if (refreshBtn) {
+            refreshBtn.disabled = true;
+            refreshBtn.textContent = 'Loading...';
+        }
+        
+        const tags = await api.getPublicTags();
+        
+        if (tags.length === 0) {
+            tagsList.innerHTML = '<div class="empty-message"><p>No public tags found.</p></div>';
+            return;
+        }
+        
+        // Generate tag list HTML
+        let html = '';
+        tags.forEach(tag => {
+            html += `
+                <div class="tag-management-item" data-tag-id="${tag.id}">
+                    <div class="tag-management-info">
+                        <div class="tag-management-name">${tag.name}</div>
+                        <div class="tag-management-usage">Used in recipes (usage data not available)</div>
+                    </div>
+                    <div class="tag-management-actions">
+                        <button class="delete-tag-btn" data-tag-id="${tag.id}" data-tag-name="${tag.name}">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        tagsList.innerHTML = html;
+        
+        // Add event listeners for delete buttons
+        const deleteButtons = tagsList.querySelectorAll('.delete-tag-btn');
+        deleteButtons.forEach(btn => {
+            btn.addEventListener('click', handleDeletePublicTag);
+        });
+        
+    } catch (error) {
+        console.error('Error loading public tags:', error);
+        tagsList.innerHTML = '<div class="error-message"><p>Error loading tags. Please try again.</p></div>';
+        showMessage('Error loading public tags', 'error');
+    } finally {
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.textContent = 'Refresh Tags';
+        }
+    }
+}
+
+async function handleDeletePublicTag(event) {
+    const button = event.target;
+    const tagId = parseInt(button.dataset.tagId);
+    const tagName = button.dataset.tagName;
+    
+    // Confirm deletion
+    const confirmMessage = `Are you sure you want to delete the public tag "${tagName}"?\n\nThis will remove it from ALL recipes that use this tag. This action cannot be undone.`;
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    const originalText = button.textContent;
+    
+    try {
+        // Show loading state
+        button.disabled = true;
+        button.textContent = 'Deleting...';
+        
+        await api.deletePublicTag(tagId);
+        
+        // Remove the tag item from the UI
+        const tagItem = button.closest('.tag-management-item');
+        if (tagItem) {
+            tagItem.remove();
+        }
+        
+        showMessage(`Public tag "${tagName}" deleted successfully`, 'success');
+        
+        // Check if list is now empty
+        const tagsList = document.getElementById('public-tags-list');
+        if (tagsList && tagsList.children.length === 0) {
+            tagsList.innerHTML = '<div class="empty-message"><p>No public tags found.</p></div>';
+        }
+        
+    } catch (error) {
+        console.error('Error deleting public tag:', error);
+        showMessage(`Error deleting tag "${tagName}": ${error.message || 'Please try again'}`, 'error');
+        
+        // Restore button state
+        button.disabled = false;
+        button.textContent = originalText;
     }
 }

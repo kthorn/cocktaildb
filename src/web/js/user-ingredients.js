@@ -10,6 +10,9 @@ class UserIngredientsManager {
         this.selectedToAdd = new Set();
         this.selectedToRemove = new Set();
         
+        // Private tag management
+        this.privateTags = [];
+        
         this.init();
     }
 
@@ -23,6 +26,7 @@ class UserIngredientsManager {
         this.showAuthenticatedContent();
         this.bindEvents();
         await this.loadData();
+        await this.loadPrivateTags();
     }
 
     showAuthRequired() {
@@ -54,6 +58,11 @@ class UserIngredientsManager {
 
         document.getElementById('remove-selected-btn').addEventListener('click', () => {
             this.removeSelectedIngredients();
+        });
+
+        // Private tag management
+        document.getElementById('refresh-private-tags-btn').addEventListener('click', () => {
+            this.loadPrivateTags();
         });
     }
 
@@ -391,6 +400,113 @@ class UserIngredientsManager {
         setTimeout(() => {
             toast.remove();
         }, 5000);
+    }
+
+    // Private tag management methods
+    async loadPrivateTags() {
+        const tagsList = document.getElementById('private-tags-list');
+        const refreshBtn = document.getElementById('refresh-private-tags-btn');
+        
+        if (!tagsList) return;
+        
+        try {
+            // Show loading state
+            tagsList.innerHTML = '<div class="loading-message"><p>Loading your private tags...</p></div>';
+            if (refreshBtn) {
+                refreshBtn.disabled = true;
+                refreshBtn.textContent = 'Loading...';
+            }
+            
+            this.privateTags = await api.getPrivateTags();
+            
+            if (this.privateTags.length === 0) {
+                tagsList.innerHTML = '<div class="empty-message"><p>No private tags found. Create tags when adding them to recipes.</p></div>';
+                return;
+            }
+            
+            // Generate tag list HTML
+            let html = '';
+            this.privateTags.forEach(tag => {
+                html += `
+                    <div class="tag-management-item" data-tag-id="${tag.id}">
+                        <div class="tag-management-info">
+                            <div class="tag-management-name">${tag.name}</div>
+                            <div class="tag-management-usage">Private tag - only visible to you</div>
+                        </div>
+                        <div class="tag-management-actions">
+                            <button class="delete-tag-btn" data-tag-id="${tag.id}" data-tag-name="${tag.name}">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            tagsList.innerHTML = html;
+            
+            // Add event listeners for delete buttons
+            const deleteButtons = tagsList.querySelectorAll('.delete-tag-btn');
+            deleteButtons.forEach(btn => {
+                btn.addEventListener('click', (e) => this.handleDeletePrivateTag(e));
+            });
+            
+        } catch (error) {
+            console.error('Error loading private tags:', error);
+            tagsList.innerHTML = '<div class="error-message"><p>Error loading tags. Please try again.</p></div>';
+            this.showError('Error loading private tags');
+        } finally {
+            if (refreshBtn) {
+                refreshBtn.disabled = false;
+                refreshBtn.textContent = 'Refresh';
+            }
+        }
+    }
+
+    async handleDeletePrivateTag(event) {
+        const button = event.target;
+        const tagId = parseInt(button.dataset.tagId);
+        const tagName = button.dataset.tagName;
+        
+        // Confirm deletion
+        const confirmMessage = `Are you sure you want to delete your private tag "${tagName}"?\n\nThis will remove it from all your recipes that use this tag. This action cannot be undone.`;
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+        
+        const originalText = button.textContent;
+        
+        try {
+            // Show loading state
+            button.disabled = true;
+            button.textContent = 'Deleting...';
+            
+            await api.deletePrivateTag(tagId);
+            
+            // Remove the tag item from the UI
+            const tagItem = button.closest('.tag-management-item');
+            if (tagItem) {
+                tagItem.remove();
+            }
+            
+            // Update local data
+            this.privateTags = this.privateTags.filter(tag => tag.id !== tagId);
+            
+            this.showSuccess(`Private tag "${tagName}" deleted successfully`);
+            
+            // Check if list is now empty
+            const tagsList = document.getElementById('private-tags-list');
+            if (tagsList && tagsList.children.length === 0) {
+                tagsList.innerHTML = '<div class="empty-message"><p>No private tags found. Create tags when adding them to recipes.</p></div>';
+            }
+            
+        } catch (error) {
+            console.error('Error deleting private tag:', error);
+            this.showError(`Error deleting tag "${tagName}": ${error.message || 'Please try again'}`);
+            
+            // Restore button state
+            button.disabled = false;
+            button.textContent = originalText;
+        }
     }
 }
 

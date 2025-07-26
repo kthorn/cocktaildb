@@ -654,6 +654,28 @@ Resources:
             Method: post
             Auth:
               Authorizer: CognitoAuthorizer
+        DeletePublicTag:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /tags/public/{tagId}
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
+        DeletePrivateTag:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /tags/private/{tagId}
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
+        SearchTags:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /tags/search
+            Method: get
 
         PostRecipePublicTag:
           Type: Api

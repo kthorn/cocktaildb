@@ -2,7 +2,7 @@
 <html lang="en">
 
     <head>
-        <title>My Ingredients - Cocktail Database</title>
+        <title>My Ingredients & Tags - Cocktail Database</title>
         <!-- Prevent FOUC (Flash of Unstyled Content) with common.js fallback -->
     </head>
 
@@ -11,8 +11,8 @@
 
         <main>
             <section class="page-header">
-                <h2>My Ingredients</h2>
-                <p>Manage your personal ingredient inventory</p>
+                <h2>My Ingredients & Tags</h2>
+                <p>Manage your personal ingredient inventory and private tags</p>
             </section>
 
             <div class="auth-required-content">
@@ -42,10 +42,22 @@
                         </div>
                     </div>
                 </section>
+
+                <section class="private-tags">
+                    <div class="section-header">
+                        <h3>Your Private Tags</h3>
+                        <button id="refresh-private-tags-btn" class="btn btn-secondary">Refresh</button>
+                    </div>
+                    <div id="private-tags-list" class="tags-management-list">
+                        <div class="loading-message">
+                            <p>Loading your private tags...</p>
+                        </div>
+                    </div>
+                </section>
             </div>
 
             <div class="auth-required-message hidden">
-                <p>Please <button id="login-prompt-btn" class="btn btn-link">login</button> to manage your ingredients.</p>
+                <p>Please <button id="login-prompt-btn" class="btn btn-link">login</button> to manage your ingredients and tags.</p>
             </div>
         </main>
 

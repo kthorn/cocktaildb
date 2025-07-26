@@ -88,6 +88,25 @@
                         
                         <div id="ingredient-upload-results" style="margin-top: var(--space-md);"></div>
                     </div>
+
+                    <div class="card-container">
+                        <h3>Public Tag Management</h3>
+                        <p style="color: var(--text-light); margin-bottom: var(--space-md);">
+                            Manage public tags used across all recipes. Deleting a tag will remove it from all recipes.
+                        </p>
+                        
+                        <div class="form-actions" style="margin-bottom: var(--space-md);">
+                            <button id="refresh-tags-btn" class="btn btn-secondary">
+                                Refresh Tags
+                            </button>
+                        </div>
+                        
+                        <div id="public-tags-list" class="tags-management-list">
+                            <div class="loading-message">
+                                <p>Loading public tags...</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
         </main>

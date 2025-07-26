@@ -309,6 +309,22 @@ class CocktailAPI {
         return this._request('/tags/private', 'POST', { name: tagName }, true);
     }
 
+    // Delete a public tag (requires authentication - admin only)
+    async deletePublicTag(tagId) {
+        return this._request(`/tags/public/${tagId}`, 'DELETE', null, true);
+    }
+
+    // Delete a private tag (requires authentication - user owned only)
+    async deletePrivateTag(tagId) {
+        return this._request(`/tags/private/${tagId}`, 'DELETE', null, true);
+    }
+
+    // Search tags (optional authentication for private tags)
+    async searchTags(query) {
+        const params = new URLSearchParams({ q: query });
+        return this._request(`/tags/search?${params}`, 'GET', null, false);
+    }
+
     // User Ingredients API
     async getUserIngredients() {
         return this._request('/user-ingredients', 'GET', null, true);

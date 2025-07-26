@@ -304,7 +304,7 @@ class Database:
                     ),
                 )
                 return ingredient[0]
-            except Exception as e:
+            except Exception:
                 if conn:
                     conn.rollback()
                 raise
@@ -1867,6 +1867,140 @@ class Database:
             )
             raise
 
+    @retry_on_db_locked()
+    def delete_public_tag(self, tag_id: int) -> bool:
+        """Delete a public tag completely from the database.
+        This will CASCADE delete all recipe_tags associations.
+        
+        Args:
+            tag_id: ID of the public tag to delete
+            
+        Returns:
+            bool: True if tag was deleted, False if not found
+            
+        Raises:
+            DatabaseException: If tag is private or database error occurs
+        """
+        try:
+            cursor = self.connection.cursor()
+            
+            # First verify the tag exists and is public
+            cursor.execute("SELECT id, created_by FROM tags WHERE id = ?", (tag_id,))
+            tag_row = cursor.fetchone()
+            
+            if not tag_row:
+                return False
+                
+            # Check if tag is public (created_by should be NULL)
+            if tag_row[1] is not None:
+                raise Exception("Cannot delete private tag through public tag deletion method")
+                
+            # Delete the tag (CASCADE will handle recipe_tags)
+            cursor.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
+            self.connection.commit()
+            
+            logger.info(f"Successfully deleted public tag {tag_id}")
+            return cursor.rowcount > 0
+            
+        except Exception as e:
+            logger.error(f"Error deleting public tag {tag_id}: {str(e)}")
+            raise
+
+    @retry_on_db_locked()
+    def delete_private_tag(self, tag_id: int, user_id: str) -> bool:
+        """Delete a private tag completely from the database.
+        This will CASCADE delete all recipe_tags associations.
+        Only the tag owner can delete their private tags.
+        
+        Args:
+            tag_id: ID of the private tag to delete
+            user_id: ID of the user attempting to delete (must be tag owner)
+            
+        Returns:
+            bool: True if tag was deleted, False if not found or not owned by user
+            
+        Raises:
+            DatabaseException: If tag is public or database error occurs
+        """
+        try:
+            cursor = self.connection.cursor()
+            
+            # First verify the tag exists, is private, and belongs to the user
+            cursor.execute("SELECT id, created_by FROM tags WHERE id = ? AND created_by = ?", (tag_id, user_id))
+            tag_row = cursor.fetchone()
+            
+            if not tag_row:
+                return False
+                
+            # Delete the tag (CASCADE will handle recipe_tags)
+            cursor.execute("DELETE FROM tags WHERE id = ? AND created_by = ?", (tag_id, user_id))
+            self.connection.commit()
+            
+            logger.info(f"Successfully deleted private tag {tag_id} for user {user_id}")
+            return cursor.rowcount > 0
+            
+        except Exception as e:
+            logger.error(f"Error deleting private tag {tag_id} for user {user_id}: {str(e)}")
+            raise
+
+    @retry_on_db_locked()
+    def search_tags(self, query: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Search for tags by name, returning both public and user's private tags.
+        
+        Args:
+            query: Search query to match against tag names
+            user_id: Optional user ID to include their private tags
+            
+        Returns:
+            List of matching tags with type indicators
+        """
+        try:
+            cursor = self.connection.cursor()
+            tags = []
+            
+            # Search public tags
+            cursor.execute("""
+                SELECT id, name, 'public' as type, 
+                       (SELECT COUNT(*) FROM recipe_tags WHERE tag_id = tags.id) as usage_count
+                FROM tags 
+                WHERE created_by IS NULL AND name LIKE ? 
+                ORDER BY name COLLATE NOCASE
+            """, (f"%{query}%",))
+            
+            for row in cursor.fetchall():
+                tags.append({
+                    "id": row[0],
+                    "name": row[1],
+                    "type": row[2],
+                    "usage_count": row[3]
+                })
+            
+            # Search private tags if user is authenticated
+            if user_id:
+                cursor.execute("""
+                    SELECT id, name, 'private' as type,
+                           (SELECT COUNT(*) FROM recipe_tags WHERE tag_id = tags.id) as usage_count
+                    FROM tags 
+                    WHERE created_by = ? AND name LIKE ? 
+                    ORDER BY name COLLATE NOCASE
+                """, (user_id, f"%{query}%"))
+                
+                for row in cursor.fetchall():
+                    tags.append({
+                        "id": row[0],
+                        "name": row[1],
+                        "type": row[2],
+                        "usage_count": row[3]
+                    })
+            
+            # Sort combined results by name
+            tags.sort(key=lambda x: x["name"].lower())
+            return tags
+            
+        except Exception as e:
+            logger.error(f"Error searching tags for query '{query}' and user {user_id}: {str(e)}")
+            raise
+
     # --- End Tag Management ---
 
     # --- Pagination Methods ---
@@ -2482,7 +2616,7 @@ class Database:
                 raise ValueError(error_summary)
 
             # Third pass: sort ingredients by path depth (deepest first) to ensure children are deleted before parents
-            logger.info(f"Sorting ingredients by path depth for ordered deletion")
+            logger.info("Sorting ingredients by path depth for ordered deletion")
             valid_ingredients.sort(
                 key=lambda x: len(x["path"].split("/")) if x["path"] else 0,
                 reverse=True,

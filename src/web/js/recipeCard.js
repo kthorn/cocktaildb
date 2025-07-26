@@ -74,16 +74,29 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
     const shouldShowAddTagButton = isAuthenticated(); // Check if user is authenticated for add tag button
     
     const publicTags = recipe.tags && Array.isArray(recipe.tags) ? recipe.tags.filter(tag => tag.type === 'public') : [];
-    const publicTagNames = (publicTags || []).map(tag => tag.name);
-    const hasPublicTags = publicTagNames.length > 0;
+    const privateTags = recipe.tags && Array.isArray(recipe.tags) ? recipe.tags.filter(tag => tag.type === 'private') : [];
+    const hasAnyTags = publicTags.length > 0 || privateTags.length > 0;
+    
+    // Helper function to generate tag chips
+    function generateTagChips(tags, isPrivate = false) {
+        return tags.map(tag => `
+            <span class="tag-chip ${isPrivate ? 'tag-private' : 'tag-public'}" data-tag-id="${tag.id}" data-tag-type="${tag.type}">
+                ${tag.name}
+                ${shouldShowActions ? `<button class="tag-remove-btn" data-recipe-id="${recipe.id}" data-tag-id="${tag.id}" data-tag-type="${tag.type}" title="Remove from recipe">×</button>` : ''}
+            </span>
+        `).join('');
+    }
     
     // Start with the basic recipe details
     card.innerHTML = `
         <h4 class="recipe-title">${recipe.name}</h4>
         <div class="recipe-meta">
             <div class="recipe-tags">
-                <span class="existing-tags" style="display: ${hasPublicTags ? 'inline' : 'none'};">${publicTagNames.join(', ')}</span>
-                <span class="no-tags-placeholder" style="display: ${hasPublicTags ? 'none' : 'inline'};">No tags yet</span>
+                <div class="tags-container" style="display: ${hasAnyTags ? 'inline' : 'none'};">
+                    ${generateTagChips(publicTags, false)}
+                    ${generateTagChips(privateTags, true)}
+                </div>
+                <span class="no-tags-placeholder" style="display: ${hasAnyTags ? 'none' : 'inline'};">No tags yet</span>
                 ${shouldShowAddTagButton ? `
                 <button class="add-tag-btn" 
                         data-recipe-id="${recipe.id}" 
@@ -670,21 +683,33 @@ async function handleSaveTags() {
         // Update the specific recipe card UI
         const recipeCardElement = document.querySelector(`.recipe-card[data-id="${recipeId}"]`);
         if (recipeCardElement) {
-            const tagsDisplay = recipeCardElement.querySelector('.recipe-tags .existing-tags');
+            const tagsContainer = recipeCardElement.querySelector('.recipe-tags .tags-container');
             const noTagsPlaceholder = recipeCardElement.querySelector('.recipe-tags .no-tags-placeholder');
             const addTagButtonOnCard = recipeCardElement.querySelector('.add-tag-btn');
 
-            // Filter for public tags and ensure names are usable
-            const namesToDisplay = modalFinalTags
-                .filter(t => t.type === 'public' && t.name && t.name.trim() !== '')
-                .map(t => t.name.trim());
+            // Separate public and private tags
+            const publicTags = modalFinalTags.filter(t => t.type === 'public' && t.name && t.name.trim() !== '');
+            const privateTags = modalFinalTags.filter(t => t.type === 'private' && t.name && t.name.trim() !== '');
+            const hasAnyTags = publicTags.length > 0 || privateTags.length > 0;
 
-            if (tagsDisplay) {
-                tagsDisplay.textContent = namesToDisplay.join(', ');
-                tagsDisplay.style.display = namesToDisplay.length > 0 ? 'inline' : 'none';
+            if (tagsContainer) {
+                // Helper function to generate tag chips (same as in createRecipeCard)
+                const shouldShowActions = isAuthenticated(); // For tag removal buttons
+                function generateTagChips(tags, isPrivate = false) {
+                    return tags.map(tag => `
+                        <span class="tag-chip ${isPrivate ? 'tag-private' : 'tag-public'}" data-tag-id="${tag.id}" data-tag-type="${tag.type}">
+                            ${tag.name}
+                            ${shouldShowActions ? `<button class="tag-remove-btn" data-recipe-id="${recipeId}" data-tag-id="${tag.id}" data-tag-type="${tag.type}" title="Remove from recipe">×</button>` : ''}
+                        </span>
+                    `).join('');
+                }
+                
+                // Update the tags container with new chips
+                tagsContainer.innerHTML = generateTagChips(publicTags, false) + generateTagChips(privateTags, true);
+                tagsContainer.style.display = hasAnyTags ? 'inline' : 'none';
             }
             if (noTagsPlaceholder) {
-                noTagsPlaceholder.style.display = namesToDisplay.length > 0 ? 'none' : 'inline';
+                noTagsPlaceholder.style.display = hasAnyTags ? 'none' : 'inline';
             }
             if (addTagButtonOnCard) {
                 const updatedRecipeData = await api.getRecipe(recipeId);
@@ -715,6 +740,63 @@ document.addEventListener('click', (e) => {
         const recipeName = addTagButton.dataset.recipeName;
         const currentTagsJson = addTagButton.dataset.recipeTags;
         openTagEditorModal(recipeId, recipeName, currentTagsJson);
+    }
+});
+
+// Delegated event listener for removing tags from recipes
+document.addEventListener('click', async (e) => {
+    const removeTagButton = e.target.closest('.tag-remove-btn');
+    if (removeTagButton) {
+        e.preventDefault();
+        e.stopPropagation(); // Prevent triggering other click handlers
+        
+        const recipeId = parseInt(removeTagButton.dataset.recipeId);
+        const tagId = parseInt(removeTagButton.dataset.tagId);
+        const tagType = removeTagButton.dataset.tagType;
+        const tagName = removeTagButton.parentElement.textContent.replace('×', '').trim();
+        
+        // Confirm removal
+        if (!confirm(`Remove "${tagName}" from this recipe?`)) {
+            return;
+        }
+        
+        try {
+            removeTagButton.disabled = true;
+            removeTagButton.textContent = '...';
+            
+            // Call the API to remove the tag from the recipe
+            const response = await api.removeTagFromRecipe(recipeId, tagId, tagType);
+            
+            if (response.success !== false) {
+                // Remove the tag chip from the UI
+                const tagChip = removeTagButton.parentElement;
+                tagChip.remove();
+                
+                // Check if there are any tags left and update placeholder visibility
+                const recipeCard = removeTagButton.closest('.recipe-card');
+                const tagsContainer = recipeCard.querySelector('.tags-container');
+                const noTagsPlaceholder = recipeCard.querySelector('.no-tags-placeholder');
+                
+                if (tagsContainer && tagsContainer.children.length === 0) {
+                    tagsContainer.style.display = 'none';
+                    if (noTagsPlaceholder) {
+                        noTagsPlaceholder.style.display = 'inline';
+                    }
+                }
+                
+                // Show success feedback
+                console.log(`Tag "${tagName}" removed from recipe`);
+            } else {
+                throw new Error(response.error || 'Failed to remove tag');
+            }
+        } catch (error) {
+            console.error('Error removing tag:', error);
+            alert(`Failed to remove tag: ${error.message}`);
+            
+            // Restore button state
+            removeTagButton.disabled = false;
+            removeTagButton.textContent = '×';
+        }
     }
 });
 
