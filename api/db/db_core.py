@@ -12,6 +12,7 @@ from .sql_queries import (
     get_recipe_by_id_sql,
     get_all_recipes_sql,
     get_recipe_ingredients_by_recipe_id_sql_factory,
+    INGREDIENT_SELECT_FIELDS,
 )
 
 # Configure logging
@@ -222,16 +223,26 @@ class Database:
             # Validate required data types
             name = data.get("name")
             if not isinstance(name, str):
-                raise TypeError(f"Ingredient name must be a string, got {type(name).__name__}")
+                raise TypeError(
+                    f"Ingredient name must be a string, got {type(name).__name__}"
+                )
             if not name.strip():
                 raise ValueError("Ingredient name cannot be empty or whitespace only")
-            
-            if data.get("description") is not None and not isinstance(data.get("description"), str):
-                raise TypeError(f"Ingredient description must be a string or None, got {type(data.get('description')).__name__}")
-            
-            if data.get("parent_id") is not None and not isinstance(data.get("parent_id"), int):
-                raise TypeError(f"Ingredient parent_id must be an integer or None, got {type(data.get('parent_id')).__name__}")
-            
+
+            if data.get("description") is not None and not isinstance(
+                data.get("description"), str
+            ):
+                raise TypeError(
+                    f"Ingredient description must be a string or None, got {type(data.get('description')).__name__}"
+                )
+
+            if data.get("parent_id") is not None and not isinstance(
+                data.get("parent_id"), int
+            ):
+                raise TypeError(
+                    f"Ingredient parent_id must be an integer or None, got {type(data.get('parent_id')).__name__}"
+                )
+
             # SQLite doesn't have a direct equivalent to Postgres' add_ingredient function
             # We'll implement the path generation logic here
             parent_path = None
@@ -717,7 +728,6 @@ class Database:
     ) -> List[Dict[str, Any]]:
         """Get all recipes with their full ingredient details (for detailed views)"""
         try:
-            start_time = time.time()
             # 1. Get all recipes
             params = {"cognito_user_id": cognito_user_id}
             recipes_result = cast(
@@ -848,14 +858,15 @@ class Database:
         direct_ingredients = cast(
             List[Dict[str, Any]],
             self.execute_query(
-                """
-                SELECT ri.id, ri.amount, ri.ingredient_id, i.name as ingredient_name,
-                       ri.unit_id, u.name as unit_name, u.abbreviation as unit_abbreviation,
-                       i.path as ingredient_path
+                f"""
+                SELECT {INGREDIENT_SELECT_FIELDS}
                 FROM recipe_ingredients ri
                 JOIN ingredients i ON ri.ingredient_id = i.id
                 LEFT JOIN units u ON ri.unit_id = u.id
                 WHERE ri.recipe_id = :recipe_id
+                ORDER BY ri.recipe_id ASC,
+                    COALESCE(ri.amount * u.conversion_to_ml, 0) DESC,
+                    ri.id ASC
                 """,
                 {"recipe_id": recipe_id},
             ),
@@ -882,6 +893,10 @@ class Database:
 
         # Assemble full_name for each ingredient using the helper method
         assemble_ingredient_full_names(direct_ingredients, ingredient_names)
+
+        # Map recipe_ingredient_id to id for frontend consistency
+        for ingredient in direct_ingredients:
+            ingredient["id"] = ingredient["recipe_ingredient_id"]
 
         return direct_ingredients
 

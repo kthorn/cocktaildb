@@ -1,5 +1,13 @@
 from typing import List
 
+# Shared SQL fragments for ingredient queries
+INGREDIENT_SELECT_FIELDS = """
+    ri.id as recipe_ingredient_id, ri.amount, ri.ingredient_id, i.name as ingredient_name,
+    ri.unit_id, u.name as unit_name, u.abbreviation as unit_abbreviation,
+    i.path as ingredient_path, u.conversion_to_ml
+"""
+
+
 get_recipe_by_id_sql = """
     SELECT
         r.id, r.name, r.instructions, r.description, r.image_url, 
@@ -43,13 +51,14 @@ get_all_recipes_sql = """
 def get_recipe_ingredients_by_recipe_id_sql_factory(recipe_ids: list[int]) -> str:
     recipe_ids_str = ",".join("?" for _ in recipe_ids)
     return f"""
-        SELECT ri.recipe_id, ri.id as recipe_ingredient_id, ri.amount, ri.ingredient_id, i.name as ingredient_name,
-                ri.unit_id, u.name as unit_name, u.abbreviation as unit_abbreviation,
-                i.path as ingredient_path
+        SELECT ri.recipe_id, {INGREDIENT_SELECT_FIELDS}
         FROM recipe_ingredients ri
         JOIN ingredients i ON ri.ingredient_id = i.id
         LEFT JOIN units u ON ri.unit_id = u.id
         WHERE ri.recipe_id IN ({recipe_ids_str})
+        ORDER BY ri.recipe_id ASC,
+        COALESCE(ri.amount * u.conversion_to_ml, 0) DESC,
+        ri.id ASC
     """
 
 
@@ -95,9 +104,7 @@ get_recipes_paginated_with_ingredients_sql = """
         pr.id, pr.name, pr.instructions, pr.description, pr.image_url,
         pr.source, pr.source_url, pr.avg_rating, pr.rating_count,
         pr.public_tags_data, pr.private_tags_data, pr.user_rating,
-        ri.id as recipe_ingredient_id, ri.amount,
-        ri.ingredient_id, i.name as ingredient_name, i.path as ingredient_path,
-        ri.unit_id, u.name as unit_name, u.abbreviation as unit_abbreviation
+        {INGREDIENT_SELECT_FIELDS}
     FROM 
         paginated_recipes pr
     LEFT JOIN
@@ -107,7 +114,9 @@ get_recipes_paginated_with_ingredients_sql = """
     LEFT JOIN
         units u ON ri.unit_id = u.id
     ORDER BY
-        pr.id, ri.id
+        pr.id ASC,
+        COALESCE(ri.amount * u.conversion_to_ml, 0) DESC,
+        ri.id ASC
 """
 
 # Dynamic SQL generation function for ingredient filtering
@@ -226,9 +235,7 @@ def build_search_recipes_paginated_sql(
             sr.id, sr.name, sr.instructions, sr.description, sr.image_url,
             sr.source, sr.source_url, sr.avg_rating, sr.rating_count,
             sr.public_tags_data, sr.private_tags_data, sr.user_rating,
-            ri.id as recipe_ingredient_id, ri.amount,
-            ri.ingredient_id, i.name as ingredient_name, i.path as ingredient_path,
-            ri.unit_id, u.name as unit_name, u.abbreviation as unit_abbreviation
+            {INGREDIENT_SELECT_FIELDS}
         FROM 
             search_results sr
         LEFT JOIN
@@ -238,7 +245,9 @@ def build_search_recipes_paginated_sql(
         LEFT JOIN
             units u ON ri.unit_id = u.id
         ORDER BY
-            sr.id, ri.id
+            sr.id ASC,
+            COALESCE(ri.amount * u.conversion_to_ml, 0) DESC,
+            ri.id ASC
     )
     SELECT * FROM paginated_with_ingredients
     """
