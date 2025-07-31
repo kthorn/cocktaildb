@@ -69,7 +69,7 @@ class TestRecipeCRUD:
                 ],
             }
 
-            with pytest.raises(sqlite3.IntegrityError):
+            with pytest.raises(ValueError, match="Invalid ingredient ID"):
                 db.create_recipe(recipe_data)
 
     def test_get_recipe_by_id(self, memory_db_with_schema):
@@ -573,7 +573,7 @@ class TestRecipeConstraints:
             db = Database()
 
             # Try to create recipe with non-existent ingredient
-            with pytest.raises(sqlite3.IntegrityError):
+            with pytest.raises(ValueError, match="Invalid ingredient ID"):
                 db.create_recipe(
                     {
                         "name": "Invalid Recipe",

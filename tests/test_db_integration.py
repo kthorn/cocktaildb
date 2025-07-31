@@ -40,7 +40,7 @@ class TestTransactionConsistency:
             }
 
             # Should fail due to invalid ingredient
-            with pytest.raises(sqlite3.IntegrityError):
+            with pytest.raises(ValueError, match="Invalid ingredient IDs: 999"):
                 db.create_recipe(recipe_data)
 
             # Verify no recipe was created (transaction rolled back)

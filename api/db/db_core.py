@@ -658,9 +658,90 @@ class Database:
             )
             raise
 
+    def _validate_recipe_ingredients(self, ingredients: List[Dict[str, Any]]) -> None:
+        """Validate recipe ingredients before database operations"""
+        if not ingredients:
+            return
+        
+        # Collect all ingredient IDs for batch validation
+        ingredient_ids = []
+        
+        for i, ingredient in enumerate(ingredients):
+            # Validate required fields
+            if "ingredient_id" not in ingredient:
+                raise ValueError(f"Ingredient {i + 1}: missing required field 'ingredient_id'")
+            
+            ingredient_id = ingredient["ingredient_id"]
+            if ingredient_id is None:
+                raise ValueError(f"Ingredient {i + 1}: 'ingredient_id' cannot be None")
+            
+            # Validate ingredient_id is an integer
+            if not isinstance(ingredient_id, int):
+                try:
+                    ingredient_id = int(ingredient_id)
+                    ingredient["ingredient_id"] = ingredient_id  # Update the dict with converted value
+                except (ValueError, TypeError):
+                    raise ValueError(f"Ingredient {i + 1}: 'ingredient_id' must be an integer, got {type(ingredient_id).__name__}")
+            
+            ingredient_ids.append(ingredient_id)
+            
+            # Validate amount if present
+            if "amount" in ingredient and ingredient["amount"] is not None:
+                amount = ingredient["amount"]
+                if not isinstance(amount, (int, float)):
+                    try:
+                        amount = float(amount)
+                        ingredient["amount"] = amount  # Update the dict with converted value
+                    except (ValueError, TypeError):
+                        raise ValueError(f"Ingredient {i + 1}: 'amount' must be numeric, got {type(amount).__name__}: '{amount}'")
+                
+                # Validate amount is not negative
+                if amount < 0:
+                    raise ValueError(f"Ingredient {i + 1}: 'amount' cannot be negative, got {amount}")
+            
+            # Validate unit_id if present
+            if "unit_id" in ingredient and ingredient["unit_id"] is not None:
+                unit_id = ingredient["unit_id"]
+                if not isinstance(unit_id, int):
+                    try:
+                        unit_id = int(unit_id)
+                        ingredient["unit_id"] = unit_id  # Update the dict with converted value
+                    except (ValueError, TypeError):
+                        raise ValueError(f"Ingredient {i + 1}: 'unit_id' must be an integer, got {type(unit_id).__name__}")
+        
+        # Batch validate that all ingredient IDs exist
+        if ingredient_ids:
+            self._validate_ingredients_exist(ingredient_ids)
+
+    def _validate_ingredients_exist(self, ingredient_ids: List[int]) -> None:
+        """Validate that all ingredient IDs exist in the database"""
+        try:
+            placeholders = ",".join("?" for _ in ingredient_ids)
+            existing_ids_result = self.execute_query(
+                f"SELECT id FROM ingredients WHERE id IN ({placeholders})",
+                tuple(ingredient_ids)
+            )
+            
+            existing_ids = set(row["id"] for row in existing_ids_result)
+            missing_ids = set(ingredient_ids) - existing_ids
+            
+            if missing_ids:
+                missing_ids_str = ", ".join(str(id) for id in sorted(missing_ids))
+                raise ValueError(f"Invalid ingredient IDs: {missing_ids_str}")
+                
+        except Exception as e:
+            if "Invalid ingredient IDs" in str(e):
+                raise  # Re-raise our custom validation error
+            logger.error(f"Error validating ingredient existence: {str(e)}")
+            raise ValueError("Failed to validate ingredient existence")
+
     @retry_on_db_locked()
     def create_recipe(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new recipe with its ingredients"""
+        # Validate ingredients before starting database transaction
+        if "ingredients" in data and data["ingredients"]:
+            self._validate_recipe_ingredients(data["ingredients"])
+        
         conn = None
         try:
             conn = self._get_connection()
