@@ -1907,33 +1907,17 @@ class Database:
             tag_id: ID of the public tag to delete
             
         Returns:
-            bool: True if tag was deleted, False if not found
-            
-        Raises:
-            DatabaseException: If tag is private or database error occurs
+            bool: True if tag was deleted, False if not found or is private
         """
         try:
-            with self.get_connection() as conn:
-                cursor = conn.cursor()
-                
-                # First verify the tag exists and is public
-                cursor.execute("SELECT id, created_by FROM tags WHERE id = ?", (tag_id,))
-                tag_row = cursor.fetchone()
-                
-                if not tag_row:
-                    return False
-                    
-                # Check if tag is public (created_by should be NULL)
-                if tag_row[1] is not None:
-                    raise Exception("Cannot delete private tag through public tag deletion method")
-                    
-                # Delete the tag (CASCADE will handle recipe_tags)
-                cursor.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
-                conn.commit()
-                
+            result = self.execute_query(
+                "DELETE FROM tags WHERE id = :tag_id AND created_by IS NULL",
+                {"tag_id": tag_id}
+            )
+            success = result.get("rowCount", 0) > 0
+            if success:
                 logger.info(f"Successfully deleted public tag {tag_id}")
-                return cursor.rowcount > 0
-                
+            return success
         except Exception as e:
             logger.error(f"Error deleting public tag {tag_id}: {str(e)}")
             raise
@@ -1950,28 +1934,16 @@ class Database:
             
         Returns:
             bool: True if tag was deleted, False if not found or not owned by user
-            
-        Raises:
-            DatabaseException: If tag is public or database error occurs
         """
         try:
-            with self.get_connection() as conn:
-                cursor = conn.cursor()
-                
-                # First verify the tag exists, is private, and belongs to the user
-                cursor.execute("SELECT id, created_by FROM tags WHERE id = ? AND created_by = ?", (tag_id, user_id))
-                tag_row = cursor.fetchone()
-                
-                if not tag_row:
-                    return False
-                    
-                # Delete the tag (CASCADE will handle recipe_tags)
-                cursor.execute("DELETE FROM tags WHERE id = ? AND created_by = ?", (tag_id, user_id))
-                conn.commit()
-                
+            result = self.execute_query(
+                "DELETE FROM tags WHERE id = :tag_id AND created_by = :user_id",
+                {"tag_id": tag_id, "user_id": user_id}
+            )
+            success = result.get("rowCount", 0) > 0
+            if success:
                 logger.info(f"Successfully deleted private tag {tag_id} for user {user_id}")
-                return cursor.rowcount > 0
-                
+            return success
         except Exception as e:
             logger.error(f"Error deleting private tag {tag_id} for user {user_id}: {str(e)}")
             raise
