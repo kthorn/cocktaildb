@@ -815,34 +815,40 @@ class Database:
 
             # Process public tags
             public_tags_str = recipe_data.get("public_tags_data")
+            logger.info(f"Recipe {recipe_id} public_tags_data: '{public_tags_str}'")
             if public_tags_str:
                 for tag_data_str in public_tags_str.split(":::"):
                     try:
                         tag_id_str, tag_name = tag_data_str.split("|||", 1)
-                        recipe["tags"].append(
-                            {"id": int(tag_id_str), "name": tag_name, "type": "public"}
-                        )
+                        tag_obj = {"id": int(tag_id_str), "name": tag_name, "type": "public"}
+                        recipe["tags"].append(tag_obj)
+                        logger.info(f"Added public tag to recipe {recipe_id}: {tag_obj}")
                     except ValueError as ve:
                         logger.warning(
                             f"Could not parse public tag_data_str '{tag_data_str}': {ve}"
                         )
             # Process private tags
             private_tags_str = recipe_data.get("private_tags_data")
+            logger.info(f"Recipe {recipe_id} private_tags_data: '{private_tags_str}' for user {cognito_user_id}")
             if (
                 private_tags_str and cognito_user_id
             ):  # Only process if user_id was present for the query
                 for tag_data_str in private_tags_str.split(":::"):
                     try:
                         tag_id_str, tag_name = tag_data_str.split("|||", 1)
-                        recipe["tags"].append(
-                            {"id": int(tag_id_str), "name": tag_name, "type": "private"}
-                        )
+                        tag_obj = {"id": int(tag_id_str), "name": tag_name, "type": "private"}
+                        recipe["tags"].append(tag_obj)
+                        logger.info(f"Added private tag to recipe {recipe_id}: {tag_obj}")
                     except ValueError as ve:
                         logger.warning(
                             f"Could not parse private tag_data_str '{tag_data_str}': {ve}"
                         )
             # Fetch ingredients separately
             recipe["ingredients"] = self._get_recipe_ingredients(recipe_id)
+            
+            # Log final tag list
+            logger.info(f"Recipe {recipe_id} final tag list ({len(recipe['tags'])} tags): {recipe['tags']}")
+            
             return recipe
 
         except Exception as e:
@@ -1538,6 +1544,7 @@ class Database:
         if not name:
             raise ValueError("Tag name cannot be empty")
         try:
+            logger.info(f"DB: Creating public tag '{name}'")
             self.execute_query(
                 "INSERT INTO tags (name, created_by) VALUES (:name, NULL)",
                 {"name": name},
@@ -1552,7 +1559,9 @@ class Database:
                 ),
             )
             if not tag:  # Should not happen if insert succeeded
+                logger.error(f"DB: Failed to retrieve public tag '{name}' after creation")
                 raise sqlite3.DatabaseError("Failed to retrieve tag after creation.")
+            logger.info(f"DB: Successfully created public tag: {tag[0]}")
             return tag[0]
         except sqlite3.IntegrityError:
             logger.warning(f"Public tag '{name}' already exists.")
@@ -1689,6 +1698,7 @@ class Database:
     def add_public_tag_to_recipe(self, recipe_id: int, tag_id: int) -> bool:
         """Associates a public tag with a recipe."""
         try:
+            logger.info(f"DB: Adding public tag {tag_id} to recipe {recipe_id}")
             result = self.execute_query(
                 """
                 INSERT INTO recipe_tags (recipe_id, tag_id) 
@@ -1697,7 +1707,12 @@ class Database:
                 """,
                 {"recipe_id": recipe_id, "tag_id": tag_id},
             )
-            return result.get("rowCount", 0) > 0
+            rows_affected = result.get("rowCount", 0)
+            if rows_affected > 0:
+                logger.info(f"DB: Successfully added tag {tag_id} to recipe {recipe_id}")
+            else:
+                logger.warning(f"DB: Tag {tag_id} already associated with recipe {recipe_id} (conflict ignored)")
+            return rows_affected > 0
         except Exception as e:
             logger.error(
                 f"Error adding public tag {tag_id} to recipe {recipe_id}: {str(e)}"
@@ -1710,6 +1725,7 @@ class Database:
         try:
             # We assume tag_id corresponds to a private tag owned by the relevant user.
             # The check for tag ownership should happen in the handler before calling this.
+            logger.info(f"DB: Adding private tag {tag_id} to recipe {recipe_id}")
             result = self.execute_query(
                 """
                 INSERT INTO recipe_tags (recipe_id, tag_id)
@@ -1718,7 +1734,12 @@ class Database:
                 """,
                 {"recipe_id": recipe_id, "tag_id": tag_id},
             )
-            return result.get("rowCount", 0) > 0
+            rows_affected = result.get("rowCount", 0)
+            if rows_affected > 0:
+                logger.info(f"DB: Successfully added private tag {tag_id} to recipe {recipe_id}")
+            else:
+                logger.warning(f"DB: Private tag {tag_id} already associated with recipe {recipe_id} (conflict ignored)")
+            return rows_affected > 0
         except Exception as e:
             logger.error(
                 f"Error adding private tag {tag_id} to recipe {recipe_id}: {str(e)}"

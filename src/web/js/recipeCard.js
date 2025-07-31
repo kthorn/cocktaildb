@@ -73,8 +73,19 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
     const shouldShowActions = showActions && isAuthenticated();
     const shouldShowAddTagButton = isAuthenticated(); // Check if user is authenticated for add tag button
     
-    const publicTags = recipe.tags && Array.isArray(recipe.tags) ? recipe.tags.filter(tag => tag.type === 'public') : [];
-    const privateTags = recipe.tags && Array.isArray(recipe.tags) ? recipe.tags.filter(tag => tag.type === 'private') : [];
+    // Deduplicate tags by ID to handle any backend duplicates
+    const uniqueTagsMap = new Map();
+    if (recipe.tags && Array.isArray(recipe.tags)) {
+        recipe.tags.forEach(tag => {
+            if (tag && tag.id && tag.name && tag.name.trim() !== '') {
+                uniqueTagsMap.set(tag.id, tag);
+            }
+        });
+    }
+    const deduplicatedTags = Array.from(uniqueTagsMap.values());
+    
+    const publicTags = deduplicatedTags.filter(tag => tag.type === 'public');
+    const privateTags = deduplicatedTags.filter(tag => tag.type === 'private');
     const hasAnyTags = publicTags.length > 0 || privateTags.length > 0;
     
     // Helper function to generate tag chips
@@ -652,6 +663,10 @@ async function handleSaveTags() {
     saveTagsBtnEl.textContent = 'Saving...';
 
     try {
+        console.log('Save tags process started');
+        console.log('Original recipe tags:', originalRecipeTagsForEdit);
+        console.log('Current recipe tags (in modal):', currentRecipeTags);
+        
         const tagsToActuallyRemove = [];
         const tagsToActuallyAdd = [];
 
@@ -677,28 +692,76 @@ async function handleSaveTags() {
             }
         }
 
+        console.log('Tags to remove:', tagsToActuallyRemove);
+        console.log('Tags to add:', tagsToActuallyAdd);
+
         for (const tag of tagsToActuallyRemove) {
             // Ensure tag ID is a valid integer
             if (!tag.id || isNaN(parseInt(tag.id))) {
                 console.error('Invalid tag ID for removal:', tag);
                 continue;
             }
-            await api.removeTagFromRecipe(recipeId, parseInt(tag.id), tag.type);
+            console.log('Removing tag from recipe:', { recipeId, tag });
+            const removeResult = await api.removeTagFromRecipe(recipeId, parseInt(tag.id), tag.type);
+            console.log('Remove tag result:', removeResult);
         }
+        // Deduplicate tags to add to prevent race conditions
+        const uniqueTagsToAdd = [];
+        const seenTags = new Set();
+        
         for (const tag of tagsToActuallyAdd) {
-            await api.addTagToRecipe(recipeId, tag.name, tag.type);
+            const tagKey = `${tag.name.toLowerCase()}-${tag.type}`;
+            if (!seenTags.has(tagKey)) {
+                seenTags.add(tagKey);
+                uniqueTagsToAdd.push(tag);
+            }
+        }
+        
+        console.log('Original tags to add:', tagsToActuallyAdd);
+        console.log('Deduplicated tags to add:', uniqueTagsToAdd);
+        
+        for (const tag of uniqueTagsToAdd) {
+            console.log('Adding tag to recipe:', { recipeId, tag });
+            const addResult = await api.addTagToRecipe(recipeId, tag.name, tag.type);
+            console.log('Add tag result:', addResult);
         }
 
-        // Update the specific recipe card UI
+        // Update the specific recipe card UI with fresh data from API
         const recipeCardElement = document.querySelector(`.recipe-card[data-id="${recipeId}"]`);
         if (recipeCardElement) {
             const tagsContainer = recipeCardElement.querySelector('.recipe-tags .tags-container');
             const noTagsPlaceholder = recipeCardElement.querySelector('.recipe-tags .no-tags-placeholder');
             const addTagButtonOnCard = recipeCardElement.querySelector('.add-tag-btn');
 
-            // Separate public and private tags
-            const publicTags = modalFinalTags.filter(t => t.type === 'public' && t.name && t.name.trim() !== '');
-            const privateTags = modalFinalTags.filter(t => t.type === 'private' && t.name && t.name.trim() !== '');
+            // Get fresh data from API to ensure consistency
+            const updatedRecipeData = await api.getRecipe(recipeId);
+            console.log('Fresh recipe data from API:', updatedRecipeData);
+            
+            // The API returns tags in the main 'tags' array, not separate public_tags/private_tags
+            const freshTags = updatedRecipeData && updatedRecipeData.tags ? updatedRecipeData.tags : [];
+            console.log('Fresh tags from API:', freshTags);
+            
+            // Log each tag structure for debugging
+            freshTags.forEach((tag, index) => {
+                console.log(`Tag ${index}:`, tag);
+            });
+
+            // Deduplicate tags by ID to handle any backend duplicates
+            const uniqueTagsMap = new Map();
+            freshTags.forEach(tag => {
+                if (tag && tag.id && tag.name && tag.name.trim() !== '') {
+                    uniqueTagsMap.set(tag.id, tag);
+                }
+            });
+            const deduplicatedTags = Array.from(uniqueTagsMap.values());
+            console.log('Deduplicated tags:', deduplicatedTags);
+
+            // Separate public and private tags from deduplicated data
+            const publicTags = deduplicatedTags.filter(t => t.type === 'public');
+            const privateTags = deduplicatedTags.filter(t => t.type === 'private');
+            
+            console.log('Filtered public tags:', publicTags);
+            console.log('Filtered private tags:', privateTags);
             const hasAnyTags = publicTags.length > 0 || privateTags.length > 0;
 
             if (tagsContainer) {
@@ -713,7 +776,7 @@ async function handleSaveTags() {
                     `).join('');
                 }
                 
-                // Update the tags container with new chips
+                // Update the tags container with fresh data from API
                 tagsContainer.innerHTML = generateTagChips(publicTags, false) + generateTagChips(privateTags, true);
                 tagsContainer.style.display = hasAnyTags ? 'inline' : 'none';
             }
@@ -721,12 +784,7 @@ async function handleSaveTags() {
                 noTagsPlaceholder.style.display = hasAnyTags ? 'none' : 'inline';
             }
             if (addTagButtonOnCard) {
-                const updatedRecipeData = await api.getRecipe(recipeId);
-                if (updatedRecipeData && updatedRecipeData.tags) {
-                    addTagButtonOnCard.dataset.recipeTags = JSON.stringify(updatedRecipeData.tags);
-                } else {
-                    addTagButtonOnCard.dataset.recipeTags = JSON.stringify(modalFinalTags);
-                }
+                addTagButtonOnCard.dataset.recipeTags = JSON.stringify(freshTags);
             }
         }
 
@@ -783,14 +841,14 @@ document.addEventListener('click', async (e) => {
             const response = await api.removeTagFromRecipe(recipeId, tagId, tagType);
             
             if (response.success !== false) {
-                // Remove the tag chip from the UI
+                // Find elements before removing the tag chip
                 const tagChip = removeTagButton.parentElement;
-                tagChip.remove();
-                
-                // Check if there are any tags left and update placeholder visibility
                 const recipeCard = removeTagButton.closest('.recipe-card');
-                const tagsContainer = recipeCard.querySelector('.tags-container');
-                const noTagsPlaceholder = recipeCard.querySelector('.no-tags-placeholder');
+                const tagsContainer = recipeCard ? recipeCard.querySelector('.tags-container') : null;
+                const noTagsPlaceholder = recipeCard ? recipeCard.querySelector('.no-tags-placeholder') : null;
+                
+                // Remove the tag chip from the UI
+                tagChip.remove();
                 
                 if (tagsContainer && tagsContainer.children.length === 0) {
                     tagsContainer.style.display = 'none';

@@ -42,10 +42,18 @@ async def create_public_tag(
 ):
     """Create a new public tag (requires authentication)"""
     try:
-        logger.info(f"Creating public tag: {tag_data.name}")
+        logger.info(f"Creating public tag: '{tag_data.name}' for user {user.user_id}")
         _ = user  # Satisfy linter - user is needed for auth dependency
         
+        # Check if tag already exists before creating
+        existing_tags = db.get_public_tags()
+        existing_tag = next((tag for tag in existing_tags if tag['name'].lower() == tag_data.name.lower()), None)
+        if existing_tag:
+            logger.warning(f"Public tag '{tag_data.name}' already exists with ID {existing_tag['id']}, returning existing tag")
+            return PublicTagResponse(**existing_tag)
+        
         created_tag = db.create_public_tag(tag_data.name)
+        logger.info(f"Successfully created public tag: ID={created_tag['id']}, name='{created_tag['name']}'")
         return PublicTagResponse(**created_tag)
 
     except Exception as e:
@@ -77,9 +85,17 @@ async def create_private_tag(
 ):
     """Create a new private tag (requires authentication)"""
     try:
-        logger.info(f"Creating private tag: {tag_data.name}")
+        logger.info(f"Creating private tag: '{tag_data.name}' for user {user.user_id}")
+
+        # Check if tag already exists for this user before creating
+        existing_tags = db.get_private_tags(user.user_id)
+        existing_tag = next((tag for tag in existing_tags if tag['name'].lower() == tag_data.name.lower()), None)
+        if existing_tag:
+            logger.warning(f"Private tag '{tag_data.name}' already exists for user {user.user_id} with ID {existing_tag['id']}, returning existing tag")
+            return PrivateTagResponse(**existing_tag)
 
         created_tag = db.create_private_tag(tag_data.name, user.user_id)
+        logger.info(f"Successfully created private tag: ID={created_tag['id']}, name='{created_tag['name']}', user={user.user_id}")
         return PrivateTagResponse(**created_tag)
 
     except Exception as e:
@@ -170,24 +186,37 @@ async def add_public_tag_to_recipe(
 ):
     """Add a public tag to a recipe (requires authentication)"""
     try:
-        logger.info(f"Adding public tag {tag_association.tag_id} to recipe {recipe_id}")
+        logger.info(f"Adding public tag {tag_association.tag_id} to recipe {recipe_id} by user {user.user_id}")
 
         # Check if recipe exists
         recipe = db.get_recipe(recipe_id)
         if not recipe:
+            logger.warning(f"Recipe {recipe_id} not found when trying to add tag {tag_association.tag_id}")
             raise NotFoundException(f"Recipe with ID {recipe_id} not found")
 
         # Check if tag exists and is public
         tag = db.get_tag(tag_association.tag_id)
         if not tag:
+            logger.warning(f"Tag {tag_association.tag_id} not found when trying to add to recipe {recipe_id}")
             raise NotFoundException(f"Tag with ID {tag_association.tag_id} not found")
 
+        logger.info(f"Adding tag: ID={tag['id']}, name='{tag['name']}', is_private={tag.get('is_private', False)}")
+
         if tag.get("is_private", False):
+            logger.error(f"Attempted to add private tag {tag_association.tag_id} as public tag to recipe {recipe_id}")
             raise DatabaseException("Cannot add private tag as public tag")
 
-        db.add_recipe_tag(
-            recipe_id, tag_association.tag_id, is_private=False, user_id=user.user_id
-        )
+        # Check if association already exists
+        existing_recipe = db.get_recipe(recipe_id, user.user_id)
+        existing_tag_ids = [t['id'] for t in existing_recipe.get('tags', [])] if existing_recipe else []
+        if tag_association.tag_id in existing_tag_ids:
+            logger.warning(f"Tag {tag_association.tag_id} already associated with recipe {recipe_id}, skipping")
+        else:
+            result = db.add_recipe_tag(
+                recipe_id, tag_association.tag_id, is_private=False, user_id=user.user_id
+            )
+            logger.info(f"Recipe-tag association result: {result}")
+        
         return MessageResponse(message="Public tag added to recipe successfully")
 
     except (NotFoundException, DatabaseException):
