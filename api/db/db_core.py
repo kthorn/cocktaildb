@@ -1913,26 +1913,27 @@ class Database:
             DatabaseException: If tag is private or database error occurs
         """
         try:
-            cursor = self.connection.cursor()
-            
-            # First verify the tag exists and is public
-            cursor.execute("SELECT id, created_by FROM tags WHERE id = ?", (tag_id,))
-            tag_row = cursor.fetchone()
-            
-            if not tag_row:
-                return False
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
                 
-            # Check if tag is public (created_by should be NULL)
-            if tag_row[1] is not None:
-                raise Exception("Cannot delete private tag through public tag deletion method")
+                # First verify the tag exists and is public
+                cursor.execute("SELECT id, created_by FROM tags WHERE id = ?", (tag_id,))
+                tag_row = cursor.fetchone()
                 
-            # Delete the tag (CASCADE will handle recipe_tags)
-            cursor.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
-            self.connection.commit()
-            
-            logger.info(f"Successfully deleted public tag {tag_id}")
-            return cursor.rowcount > 0
-            
+                if not tag_row:
+                    return False
+                    
+                # Check if tag is public (created_by should be NULL)
+                if tag_row[1] is not None:
+                    raise Exception("Cannot delete private tag through public tag deletion method")
+                    
+                # Delete the tag (CASCADE will handle recipe_tags)
+                cursor.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
+                conn.commit()
+                
+                logger.info(f"Successfully deleted public tag {tag_id}")
+                return cursor.rowcount > 0
+                
         except Exception as e:
             logger.error(f"Error deleting public tag {tag_id}: {str(e)}")
             raise
@@ -1954,22 +1955,23 @@ class Database:
             DatabaseException: If tag is public or database error occurs
         """
         try:
-            cursor = self.connection.cursor()
-            
-            # First verify the tag exists, is private, and belongs to the user
-            cursor.execute("SELECT id, created_by FROM tags WHERE id = ? AND created_by = ?", (tag_id, user_id))
-            tag_row = cursor.fetchone()
-            
-            if not tag_row:
-                return False
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
                 
-            # Delete the tag (CASCADE will handle recipe_tags)
-            cursor.execute("DELETE FROM tags WHERE id = ? AND created_by = ?", (tag_id, user_id))
-            self.connection.commit()
-            
-            logger.info(f"Successfully deleted private tag {tag_id} for user {user_id}")
-            return cursor.rowcount > 0
-            
+                # First verify the tag exists, is private, and belongs to the user
+                cursor.execute("SELECT id, created_by FROM tags WHERE id = ? AND created_by = ?", (tag_id, user_id))
+                tag_row = cursor.fetchone()
+                
+                if not tag_row:
+                    return False
+                    
+                # Delete the tag (CASCADE will handle recipe_tags)
+                cursor.execute("DELETE FROM tags WHERE id = ? AND created_by = ?", (tag_id, user_id))
+                conn.commit()
+                
+                logger.info(f"Successfully deleted private tag {tag_id} for user {user_id}")
+                return cursor.rowcount > 0
+                
         except Exception as e:
             logger.error(f"Error deleting private tag {tag_id} for user {user_id}: {str(e)}")
             raise
