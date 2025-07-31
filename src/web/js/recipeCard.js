@@ -788,7 +788,6 @@ async function handleSaveTags() {
             }
         }
 
-        alert('Tags saved successfully!');
         closeTagEditorModal();
     } catch (error) {
         console.error('Error saving tags:', error);

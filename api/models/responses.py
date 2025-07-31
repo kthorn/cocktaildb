@@ -51,6 +51,7 @@ class PublicTagResponse(BaseModel):
 
     id: int = Field(..., description="Tag ID")
     name: str = Field(..., description="Tag name")
+    usage_count: int = Field(default=0, description="Number of recipes using this tag")
 
     class Config:
         from_attributes = True

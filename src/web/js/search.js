@@ -360,13 +360,13 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             // Always load public tags
             const publicTags = await api.getPublicTags();
-            availableTags = [...publicTags];
+            availableTags = publicTags.map(tag => ({ ...tag, type: 'public' }));
             
             // If user is authenticated, also load private tags
             if (api.isAuthenticated()) {
                 try {
                     const privateTags = await api.getPrivateTags();
-                    availableTags.push(...privateTags);
+                    availableTags.push(...privateTags.map(tag => ({ ...tag, type: 'private' })));
                 } catch (error) {
                     console.warn('Could not load private tags (user may not be authenticated):', error);
                 }
@@ -692,7 +692,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const html = filteredResults.map((tag, index) => `
                 <div class="tag-suggestion-item" data-index="${index}" data-tag-id="${tag.id}" data-tag-name="${tag.name}" data-tag-type="${tag.type}">
                     <span class="tag-suggestion-name">${tag.name}</span>
-                    <span class="tag-suggestion-type ${tag.type}">${tag.type}</span>
+                    <span class="tag-suggestion-type ${tag.type}">${tag.type === 'private' ? '&#x1F512;' : '&#x1F30D;'}</span>
                 </div>
             `).join('');
             

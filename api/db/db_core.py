@@ -1663,12 +1663,22 @@ class Database:
             raise
 
     def get_public_tags(self) -> List[Dict[str, Any]]:
-        """Get all public tags."""
+        """Get all public tags with usage count."""
         try:
             return cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name FROM tags WHERE created_by IS NULL ORDER BY name"
+                    """
+                    SELECT 
+                        t.id, 
+                        t.name, 
+                        COALESCE(COUNT(rt.recipe_id), 0) as usage_count
+                    FROM tags t
+                    LEFT JOIN recipe_tags rt ON t.id = rt.tag_id
+                    WHERE t.created_by IS NULL 
+                    GROUP BY t.id, t.name
+                    ORDER BY t.name
+                    """
                 ),
             )
         except Exception as e:
