@@ -327,11 +327,6 @@ class CocktailAPI {
         return this._request(`/tags/private/${tagId}`, 'DELETE', null, true);
     }
 
-    // Search tags (optional authentication for private tags)
-    async searchTags(query) {
-        const params = new URLSearchParams({ q: query });
-        return this._request(`/tags/search?${params}`, 'GET', null, false);
-    }
 
     // User Ingredients API
     async getUserIngredients() {

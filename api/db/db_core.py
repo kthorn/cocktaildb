@@ -1964,63 +1964,6 @@ class Database:
             logger.error(f"Error deleting private tag {tag_id} for user {user_id}: {str(e)}")
             raise
 
-    @retry_on_db_locked()
-    def search_tags(self, query: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Search for tags by name, returning both public and user's private tags.
-        
-        Args:
-            query: Search query to match against tag names
-            user_id: Optional user ID to include their private tags
-            
-        Returns:
-            List of matching tags with type indicators
-        """
-        try:
-            cursor = self.connection.cursor()
-            tags = []
-            
-            # Search public tags
-            cursor.execute("""
-                SELECT id, name, 'public' as type, 
-                       (SELECT COUNT(*) FROM recipe_tags WHERE tag_id = tags.id) as usage_count
-                FROM tags 
-                WHERE created_by IS NULL AND name LIKE ? 
-                ORDER BY name COLLATE NOCASE
-            """, (f"%{query}%",))
-            
-            for row in cursor.fetchall():
-                tags.append({
-                    "id": row[0],
-                    "name": row[1],
-                    "type": row[2],
-                    "usage_count": row[3]
-                })
-            
-            # Search private tags if user is authenticated
-            if user_id:
-                cursor.execute("""
-                    SELECT id, name, 'private' as type,
-                           (SELECT COUNT(*) FROM recipe_tags WHERE tag_id = tags.id) as usage_count
-                    FROM tags 
-                    WHERE created_by = ? AND name LIKE ? 
-                    ORDER BY name COLLATE NOCASE
-                """, (user_id, f"%{query}%"))
-                
-                for row in cursor.fetchall():
-                    tags.append({
-                        "id": row[0],
-                        "name": row[1],
-                        "type": row[2],
-                        "usage_count": row[3]
-                    })
-            
-            # Sort combined results by name
-            tags.sort(key=lambda x: x["name"].lower())
-            return tags
-            
-        except Exception as e:
-            logger.error(f"Error searching tags for query '{query}' and user {user_id}: {str(e)}")
-            raise
 
     # --- End Tag Management ---
 

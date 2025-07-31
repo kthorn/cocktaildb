@@ -150,24 +150,6 @@ async def delete_private_tag(
         raise DatabaseException("Failed to delete private tag", detail=str(e))
 
 
-@router.get("/search", response_model=List[dict])
-async def search_tags(
-    q: str,
-    db: Database = Depends(get_db),
-    user: UserInfo = Depends(get_current_user_optional),
-):
-    """Search for tags by name, returning both public and user's private tags"""
-    try:
-        logger.info(f"Searching tags with query: {q}")
-        
-        user_id = user.user_id if user else None
-        tags = db.search_tags(q, user_id)
-        return tags
-        
-    except Exception as e:
-        logger.error(f"Error searching tags: {str(e)}")
-        raise DatabaseException("Failed to search tags", detail=str(e))
-
 
 # Recipe tag association endpoints
 recipe_tags_router = APIRouter(prefix="/recipes", tags=["recipe-tags"])

@@ -6,6 +6,9 @@ let availableIngredients = [];
 let activeRowIndex = null;
 let activeIngredientIndex = -1;
 
+// Keep a global reference to tags for type-ahead
+let availableTags = [];
+
 // Tag autocomplete management
 let selectedTags = [];
 let tagSuggestions = [];
@@ -35,8 +38,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const ingredientQueryBuilder = document.getElementById('ingredient-query-builder');
     const addIngredientRowBtn = document.getElementById('add-ingredient-row');
 
-    // Load ingredients for type-ahead
+    // Load ingredients and tags for type-ahead
     loadIngredients();
+    loadTags();
 
     // Setup add/remove ingredient rows
     addIngredientRowBtn.addEventListener('click', addIngredientRow);
@@ -351,6 +355,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Function to load all tags for type-ahead
+    async function loadTags() {
+        try {
+            // Always load public tags
+            const publicTags = await api.getPublicTags();
+            availableTags = [...publicTags];
+            
+            // If user is authenticated, also load private tags
+            if (api.isAuthenticated()) {
+                try {
+                    const privateTags = await api.getPrivateTags();
+                    availableTags.push(...privateTags);
+                } catch (error) {
+                    console.warn('Could not load private tags (user may not be authenticated):', error);
+                }
+            }
+            
+            console.log('Loaded tags for search:', availableTags.length);
+        } catch (error) {
+            console.error('Error loading tags:', error);
+        }
+    }
+
     // Function to setup the initial ingredient row
     function setupInitialIngredientRow() {
         let firstRow = ingredientQueryBuilder.querySelector('.item-row');
@@ -634,7 +661,17 @@ document.addEventListener('DOMContentLoaded', () => {
             dropdown.innerHTML = '<div class="loading">Searching tags...</div>';
             showTagDropdown();
             
-            const results = await api.searchTags(query);
+            // Ensure tags are loaded
+            if (!availableTags || !Array.isArray(availableTags) || availableTags.length === 0) {
+                dropdown.innerHTML = '<div class="no-results">Loading tags...</div>';
+                return;
+            }
+            
+            // Filter tags by query
+            const queryLower = query.toLowerCase();
+            const results = availableTags.filter(tag => 
+                tag.name.toLowerCase().includes(queryLower)
+            );
             
             if (results.length === 0) {
                 dropdown.innerHTML = '<div class="no-results">No tags found</div>';
