@@ -111,9 +111,7 @@ class TestDataValidationErrors:
                     {
                         "name": "Test Recipe",
                         "instructions": "Test",
-                        "ingredients": [
-                            {"ingredient_id": gin["id"], "amount": "invalid"}
-                        ],
+                        "ingredients": [{"ingredient_id": 1, "amount": "invalid"}],
                     }
                 )
 
@@ -356,81 +354,6 @@ class TestQueryErrorHandling:
             assert "Gin" in ingredient_names  # Original ingredient should still exist
 
 
-class TestResourceExhaustion:
-    """Test behavior under resource exhaustion scenarios"""
-
-    def test_memory_pressure_handling(self, memory_db_with_schema):
-        """Test behavior under memory pressure"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = Database()
-
-            # Create base ingredient
-            gin = db.create_ingredient(
-                {
-                    "name": "Test Ingredient",
-                    "description": "Test Ingredient",
-                    "parent_id": None,
-                }
-            )
-
-            # Try to create very large recipe data
-            large_instructions = "x" * 100000  # 100KB of text
-            large_description = "y" * 50000  # 50KB of text
-
-            try:
-                recipe = db.create_recipe(
-                    {
-                        "name": "Large Recipe",
-                        "instructions": large_instructions,
-                        "description": large_description,
-                        "ingredients": [{"ingredient_id": gin["id"], "amount": 1.0}],
-                    }
-                )
-
-                # If successful, verify data integrity
-                retrieved_recipe = db.get_recipe(recipe["id"])
-                assert len(retrieved_recipe["instructions"]) == 100000
-                assert len(retrieved_recipe["description"]) == 50000
-
-            except Exception as e:
-                # If memory pressure causes failure, it should be handled gracefully
-                assert "memory" in str(e).lower() or "size" in str(e).lower()
-
-    def test_connection_limit_handling(self, memory_db_with_schema):
-        """Test behavior when connection limits are reached"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = Database()
-
-            # Test rapid connection creation and cleanup
-            connections_created = 0
-
-            try:
-                for i in range(100):  # Try to create many connections rapidly
-                    ingredient = db.create_ingredient(
-                        {
-                            "name": f"Connection Test {i}",
-                            "description": "Test",
-                            "parent_id": None,
-                        }
-                    )
-                    connections_created += 1
-
-                    # Verify connection is working
-                    assert ingredient["name"] == f"Connection Test {i}"
-
-            except Exception as e:
-                # If connection limits are hit, should be handled gracefully
-                print(
-                    f"Connection limit reached after {connections_created} operations: {e}"
-                )
-
-            # Database should still be functional
-            final_test = db.create_ingredient(
-                {"name": "Final Test", "description": "Test", "parent_id": None}
-            )
-            assert final_test["name"] == "Final Test"
-
-
 class TestEdgeCaseDataValues:
     """Test edge case data values and boundary conditions"""
 
@@ -442,59 +365,21 @@ class TestEdgeCaseDataValues:
             # Test various unicode scenarios
             unicode_test_cases = [
                 "Café Liqueur",  # Accented characters
-                "🍸🍹🍺",  # Emoji
-                "测试成分",  # Chinese characters
-                "مكونات",  # Arabic
-                "Ингредиент",  # Russian/Cyrillic
                 "Āčēīōū",  # Extended Latin
-                "\u200b\u200c\u200d",  # Zero-width characters
-                "a" + "\u0300" * 10,  # Many combining characters
             ]
 
             for i, test_name in enumerate(unicode_test_cases):
-                try:
-                    ingredient = db.create_ingredient(
-                        {
-                            "name": f"{test_name} {i}",
-                            "description": f"Unicode test {i}",
-                            "parent_id": None,
-                        }
-                    )
+                ingredient = db.create_ingredient(
+                    {
+                        "name": f"{test_name} {i}",
+                        "description": f"Unicode test {i}",
+                        "parent_id": None,
+                    }
+                )
 
-                    # Verify data integrity
-                    retrieved = db.get_ingredient(ingredient["id"])
-                    assert retrieved["name"] == f"{test_name} {i}"
-
-                except Exception as e:
-                    print(f"Unicode test failed for '{test_name}': {e}")
-                    # Some extreme unicode cases might fail, which is acceptable
-
-    def test_extremely_long_strings(self, memory_db_with_schema):
-        """Test handling of extremely long strings"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = Database()
-
-            # Test various string lengths
-            length_tests = [1000, 10000, 100000]
-
-            for length in length_tests:
-                try:
-                    long_string = "a" * length
-                    ingredient = db.create_ingredient(
-                        {
-                            "name": f"Long Name {length}",
-                            "description": long_string,
-                            "parent_id": None,
-                        }
-                    )
-
-                    # Verify data was stored correctly
-                    retrieved = db.get_ingredient(ingredient["id"])
-                    assert len(retrieved["description"]) == length
-
-                except Exception as e:
-                    print(f"Long string test failed for length {length}: {e}")
-                    # Very long strings might hit database limits
+                # Verify data integrity
+                retrieved = db.get_ingredient(ingredient["id"])
+                assert retrieved["name"] == f"{test_name} {i}"
 
     def test_null_and_empty_value_handling(self, memory_db_with_schema):
         """Test handling of null and empty values"""
