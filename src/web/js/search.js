@@ -52,11 +52,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check for URL query parameters
     const urlParams = new URLSearchParams(window.location.search);
     const tagFromUrl = urlParams.get('tag');
+    const nameFromUrl = urlParams.get('name');
 
     if (tagFromUrl) {
         // Add the tag from URL as a selected tag
         addTagChip({ name: tagFromUrl, type: 'public', id: null });
         performSearch(); // Auto-search if tag is in URL
+    }
+
+    if (nameFromUrl) {
+        // Populate the name search field with the URL parameter
+        nameSearch.value = decodeURIComponent(nameFromUrl);
+        performSearch(); // Auto-search if name is in URL
     }
 
     // Form submit event

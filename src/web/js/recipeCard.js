@@ -157,12 +157,13 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
             <p>${recipe.source_url ? `<a href="${recipe.source_url}" target="_blank" rel="noopener noreferrer">${recipe.source || recipe.source_url}</a>` : recipe.source}</p>
         </div>
         ` : ''}
-        ${shouldShowActions ? `
         <div class="card-actions">
+            <button class="share-recipe-btn" data-recipe-name="${encodeURIComponent(recipe.name)}" title="Share recipe link" style="font-size: 0.8em; padding: 4px 8px;">🔗</button>
+            ${shouldShowActions ? `
             <button class="edit-recipe" data-id="${recipe.id}">Edit</button>
             <button class="delete-recipe" data-id="${recipe.id}">Delete</button>
+            ` : ''}
         </div>
-        ` : ''}
     `;
 
     // Add rating component
@@ -205,7 +206,87 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
         }
     }
 
+    // Add event listener for share button (always present)
+    const shareBtn = card.querySelector('.share-recipe-btn');
+    if (shareBtn) {
+        shareBtn.addEventListener('click', async () => {
+            await handleShareRecipe(recipe.name);
+        });
+    }
+
     return card;
+}
+
+/**
+ * Handle sharing a recipe by copying the search URL to clipboard
+ * @param {string} recipeName - The name of the recipe to share
+ */
+async function handleShareRecipe(recipeName) {
+    try {
+        const shareUrl = `${window.location.origin}/search.html?name=${encodeURIComponent(recipeName)}`;
+        
+        // Try to copy to clipboard
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(shareUrl);
+        } else {
+            // Fallback for older browsers or non-HTTPS
+            const textArea = document.createElement('textarea');
+            textArea.value = shareUrl;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+        }
+        
+        // Show success feedback
+        showShareFeedback('Recipe link copied to clipboard!');
+    } catch (error) {
+        console.error('Error copying to clipboard:', error);
+        showShareFeedback('Failed to copy link. Please try again.');
+    }
+}
+
+/**
+ * Show temporary feedback message for share action
+ * @param {string} message - The message to display
+ */
+function showShareFeedback(message) {
+    // Create or update existing feedback element
+    let feedback = document.getElementById('share-feedback');
+    if (!feedback) {
+        feedback = document.createElement('div');
+        feedback.id = 'share-feedback';
+        feedback.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #28a745;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 4px;
+            z-index: 1000;
+            font-size: 14px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: opacity 0.3s ease;
+        `;
+        document.body.appendChild(feedback);
+    }
+    
+    feedback.textContent = message;
+    feedback.style.display = 'block';
+    feedback.style.opacity = '1';
+    
+    // Hide after 2 seconds
+    setTimeout(() => {
+        feedback.style.opacity = '0';
+        setTimeout(() => {
+            feedback.style.display = 'none';
+        }, 300);
+    }, 2000);
 }
 
 /**
