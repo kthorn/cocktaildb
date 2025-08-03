@@ -199,7 +199,7 @@ class TestBulkUploadModels:
 class TestBulkUploadValidation:
     """Test validation logic for bulk upload"""
 
-    def test_successful_bulk_upload(self, authenticated_client):
+    def test_successful_bulk_upload(self, editor_client):
         """Test successful bulk upload with valid data"""
         # First, create some test ingredients
         ingredient_data = [
@@ -211,7 +211,7 @@ class TestBulkUploadValidation:
 
         # Create ingredients
         for ingredient in ingredient_data:
-            response = authenticated_client.post("/ingredients", json=ingredient)
+            response = editor_client.post("/ingredients", json=ingredient)
             assert response.status_code == 201
 
         # Test bulk upload with valid data
@@ -274,7 +274,7 @@ class TestBulkUploadValidation:
             ]
         }
 
-        response = authenticated_client.post("/recipes/bulk", json=bulk_data)
+        response = editor_client.post("/recipes/bulk", json=bulk_data)
         assert response.status_code == 201
 
         response_data = response.json()
@@ -287,7 +287,7 @@ class TestBulkUploadValidation:
         assert response_data["uploaded_recipes"][0]["name"] == "Test Vodka Cocktail"
         assert response_data["uploaded_recipes"][1]["name"] == "Test Gin Cocktail"
 
-    def test_bulk_upload_duplicate_recipe_names(self, authenticated_client):
+    def test_bulk_upload_duplicate_recipe_names(self, editor_client):
         """Test bulk upload validation for duplicate recipe names"""
         # Create a recipe first
         recipe_data = {
@@ -295,7 +295,7 @@ class TestBulkUploadValidation:
             "instructions": "Mix ingredients",
             "ingredients": [{"ingredient_id": 1, "amount": 2.0, "unit_id": 1}],
         }
-        create_response = authenticated_client.post("/recipes", json=recipe_data)
+        create_response = editor_client.post("/recipes", json=recipe_data)
         assert create_response.status_code == 201
 
         # Now try bulk upload with duplicate name
@@ -311,7 +311,7 @@ class TestBulkUploadValidation:
             ]
         }
 
-        response = authenticated_client.post("/recipes/bulk", json=bulk_data)
+        response = editor_client.post("/recipes/bulk", json=bulk_data)
         assert (
             response.status_code == 201
         )  # Endpoint returns 201 even with validation errors
@@ -325,7 +325,7 @@ class TestBulkUploadValidation:
             "already exists" in response_data["validation_errors"][0]["error_message"]
         )
 
-    def test_bulk_upload_nonexistent_ingredient(self, authenticated_client):
+    def test_bulk_upload_nonexistent_ingredient(self, editor_client):
         """Test bulk upload validation for non-existent ingredients"""
         bulk_data = {
             "recipes": [
@@ -343,7 +343,7 @@ class TestBulkUploadValidation:
             ]
         }
 
-        response = authenticated_client.post("/recipes/bulk", json=bulk_data)
+        response = editor_client.post("/recipes/bulk", json=bulk_data)
         assert response.status_code == 201
 
         response_data = response.json()
@@ -359,10 +359,10 @@ class TestBulkUploadValidation:
             in response_data["validation_errors"][0]["error_message"]
         )
 
-    def test_bulk_upload_partial_name_match(self, authenticated_client):
+    def test_bulk_upload_partial_name_match(self, editor_client):
         """Test that partial ingredient name matches are rejected"""
         # Create an ingredient with a specific name
-        ingredient_response = authenticated_client.post(
+        ingredient_response = editor_client.post(
             "/ingredients", json={"name": "Vodka Premium"}
         )
         assert ingredient_response.status_code == 201
@@ -384,7 +384,7 @@ class TestBulkUploadValidation:
             ]
         }
 
-        response = authenticated_client.post("/recipes/bulk", json=bulk_data)
+        response = editor_client.post("/recipes/bulk", json=bulk_data)
         assert response.status_code == 201
 
         response_data = response.json()
@@ -396,7 +396,7 @@ class TestBulkUploadValidation:
             == "ingredient_not_found"
         )
 
-    def test_bulk_upload_invalid_unit_name(self, authenticated_client):
+    def test_bulk_upload_invalid_unit_name(self, editor_client):
         """Test bulk upload validation for invalid unit names"""
         bulk_data = {
             "recipes": [
@@ -414,7 +414,7 @@ class TestBulkUploadValidation:
             ]
         }
 
-        response = authenticated_client.post("/recipes/bulk", json=bulk_data)
+        response = editor_client.post("/recipes/bulk", json=bulk_data)
         assert response.status_code == 201
 
         response_data = response.json()
@@ -426,7 +426,7 @@ class TestBulkUploadValidation:
             "does not exist" in response_data["validation_errors"][0]["error_message"]
         )
 
-    def test_bulk_upload_multiple_validation_errors(self, authenticated_client):
+    def test_bulk_upload_multiple_validation_errors(self, editor_client):
         """Test bulk upload with multiple validation errors"""
         bulk_data = {
             "recipes": [
@@ -462,7 +462,7 @@ class TestBulkUploadValidation:
             ]
         }
 
-        response = authenticated_client.post("/recipes/bulk", json=bulk_data)
+        response = editor_client.post("/recipes/bulk", json=bulk_data)
         assert response.status_code == 201
 
         response_data = response.json()
@@ -479,7 +479,7 @@ class TestBulkUploadValidation:
         assert "ingredient_not_found" in error_types
         assert "invalid_unit" in error_types
 
-    def test_bulk_upload_atomic_operation(self, authenticated_client):
+    def test_bulk_upload_atomic_operation(self, editor_client):
         """Test that bulk upload is atomic - all or nothing"""
         bulk_data = {
             "recipes": [
@@ -504,7 +504,7 @@ class TestBulkUploadValidation:
             ]
         }
 
-        response = authenticated_client.post("/recipes/bulk", json=bulk_data)
+        response = editor_client.post("/recipes/bulk", json=bulk_data)
         assert response.status_code == 201
 
         response_data = response.json()
@@ -515,14 +515,14 @@ class TestBulkUploadValidation:
         assert len(response_data["uploaded_recipes"]) == 0
 
         # Verify no recipes were actually created
-        recipes_response = authenticated_client.get("/recipes/search")
+        recipes_response = editor_client.get("/recipes/search")
         assert recipes_response.status_code == 200
         recipes_data = recipes_response.json()
         recipe_names = [recipe["name"] for recipe in recipes_data["recipes"]]
         assert "Good Recipe" not in recipe_names
         assert "Bad Recipe" not in recipe_names
 
-    def test_bulk_upload_case_insensitive_duplicate_check(self, authenticated_client):
+    def test_bulk_upload_case_insensitive_duplicate_check(self, editor_client):
         """Test that duplicate recipe name check is case insensitive"""
         # Create a recipe first
         recipe_data = {
@@ -530,7 +530,7 @@ class TestBulkUploadValidation:
             "instructions": "Mix ingredients",
             "ingredients": [{"ingredient_id": 1, "amount": 2.0, "unit_id": 1}],
         }
-        create_response = authenticated_client.post("/recipes", json=recipe_data)
+        create_response = editor_client.post("/recipes", json=recipe_data)
         assert create_response.status_code == 201
 
         # Try bulk upload with different case
@@ -546,7 +546,7 @@ class TestBulkUploadValidation:
             ]
         }
 
-        response = authenticated_client.post("/recipes/bulk", json=bulk_data)
+        response = editor_client.post("/recipes/bulk", json=bulk_data)
         assert response.status_code == 201
 
         response_data = response.json()
@@ -575,7 +575,7 @@ class TestBulkUploadEndpointSecurity:
         response = test_client_memory.post("/recipes/bulk", json=bulk_data)
         assert response.status_code == 401  # Unauthorized
 
-    def test_bulk_upload_validates_input_structure(self, authenticated_client):
+    def test_bulk_upload_validates_input_structure(self, editor_client):
         """Test that bulk upload validates input structure"""
         # Test with malformed data
         invalid_data = {
@@ -588,21 +588,21 @@ class TestBulkUploadEndpointSecurity:
             ]
         }
 
-        response = authenticated_client.post("/recipes/bulk", json=invalid_data)
+        response = editor_client.post("/recipes/bulk", json=invalid_data)
         assert response.status_code == 422  # Validation error
 
-    def test_bulk_upload_empty_recipes_list(self, authenticated_client):
+    def test_bulk_upload_empty_recipes_list(self, editor_client):
         """Test that empty recipes list is rejected"""
         invalid_data = {"recipes": []}
 
-        response = authenticated_client.post("/recipes/bulk", json=invalid_data)
+        response = editor_client.post("/recipes/bulk", json=invalid_data)
         assert response.status_code == 422  # Validation error
 
 
 class TestBulkUploadIngredientSearch:
     """Test integration with ingredient search functionality"""
 
-    def test_exact_match_ingredient_search(self, authenticated_client):
+    def test_exact_match_ingredient_search(self, editor_client):
         """Test that only exact matches are accepted for ingredient names"""
         # Create ingredients with similar names
         ingredients = [
@@ -611,7 +611,7 @@ class TestBulkUploadIngredientSearch:
         ]
 
         for ingredient in ingredients:
-            response = authenticated_client.post("/ingredients", json=ingredient)
+            response = editor_client.post("/ingredients", json=ingredient)
             assert response.status_code == 201
 
         # Test bulk upload with exact match
@@ -631,7 +631,7 @@ class TestBulkUploadIngredientSearch:
             ]
         }
 
-        response = authenticated_client.post("/recipes/bulk", json=bulk_data)
+        response = editor_client.post("/recipes/bulk", json=bulk_data)
         assert response.status_code == 201
 
         response_data = response.json()
@@ -645,10 +645,10 @@ class TestBulkUploadIngredientSearch:
         ]
         assert "Vodka" in ingredient_names
 
-    def test_ingredient_search_with_special_characters(self, authenticated_client):
+    def test_ingredient_search_with_special_characters(self, editor_client):
         """Test ingredient search with special characters"""
         # Create ingredient with special characters
-        ingredient_response = authenticated_client.post(
+        ingredient_response = editor_client.post(
             "/ingredients",
             json={"name": "St-Germain", "description": "Elderflower liqueur"},
         )
@@ -670,7 +670,7 @@ class TestBulkUploadIngredientSearch:
             ]
         }
 
-        response = authenticated_client.post("/recipes/bulk", json=bulk_data)
+        response = editor_client.post("/recipes/bulk", json=bulk_data)
         assert response.status_code == 201
 
         response_data = response.json()
