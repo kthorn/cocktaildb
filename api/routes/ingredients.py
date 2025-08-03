@@ -8,6 +8,7 @@ from dependencies.auth import (
     UserInfo,
     get_current_user_optional,
     require_authentication,
+    require_editor_access,
 )
 from db.database import get_database as get_db
 from db.db_core import Database
@@ -60,9 +61,9 @@ async def search_ingredients(
 async def create_ingredient(
     ingredient_data: IngredientCreate,
     db: Database = Depends(get_db),
-    user: UserInfo = Depends(require_authentication),
+    user: UserInfo = Depends(require_editor_access),
 ):
-    """Create a new ingredient (requires authentication)"""
+    """Create a new ingredient (requires editor access)"""
     try:
         logger.info(f"Creating ingredient: {ingredient_data.name}")
 
@@ -106,9 +107,9 @@ async def update_ingredient(
     ingredient_id: int,
     ingredient_data: IngredientUpdate,
     db: Database = Depends(get_db),
-    user: UserInfo = Depends(require_authentication),
+    user: UserInfo = Depends(require_editor_access),
 ):
-    """Update an ingredient (requires authentication)"""
+    """Update an ingredient (requires editor access)"""
     try:
         logger.info(f"Updating ingredient {ingredient_id}")
 
@@ -136,9 +137,9 @@ async def update_ingredient(
 async def delete_ingredient(
     ingredient_id: int,
     db: Database = Depends(get_db),
-    user: UserInfo = Depends(require_authentication),
+    user: UserInfo = Depends(require_editor_access),
 ):
-    """Delete an ingredient (requires authentication)"""
+    """Delete an ingredient (requires editor access)"""
     try:
         logger.info(f"Deleting ingredient {ingredient_id}")
 
@@ -167,9 +168,9 @@ async def delete_ingredient(
 async def bulk_upload_ingredients(
     bulk_data: BulkIngredientUpload,
     db: Database = Depends(get_db),
-    user: UserInfo = Depends(require_authentication),
+    user: UserInfo = Depends(require_editor_access),
 ):
-    """Bulk upload ingredients (requires authentication)"""
+    """Bulk upload ingredients (requires editor access)"""
     import time
 
     start_time = time.time()

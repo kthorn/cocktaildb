@@ -3,9 +3,9 @@ import { isAuthenticated } from './auth.js';
 
 // Define these functions in the global scope so they can be accessed from HTML
 window.editIngredient = async function(id) {
-    // Check authentication first
-    if (!api.isAuthenticated()) {
-        alert('Please log in to edit ingredients.');
+    // Check editor permissions first
+    if (!api.isEditor()) {
+        alert('Editor access required. Only editors and admins can edit ingredients.');
         return;
     }
 
@@ -53,9 +53,9 @@ window.editIngredient = async function(id) {
 };
 
 window.deleteIngredient = async function(id) {
-    // Check authentication first
-    if (!api.isAuthenticated()) {
-        alert('Please log in to delete ingredients.');
+    // Check editor permissions first
+    if (!api.isEditor()) {
+        alert('Editor access required. Only editors and admins can delete ingredients.');
         return;
     }
 
@@ -129,12 +129,12 @@ window.loadIngredients = async function() {
     }
 };
 
-// Update page elements based on authentication status
+// Update page elements based on authentication and editor status
 function updatePageBasedOnAuth() {
     const titleElement = document.getElementById('ingredients-title');
     const formSection = document.querySelector('.ingredient-form');
     
-    if (isAuthenticated()) {
+    if (api.isEditor()) {
         if (titleElement) titleElement.textContent = 'Manage Ingredients';
         if (formSection) formSection.style.display = 'block';
     } else {
@@ -187,9 +187,9 @@ document.addEventListener('DOMContentLoaded', () => {
     ingredientForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
-        // Check authentication first
-        if (!api.isAuthenticated()) {
-            alert('Please log in to create or edit ingredients.');
+        // Check editor permissions first
+        if (!api.isEditor()) {
+            alert('Editor access required. Only editors and admins can create or edit ingredients.');
             return;
         }
 
@@ -369,8 +369,8 @@ document.addEventListener('DOMContentLoaded', () => {
         hierarchy.forEach(ingredient => {
             const hasChildren = ingredient.children && ingredient.children.length > 0;
             
-            // Only show action buttons if user is authenticated
-            const actionButtons = isAuthenticated() ? `
+            // Only show action buttons if user is an editor/admin
+            const actionButtons = api.isEditor() ? `
                 <div class="tree-actions">
                     <button class="btn-small btn-outline" onclick="editIngredient(${ingredient.id})">Edit</button>
                     <button class="btn-small btn-outline-danger" onclick="deleteIngredient(${ingredient.id})">Delete</button>

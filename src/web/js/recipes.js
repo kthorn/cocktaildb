@@ -111,9 +111,9 @@ document.addEventListener('DOMContentLoaded', () => {
     recipeForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
-        // Check authentication first
-        if (!isAuthenticated()) {
-            alert('Please log in to create or edit recipes.');
+        // Check editor permissions first
+        if (!api.isEditor()) {
+            alert('Editor access required. Only editors and admins can create or edit recipes.');
             return;
         }
 
@@ -410,9 +410,9 @@ document.addEventListener('DOMContentLoaded', () => {
 async function editRecipe(id) {
     console.log('editRecipe called with ID:', id);
     
-    // Check authentication first
-    if (!isAuthenticated()) {
-        alert('Please log in to edit recipes.');
+    // Check editor permissions first
+    if (!api.isEditor()) {
+        alert('Editor access required. Only editors and admins can edit recipes.');
         return;
     }
 

@@ -36,10 +36,10 @@ class TestIngredientEndpoints:
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_create_ingredient_authorized(
-        self, authenticated_client, sample_ingredient_data
+        self, editor_client, sample_ingredient_data
     ):
         """Test creating ingredient with authentication"""
-        response = authenticated_client.post(
+        response = editor_client.post(
             "/ingredients", json=sample_ingredient_data
         )
         # May fail due to database constraints in memory DB, but should not be unauthorized
@@ -66,9 +66,9 @@ class TestRecipeEndpoints:
         response = test_client_memory.post("/recipes", json=recipe_data)
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    def test_create_recipe_authorized(self, authenticated_client, sample_recipe_data):
+    def test_create_recipe_authorized(self, editor_client, sample_recipe_data):
         """Test creating recipe with authentication"""
-        response = authenticated_client.post("/recipes", json=sample_recipe_data)
+        response = editor_client.post("/recipes", json=sample_recipe_data)
         assert response.status_code != status.HTTP_401_UNAUTHORIZED
 
 
@@ -106,35 +106,35 @@ class TestPublicResourceEndpoints:
 class TestRequestValidation:
     """Test request validation with Pydantic models"""
 
-    def test_create_ingredient_invalid_data(self, authenticated_client):
+    def test_create_ingredient_invalid_data(self, editor_client):
         """Test creating ingredient with invalid data"""
         invalid_data = {"description": "Missing name field"}
-        response = authenticated_client.post("/ingredients", json=invalid_data)
+        response = editor_client.post("/ingredients", json=invalid_data)
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
-    def test_create_recipe_invalid_data(self, authenticated_client):
+    def test_create_recipe_invalid_data(self, editor_client):
         """Test creating recipe with invalid data"""
         invalid_data = {"instructions": "Missing name field"}
-        response = authenticated_client.post("/recipes", json=invalid_data)
+        response = editor_client.post("/recipes", json=invalid_data)
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
-    def test_missing_required_fields(self, authenticated_client):
+    def test_missing_required_fields(self, editor_client):
         """Test request with missing required fields"""
         # Ingredient requires name
         incomplete_data = {"description": "Missing name"}
-        response = authenticated_client.post("/ingredients", json=incomplete_data)
+        response = editor_client.post("/ingredients", json=incomplete_data)
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
         error_detail = response.json()
         assert "detail" in error_detail
 
-    def test_invalid_field_types(self, authenticated_client):
+    def test_invalid_field_types(self, editor_client):
         """Test request with invalid field types"""
         invalid_data = {
             "name": "Test Ingredient",
             "parent_id": "not_a_number",  # Should be integer
         }
-        response = authenticated_client.post("/ingredients", json=invalid_data)
+        response = editor_client.post("/ingredients", json=invalid_data)
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
     def test_malformed_json(self, authenticated_client):

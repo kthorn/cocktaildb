@@ -865,6 +865,23 @@ Resources:
         - profile
       AllowedOAuthFlowsUserPoolClient: true
 
+  # Cognito User Pool Groups
+  CognitoAdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      GroupName: admin
+      Description: System administrators with full access
+      Precedence: 1
+
+  CognitoEditorGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      GroupName: editor
+      Description: Content editors - can create, edit, and delete recipes and ingredients
+      Precedence: 2
+
   # Cognito Domain for Hosted UI
   CognitoDomain:
     Type: AWS::Cognito::UserPoolDomain
@@ -1091,4 +1108,12 @@ Outputs:
   BackupBucketName:
     Description: S3 bucket for database backups (prod only)
     Value: !If [IsProdEnvironment, !Ref BackupBucket, "N/A (dev environment)"]
+
+  AdminGroupName:
+    Description: Name of the admin group in Cognito User Pool
+    Value: !Ref CognitoAdminGroup
+
+  EditorGroupName:
+    Description: Name of the editor group in Cognito User Pool
+    Value: !Ref CognitoEditorGroup
 

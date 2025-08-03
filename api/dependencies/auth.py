@@ -90,3 +90,37 @@ async def require_authentication(request: Request) -> UserInfo:
             headers={"WWW-Authenticate": "Bearer"},
         )
     return user
+
+
+def is_admin(user: UserInfo) -> bool:
+    """Check if user is an admin"""
+    return "admin" in user.groups
+
+
+def is_editor(user: UserInfo) -> bool:
+    """Check if user is an editor"""
+    return "editor" in user.groups
+
+
+def is_editor_or_admin(user: UserInfo) -> bool:
+    """Check if user is an editor or admin"""
+    return is_editor(user) or is_admin(user)
+
+
+async def require_editor_access(request: Request) -> UserInfo:
+    """Require editor or admin access - raises exception if user is not authorized"""
+    user = get_user_from_lambda_event(request)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    if not is_editor_or_admin(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Editor access required. Only editors and admins can create, edit, or delete recipes and ingredients.",
+        )
+    
+    return user

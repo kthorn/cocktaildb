@@ -170,13 +170,25 @@ def mock_user():
 
 
 @pytest.fixture(scope="function")
+def mock_editor_user():
+    """Mock editor user for testing"""
+    return {
+        "sub": "editor-user-123",
+        "username": "editoruser",
+        "email": "editor@example.com",
+        "cognito:groups": ["editor"],
+        "user_id": "editor-user-123",
+    }
+
+
+@pytest.fixture(scope="function")
 def mock_admin_user():
     """Mock admin user for testing"""
     return {
         "sub": "admin-user-123",
         "username": "adminuser",
         "email": "admin@example.com",
-        "cognito:groups": ["admins"],
+        "cognito:groups": ["admin"],
         "user_id": "admin-user-123",
     }
 
@@ -307,9 +319,44 @@ def authenticated_client(test_client_memory_with_app, mock_user):
 
 
 @pytest.fixture(scope="function")
+def editor_client(test_client_memory_with_app, mock_editor_user):
+    """Test client with mocked editor authentication using FastAPI dependency override"""
+    from dependencies.auth import UserInfo, require_authentication, require_editor_access
+
+    client, app = test_client_memory_with_app
+
+    # Create UserInfo with only the parameters it expects
+    user_info = UserInfo(
+        user_id=mock_editor_user["user_id"],
+        username=mock_editor_user.get("username"),
+        email=mock_editor_user.get("email"),
+        groups=mock_editor_user.get("cognito:groups", []),
+        claims=mock_editor_user,
+    )
+
+    # Override both dependencies
+    def override_require_authentication():
+        return user_info
+    
+    def override_require_editor_access():
+        return user_info
+
+    app.dependency_overrides[require_authentication] = override_require_authentication
+    app.dependency_overrides[require_editor_access] = override_require_editor_access
+
+    yield client
+
+    # Clean up the overrides (test_client_memory_with_app will also clean up)
+    if require_authentication in app.dependency_overrides:
+        del app.dependency_overrides[require_authentication]
+    if require_editor_access in app.dependency_overrides:
+        del app.dependency_overrides[require_editor_access]
+
+
+@pytest.fixture(scope="function")
 def admin_client(test_client_memory_with_app, mock_admin_user):
     """Test client with mocked admin authentication using FastAPI dependency override"""
-    from dependencies.auth import UserInfo, require_authentication
+    from dependencies.auth import UserInfo, require_authentication, require_editor_access
 
     client, app = test_client_memory_with_app
 
@@ -322,17 +369,23 @@ def admin_client(test_client_memory_with_app, mock_admin_user):
         claims=mock_admin_user,
     )
 
-    # Override the dependency
+    # Override both dependencies
     def override_require_authentication():
+        return user_info
+    
+    def override_require_editor_access():
         return user_info
 
     app.dependency_overrides[require_authentication] = override_require_authentication
+    app.dependency_overrides[require_editor_access] = override_require_editor_access
 
     yield client
 
-    # Clean up the override (test_client_memory_with_app will also clean up)
+    # Clean up the overrides (test_client_memory_with_app will also clean up)
     if require_authentication in app.dependency_overrides:
         del app.dependency_overrides[require_authentication]
+    if require_editor_access in app.dependency_overrides:
+        del app.dependency_overrides[require_editor_access]
 
 
 # @pytest.fixture(scope="function")

@@ -69,8 +69,8 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
     card.className = 'recipe-card';
     card.dataset.id = recipe.id; // Add recipe ID to card for easier refresh
     
-    // Only show action buttons if user is authenticated and showActions is true
-    const shouldShowActions = showActions && isAuthenticated();
+    // Only show action buttons if user is an editor/admin and showActions is true
+    const shouldShowActions = showActions && api.isEditor();
     const shouldShowAddTagButton = isAuthenticated(); // Check if user is authenticated for add tag button
     
     // Deduplicate tags by ID to handle any backend duplicates
@@ -959,9 +959,9 @@ document.addEventListener('click', async (e) => {
  * @param {Function} onRecipeDeleted - Callback after deletion
  */
 async function deleteRecipe(id, onRecipeDeleted = null) {
-    // Check authentication first
-    if (!isAuthenticated()) {
-        alert('Please log in to delete recipes.');
+    // Check editor permissions first
+    if (!api.isEditor()) {
+        alert('Editor access required. Only editors and admins can delete recipes.');
         return;
     }
 

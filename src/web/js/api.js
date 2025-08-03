@@ -93,15 +93,24 @@ class CocktailAPI {
         return this._request(`/ingredients/${id}`);
     }
 
-    async createIngredient(ingredientData) {        
+    async createIngredient(ingredientData) {
+        if (!this.isEditor()) {
+            throw new Error('Editor access required. Only editors and admins can create ingredients.');
+        }        
         return this._request('/ingredients', 'POST', ingredientData);
     }
 
     async updateIngredient(id, ingredientData) {
+        if (!this.isEditor()) {
+            throw new Error('Editor access required. Only editors and admins can update ingredients.');
+        }
         return this._request(`/ingredients/${id}`, 'PUT', ingredientData);
     }
 
     async deleteIngredient(id) {
+        if (!this.isEditor()) {
+            throw new Error('Editor access required. Only editors and admins can delete ingredients.');
+        }
         return this._request(`/ingredients/${id}`, 'DELETE');
     }
 
@@ -113,22 +122,37 @@ class CocktailAPI {
 
 
     async createRecipe(recipeData) {
+        if (!this.isEditor()) {
+            throw new Error('Editor access required. Only editors and admins can create recipes.');
+        }
         return this._request('/recipes', 'POST', recipeData);
     }
 
     async updateRecipe(id, recipeData) {
+        if (!this.isEditor()) {
+            throw new Error('Editor access required. Only editors and admins can update recipes.');
+        }
         return this._request(`/recipes/${id}`, 'PUT', recipeData);
     }
 
     async deleteRecipe(id) {
+        if (!this.isEditor()) {
+            throw new Error('Editor access required. Only editors and admins can delete recipes.');
+        }
         return this._request(`/recipes/${id}`, 'DELETE');
     }
 
     async bulkUploadRecipes(recipesData) {
+        if (!this.isEditor()) {
+            throw new Error('Editor access required. Only editors and admins can bulk upload recipes.');
+        }
         return this._request('/recipes/bulk', 'POST', recipesData);
     }
 
     async bulkUploadIngredients(ingredientsData) {
+        if (!this.isEditor()) {
+            throw new Error('Editor access required. Only editors and admins can bulk upload ingredients.');
+        }
         return this._request('/ingredients/bulk', 'POST', ingredientsData);
     }
 
@@ -243,6 +267,54 @@ class CocktailAPI {
     // Helper to check if user is authenticated
     isAuthenticated() {
         return isAuthenticated();
+    }
+
+    // Helper to check if user is an editor or admin
+    isEditor() {
+        if (!this.isAuthenticated()) {
+            return false;
+        }
+        
+        try {
+            const idToken = localStorage.getItem('id_token');
+            if (!idToken) {
+                return false;
+            }
+            
+            // Decode JWT token to get groups
+            const tokenPayload = JSON.parse(atob(idToken.split('.')[1]));
+            const groups = tokenPayload['cognito:groups'] || [];
+            
+            // Check if user is in editor or admin group
+            return groups.includes('editor') || groups.includes('admin');
+        } catch (error) {
+            console.error('Error checking editor status:', error);
+            return false;
+        }
+    }
+
+    // Helper to check if user is an admin
+    isAdmin() {
+        if (!this.isAuthenticated()) {
+            return false;
+        }
+        
+        try {
+            const idToken = localStorage.getItem('id_token');
+            if (!idToken) {
+                return false;
+            }
+            
+            // Decode JWT token to get groups
+            const tokenPayload = JSON.parse(atob(idToken.split('.')[1]));
+            const groups = tokenPayload['cognito:groups'] || [];
+            
+            // Check if user is in admin group
+            return groups.includes('admin');
+        } catch (error) {
+            console.error('Error checking admin status:', error);
+            return false;
+        }
     }
 
     // Add a tag to a recipe

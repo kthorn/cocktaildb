@@ -54,8 +54,8 @@ function setupAdminPage() {
     // Check authentication and show/hide admin tools accordingly
     updateUIBasedOnAuth();
     
-    // Load initial data if user is authenticated
-    if (isAuthenticated()) {
+    // Load initial data if user has editor permissions
+    if (api.isEditor()) {
         loadPublicTags();
     }
 }
@@ -72,7 +72,16 @@ function updateUIBasedOnAuth() {
         return;
     }
     
-    // User is authenticated, show admin tools
+    if (!api.isEditor()) {
+        adminTools.innerHTML = `
+            <div class="card-container">
+                <p>Editor access required. Only editors and admins can access admin tools.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // User has editor permissions, show admin tools
     adminTools.style.display = 'block';
 }
 

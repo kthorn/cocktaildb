@@ -8,6 +8,7 @@ from dependencies.auth import (
     UserInfo,
     get_current_user_optional,
     require_authentication,
+    require_editor_access,
 )
 from db.database import get_database as get_db
 from db.db_core import Database
@@ -207,9 +208,9 @@ async def search_recipes_authenticated(
 async def create_recipe(
     recipe_data: RecipeCreate,
     db: Database = Depends(get_db),
-    user: UserInfo = Depends(require_authentication),
+    user: UserInfo = Depends(require_editor_access),
 ):
-    """Create a new recipe (requires authentication)"""
+    """Create a new recipe (requires editor access)"""
     try:
         logger.info(f"Creating recipe: {recipe_data.name}")
 
@@ -266,9 +267,9 @@ async def update_recipe(
     recipe_id: int,
     recipe_data: RecipeUpdate,
     db: Database = Depends(get_db),
-    user: UserInfo = Depends(require_authentication),
+    user: UserInfo = Depends(require_editor_access),
 ):
-    """Update a recipe (requires authentication)"""
+    """Update a recipe (requires editor access)"""
     try:
         logger.info(f"Updating recipe {recipe_id}")
 
@@ -299,9 +300,9 @@ async def update_recipe(
 async def delete_recipe(
     recipe_id: int,
     db: Database = Depends(get_db),
-    user: UserInfo = Depends(require_authentication),
+    user: UserInfo = Depends(require_editor_access),
 ):
-    """Delete a recipe (requires authentication)"""
+    """Delete a recipe (requires editor access)"""
     try:
         logger.info(f"Deleting recipe {recipe_id}")
 
@@ -374,9 +375,9 @@ async def delete_recipe_rating(
 async def bulk_upload_recipes(
     bulk_data: BulkRecipeUpload,
     db: Database = Depends(get_db),
-    user: UserInfo = Depends(require_authentication),
+    user: UserInfo = Depends(require_editor_access),
 ):
-    """Bulk upload recipes (requires authentication)"""
+    """Bulk upload recipes (requires editor access)"""
     import time
 
     start_time = time.time()

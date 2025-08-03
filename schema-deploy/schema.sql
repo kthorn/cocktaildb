@@ -13,6 +13,9 @@ CREATE TABLE ingredients (
   description TEXT,
   parent_id INTEGER,
   path TEXT,
+  created_by TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (parent_id) REFERENCES ingredients(id)
 );
 
@@ -32,7 +35,10 @@ CREATE TABLE recipes (
   source TEXT,
   source_url TEXT,
   avg_rating REAL DEFAULT 0,
-  rating_count INTEGER DEFAULT 0
+  rating_count INTEGER DEFAULT 0,
+  created_by TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE ratings (
@@ -92,6 +98,8 @@ CREATE INDEX idx_ratings_cognito_user_id ON ratings(cognito_user_id);
 CREATE INDEX idx_ratings_recipe_id ON ratings(recipe_id);
 CREATE INDEX idx_user_ingredients_cognito_user_id ON user_ingredients(cognito_user_id);
 CREATE INDEX idx_user_ingredients_ingredient_id ON user_ingredients(ingredient_id);
+CREATE INDEX idx_recipes_created_by ON recipes(created_by);
+CREATE INDEX idx_ingredients_created_by ON ingredients(created_by);
 
 CREATE UNIQUE INDEX idx_public_tags ON tags(name) WHERE created_by IS NULL;
 CREATE UNIQUE INDEX idx_private_tags ON tags(name, created_by) WHERE created_by IS NOT NULL;
@@ -129,6 +137,20 @@ BEGIN
     avg_rating = COALESCE((SELECT AVG(rating) FROM ratings WHERE recipe_id = OLD.recipe_id), 0),
     rating_count = (SELECT COUNT(*) FROM ratings WHERE recipe_id = OLD.recipe_id)
   WHERE id = OLD.recipe_id;
+END;
+
+-- Create trigger to automatically update updated_at for recipes
+CREATE TRIGGER update_recipes_updated_at
+AFTER UPDATE ON recipes
+BEGIN
+  UPDATE recipes SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+END;
+
+-- Create trigger to automatically update updated_at for ingredients
+CREATE TRIGGER update_ingredients_updated_at
+AFTER UPDATE ON ingredients
+BEGIN
+  UPDATE ingredients SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
 
 
