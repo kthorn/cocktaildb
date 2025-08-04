@@ -63,6 +63,7 @@ Conditions:
   IsProdEnvironment: !Equals [!Ref Environment, "prod"]
   HasGoogleOAuth: !Not [!Equals [!Ref GoogleClientId, ""]]
   HasAmazonOAuth: !Not [!Equals [!Ref AmazonClientId, ""]]
+  HasAuthCertificate: !Not [!Equals [!Ref AuthCertificateArn, ""]]
 
 Resources:
   # VPC and Network Configuration
