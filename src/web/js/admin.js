@@ -6,7 +6,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupAdminPage() {
-    const downloadBtn = document.getElementById('download-db-btn');
     const downloadTemplateBtn = document.getElementById('download-template-btn');
     const fileInput = document.getElementById('recipe-file-input');
     const uploadBtn = document.getElementById('upload-recipes-btn');
@@ -15,10 +14,6 @@ function setupAdminPage() {
     const downloadIngredientTemplateBtn = document.getElementById('download-ingredient-template-btn');
     const ingredientFileInput = document.getElementById('ingredient-file-input');
     const uploadIngredientsBtn = document.getElementById('upload-ingredients-btn');
-    
-    if (downloadBtn) {
-        downloadBtn.addEventListener('click', downloadDatabase);
-    }
     
     if (downloadTemplateBtn) {
         downloadTemplateBtn.addEventListener('click', downloadTemplate);
@@ -85,60 +80,6 @@ function updateUIBasedOnAuth() {
     adminTools.style.display = 'block';
 }
 
-async function downloadDatabase() {
-    const downloadBtn = document.getElementById('download-db-btn');
-    const originalText = downloadBtn.textContent;
-    
-    try {
-        // Update button to show loading state
-        downloadBtn.textContent = 'Downloading...';
-        downloadBtn.disabled = true;
-        
-        // Make API call to download database
-        const response = await fetch(`${api.baseUrl}/admin/database/download`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('id_token')}`
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Download failed: ${response.status} ${response.statusText}`);
-        }
-        
-        // Get the blob from response
-        const blob = await response.blob();
-        
-        // Create download link
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        
-        // Generate filename with timestamp
-        const now = new Date();
-        const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-        a.download = `cocktaildb-backup-${timestamp}.db`;
-        
-        // Trigger download
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        
-        // Clean up the blob URL
-        window.URL.revokeObjectURL(url);
-        
-        // Show success message
-        showMessage('Database downloaded successfully!', 'success');
-        
-    } catch (error) {
-        console.error('Error downloading database:', error);
-        showMessage(`Error downloading database: ${error.message}`, 'error');
-    } finally {
-        // Restore button state
-        downloadBtn.textContent = originalText;
-        downloadBtn.disabled = false;
-    }
-}
 
 function showMessage(message, type = 'info') {
     // Create message element using existing notification styles

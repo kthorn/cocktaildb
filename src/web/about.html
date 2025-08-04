@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <title>About - Cocktail Database</title>
+        <!-- Prevent FOUC (Flash of Unstyled Content) with common.js fallback -->
+    </head>
+
+    <body>
+        <!-- Header will be loaded by common.js -->
+
+        <main>
+            <section class="about-content">
+                <h2>About Cocktail Database</h2>
+                
+                <div class="about-text">
+                    <p>Welcome to my cocktail database - a hobby project to track cocktails and ingredients.</p>
+                    
+                    <h3>What You Can Do</h3>
+                    <p>Sign up for a free account to:</p>
+                    <ul>
+                        <li>Rate and review cocktail recipes</li>
+                        <li>Add personal tags to organize your favorites</li>
+                        <li>Track your ingredient inventory</li>
+                        <li>Search for cocktails you can make with ingredients on hand</li>
+                    </ul>
+                    
+                    <h3>Contributing Recipes & Ingredients</h3>
+                    <p>To maintain data quality for analysis purposes (coming soon), only editors can add new recipes and ingredients. 
+                    If you'd like to become an editor or have recipes to contribute, please contact me at 
+                    <a href="mailto:kurt.thorn@gmail.com">kurt.thorn@gmail.com</a>.</p>
+                    
+                    <h3>Support & Issues</h3>
+                    <p>Found a bug or have a suggestion? Please open an issue on 
+                    <a href="https://github.com/kthorn/cocktaildb">GitHub</a>. As this is a hobby project, 
+                    I may not be able to fix them immediately, but I appreciate your feedback.</p>
+
+                    <h3>About The Code</h3>
+                    <p>The code is open source and available on <a href="https://github.com/kthorn/cocktaildb">GitHub</a>. 
+                        Feel free to fork it and use it for your own purposes.</p>
+                    <p>It was largely vibe coded with Claude, so the code may be a bit messy. The database is a SQLite database, 
+                        and the API runs via FastAPI on AWS Lambda. It's quite cheap to run.</p>
+                    
+                    <p><strong>Cheers and enjoy exploring!</strong></p>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer will be loaded by common.js -->
+
+        <script type="module" src="js/common.js"></script>
+        <script type="module" src="js/about.js"></script>
+    </body>
+
+</html>
