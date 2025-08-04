@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Login Successful - CocktailDB</title>
+        <link rel="stylesheet" href="styles.css">
+        <script type="module">
+        // Parse the URL hash fragment for authentication tokens
+        function parseHashParams() {
+            const hash = window.location.hash.substring(1);
+            console.log('Raw hash:', hash);
+            return hash.split('&').reduce((params, param) => {
+                const [key, value] = param.split('=');
+                if (key && value) {
+                    params[key] = decodeURIComponent(value);
+                }
+                return params;
+            }, {});
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                // Get the tokens from the URL hash
+                const params = parseHashParams();
+                
+                if (params.access_token) {
+                    // Store tokens in localStorage
+                    localStorage.setItem('token', params.access_token);
+                    if (params.id_token) {
+                        localStorage.setItem('id_token', params.id_token);
+                        // Parse the ID token to get user info
+                        const payloadBase64 = params.id_token.split('.')[1];
+                        const payload = JSON.parse(atob(payloadBase64));                       
+                        // Store username (preferred_username or email or sub)
+                        const username = payload.preferred_username || payload.email || payload.sub;
+                        localStorage.setItem('username', username);
+                        
+                        // Update status with username
+                        document.getElementById('username').textContent = username;
+                        document.getElementById('welcome-message').classList.remove('hidden');
+                    }                   
+                    
+                    document.getElementById('status').textContent = 'Login successful! Redirecting to home page...';
+                    
+                    // Redirect back to the main page after a short delay
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 2000);
+                } else if (params.error) {
+                    // Handle OAuth errors
+                    document.getElementById('status').textContent = `Login failed: ${params.error_description || params.error}`;
+                    document.getElementById('error-container').classList.remove('hidden');
+                } else {
+                    // No tokens found, likely just accessed the page directly
+                    document.getElementById('status').textContent = 'No authentication data found. Redirecting to home page...';
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error('Error processing authentication response:', error);
+                document.getElementById('status').textContent = 'Login processing failed. Please try again.';
+                document.getElementById('error-container').classList.remove('hidden');
+            }
+        });
+        </script>
+    </head>
+    <body>
+        <div class="container">
+            <div class="login-callback">
+                <h1>🍸 CocktailDB</h1>
+                <div id="welcome-message" class="hidden">
+                    <h2>Welcome, <span id="username"></span>!</h2>
+                </div>
+                <p id="status">Processing authentication...</p>
+                
+                <div id="error-container" class="hidden">
+                    <button onclick="window.location.href='index.html'" class="btn btn-primary">
+                        Back to Home
+                    </button>
+                </div>
+            </div>
+        </div>
+        <script type="module" src="js/common.js"></script>
+    </body>
+</html>

@@ -50,6 +50,7 @@ export function loadHeader() {
           <button id="logout-btn">Logout</button>
         </span>
         <button id="login-btn">Login</button>
+        <button id="signup-btn">Sign Up</button>
       </div>
     </nav>
   `;

@@ -34,6 +34,24 @@ Parameters:
     Type: String
     Default: ""
     Description: ARN of the ACM certificate for the auth subdomain (must be in us-east-1). Required if Environment is prod.
+  GoogleClientId:
+    Type: String
+    Default: ""
+    Description: Google OAuth Client ID for social login (optional)
+  GoogleClientSecret:
+    Type: String
+    Default: ""
+    Description: Google OAuth Client Secret for social login (optional)
+    NoEcho: true
+  AmazonClientId:
+    Type: String
+    Default: ""
+    Description: Amazon Client ID for Login with Amazon (optional)
+  AmazonClientSecret:
+    Type: String
+    Default: ""
+    Description: Amazon Client Secret for Login with Amazon (optional)
+    NoEcho: true
 
 Globals:
   Function:
@@ -43,6 +61,8 @@ Globals:
 
 Conditions:
   IsProdEnvironment: !Equals [!Ref Environment, "prod"]
+  HasGoogleOAuth: !Not [!Equals [!Ref GoogleClientId, ""]]
+  HasAmazonOAuth: !Not [!Equals [!Ref AmazonClientId, ""]]
 
 Resources:
   # VPC and Network Configuration
@@ -844,14 +864,14 @@ Resources:
       UserPoolName: !Ref UserPoolName # This now uses the environment-specific default
       AliasAttributes:
         - email
-        - preferred_username
-      AutoVerifiedAttributes: []
+      AutoVerifiedAttributes:
+        - email
       MfaConfiguration: "OFF"
       AdminCreateUserConfig:
-        AllowAdminCreateUserOnly: true
+        AllowAdminCreateUserOnly: false
       Policies:
         PasswordPolicy:
-          MinimumLength: 6
+          MinimumLength: 8
           RequireLowercase: false
           RequireNumbers: false
           RequireSymbols: false
@@ -859,10 +879,14 @@ Resources:
       UserPoolAddOns:
         AdvancedSecurityMode: !Ref CognitoAdvancedSecurity # Use parameter
       Schema:
-        - Name: name
+        - Name: email
           AttributeDataType: String
-          Mutable: true
           Required: true
+          Mutable: true
+        - Name: preferred_username
+          AttributeDataType: String
+          Required: false
+          Mutable: false
 
   # Cognito User Pool Client
   CognitoUserPoolClient:
@@ -897,6 +921,10 @@ Resources:
         - openid
         - profile
       AllowedOAuthFlowsUserPoolClient: true
+      WriteAttributes:
+        - email
+      ReadAttributes:
+        - email
 
   # Cognito User Pool Groups
   CognitoAdminGroup:
@@ -945,6 +973,40 @@ Resources:
         .label-customizable { color: #333 !important; font-weight: bold !important; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; margin-bottom: 0.5rem !important; display: block !important; }
         .submitButton-customizable { background-color: #A61816 !important; border-color: #A61816 !important; color: white !important; padding: 0.75rem 1.5rem !important; border-radius: 4px !important; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; font-size: 1rem !important; font-weight: 500 !important; border: none !important; width: 100% !important; }
         .redirect-customizable { color: #A61816 !important; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; }
+
+  # OAuth Identity Providers
+  GoogleIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Condition: HasGoogleOAuth
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      ProviderName: "Google"
+      ProviderType: "Google"
+      ProviderDetails:
+        client_id: !Ref GoogleClientId
+        client_secret: !Ref GoogleClientSecret
+        authorize_scopes: "profile email openid"
+      AttributeMapping:
+        email: "email"
+        name: "name"
+        username: "sub"
+
+
+  AmazonIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Condition: HasAmazonOAuth
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      ProviderName: "LoginWithAmazon"
+      ProviderType: "LoginWithAmazon"
+      ProviderDetails:
+        client_id: !Ref AmazonClientId
+        client_secret: !Ref AmazonClientSecret
+        authorize_scopes: "profile"
+      AttributeMapping:
+        email: "email"
+        name: "name"
+        username: "user_id"
 
   # IAM Role for API Gateway CloudWatch Logging
   ApiGatewayCloudWatchRole:

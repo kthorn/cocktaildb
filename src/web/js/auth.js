@@ -4,6 +4,7 @@ import config from './config.js';
 // Initialize authentication on page load
 export function initAuth() {
     const loginButton = document.getElementById('login-btn');
+    const signupButton = document.getElementById('signup-btn');
     const logoutButton = document.getElementById('logout-btn');
     const userInfo = document.getElementById('user-info');
     
@@ -18,9 +19,17 @@ export function initAuth() {
     
     // Setup login button
     loginButton.addEventListener('click', () => {
-        // Redirect to Cognito hosted UI
+        // Redirect to Cognito hosted UI for login
         window.location.href = `${config.cognitoDomain}/login?client_id=${config.clientId}&response_type=token&scope=email+openid+profile&redirect_uri=${encodeURIComponent(window.location.origin + '/callback.html')}`;
     });
+    
+    // Setup signup button (if it exists)
+    if (signupButton) {
+        signupButton.addEventListener('click', () => {
+            // Redirect to Cognito hosted UI for signup
+            window.location.href = `${config.cognitoDomain}/signup?client_id=${config.clientId}&response_type=token&scope=email+openid+profile&redirect_uri=${encodeURIComponent(window.location.origin + '/callback.html')}`;
+        });
+    }
     
     // Setup logout button
     logoutButton.addEventListener('click', () => {
@@ -32,10 +41,12 @@ export function initAuth() {
         if (isAuthenticated()) {
             // User is logged in
             loginButton.classList.add('hidden');
+            if (signupButton) signupButton.classList.add('hidden');
             userInfo.classList.remove('hidden');
         } else {
             // User is logged out
             loginButton.classList.remove('hidden');
+            if (signupButton) signupButton.classList.remove('hidden');
             userInfo.classList.add('hidden');
         }
     }
