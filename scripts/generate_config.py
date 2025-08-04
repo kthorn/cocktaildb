@@ -174,7 +174,7 @@ def main():
     config_values["client_id"] = validate_value(config_values["client_id"], "CLIENT_ID")
 
     config_values["cognito_domain"] = get_cloudformation_output(
-        args.stack_name, "CognitoDomainURL", args.region
+        args.stack_name, "CognitoDomainURLV3", args.region
     )
     config_values["cognito_domain"] = validate_value(
         config_values["cognito_domain"], "COGNITO_DOMAIN_OUTPUT_URL"

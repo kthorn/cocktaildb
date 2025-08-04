@@ -53,8 +53,9 @@ cd "$(dirname "$0")/.."
 STACK_NAME="cocktail-db-${TARGET_ENV}"
 REGION="us-east-1"
 DB_NAME_PARAM="cocktaildb-${TARGET_ENV}"
-USER_POOL_NAME_PARAM="CocktailDB-UserPool-${TARGET_ENV}"
-PARAM_OVERRIDES="Environment=${TARGET_ENV} HostedZoneId=${HOSTED_ZONE_ID} DatabaseName=${DB_NAME_PARAM} UserPoolName=${USER_POOL_NAME_PARAM}"
+USER_POOL_NAME_PARAM="CocktailDB-UserPool-${TARGET_ENV}-v2"
+AUTH_CERT_ARN="arn:aws:acm:us-east-1:732940910135:certificate/ef4e8b26-0806-4d73-80a1-682201322d1f"
+PARAM_OVERRIDES="Environment=${TARGET_ENV} HostedZoneId=${HOSTED_ZONE_ID} DatabaseName=${DB_NAME_PARAM} UserPoolName=${USER_POOL_NAME_PARAM} AuthCertificateArn=${AUTH_CERT_ARN}"
 
 echo "Stack name: $STACK_NAME"
 

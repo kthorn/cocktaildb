@@ -56,7 +56,7 @@ Parameters:
 Globals:
   Function:
     Runtime: python3.12
-    Timeout: 60
+    Timeout: 65
     MemorySize: 1536
 
 Conditions:
@@ -345,7 +345,7 @@ Resources:
       Name: !Sub "${AuthSubdomain}.${DomainName}"
       Type: A
       AliasTarget:
-        DNSName: !GetAtt CognitoDomain.CloudFrontDistribution
+        DNSName: !GetAtt CognitoDomainV3.CloudFrontDistribution
         HostedZoneId: Z2FDTNDATAQYW2 # CloudFront hosted zone ID (static value for Cognito)
         EvaluateTargetHealth: false
 
@@ -465,8 +465,8 @@ Resources:
       Environment:
         Variables:
           DB_NAME: !Ref DatabaseName
-          USER_POOL_ID: !Ref CognitoUserPool
-          APP_CLIENT_ID: !Ref CognitoUserPoolClient
+          USER_POOL_ID: !Ref CognitoUserPoolV3
+          APP_CLIENT_ID: !Ref CognitoUserPoolV3Client
           ENVIRONMENT: !Ref Environment
           DB_PATH: !Sub /mnt/efs/${DatabaseName}.db
       VpcConfig:
@@ -858,7 +858,7 @@ Resources:
 
 
   # Cognito User Pool for Authentication
-  CognitoUserPool:
+  CognitoUserPoolV3:
     Type: AWS::Cognito::UserPool
     Properties:
       UserPoolName: !Ref UserPoolName # This now uses the environment-specific default
@@ -889,10 +889,10 @@ Resources:
           Mutable: false
 
   # Cognito User Pool Client
-  CognitoUserPoolClient:
+  CognitoUserPoolV3Client:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      UserPoolId: !Ref CognitoUserPool
+      UserPoolId: !Ref CognitoUserPoolV3
       ClientName: !Sub cocktaildb-client-${Environment}
       GenerateSecret: false
       ExplicitAuthFlows:
@@ -927,42 +927,43 @@ Resources:
         - email
 
   # Cognito User Pool Groups
-  CognitoAdminGroup:
+  CognitoAdminGroupV3:
     Type: AWS::Cognito::UserPoolGroup
     Properties:
-      UserPoolId: !Ref CognitoUserPool
+      UserPoolId: !Ref CognitoUserPoolV3
       GroupName: admin
       Description: System administrators with full access
       Precedence: 1
 
-  CognitoEditorGroup:
+  CognitoEditorGroupV3:
     Type: AWS::Cognito::UserPoolGroup
     Properties:
-      UserPoolId: !Ref CognitoUserPool
+      UserPoolId: !Ref CognitoUserPoolV3
       GroupName: editor
       Description: Content editors - can create, edit, and delete recipes and ingredients
       Precedence: 2
 
   # Cognito Domain for Hosted UI
-  CognitoDomain:
+  CognitoDomainV3:
     Type: AWS::Cognito::UserPoolDomain
     Properties:
       Domain: !If
         - IsProdEnvironment
         - !Sub "${AuthSubdomain}.${DomainName}"
-        - !Sub "cocktaildbauth-${Environment}-${AWS::AccountId}" # Globally unique domain for dev
-      UserPoolId: !Ref CognitoUserPool
+        - !Sub "cocktaildbauth-${Environment}-${AWS::AccountId}-v3" # Globally unique domain for dev
+      UserPoolId: !Ref CognitoUserPoolV3
       CustomDomainConfig: !If
         - IsProdEnvironment
-        - CertificateArn: !Ref AuthCertificate
+        - CertificateArn: !Ref AuthCertificateArn
         - !Ref "AWS::NoValue"
 
   # UI Customization for Cognito Hosted UI
-  CognitoUICustomization:
+  CognitoUICustomizationV3:
     Type: AWS::Cognito::UserPoolUICustomizationAttachment
+    DependsOn: CognitoDomainV3
     Properties:
-      UserPoolId: !Ref CognitoUserPool
-      ClientId: !Ref CognitoUserPoolClient
+      UserPoolId: !Ref CognitoUserPoolV3
+      ClientId: !Ref CognitoUserPoolV3Client
       CSS: |
         .background-customizable { background-color: #f5f5f5 !important; }
         .banner-customizable { background-color: #2c3e50 !important; padding: 1.5rem 2rem !important; }
@@ -975,11 +976,11 @@ Resources:
         .redirect-customizable { color: #A61816 !important; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; }
 
   # OAuth Identity Providers
-  GoogleIdentityProvider:
+  GoogleIdentityProviderV3:
     Type: AWS::Cognito::UserPoolIdentityProvider
     Condition: HasGoogleOAuth
     Properties:
-      UserPoolId: !Ref CognitoUserPool
+      UserPoolId: !Ref CognitoUserPoolV3
       ProviderName: "Google"
       ProviderType: "Google"
       ProviderDetails:
@@ -992,11 +993,11 @@ Resources:
         username: "sub"
 
 
-  AmazonIdentityProvider:
+  AmazonIdentityProviderV3:
     Type: AWS::Cognito::UserPoolIdentityProvider
     Condition: HasAmazonOAuth
     Properties:
-      UserPoolId: !Ref CognitoUserPool
+      UserPoolId: !Ref CognitoUserPoolV3
       ProviderName: "LoginWithAmazon"
       ProviderType: "LoginWithAmazon"
       ProviderDetails:
@@ -1043,7 +1044,7 @@ Resources:
       Auth:
         Authorizers:
           CognitoAuthorizer:
-            UserPoolArn: !GetAtt CognitoUserPool.Arn
+            UserPoolArn: !GetAtt CognitoUserPoolV3.Arn
         AddDefaultAuthorizerToCorsPreflight: false
       # --- Add MethodSettings for Stage Logging ---
       MethodSettings:
@@ -1206,18 +1207,18 @@ Outputs:
 
   UserPoolId:
     Description: Cognito User Pool ID
-    Value: !Ref CognitoUserPool
+    Value: !Ref CognitoUserPoolV3
     
   UserPoolClientId:
     Description: Cognito User Pool Client ID
-    Value: !Ref CognitoUserPoolClient
+    Value: !Ref CognitoUserPoolV3Client
     
-  CognitoDomainURL:
+  CognitoDomainURLV3:
     Description: Cognito Domain URL for hosted UI
     Value: !If
       - IsProdEnvironment
       - !Sub "https://${AuthSubdomain}.${DomainName}"
-      - !Sub "https://${CognitoDomain}.auth.${AWS::Region}.amazoncognito.com"
+      - !Sub "https://${CognitoDomainV3}.auth.${AWS::Region}.amazoncognito.com"
 
   CustomDomainURL:
     Description: Website URL with custom domain (production only)
@@ -1237,9 +1238,9 @@ Outputs:
 
   AdminGroupName:
     Description: Name of the admin group in Cognito User Pool
-    Value: !Ref CognitoAdminGroup
+    Value: !Ref CognitoAdminGroupV3
 
   EditorGroupName:
     Description: Name of the editor group in Cognito User Pool
-    Value: !Ref CognitoEditorGroup
+    Value: !Ref CognitoEditorGroupV3
 
