@@ -1,7 +1,9 @@
 import { api } from './api.js';
-import { isAuthenticated } from './auth.js';
+import { isAuthenticated, initAuth } from './auth.js';
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Ensure authentication is initialized before checking permissions
+    await initAuth();
     setupAdminPage();
 });
 
@@ -58,6 +60,11 @@ function setupAdminPage() {
 function updateUIBasedOnAuth() {
     const adminTools = document.querySelector('.admin-tools');
     
+    if (!adminTools) {
+        console.error('Admin tools container not found');
+        return;
+    }
+    
     if (!isAuthenticated()) {
         adminTools.innerHTML = `
             <div class="card-container">
@@ -76,8 +83,8 @@ function updateUIBasedOnAuth() {
         return;
     }
     
-    // User has editor permissions, show admin tools
-    adminTools.style.display = 'block';
+    // User has editor permissions, admin tools are already visible in HTML
+    // No need to hide/show since the HTML contains the admin tools by default
 }
 
 

@@ -389,6 +389,16 @@ button:hover, .btn:hover {
     margin-bottom: var(--space-sm);
 }
 
+/* About page content */
+.about-content ul {
+    padding-left: 1.5rem;
+    margin: var(--space-sm) 0;
+}
+
+.about-content li {
+    margin-bottom: var(--space-xs);
+}
+
 /* Recipe components */
 .recipe-card .ingredients,
 .recipe-card .instructions,
