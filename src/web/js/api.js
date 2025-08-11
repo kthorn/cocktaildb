@@ -421,6 +421,11 @@ class CocktailAPI {
         return this._request('/user-ingredients/bulk', 'DELETE', { ingredient_ids: ingredientIds });
     }
 
+    // Stats API
+    async getStats() {
+        return this._request('/stats', 'GET');
+    }
+
 
 }
 

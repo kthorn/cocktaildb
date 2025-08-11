@@ -12,6 +12,8 @@ from .sql_queries import (
     get_recipe_by_id_sql,
     get_all_recipes_sql,
     get_recipe_ingredients_by_recipe_id_sql_factory,
+    get_recipes_count_sql,
+    get_ingredients_count_sql,
     INGREDIENT_SELECT_FIELDS,
 )
 
@@ -2707,3 +2709,27 @@ class Database:
                 conn.close()
 
     # --- End User Ingredient Tracking Methods ---
+
+    # --- Count Methods ---
+
+    @retry_on_db_locked()
+    def get_recipes_count(self) -> int:
+        """Get total count of recipes"""
+        try:
+            result = self.query(get_recipes_count_sql)
+            return result[0]["total_count"] if result else 0
+        except Exception as e:
+            logger.error(f"Error getting recipes count: {str(e)}")
+            raise
+
+    @retry_on_db_locked()
+    def get_ingredients_count(self) -> int:
+        """Get total count of ingredients"""
+        try:
+            result = self.query(get_ingredients_count_sql)
+            return result[0]["total_count"] if result else 0
+        except Exception as e:
+            logger.error(f"Error getting ingredients count: {str(e)}")
+            raise
+
+    # --- End Count Methods ---

@@ -808,6 +808,15 @@ Resources:
             Auth:
               Authorizer: CognitoAuthorizer
         # --- END User Ingredients Endpoints ---
+
+        # --- Stats Endpoints ---
+        GetStats:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /stats
+            Method: get
+        # --- END Stats Endpoints ---
         
         # --- Admin Endpoints ---
         GetAdminDatabaseDownload:

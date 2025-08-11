@@ -29,7 +29,7 @@ from core.exception_handlers import (
     validation_exception_handler,
     general_exception_handler,
 )
-from routes import ingredients, recipes, ratings, units, tags, auth, admin, user_ingredients
+from routes import ingredients, recipes, ratings, units, tags, auth, admin, user_ingredients, stats
 from routes.tags import recipe_tags_router
 from models.responses import MessageResponse
 
@@ -101,6 +101,7 @@ app.include_router(recipe_tags_router)
 app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(user_ingredients.router)
+app.include_router(stats.router)
 
 # OPTIONS handlers are explicitly defined in template.yaml as mock integrations
 # This prevents CORS preflight requests from hitting Cognito authorization

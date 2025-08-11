@@ -156,7 +156,7 @@ export function createInteractiveStars(options) {
 
   const container = document.createElement('div');
   container.className = 'star-rating interactive';
-  container.dataset.rating = initialRating.toString();
+  container.dataset.rating = (initialRating ?? 0).toString();
   
   // Distinguish between no rating and 0-star rating for visual states
   const hasRating = showDifferentStates ? (initialRating !== null && initialRating !== undefined) : true;

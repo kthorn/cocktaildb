@@ -3,85 +3,115 @@ import { createRecipeCard } from './recipeCard.js';
 
 let currentRecipeIndex = 0;
 let recipes = [];
+let currentPage = 1;
+let hasMoreRecipes = true;
+let isLoadingRecipes = false;
+const recipesPerPage = 12;
 
 // Update stats display
 async function updateStats() {
     try {
-        const ingredients = await api.getIngredients();        
-        document.getElementById('total-ingredients').textContent = ingredients.length;
-        document.getElementById('total-recipes').textContent = recipes.length;
+        const stats = await api.getStats();
+        document.getElementById('total-ingredients').textContent = stats.ingredients_count;
+        document.getElementById('total-recipes').textContent = stats.recipes_count;
     } catch (error) {
         console.error('Error updating stats:', error);
     }
 }
 
-// Load and display a recipe
-async function loadRecipes() {
+// Load initial recipes (first page only)
+async function loadInitialRecipes() {
     try {
         // Show loading message
         document.getElementById('recipe-display').innerHTML = '<p>Loading recipes...</p>';
         
-        // Load all recipes by fetching pages until we get them all
+        // Reset state
         recipes = [];
-        let page = 1;
-        let hasMore = true;
-        let firstRecipeDisplayed = false;
+        currentPage = 1;
+        hasMoreRecipes = true;
+        isLoadingRecipes = false;
         
-        while (hasMore) {
-            console.log(`Loading page ${page}...`);
-            const result = await api.searchRecipes({}, page, 10); // Empty search returns all recipes
-            console.log(`Page ${page} result:`, result);
-            
-            if (result && result.recipes && result.recipes.length > 0) {
-                recipes = recipes.concat(result.recipes);
-                console.log(`Added ${result.recipes.length} recipes. Total: ${recipes.length}`);
-                
-                // Display the first recipe as soon as we have it
-                if (!firstRecipeDisplayed && recipes.length > 0) {
-                    displayRecipe(currentRecipeIndex);
-                    firstRecipeDisplayed = true;
-                }
-                
-                // Check if there are more pages
-                console.log('Pagination object:', result.pagination);
-                hasMore = result.pagination.has_next;
-                console.log(`Has more pages: ${hasMore}`);
-                page++;
-            } else {
-                console.log('No more recipes found');
-                hasMore = false;
-            }
-        }
+        // Load first page
+        await loadMoreRecipes();
         
-        console.log(`Final recipe count: ${recipes.length}`);
-        
-        if (recipes.length === 0) {
+        // Display the first recipe if we have any
+        if (recipes.length > 0) {
+            displayRecipe(currentRecipeIndex);
+        } else {
             document.getElementById('recipe-display').innerHTML = '<p>No recipes found.</p>';
         }
+        
         updateStats();
     } catch (error) {
-        console.error('Error loading recipes:', error);
+        console.error('Error loading initial recipes:', error);
         document.getElementById('recipe-display').innerHTML = '<p>Error loading recipes.</p>';
     }
 }
 
+// Load more recipes (for pagination/scroll)
+async function loadMoreRecipes() {
+    if (isLoadingRecipes || !hasMoreRecipes) {
+        return;
+    }
+    
+    isLoadingRecipes = true;
+    
+    try {
+        console.log(`Loading page ${currentPage}...`);
+        const result = await api.searchRecipes({}, currentPage, recipesPerPage); // Empty search returns all recipes
+        console.log(`Page ${currentPage} result:`, result);
+        
+        if (result && result.recipes && result.recipes.length > 0) {
+            recipes = recipes.concat(result.recipes);
+            console.log(`Added ${result.recipes.length} recipes. Total: ${recipes.length}`);
+            
+            // Check if there are more pages
+            console.log('Pagination object:', result.pagination);
+            hasMoreRecipes = result.pagination.has_next;
+            console.log(`Has more pages: ${hasMoreRecipes}`);
+            currentPage++;
+        } else {
+            console.log('No more recipes found');
+            hasMoreRecipes = false;
+        }
+    } catch (error) {
+        console.error('Error loading more recipes:', error);
+        hasMoreRecipes = false;
+    } finally {
+        isLoadingRecipes = false;
+    }
+}
+
 // Display a specific recipe by index
-function displayRecipe(index) {
+async function displayRecipe(index) {
     if (recipes.length === 0) return;
     
-    // Ensure index is within bounds
+    // Ensure index is within bounds, but handle lazy loading
     if (index < 0) index = recipes.length - 1;
-    if (index >= recipes.length) index = 0;
+    if (index >= recipes.length) {
+        // Check if we need to load more recipes
+        if (hasMoreRecipes && !isLoadingRecipes) {
+            await loadMoreRecipes();
+            // After loading, check if we now have the recipe
+            if (index >= recipes.length) {
+                index = recipes.length - 1; // Fall back to last available
+            }
+        } else {
+            index = 0; // Wrap to beginning
+        }
+    }
     
     currentRecipeIndex = index;
     
     try {
         // Use the already loaded full recipe data
         const recipe = recipes[index];
-        const recipeCard = createRecipeCard(recipe, true);
-        
-        document.getElementById('recipe-display').innerHTML = '';
-        document.getElementById('recipe-display').appendChild(recipeCard);
+        if (recipe) {
+            const recipeCard = createRecipeCard(recipe, true);
+            
+            document.getElementById('recipe-display').innerHTML = '';
+            document.getElementById('recipe-display').appendChild(recipeCard);
+        }
     } catch (error) {
         console.error('Error displaying recipe:', error);
         document.getElementById('recipe-display').innerHTML = '<p>Error loading recipe.</p>';
@@ -89,15 +119,15 @@ function displayRecipe(index) {
 }
 
 // Event listeners for carousel arrows
-document.getElementById('prev-recipe').addEventListener('click', () => {
-    displayRecipe(currentRecipeIndex - 1);
+document.getElementById('prev-recipe').addEventListener('click', async () => {
+    await displayRecipe(currentRecipeIndex - 1);
 });
 
-document.getElementById('next-recipe').addEventListener('click', () => {
-    displayRecipe(currentRecipeIndex + 1);
+document.getElementById('next-recipe').addEventListener('click', async () => {
+    await displayRecipe(currentRecipeIndex + 1);
 });
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    loadRecipes();
+    loadInitialRecipes();
 }); 

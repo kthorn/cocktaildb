@@ -67,6 +67,11 @@ get_recipes_count_sql = """
     FROM recipes r
 """
 
+get_ingredients_count_sql = """
+    SELECT COUNT(DISTINCT i.id) as total_count
+    FROM ingredients i
+"""
+
 get_recipes_paginated_with_ingredients_sql = """
     WITH paginated_recipes AS (
         SELECT
