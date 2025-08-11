@@ -1,7 +1,7 @@
 // Recipe card component for displaying cocktail recipes
 import { api } from './api.js';
 import { isAuthenticated, getUserInfo } from './auth.js';
-import { generateStarRating, createInteractiveRating } from './common.js';
+import { generateStarRating, createInteractiveStars } from './common.js';
 
 /**
  * Formats a number into a string, converting decimals to common fractions if close.
@@ -170,16 +170,50 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
     const ratingContainer = card.querySelector(`#rating-container-${recipe.id}`);
     if (ratingContainer) {
         if (isAuthenticated()) {
+            // Create wrapper for interactive rating
+            const wrapper = document.createElement('div');
+            wrapper.className = 'star-rating interactive';
+            wrapper.dataset.recipeId = recipe.id;
+            
             // Add interactive rating for logged in users
-            // The recipe object now directly contains user_rating if available
-            const interactiveRating = createInteractiveRating(
-                recipe.id,
-                recipe.user_rating, // Use user_rating from the recipe object (don't default to 0)
-                recipe.avg_rating || 0,
-                recipe.rating_count || 0,
-                submitRating
-            );
-            ratingContainer.appendChild(interactiveRating);
+            const starComponent = createInteractiveStars({
+                initialRating: recipe.user_rating, // Use user_rating from the recipe object
+                allowToggle: false,
+                showDifferentStates: true,
+                onClick: async (rating) => {
+                    await submitRating(recipe.id, rating);
+                }
+            });
+            wrapper.appendChild(starComponent);
+            
+            // Add user rating indicator
+            const userIndicator = document.createElement('span');
+            userIndicator.className = 'user-rating-indicator';
+            const hasRating = recipe.user_rating !== null && recipe.user_rating !== undefined;
+            const ratingValue = recipe.user_rating ?? 0;
+            
+            if (!hasRating) {
+                userIndicator.textContent = ' (not rated)';
+                userIndicator.style.color = '#999';
+                userIndicator.style.fontSize = '0.8em';
+            } else if (ratingValue === 0) {
+                userIndicator.textContent = ' (0 stars)';
+                userIndicator.style.color = '#666';
+                userIndicator.style.fontSize = '0.8em';
+            } else {
+                userIndicator.textContent = ` (${ratingValue})`;
+                userIndicator.style.color = '#666';
+                userIndicator.style.fontSize = '0.8em';
+            }
+            wrapper.appendChild(userIndicator);
+            
+            // Add rating stats
+            const stats = document.createElement('span');
+            stats.className = 'rating-stats';
+            stats.textContent = ` - Avg: ${(recipe.avg_rating || 0).toFixed(1)} (${recipe.rating_count || 0})`;
+            wrapper.appendChild(stats);
+            
+            ratingContainer.appendChild(wrapper);
         } else {
             // Show static rating for non-logged in users
             const staticRating = generateStarRating(recipe.avg_rating || 0, recipe.rating_count || 0);
@@ -362,18 +396,47 @@ async function refreshRecipeAfterRating(recipeId, ratingResponse) {
         // Re-render just the rating component
         const ratingContainer = recipeCard.querySelector(`#rating-container-${recipeId}`);
         if (ratingContainer) {
-            // Use the submitted rating as the user's current rating
-            const interactiveRating = createInteractiveRating(
-                recipeId,
-                ratingResponse?.rating || 0,
-                recipe.avg_rating || 0,
-                recipe.rating_count || 0,
-                submitRating
-            );
+            // Create wrapper for interactive rating
+            const wrapper = document.createElement('div');
+            wrapper.className = 'star-rating interactive';
+            wrapper.dataset.recipeId = recipeId;
+            
+            // Create star component with submitted rating
+            const starComponent = createInteractiveStars({
+                initialRating: ratingResponse?.rating || 0,
+                allowToggle: false,
+                showDifferentStates: true,
+                onClick: async (rating) => {
+                    await submitRating(recipeId, rating);
+                }
+            });
+            wrapper.appendChild(starComponent);
+            
+            // Add user rating indicator
+            const userIndicator = document.createElement('span');
+            userIndicator.className = 'user-rating-indicator';
+            const submittedRating = ratingResponse?.rating || 0;
+            
+            if (submittedRating === 0) {
+                userIndicator.textContent = ' (0 stars)';
+                userIndicator.style.color = '#666';
+                userIndicator.style.fontSize = '0.8em';
+            } else {
+                userIndicator.textContent = ` (${submittedRating})`;
+                userIndicator.style.color = '#666';
+                userIndicator.style.fontSize = '0.8em';
+            }
+            wrapper.appendChild(userIndicator);
+            
+            // Add rating stats
+            const stats = document.createElement('span');
+            stats.className = 'rating-stats';
+            stats.textContent = ` - Avg: ${(recipe.avg_rating || 0).toFixed(1)} (${recipe.rating_count || 0})`;
+            wrapper.appendChild(stats);
             
             // Clear and replace
             ratingContainer.innerHTML = '';
-            ratingContainer.appendChild(interactiveRating);
+            ratingContainer.appendChild(wrapper);
         }
         
         console.log(`Recipe ${recipeId} refreshed with new rating data`);

@@ -138,119 +138,144 @@ export function generateStarRating(rating, count) {
 }
 
 /**
- * Creates an interactive star rating component
- * @param {number} recipeId - The ID of the recipe
- * @param {number} currentRating - The current user's rating (if any)
- * @param {number} avgRating - The average rating (0-5)
- * @param {number} count - The number of ratings
- * @param {Function} onRatingSubmitted - Callback when rating is submitted
- * @returns {HTMLElement} The interactive star rating element
+ * Creates a pure interactive star component (5 stars only, no additional text)
+ * @param {Object} options - Configuration options
+ * @param {number} options.initialRating - The initial rating value (0 for no selection)
+ * @param {boolean} options.allowToggle - Whether clicking the same star again deselects it (default: false)
+ * @param {boolean} options.showDifferentStates - Whether to show different visual states for no-rating vs 0-star vs filled (default: false)
+ * @param {Function} options.onClick - Callback when a star is clicked: (rating) => {}
+ * @returns {HTMLElement} The interactive star component
  */
-export function createInteractiveRating(recipeId, currentRating, avgRating, count, onRatingSubmitted) {
+export function createInteractiveStars(options) {
+  const {
+    initialRating = 0,
+    allowToggle = false,
+    showDifferentStates = false,
+    onClick
+  } = options;
+
   const container = document.createElement('div');
   container.className = 'star-rating interactive';
-  container.dataset.recipeId = recipeId;
+  container.dataset.rating = initialRating.toString();
   
-  // Distinguish between no rating (null/undefined) and 0-star rating
-  const hasRating = currentRating !== null && currentRating !== undefined;
-  const ratingValue = currentRating ?? 0;
+  // Distinguish between no rating and 0-star rating for visual states
+  const hasRating = showDifferentStates ? (initialRating !== null && initialRating !== undefined) : true;
+  const ratingValue = initialRating ?? 0;
   
   // Create 5 stars
   for (let i = 1; i <= 5; i++) {
     const star = document.createElement('span');
     star.className = 'star interactive';
+    star.dataset.value = i;
     
-    if (!hasRating) {
-      // No rating given - show empty outline stars
-      star.textContent = '☆';
-      star.classList.add('no-rating');
-    } else if (ratingValue === 0) {
-      // 0-star rating given - show grayed filled stars
-      star.textContent = '★';
-      star.classList.add('zero-rating');
+    // Set initial star appearance
+    if (showDifferentStates) {
+      // Rating mode: show different states
+      if (!hasRating) {
+        star.textContent = '☆';
+        star.classList.add('no-rating');
+      } else if (ratingValue === 0) {
+        star.textContent = '★';
+        star.classList.add('zero-rating');
+      } else {
+        star.textContent = i <= ratingValue ? '★' : '☆';
+        if (i <= ratingValue) {
+          star.classList.add('filled');
+        }
+      }
     } else {
-      // Normal rating - show filled/empty based on rating value
-      star.textContent = i <= ratingValue ? '★' : '☆';
+      // Filter mode: use filled stars with active class
+      star.textContent = '★';
       if (i <= ratingValue) {
-        star.classList.add('filled');
+        star.classList.add('active');
       }
     }
     
-    star.dataset.value = i;
-    
     // Add hover effect
     star.addEventListener('mouseover', () => {
-      // Fill all stars up to this one on hover
-      container.querySelectorAll('.star').forEach(s => {
-        if (parseInt(s.dataset.value) <= i) {
-          s.textContent = '★';
-          s.classList.add('hover');
-        } else {
-          s.textContent = '☆';
-          s.classList.remove('hover');
-        }
-      });
-    });
-    
-    // Remove hover effect
-    star.addEventListener('mouseout', () => {
-      // Reset to original state
       container.querySelectorAll('.star').forEach(s => {
         const value = parseInt(s.dataset.value);
-        s.classList.remove('hover');
-        
-        // Reset based on actual rating state
-        if (!hasRating) {
-          s.textContent = '☆';
-          s.className = 'star interactive no-rating';
-        } else if (ratingValue === 0) {
-          s.textContent = '★';
-          s.className = 'star interactive zero-rating';
-        } else {
-          if (value <= ratingValue) {
+        if (showDifferentStates) {
+          // Rating mode: change content and add hover class
+          if (value <= i) {
             s.textContent = '★';
-            s.className = 'star interactive filled';
+            s.classList.add('hover');
           } else {
             s.textContent = '☆';
-            s.className = 'star interactive';
+            s.classList.remove('hover');
+          }
+        } else {
+          // Filter mode: just add hover class
+          if (value <= i) {
+            s.classList.add('hover');
+          } else {
+            s.classList.remove('hover');
           }
         }
       });
     });
     
-    // Click event to set rating
-    star.addEventListener('click', async () => {
-      if (typeof onRatingSubmitted === 'function') {
-        await onRatingSubmitted(recipeId, i);
+    // Click event
+    star.addEventListener('click', () => {
+      const currentRating = parseInt(container.dataset.rating) || 0;
+      let newRating = i;
+      
+      // Handle toggle behavior if enabled
+      if (allowToggle && currentRating === i) {
+        newRating = 0;
+      }
+      
+      // Update container state
+      container.dataset.rating = newRating.toString();
+      updateStarDisplay(container, newRating, showDifferentStates, hasRating);
+      
+      // Call callback
+      if (typeof onClick === 'function') {
+        onClick(newRating);
       }
     });
     
     container.appendChild(star);
   }
   
-  // Add user rating indicator
-  const userIndicator = document.createElement('span');
-  userIndicator.className = 'user-rating-indicator';
-  if (!hasRating) {
-    userIndicator.textContent = ' (not rated)';
-    userIndicator.style.color = '#999';
-    userIndicator.style.fontSize = '0.8em';
-  } else if (ratingValue === 0) {
-    userIndicator.textContent = ' (0 stars)';
-    userIndicator.style.color = '#666';
-    userIndicator.style.fontSize = '0.8em';
-  } else {
-    userIndicator.textContent = ` (${ratingValue})`;
-    userIndicator.style.color = '#666';
-    userIndicator.style.fontSize = '0.8em';
-  }
-  container.appendChild(userIndicator);
-  
-  // Add rating average and count
-  const stats = document.createElement('span');
-  stats.className = 'rating-stats';
-  stats.textContent = ` - Avg: ${avgRating.toFixed(1)} (${count || 0})`;
-  container.appendChild(stats);
+  // Reset hover effect on mouse leave
+  container.addEventListener('mouseleave', () => {
+    const currentRating = parseInt(container.dataset.rating) || 0;
+    updateStarDisplay(container, currentRating, showDifferentStates, hasRating);
+    container.querySelectorAll('.star').forEach(s => s.classList.remove('hover'));
+  });
   
   return container;
+}
+
+/**
+ * Helper function to update star display
+ */
+function updateStarDisplay(container, rating, showDifferentStates, hasRating) {
+  container.querySelectorAll('.star').forEach(star => {
+    const value = parseInt(star.dataset.value);
+    star.classList.remove('hover', 'active', 'filled', 'no-rating', 'zero-rating');
+    
+    if (showDifferentStates) {
+      // Rating mode: different visual states
+      if (!hasRating) {
+        star.textContent = '☆';
+        star.classList.add('no-rating');
+      } else if (rating === 0) {
+        star.textContent = '★';
+        star.classList.add('zero-rating');
+      } else {
+        star.textContent = value <= rating ? '★' : '☆';
+        if (value <= rating) {
+          star.classList.add('filled');
+        }
+      }
+    } else {
+      // Filter mode: active class
+      star.textContent = '★';
+      if (value <= rating) {
+        star.classList.add('active');
+      }
+    }
+  });
 } 

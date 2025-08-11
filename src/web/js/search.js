@@ -1,5 +1,6 @@
 import { api } from './api.js';
 import { displayRecipes, createProgressiveRecipeLoader, createRecipeCard } from './recipeCard.js';
+import { createInteractiveStars } from './common.js';
 
 // Keep a global reference to ingredients for type-ahead
 let availableIngredients = [];
@@ -25,6 +26,9 @@ let allSearchResults = [];
 let isInfiniteScrollEnabled = false;
 let scrollThreshold = 200; // pixels from bottom to trigger load
 
+// Rating filter state
+let starRatingFilterComponent = null;
+
 document.addEventListener('DOMContentLoaded', () => {
     // Elements
     const searchForm = document.getElementById('recipe-search-form');
@@ -48,6 +52,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Setup tag autocomplete
     setupTagAutocomplete();
+    
+    // Setup star rating filter
+    setupStarRatingFilter();
 
     // Check for URL query parameters
     const urlParams = new URLSearchParams(window.location.search);
@@ -100,6 +107,24 @@ document.addEventListener('DOMContentLoaded', () => {
             firstRow.querySelector('.ingredient-search').value = '';
             // No longer need to clear ingredient ID since we use names directly
         }
+        
+        // Reset star rating filter
+        if (starRatingFilterComponent) {
+            starRatingFilterComponent.dataset.rating = '0';
+            // Update display
+            starRatingFilterComponent.querySelectorAll('.star').forEach(star => {
+                star.classList.remove('active');
+            });
+            // Remove has-selection class from wrapper
+            const wrapper = starRatingFilterComponent.parentElement;
+            if (wrapper && wrapper.classList.contains('star-rating-filter')) {
+                wrapper.classList.remove('has-selection');
+            }
+        }
+        
+        // Reset selected tags
+        selectedTags = [];
+        renderTagChips();
     });
 
     // Function to perform the search
@@ -293,17 +318,19 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('Added name to query:', query.name);
         }
         
-        // Add rating filter if selected (other than 'all')
-        const selectedRatingElement = document.querySelector('input[name="rating-filter"]:checked');
-        console.log('Selected rating element:', selectedRatingElement);
-        if (selectedRatingElement) {
-            const selectedRating = selectedRatingElement.value;
-            console.log('Selected rating value:', selectedRating);
-            if (selectedRating !== 'all') {
-                query.rating = parseFloat(selectedRating);
+        // Add rating filter from star selection
+        if (starRatingFilterComponent) {
+            const selectedRating = starRatingFilterComponent.dataset.rating;
+            console.log('Selected star rating:', selectedRating);
+            if (selectedRating && selectedRating !== '0') {
+                query.rating = parseInt(selectedRating);
             }
-        } else {
-            console.log('No rating filter selected, skipping rating filter');
+        }
+        
+        // Add exclude unrated filter
+        const excludeUnratedCheckbox = document.getElementById('exclude-unrated');
+        if (excludeUnratedCheckbox && excludeUnratedCheckbox.checked) {
+            query.exclude_unrated = true;
         }
         
         // Add selected tags
@@ -821,5 +848,41 @@ document.addEventListener('DOMContentLoaded', () => {
         const dropdown = document.getElementById('tag-suggestions-dropdown');
         dropdown.classList.add('hidden');
         activeSuggestionIndex = -1;
+    }
+    
+    // Star rating filter functionality
+    function setupStarRatingFilter() {
+        const container = document.getElementById('star-rating-filter-container');
+        if (!container) return;
+        
+        // Create the wrapper div
+        const wrapper = document.createElement('div');
+        wrapper.className = 'star-rating-filter';
+        
+        // Create the star component
+        starRatingFilterComponent = createInteractiveStars({
+            initialRating: 0,
+            allowToggle: true,
+            showDifferentStates: false,
+            onClick: (rating) => {
+                console.log('Star rating filter changed:', rating);
+                // Update wrapper classes for styling
+                if (rating > 0) {
+                    wrapper.classList.add('has-selection');
+                } else {
+                    wrapper.classList.remove('has-selection');
+                }
+            }
+        });
+        
+        // Add "and up" text
+        const andUpText = document.createElement('span');
+        andUpText.className = 'and-up-text';
+        andUpText.textContent = 'and up';
+        
+        // Assemble the components
+        wrapper.appendChild(starRatingFilterComponent);
+        wrapper.appendChild(andUpText);
+        container.appendChild(wrapper);
     }
 }); 

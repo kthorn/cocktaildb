@@ -29,25 +29,14 @@
                             <div class="form-row">
                                 <div class="form-group">
                                     <label>Rating</label>
-                                    <div class="input-group">
-                                        <label>
-                                            <input type="radio"
-                                                name="rating-filter"
-                                                value="all" checked>
-                                            Any rating
-                                        </label>
-                                        <label>
-                                            <input type="radio"
-                                                name="rating-filter"
-                                                value="4+">
-                                            4+ stars
-                                        </label>
-                                        <label>
-                                            <input type="radio"
-                                                name="rating-filter"
-                                                value="3+">
-                                            3+ stars
-                                        </label>
+                                    <div class="rating-search-group">
+                                        <div id="star-rating-filter-container"></div>
+                                        <div class="unrated-filter">
+                                            <label>
+                                                <input type="checkbox" id="exclude-unrated" name="exclude-unrated">
+                                                Exclude unrated recipes
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
 
