@@ -2716,7 +2716,7 @@ class Database:
     def get_recipes_count(self) -> int:
         """Get total count of recipes"""
         try:
-            result = self.query(get_recipes_count_sql)
+            result = self.execute_query(get_recipes_count_sql)
             return result[0]["total_count"] if result else 0
         except Exception as e:
             logger.error(f"Error getting recipes count: {str(e)}")
@@ -2726,7 +2726,7 @@ class Database:
     def get_ingredients_count(self) -> int:
         """Get total count of ingredients"""
         try:
-            result = self.query(get_ingredients_count_sql)
+            result = self.execute_query(get_ingredients_count_sql)
             return result[0]["total_count"] if result else 0
         except Exception as e:
             logger.error(f"Error getting ingredients count: {str(e)}")
