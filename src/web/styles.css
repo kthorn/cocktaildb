@@ -1861,6 +1861,24 @@ footer {
         overflow-wrap: break-word;
     }
 
+    /* Fix form layout on mobile */
+    .form-content-wrapper {
+        flex-direction: column;
+        gap: var(--space-md);
+    }
+    
+    .form-actions {
+        width: 100%;
+        flex-direction: row;
+        justify-content: center;
+        align-self: stretch;
+    }
+    
+    .form-actions button {
+        flex: 1;
+        max-width: 150px;
+    }
+
     .quick-stats {
         grid-template-columns: 1fr;
     }
