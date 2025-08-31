@@ -96,12 +96,12 @@ get_recipes_paginated_with_ingredients_sql = """
             CASE 
                 WHEN :sort_by = 'name' AND :sort_order = 'asc' THEN r.name
                 WHEN :sort_by = 'avg_rating' AND :sort_order = 'asc' THEN CAST(COALESCE(r.avg_rating, 0) AS TEXT)
-                WHEN :sort_by = 'created_at' AND :sort_order = 'asc' THEN CAST(r.id AS TEXT)
+                WHEN :sort_by = 'created_at' AND :sort_order = 'asc' THEN r.id
             END ASC,
             CASE 
                 WHEN :sort_by = 'name' AND :sort_order = 'desc' THEN r.name
                 WHEN :sort_by = 'avg_rating' AND :sort_order = 'desc' THEN CAST(COALESCE(r.avg_rating, 0) AS TEXT)
-                WHEN :sort_by = 'created_at' AND :sort_order = 'desc' THEN CAST(r.id AS TEXT)
+                WHEN :sort_by = 'created_at' AND :sort_order = 'desc' THEN r.id
             END DESC
         LIMIT :limit OFFSET :offset
     )
@@ -221,12 +221,12 @@ def build_search_recipes_paginated_sql(
             CASE 
                 WHEN :sort_by = 'name' AND :sort_order = 'asc' THEN r.name
                 WHEN :sort_by = 'avg_rating' AND :sort_order = 'asc' THEN CAST(COALESCE(r.avg_rating, 0) AS TEXT)
-                WHEN :sort_by = 'created_at' AND :sort_order = 'asc' THEN CAST(r.id AS TEXT)
+                WHEN :sort_by = 'created_at' AND :sort_order = 'asc' THEN r.id
             END ASC,
             CASE 
                 WHEN :sort_by = 'name' AND :sort_order = 'desc' THEN r.name
                 WHEN :sort_by = 'avg_rating' AND :sort_order = 'desc' THEN CAST(COALESCE(r.avg_rating, 0) AS TEXT)
-                WHEN :sort_by = 'created_at' AND :sort_order = 'desc' THEN CAST(r.id AS TEXT)
+                WHEN :sort_by = 'created_at' AND :sort_order = 'desc' THEN r.id
             END DESC
         LIMIT :limit OFFSET :offset
     ),
@@ -250,12 +250,12 @@ def build_search_recipes_paginated_sql(
             CASE 
                 WHEN :sort_by = 'name' AND :sort_order = 'asc' THEN sr.name
                 WHEN :sort_by = 'avg_rating' AND :sort_order = 'asc' THEN CAST(COALESCE(sr.avg_rating, 0) AS TEXT)
-                WHEN :sort_by = 'created_at' AND :sort_order = 'asc' THEN CAST(sr.id AS TEXT)
+                WHEN :sort_by = 'created_at' AND :sort_order = 'asc' THEN sr.id
             END ASC,
             CASE 
                 WHEN :sort_by = 'name' AND :sort_order = 'desc' THEN sr.name
                 WHEN :sort_by = 'avg_rating' AND :sort_order = 'desc' THEN CAST(COALESCE(sr.avg_rating, 0) AS TEXT)
-                WHEN :sort_by = 'created_at' AND :sort_order = 'desc' THEN CAST(sr.id AS TEXT)
+                WHEN :sort_by = 'created_at' AND :sort_order = 'desc' THEN sr.id
             END DESC,
             COALESCE(ri.amount * u.conversion_to_ml, 0) DESC,
             ri.id ASC
