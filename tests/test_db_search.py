@@ -808,6 +808,235 @@ class TestPaginationOperations:
             assert len(results) == 0
 
 
+class TestSortingFunctionality:
+    """Test recipe sorting functionality"""
+
+    def test_search_recipes_sort_by_name_asc(self, memory_db_with_schema):
+        """Test sorting recipes by name in ascending order"""
+        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
+            db = Database()
+
+            # Create recipes in non-alphabetical order
+            recipe_names = ["Zebra Cocktail", "Apple Martini", "Manhattan", "Bloody Mary"]
+            for name in recipe_names:
+                db.create_recipe({"name": name, "instructions": "Test"})
+
+            # Search with name sorting ascending
+            results = db.search_recipes_paginated(
+                search_params={}, limit=10, offset=0, sort_by="name", sort_order="asc"
+            )
+
+            assert len(results) == 4
+            # Should be in alphabetical order
+            assert results[0]["name"] == "Apple Martini"
+            assert results[1]["name"] == "Bloody Mary"
+            assert results[2]["name"] == "Manhattan"
+            assert results[3]["name"] == "Zebra Cocktail"
+
+    def test_search_recipes_sort_by_name_desc(self, memory_db_with_schema):
+        """Test sorting recipes by name in descending order"""
+        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
+            db = Database()
+
+            # Create recipes in non-alphabetical order
+            recipe_names = ["Apple Martini", "Zebra Cocktail", "Manhattan", "Bloody Mary"]
+            for name in recipe_names:
+                db.create_recipe({"name": name, "instructions": "Test"})
+
+            # Search with name sorting descending
+            results = db.search_recipes_paginated(
+                search_params={}, limit=10, offset=0, sort_by="name", sort_order="desc"
+            )
+
+            assert len(results) == 4
+            # Should be in reverse alphabetical order
+            assert results[0]["name"] == "Zebra Cocktail"
+            assert results[1]["name"] == "Manhattan"
+            assert results[2]["name"] == "Bloody Mary"
+            assert results[3]["name"] == "Apple Martini"
+
+    def test_search_recipes_sort_by_rating_asc(self, memory_db_with_schema):
+        """Test sorting recipes by rating in ascending order"""
+        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
+            db = Database()
+
+            # Create recipes
+            recipe1 = db.create_recipe({"name": "High Rated", "instructions": "Test"})
+            recipe2 = db.create_recipe({"name": "Low Rated", "instructions": "Test"})
+            recipe3 = db.create_recipe({"name": "Medium Rated", "instructions": "Test"})
+            recipe4 = db.create_recipe({"name": "Unrated", "instructions": "Test"})
+
+            # Add ratings
+            db.set_rating({"cognito_user_id": "user1", "cognito_username": "user1", 
+                          "recipe_id": recipe1["id"], "rating": 5})
+            db.set_rating({"cognito_user_id": "user1", "cognito_username": "user1", 
+                          "recipe_id": recipe2["id"], "rating": 2})
+            db.set_rating({"cognito_user_id": "user1", "cognito_username": "user1", 
+                          "recipe_id": recipe3["id"], "rating": 3})
+            # recipe4 remains unrated (avg_rating = 0)
+
+            # Search with rating sorting ascending
+            results = db.search_recipes_paginated(
+                search_params={}, limit=10, offset=0, sort_by="avg_rating", sort_order="asc"
+            )
+
+            assert len(results) == 4
+            # Should be ordered by rating ascending (unrated/0 first)
+            assert results[0]["name"] == "Unrated"
+            assert results[0]["avg_rating"] is None or results[0]["avg_rating"] == 0
+            assert results[1]["name"] == "Low Rated"
+            assert results[1]["avg_rating"] == 2.0
+            assert results[2]["name"] == "Medium Rated"
+            assert results[2]["avg_rating"] == 3.0
+            assert results[3]["name"] == "High Rated"
+            assert results[3]["avg_rating"] == 5.0
+
+    def test_search_recipes_sort_by_rating_desc(self, memory_db_with_schema):
+        """Test sorting recipes by rating in descending order"""
+        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
+            db = Database()
+
+            # Create recipes
+            recipe1 = db.create_recipe({"name": "High Rated", "instructions": "Test"})
+            recipe2 = db.create_recipe({"name": "Low Rated", "instructions": "Test"})
+            recipe3 = db.create_recipe({"name": "Medium Rated", "instructions": "Test"})
+
+            # Add ratings
+            db.set_rating({"cognito_user_id": "user1", "cognito_username": "user1", 
+                          "recipe_id": recipe1["id"], "rating": 5})
+            db.set_rating({"cognito_user_id": "user1", "cognito_username": "user1", 
+                          "recipe_id": recipe2["id"], "rating": 2})
+            db.set_rating({"cognito_user_id": "user1", "cognito_username": "user1", 
+                          "recipe_id": recipe3["id"], "rating": 3})
+
+            # Search with rating sorting descending
+            results = db.search_recipes_paginated(
+                search_params={}, limit=10, offset=0, sort_by="avg_rating", sort_order="desc"
+            )
+
+            assert len(results) == 3
+            # Should be ordered by rating descending
+            assert results[0]["name"] == "High Rated"
+            assert results[0]["avg_rating"] == 5.0
+            assert results[1]["name"] == "Medium Rated"
+            assert results[1]["avg_rating"] == 3.0
+            assert results[2]["name"] == "Low Rated"
+            assert results[2]["avg_rating"] == 2.0
+
+    def test_search_recipes_sort_by_created_at_asc(self, memory_db_with_schema):
+        """Test sorting recipes by creation time (ID) in ascending order"""
+        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
+            db = Database()
+
+            # Create recipes - IDs should be sequential
+            recipe1 = db.create_recipe({"name": "First Recipe", "instructions": "Test"})
+            recipe2 = db.create_recipe({"name": "Second Recipe", "instructions": "Test"})
+            recipe3 = db.create_recipe({"name": "Third Recipe", "instructions": "Test"})
+
+            # Search with creation time sorting ascending
+            results = db.search_recipes_paginated(
+                search_params={}, limit=10, offset=0, sort_by="created_at", sort_order="asc"
+            )
+
+            assert len(results) == 3
+            # Should be ordered by creation time (ID) ascending
+            assert results[0]["name"] == "First Recipe"
+            assert results[0]["id"] == recipe1["id"]
+            assert results[1]["name"] == "Second Recipe"
+            assert results[1]["id"] == recipe2["id"]
+            assert results[2]["name"] == "Third Recipe"
+            assert results[2]["id"] == recipe3["id"]
+
+    def test_search_recipes_sort_by_created_at_desc(self, memory_db_with_schema):
+        """Test sorting recipes by creation time (ID) in descending order"""
+        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
+            db = Database()
+
+            # Create recipes - IDs should be sequential
+            recipe1 = db.create_recipe({"name": "First Recipe", "instructions": "Test"})
+            recipe2 = db.create_recipe({"name": "Second Recipe", "instructions": "Test"})
+            recipe3 = db.create_recipe({"name": "Third Recipe", "instructions": "Test"})
+
+            # Search with creation time sorting descending
+            results = db.search_recipes_paginated(
+                search_params={}, limit=10, offset=0, sort_by="created_at", sort_order="desc"
+            )
+
+            assert len(results) == 3
+            # Should be ordered by creation time (ID) descending
+            assert results[0]["name"] == "Third Recipe"
+            assert results[0]["id"] == recipe3["id"]
+            assert results[1]["name"] == "Second Recipe"
+            assert results[1]["id"] == recipe2["id"]
+            assert results[2]["name"] == "First Recipe"
+            assert results[2]["id"] == recipe1["id"]
+
+    def test_search_recipes_sort_with_search_criteria(self, memory_db_with_schema):
+        """Test that sorting works correctly with search criteria"""
+        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
+            db = Database()
+
+            # Create recipes with search term in different orders
+            recipe_names = ["Zebra Martini", "Apple Martini", "Classic Martini"]
+            recipes = []
+            for name in recipe_names:
+                recipe = db.create_recipe({"name": name, "instructions": "Test"})
+                recipes.append(recipe)
+
+            # Add ratings to make sorting more interesting
+            db.set_rating({"cognito_user_id": "user1", "cognito_username": "user1", 
+                          "recipe_id": recipes[0]["id"], "rating": 2})  # Zebra Martini
+            db.set_rating({"cognito_user_id": "user1", "cognito_username": "user1", 
+                          "recipe_id": recipes[1]["id"], "rating": 5})  # Apple Martini
+            db.set_rating({"cognito_user_id": "user1", "cognito_username": "user1", 
+                          "recipe_id": recipes[2]["id"], "rating": 3})  # Classic Martini
+
+            # Search for "martini" and sort by name ascending
+            results = db.search_recipes_paginated(
+                search_params={"name": "martini"}, limit=10, offset=0, 
+                sort_by="name", sort_order="asc"
+            )
+
+            assert len(results) == 3
+            assert results[0]["name"] == "Apple Martini"
+            assert results[1]["name"] == "Classic Martini"
+            assert results[2]["name"] == "Zebra Martini"
+
+            # Same search but sort by rating descending
+            results = db.search_recipes_paginated(
+                search_params={"name": "martini"}, limit=10, offset=0, 
+                sort_by="avg_rating", sort_order="desc"
+            )
+
+            assert len(results) == 3
+            assert results[0]["name"] == "Apple Martini"  # Rating 5
+            assert results[1]["name"] == "Classic Martini"  # Rating 3
+            assert results[2]["name"] == "Zebra Martini"  # Rating 2
+
+    def test_search_recipes_sort_case_sensitive(self, memory_db_with_schema):
+        """Test that name sorting follows SQLite's default case-sensitive collation"""
+        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
+            db = Database()
+
+            # Create recipes with different cases
+            recipe_names = ["apple martini", "BANANA DAIQUIRI", "Cherry Bomb", "dragon fruit"]
+            for name in recipe_names:
+                db.create_recipe({"name": name, "instructions": "Test"})
+
+            # Search with name sorting ascending
+            results = db.search_recipes_paginated(
+                search_params={}, limit=10, offset=0, sort_by="name", sort_order="asc"
+            )
+
+            assert len(results) == 4
+            # SQLite default collation: uppercase letters come before lowercase letters
+            # Expected order: BANANA DAIQUIRI, Cherry Bomb, apple martini, dragon fruit
+            assert results[0]["name"] == "BANANA DAIQUIRI"
+            assert results[1]["name"] == "Cherry Bomb"
+            assert results[2]["name"] == "apple martini"
+            assert results[3]["name"] == "dragon fruit"
+
+
 class TestSearchEdgeCases:
     """Test edge cases and error conditions"""
 

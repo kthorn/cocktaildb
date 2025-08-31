@@ -157,13 +157,18 @@ class CocktailAPI {
     }
 
     // Search recipes with various criteria
-    async searchRecipes(searchQuery, page = 1, limit = 20) {
+    async searchRecipes(searchQuery, page = 1, limit = 20, sortBy = 'name', sortOrder = 'asc') {
         // Build query string from the search parameters
         const queryParams = new URLSearchParams();
         
         // Add pagination parameters
         queryParams.append('page', page.toString());
         queryParams.append('limit', limit.toString());
+        
+        // Add sorting parameters
+        queryParams.append('sort_by', sortBy);
+        queryParams.append('sort_order', sortOrder);
+        console.log('Adding sort parameters to API call:', { sort_by: sortBy, sort_order: sortOrder });
         
         // Add search filters to query params
         if (searchQuery.name) {

@@ -29,6 +29,10 @@ let scrollThreshold = 200; // pixels from bottom to trigger load
 // Rating filter state
 let starRatingFilterComponent = null;
 
+// Sort state
+let currentSortBy = 'name';
+let currentSortOrder = 'asc';
+
 document.addEventListener('DOMContentLoaded', () => {
     // Elements
     const searchForm = document.getElementById('recipe-search-form');
@@ -41,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const emptyResults = document.querySelector('.empty-message');
     const ingredientQueryBuilder = document.getElementById('ingredient-query-builder');
     const addIngredientRowBtn = document.getElementById('add-ingredient-row');
+    const sortSelect = document.getElementById('sort-select');
 
     // Load ingredients and tags for type-ahead
     loadIngredients();
@@ -55,6 +60,17 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Setup star rating filter
     setupStarRatingFilter();
+    
+    // Setup sort functionality
+    setupSortSelect();
+    
+    // Initialize sort from dropdown value
+    if (sortSelect) {
+        const [sortBy, sortOrder] = sortSelect.value.split(':');
+        currentSortBy = sortBy;
+        currentSortOrder = sortOrder;
+        console.log('Initial sort values:', { sortBy: currentSortBy, sortOrder: currentSortOrder });
+    }
 
     // Check for URL query parameters
     const urlParams = new URLSearchParams(window.location.search);
@@ -125,6 +141,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Reset selected tags
         selectedTags = [];
         renderTagChips();
+        
+        // Reset sort to default
+        currentSortBy = 'name';
+        currentSortOrder = 'asc';
+        if (sortSelect) {
+            sortSelect.value = 'name:asc';
+        }
     });
 
     // Function to perform the search
@@ -155,8 +178,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 disableInfiniteScroll();
             }
             
-            // Call the API to search recipes with pagination
-            const result = await api.searchRecipes(searchQuery, currentSearchPage, searchResultsPerPage);
+            // Call the API to search recipes with pagination and sorting
+            console.log('Calling searchRecipes with sort params:', { sortBy: currentSortBy, sortOrder: currentSortOrder });
+            const result = await api.searchRecipes(searchQuery, currentSearchPage, searchResultsPerPage, currentSortBy, currentSortOrder);
             console.log('API result:', result);
             
             // Hide loading placeholder
@@ -884,5 +908,24 @@ document.addEventListener('DOMContentLoaded', () => {
         wrapper.appendChild(starRatingFilterComponent);
         wrapper.appendChild(andUpText);
         container.appendChild(wrapper);
+    }
+    
+    // Sort select functionality
+    function setupSortSelect() {
+        if (!sortSelect) return;
+        
+        // Handle sort selection changes
+        sortSelect.addEventListener('change', (e) => {
+            const [sortBy, sortOrder] = e.target.value.split(':');
+            currentSortBy = sortBy;
+            currentSortOrder = sortOrder;
+            
+            console.log('Sort changed:', { sortBy: currentSortBy, sortOrder: currentSortOrder });
+            
+            // Trigger search with new sort parameters if we have search results
+            if (currentSearchQuery !== null) {
+                performSearch();
+            }
+        });
     }
 }); 

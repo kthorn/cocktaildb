@@ -60,6 +60,18 @@
                                 </label>
                             </div>
 
+                            <div class="form-group">
+                                <label for="sort-select">Sort by</label>
+                                <select id="sort-select" name="sort-select" class="form-select">
+                                    <option value="name:asc">Name (A-Z)</option>
+                                    <option value="name:desc">Name (Z-A)</option>
+                                    <option value="created_at:desc">Newest First</option>
+                                    <option value="created_at:asc">Oldest First</option>
+                                    <option value="avg_rating:desc">Highest Rated</option>
+                                    <option value="avg_rating:asc">Lowest Rated</option>
+                                </select>
+                            </div>
+
                             <div class="form-group ingredient-search-container">
                                 <label>Ingredients</label>
                                 <div id="ingredient-query-builder">
