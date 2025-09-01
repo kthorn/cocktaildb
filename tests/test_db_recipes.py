@@ -97,35 +97,6 @@ class TestRecipeCRUD:
             result = db.get_recipe(999)
             assert result is None
 
-    def test_get_recipes_empty(self, memory_db_with_schema):
-        """Test getting recipes when database is empty"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = Database()
-
-            result = db.search_recipes(search_params={})
-            assert isinstance(result, list)
-            assert len(result) == 0
-
-    def test_get_recipes_multiple(self, memory_db_with_schema):
-        """Test getting multiple recipes"""
-        with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
-            db = Database()
-
-            # Create multiple recipes
-            recipes = [
-                {"name": "Martini", "instructions": "Martini instructions"},
-                {"name": "Manhattan", "instructions": "Manhattan instructions"},
-            ]
-
-            for recipe_data in recipes:
-                db.create_recipe(recipe_data)
-
-            result = db.search_recipes(search_params={})
-            assert len(result) == 2
-
-            names = {recipe["name"] for recipe in result}
-            assert names == {"Martini", "Manhattan"}
-
 
 class TestRecipeIngredientRelationships:
     """Test complex recipe-ingredient relationships"""

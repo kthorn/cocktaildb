@@ -326,6 +326,7 @@ async def bulk_upload_ingredients(
                     "name": ingredient_data.name,
                     "description": ingredient_data.description,
                     "parent_id": parent_id,
+                    "substitution_level": ingredient_data.substitution_level,
                     "created_by": user.user_id,
                 }
 

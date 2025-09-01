@@ -11,6 +11,7 @@ class IngredientResponse(BaseModel):
     description: Optional[str] = Field(None, description="Ingredient description")
     parent_id: Optional[int] = Field(None, description="Parent ingredient ID")
     path: Optional[str] = Field(None, description="Ingredient hierarchy path")
+    substitution_level: Optional[int] = Field(None, description="Substitution level: 0=no substitution, 1=parent-level, 2=grandparent-level, null=inherit")
     exact_match: Optional[bool] = Field(None, description="Whether this was an exact match for search queries")
 
     class Config:

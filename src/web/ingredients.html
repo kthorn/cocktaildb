@@ -55,6 +55,20 @@
                                 rows="3"></textarea>
                         </div>
 
+                        <div class="form-group">
+                            <label for="ingredient-substitution-level">Substitution Level:</label>
+                            <select id="ingredient-substitution-level">
+                                <option value="0">0 - No substitution (exact match required)</option>
+                                <option value="1">1 - Allow brand substitution within parent category</option>
+                                <option value="2">2 - Allow substitution at grandparent level</option>
+                                <option value="">NULL - Inherit from parent</option>
+                            </select>
+                            <small class="form-help">
+                                Controls when this ingredient can be substituted in recipes. 
+                                Level 0 requires exact match (e.g., Aperol), Level 1 allows brands within same category (e.g., any light rum), Level 2 allows broader substitution.
+                            </small>
+                        </div>
+
                         <button type="submit">Add Ingredient</button>
                     </form>
                 </div>

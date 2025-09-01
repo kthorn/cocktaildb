@@ -10,6 +10,9 @@ class IngredientCreate(BaseModel):
     parent_id: Optional[int] = Field(
         None, description="Parent ingredient ID for hierarchy"
     )
+    substitution_level: Optional[int] = Field(
+        None, description="Substitution level: 0=no substitution, 1=parent-level, 2=grandparent-level, null=inherit"
+    )
 
 
 class IngredientUpdate(BaseModel):
@@ -19,6 +22,9 @@ class IngredientUpdate(BaseModel):
     description: Optional[str] = Field(None, description="Ingredient description")
     parent_id: Optional[int] = Field(
         None, description="Parent ingredient ID for hierarchy"
+    )
+    substitution_level: Optional[int] = Field(
+        None, description="Substitution level: 0=no substitution, 1=parent-level, 2=grandparent-level, null=inherit"
     )
 
 
@@ -159,6 +165,9 @@ class BulkIngredientCreate(BaseModel):
     parent_name: Optional[str] = Field(None, description="Parent ingredient name (will be looked up by exact match)")
     # Kept for backward compatibility - deprecated in favor of parent_name
     parent_id: Optional[int] = Field(None, description="Parent ingredient ID (deprecated, use parent_name)")
+    substitution_level: Optional[int] = Field(
+        None, description="Substitution level: 0=no substitution, 1=parent-level, 2=grandparent-level, null=inherit"
+    )
 
 
 class BulkIngredientUpload(BaseModel):

@@ -178,36 +178,87 @@ def build_search_recipes_paginated_sql(
     for condition in tag_conditions:
         base_sql += f" AND r.id IN (SELECT DISTINCT rt3.recipe_id FROM recipe_tags rt3 JOIN tags t3 ON rt3.tag_id = t3.id WHERE {condition})"
 
-    # Add inventory filtering - recipe can be made with user's inventory
+    # Add inventory filtering - recipe can be made with user's inventory (substitution-aware)
     if inventory_filter:
         base_sql += """ AND r.id IN (
             SELECT r_inv.id 
             FROM recipes r_inv
-            LEFT JOIN recipe_ingredients ri_inv ON r_inv.id = ri_inv.recipe_id
-            LEFT JOIN ingredients i_inv ON ri_inv.ingredient_id = i_inv.id
             WHERE r_inv.id = r.id
-            GROUP BY r_inv.id
-            HAVING COUNT(DISTINCT ri_inv.ingredient_id) <= (
-                SELECT COUNT(DISTINCT ui.ingredient_id)
-                FROM user_ingredients ui
-                LEFT JOIN ingredients i_user ON ui.ingredient_id = i_user.id
-                WHERE ui.cognito_user_id = :cognito_user_id
-                AND EXISTS (
-                    SELECT 1 FROM recipe_ingredients ri_check 
-                    LEFT JOIN ingredients i_check ON ri_check.ingredient_id = i_check.id
-                    WHERE ri_check.recipe_id = r_inv.id
-                    AND i_check.id = i_user.id
-                )
-            )
             AND NOT EXISTS (
                 SELECT 1 FROM recipe_ingredients ri_missing
-                LEFT JOIN ingredients i_missing ON ri_missing.ingredient_id = i_missing.id
+                LEFT JOIN ingredients i_recipe ON ri_missing.ingredient_id = i_recipe.id
                 WHERE ri_missing.recipe_id = r_inv.id
                 AND NOT EXISTS (
                     SELECT 1 FROM user_ingredients ui_check
-                    LEFT JOIN ingredients i_available ON ui_check.ingredient_id = i_available.id
+                    LEFT JOIN ingredients i_user ON ui_check.ingredient_id = i_user.id
                     WHERE ui_check.cognito_user_id = :cognito_user_id
-                    AND i_missing.id = i_available.id
+                    AND (
+                        -- Get effective substitution levels by walking up the hierarchy (max 3 levels deep to prevent infinite loops)
+                        WITH resolved_levels AS (
+                            -- For recipe ingredient: resolve its effective substitution_level
+                            SELECT 
+                                i_recipe.id as recipe_ingredient_id,
+                                COALESCE(
+                                    i_recipe.substitution_level,
+                                    i_recipe_p1.substitution_level,
+                                    i_recipe_p2.substitution_level,
+                                    i_recipe_p3.substitution_level,
+                                    0  -- Default to 0 if not found in hierarchy
+                                ) as recipe_effective_level,
+                                -- For user ingredient: resolve its effective substitution_level  
+                                i_user.id as user_ingredient_id,
+                                COALESCE(
+                                    i_user.substitution_level,
+                                    i_user_p1.substitution_level,
+                                    i_user_p2.substitution_level,
+                                    i_user_p3.substitution_level,
+                                    0  -- Default to 0 if not found in hierarchy
+                                ) as user_effective_level
+                            FROM ingredients i_recipe
+                            CROSS JOIN ingredients i_user
+                            -- Recipe ingredient parent chain
+                            LEFT JOIN ingredients i_recipe_p1 ON i_recipe.parent_id = i_recipe_p1.id
+                            LEFT JOIN ingredients i_recipe_p2 ON i_recipe_p1.parent_id = i_recipe_p2.id  
+                            LEFT JOIN ingredients i_recipe_p3 ON i_recipe_p2.parent_id = i_recipe_p3.id
+                            -- User ingredient parent chain
+                            LEFT JOIN ingredients i_user_p1 ON i_user.parent_id = i_user_p1.id
+                            LEFT JOIN ingredients i_user_p2 ON i_user_p1.parent_id = i_user_p2.id
+                            LEFT JOIN ingredients i_user_p3 ON i_user_p2.parent_id = i_user_p3.id
+                            WHERE i_recipe.id = i_recipe.id AND i_user.id = i_user.id
+                        )
+                        SELECT 1 FROM resolved_levels rl
+                        WHERE rl.recipe_ingredient_id = i_recipe.id 
+                          AND rl.user_ingredient_id = i_user.id
+                          AND (
+                            -- Level 0: Exact match only
+                            (rl.recipe_effective_level = 0 AND i_recipe.id = i_user.id)
+                            OR
+                            -- Level 1: Parent-level substitution
+                            (rl.recipe_effective_level = 1 AND rl.user_effective_level = 1
+                             AND (i_recipe.parent_id = i_user.parent_id AND i_recipe.parent_id IS NOT NULL
+                                  OR i_user.path LIKE i_recipe.path || '%'))
+                            OR  
+                            -- Level 2: Grandparent-level substitution
+                            (rl.recipe_effective_level = 2 AND rl.user_effective_level = 2
+                             AND (EXISTS (
+                                SELECT 1 FROM ingredients i_recipe_parent
+                                WHERE i_recipe_parent.id = i_recipe.parent_id
+                                AND EXISTS (
+                                    SELECT 1 FROM ingredients i_user_parent  
+                                    WHERE i_user_parent.id = i_user.parent_id
+                                    AND i_recipe_parent.parent_id = i_user_parent.parent_id
+                                    AND i_recipe_parent.parent_id IS NOT NULL
+                                )
+                             ) OR (
+                                i_user.path LIKE i_recipe.path || '%'
+                                OR (i_recipe.parent_id IS NOT NULL AND EXISTS (
+                                    SELECT 1 FROM ingredients i_recipe_parent
+                                    WHERE i_recipe_parent.id = i_recipe.parent_id
+                                    AND i_user.path LIKE i_recipe_parent.path || '%'
+                                ))
+                             )))
+                          )
+                    )
                 )
             )
         )"""
