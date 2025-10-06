@@ -209,8 +209,6 @@ class UserIngredientsManager {
                 } else if (type === 'current') {
                     if (e.target.checked) {
                         this.selectedToRemove.add(ingredientId);
-                        // Auto-select parent categories
-                        this.selectParentIngredients(ingredientId, container, type);
                     } else {
                         this.selectedToRemove.delete(ingredientId);
                         // Auto-deselect child categories

@@ -128,22 +128,22 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
                     
                     // Special handling for specific units
                     if (ing.unit_name === 'to top' && (ing.amount === null || ing.amount === undefined || ing.amount === 0)) {
-                        return `<li>${ingredientName}, to top</li>`;
+                        return `<li><span class="ingredient-name" data-ingredient-path="${ing.ingredient_path || ''}">${ingredientName}</span>, to top</li>`;
                     }
                     if (ing.unit_name === 'to rinse' && (ing.amount === null || ing.amount === undefined || ing.amount === 0)) {
-                        return `<li>${ingredientName}, to rinse</li>`;
+                        return `<li><span class="ingredient-name" data-ingredient-path="${ing.ingredient_path || ''}">${ingredientName}</span>, to rinse</li>`;
                     }
                     if (ing.unit_name === 'each' || ing.unit_name === 'Each') {
                         // For 'each' unit, don't display the unit name
                         const formattedAmount = formatAmount(ing.amount);
-                        return `<li>${formattedAmount ? formattedAmount + ' ' : ''}${ingredientName}</li>`;
+                        return `<li>${formattedAmount ? formattedAmount + ' ' : ''}<span class="ingredient-name" data-ingredient-path="${ing.ingredient_path || ''}">${ingredientName}</span></li>`;
                     }
                     
                     // Default handling for all other units
                     const formattedAmount = formatAmount(ing.amount);
                     const unitDisplay = ing.unit_name ? ` ${ing.unit_name}` : '';
                     
-                    return `<li>${formattedAmount}${unitDisplay} ${ingredientName}</li>`;
+                    return `<li>${formattedAmount}${unitDisplay} <span class="ingredient-name" data-ingredient-path="${ing.ingredient_path || ''}">${ingredientName}</span></li>`;
                 }).join('')}
             </ul>
         </div>
@@ -248,6 +248,9 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
         });
     }
 
+    // Add hover functionality for ingredient hierarchy
+    setupIngredientHover(card, recipe);
+
     return card;
 }
 
@@ -257,8 +260,8 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
  */
 async function handleShareRecipe(recipeName) {
     try {
-        const shareUrl = `${window.location.origin}/search.html?name=${encodeURIComponent(recipeName)}`;
-        
+        const shareUrl = `${window.location.origin}/recipe.html?name=${encodeURIComponent(recipeName)}`;
+
         // Try to copy to clipboard
         if (navigator.clipboard && window.isSecureContext) {
             await navigator.clipboard.writeText(shareUrl);
@@ -275,7 +278,7 @@ async function handleShareRecipe(recipeName) {
             document.execCommand('copy');
             document.body.removeChild(textArea);
         }
-        
+
         // Show success feedback
         showShareFeedback('Recipe link copied to clipboard!');
     } catch (error) {
@@ -1045,5 +1048,151 @@ async function deleteRecipe(id, onRecipeDeleted = null) {
     } catch (error) {
         console.error('Error deleting recipe:', error);
         alert(`Failed to delete recipe: ${error.message || 'Please try again.'}`);
+    }
+}
+
+// Global cache for ingredient hierarchy data to minimize API calls
+const ingredientHierarchyCache = new Map();
+
+/**
+ * Sets up ingredient hierarchy hover functionality for a recipe card
+ * @param {HTMLElement} card - The recipe card element
+ * @param {Object} recipe - The recipe object containing ingredient data
+ */
+function setupIngredientHover(card, recipe) {
+    const ingredientNames = card.querySelectorAll('.ingredient-name');
+    let currentTooltip = null;
+    
+    // Pre-load hierarchies for all ingredients in this recipe to minimize API calls
+    preloadIngredientHierarchies(recipe);
+    
+    ingredientNames.forEach(ingredientElement => {
+        const ingredientPath = ingredientElement.dataset.ingredientPath;
+        
+        // Set all ingredient names to normal font weight
+        ingredientElement.style.fontWeight = 'normal';
+        
+        // Skip ingredients without path data or with single-level paths
+        if (!ingredientPath || ingredientPath === '' || ingredientPath.split('/').filter(p => p).length <= 1) {
+            return;
+        }
+        
+        // Add visual indication that ingredient has hierarchy
+        ingredientElement.style.cursor = 'help';
+        ingredientElement.style.textDecoration = 'underline';
+        ingredientElement.style.textDecorationStyle = 'dotted';
+        
+        ingredientElement.addEventListener('mouseenter', async () => {
+            try {
+                // Remove any existing tooltip
+                if (currentTooltip) {
+                    currentTooltip.remove();
+                    currentTooltip = null;
+                }
+                
+                // Get ingredient hierarchy from cache or API
+                const hierarchy = await getIngredientHierarchy(ingredientPath);
+                
+                if (hierarchy && hierarchy.length > 1) {
+                    // Create hierarchy display (from general to specific)
+                    const hierarchyNames = hierarchy.map(ing => ing.name);
+                    const hierarchyText = hierarchyNames.join(' → ');
+                    
+                    // Create tooltip
+                    currentTooltip = document.createElement('div');
+                    currentTooltip.className = 'ingredient-hierarchy-tooltip';
+                    currentTooltip.textContent = hierarchyText;
+                    currentTooltip.style.cssText = `
+                        position: absolute;
+                        background: rgba(0, 0, 0, 0.9);
+                        color: white;
+                        padding: 8px 12px;
+                        border-radius: 4px;
+                        font-size: 12px;
+                        white-space: nowrap;
+                        z-index: 1000;
+                        pointer-events: none;
+                        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                        max-width: 300px;
+                        word-wrap: break-word;
+                        white-space: normal;
+                    `;
+                    
+                    // Position tooltip
+                    const rect = ingredientElement.getBoundingClientRect();
+                    currentTooltip.style.left = `${rect.left + window.scrollX}px`;
+                    currentTooltip.style.top = `${rect.bottom + window.scrollY + 5}px`;
+                    
+                    document.body.appendChild(currentTooltip);
+                    
+                    // Adjust position if tooltip goes off screen
+                    const tooltipRect = currentTooltip.getBoundingClientRect();
+                    if (tooltipRect.right > window.innerWidth) {
+                        currentTooltip.style.left = `${window.innerWidth - tooltipRect.width - 10 + window.scrollX}px`;
+                    }
+                    if (tooltipRect.bottom > window.innerHeight) {
+                        currentTooltip.style.top = `${rect.top + window.scrollY - tooltipRect.height - 5}px`;
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching ingredient hierarchy:', error);
+            }
+        });
+        
+        ingredientElement.addEventListener('mouseleave', () => {
+            if (currentTooltip) {
+                currentTooltip.remove();
+                currentTooltip = null;
+            }
+        });
+    });
+}
+
+/**
+ * Pre-loads ingredient hierarchies for a recipe to minimize API calls
+ * @param {Object} recipe - The recipe object
+ */
+async function preloadIngredientHierarchies(recipe) {
+    if (!recipe.ingredients) return;
+    
+    // Get unique paths that have hierarchies (more than one level)
+    const uniquePaths = new Set();
+    recipe.ingredients.forEach(ing => {
+        const path = ing.ingredient_path;
+        if (path && path.split('/').filter(p => p).length > 1 && !ingredientHierarchyCache.has(path)) {
+            uniquePaths.add(path);
+        }
+    });
+    
+    // Fetch hierarchies for all unique paths in parallel
+    const promises = Array.from(uniquePaths).map(async (path) => {
+        try {
+            const hierarchy = await api.getIngredientHierarchy(path);
+            ingredientHierarchyCache.set(path, hierarchy);
+        } catch (error) {
+            console.error('Error preloading hierarchy for path:', path, error);
+        }
+    });
+    
+    await Promise.allSettled(promises);
+}
+
+/**
+ * Gets ingredient hierarchy from cache or API
+ * @param {string} ingredientPath - The ingredient path
+ * @returns {Array} The ingredient hierarchy
+ */
+async function getIngredientHierarchy(ingredientPath) {
+    if (ingredientHierarchyCache.has(ingredientPath)) {
+        return ingredientHierarchyCache.get(ingredientPath);
+    }
+    
+    try {
+        const hierarchy = await api.getIngredientHierarchy(ingredientPath);
+        ingredientHierarchyCache.set(ingredientPath, hierarchy);
+        return hierarchy;
+    } catch (error) {
+        console.error('Error fetching ingredient hierarchy:', error);
+        return [];
     }
 } 

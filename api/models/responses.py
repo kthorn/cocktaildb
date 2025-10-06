@@ -37,6 +37,7 @@ class RecipeIngredientResponse(BaseModel):
 
     ingredient_id: int = Field(..., description="Ingredient ID")
     ingredient_name: str = Field(..., description="Ingredient name")
+    ingredient_path: Optional[str] = Field(None, description="Ingredient hierarchy path")
     full_name: Optional[str] = Field(None, description="Full hierarchical ingredient name")
     amount: Optional[float] = Field(None, description="Ingredient amount")
     unit_id: Optional[int] = Field(None, description="Unit ID")

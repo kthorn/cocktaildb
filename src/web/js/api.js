@@ -114,6 +114,13 @@ class CocktailAPI {
         return this._request(`/ingredients/${id}`, 'DELETE');
     }
 
+    async getIngredientHierarchy(path) {
+        if (!path) {
+            return [];
+        }
+        return this._request(`/ingredients/hierarchy?path=${encodeURIComponent(path)}`);
+    }
+
     // Recipes API
 
     async getRecipe(id) {
