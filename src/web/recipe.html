@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <title>Recipe - Cocktail Database</title>
+        <!-- Prevent FOUC (Flash of Unstyled Content) with common.js fallback -->
+    </head>
+
+    <body>
+        <!-- Header will be loaded by common.js -->
+
+        <main>
+            <section class="section-title">
+                <h2 id="recipe-page-title">Recipe</h2>
+            </section>
+
+            <section class="recipe-display-section">
+                <div id="recipe-container">
+                    <!-- Recipe card will be displayed here -->
+                    <div class="loading-placeholder">
+                        <p>Loading recipe...</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer will be loaded by common.js -->
+
+        <script type="module" src="js/common.js"></script>
+        <script type="module" src="js/api.js"></script>
+        <script type="module" src="js/recipeCard.js"></script>
+        <script type="module" src="js/recipe.js"></script>
+    </body>
+
+</html>
