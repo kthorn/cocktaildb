@@ -9,12 +9,13 @@ class UserIngredientsManager {
         this.filteredIngredients = [];
         this.selectedToAdd = new Set();
         this.selectedToRemove = new Set();
-        
+
         // Private tag management
         this.privateTags = [];
 
         // Ingredient recommendations
         this.recommendations = [];
+        this.recommendationsLimit = 10; // Number of recommendations to display
 
         this.init();
     }
@@ -533,7 +534,7 @@ class UserIngredientsManager {
                 refreshBtn.textContent = 'Loading...';
             }
 
-            const response = await api.getIngredientRecommendations(20);
+            const response = await api.getIngredientRecommendations(this.recommendationsLimit);
             this.recommendations = response.recommendations || [];
 
             if (this.recommendations.length === 0) {
