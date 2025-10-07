@@ -807,6 +807,14 @@ Resources:
             Method: delete
             Auth:
               Authorizer: CognitoAuthorizer
+        GetUserIngredientRecommendations:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /user-ingredients/recommendations
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
         # --- END User Ingredients Endpoints ---
 
         # --- Stats Endpoints ---

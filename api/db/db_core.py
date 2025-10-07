@@ -2602,6 +2602,180 @@ class Database:
             if conn:
                 conn.close()
 
+    @retry_on_db_locked()
+    def get_ingredient_recommendations(
+        self, user_id: str, limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """
+        Get ingredient recommendations that would unlock the most new recipes.
+
+        This finds ingredients the user doesn't have that would complete the most
+        "almost makeable" recipes (recipes where user has all but one ingredient).
+        Respects substitution_level rules for ingredient matching.
+        """
+        try:
+            # This complex query:
+            # 1. Finds all recipes where user is missing exactly 1 ingredient (accounting for substitution rules)
+            # 2. Groups by the missing ingredient
+            # 3. Counts how many recipes each missing ingredient would unlock
+            # 4. Returns top N recommendations with recipe names
+
+            query = """
+            WITH
+            -- Get user's ingredient IDs and their hierarchy info
+            user_inventory AS (
+                SELECT
+                    ui.ingredient_id,
+                    i.path,
+                    i.parent_id,
+                    COALESCE(
+                        i.substitution_level,
+                        ip1.substitution_level,
+                        ip2.substitution_level,
+                        ip3.substitution_level,
+                        0
+                    ) as effective_substitution_level
+                FROM user_ingredients ui
+                JOIN ingredients i ON ui.ingredient_id = i.id
+                LEFT JOIN ingredients ip1 ON i.parent_id = ip1.id
+                LEFT JOIN ingredients ip2 ON ip1.parent_id = ip2.id
+                LEFT JOIN ingredients ip3 ON ip2.parent_id = ip3.id
+                WHERE ui.cognito_user_id = :user_id
+            ),
+            -- For each recipe, find all required ingredients
+            recipe_requirements AS (
+                SELECT
+                    ri.recipe_id,
+                    ri.ingredient_id as required_ingredient_id,
+                    i.name as required_ingredient_name,
+                    i.path as required_ingredient_path,
+                    i.parent_id as required_parent_id,
+                    COALESCE(
+                        i.substitution_level,
+                        ip1.substitution_level,
+                        ip2.substitution_level,
+                        ip3.substitution_level,
+                        0
+                    ) as required_effective_substitution_level
+                FROM recipe_ingredients ri
+                JOIN ingredients i ON ri.ingredient_id = i.id
+                LEFT JOIN ingredients ip1 ON i.parent_id = ip1.id
+                LEFT JOIN ingredients ip2 ON ip1.parent_id = ip2.id
+                LEFT JOIN ingredients ip3 ON ip2.parent_id = ip3.id
+            ),
+            -- Check each recipe requirement against user inventory
+            requirement_satisfaction AS (
+                SELECT
+                    rr.recipe_id,
+                    rr.required_ingredient_id,
+                    rr.required_ingredient_name,
+                    CASE
+                        WHEN EXISTS (
+                            SELECT 1 FROM user_inventory ui
+                            WHERE
+                                -- Level 0: Exact match only
+                                (rr.required_effective_substitution_level = 0
+                                 AND rr.required_ingredient_id = ui.ingredient_id)
+                                OR
+                                -- Level 1: Parent-level substitution (siblings)
+                                (rr.required_effective_substitution_level = 1
+                                 AND ui.effective_substitution_level = 1
+                                 AND ((rr.required_parent_id = ui.parent_id AND rr.required_parent_id IS NOT NULL)
+                                      OR ui.path LIKE rr.required_ingredient_path || '%'))
+                                OR
+                                -- Level 2: Grandparent-level substitution (cousins)
+                                (rr.required_effective_substitution_level = 2
+                                 AND ui.effective_substitution_level = 2
+                                 AND (EXISTS (
+                                    SELECT 1 FROM ingredients irp
+                                    WHERE irp.id = rr.required_parent_id
+                                    AND EXISTS (
+                                        SELECT 1 FROM ingredients iup
+                                        WHERE iup.id = ui.parent_id
+                                        AND irp.parent_id = iup.parent_id
+                                        AND irp.parent_id IS NOT NULL
+                                    )
+                                 ) OR (
+                                    ui.path LIKE rr.required_ingredient_path || '%'
+                                    OR (rr.required_parent_id IS NOT NULL AND EXISTS (
+                                        SELECT 1 FROM ingredients irp2
+                                        WHERE irp2.id = rr.required_parent_id
+                                        AND ui.path LIKE irp2.path || '%'
+                                    ))
+                                 )))
+                        ) THEN 1
+                        ELSE 0
+                    END as is_satisfied
+                FROM recipe_requirements rr
+            ),
+            -- Find recipes where user has all but exactly 1 ingredient
+            almost_makeable_recipes AS (
+                SELECT
+                    recipe_id,
+                    COUNT(*) as total_requirements,
+                    SUM(is_satisfied) as satisfied_count,
+                    COUNT(*) - SUM(is_satisfied) as missing_count
+                FROM requirement_satisfaction
+                GROUP BY recipe_id
+                HAVING missing_count = 1
+            ),
+            -- Find the missing ingredient for each almost-makeable recipe
+            missing_ingredients AS (
+                SELECT
+                    rs.recipe_id,
+                    rs.required_ingredient_id as missing_ingredient_id,
+                    rs.required_ingredient_name as missing_ingredient_name
+                FROM requirement_satisfaction rs
+                JOIN almost_makeable_recipes amr ON rs.recipe_id = amr.recipe_id
+                WHERE rs.is_satisfied = 0
+            ),
+            -- Aggregate: count recipes unlocked by each missing ingredient
+            ingredient_impact AS (
+                SELECT
+                    mi.missing_ingredient_id,
+                    COUNT(*) as recipes_unlocked,
+                    GROUP_CONCAT(r.name, '|||') as recipe_names
+                FROM missing_ingredients mi
+                JOIN recipes r ON mi.recipe_id = r.id
+                GROUP BY mi.missing_ingredient_id
+                ORDER BY recipes_unlocked DESC
+                LIMIT :limit
+            )
+            -- Get full ingredient details for the recommendations
+            SELECT
+                i.id,
+                i.name,
+                i.description,
+                i.parent_id,
+                i.path,
+                i.substitution_level,
+                ii.recipes_unlocked,
+                ii.recipe_names
+            FROM ingredient_impact ii
+            JOIN ingredients i ON ii.missing_ingredient_id = i.id
+            ORDER BY ii.recipes_unlocked DESC
+            """
+
+            result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(query, {"user_id": user_id, "limit": limit}),
+            )
+
+            # Parse the recipe_names field (pipe-delimited string) into a list
+            for row in result:
+                if row.get("recipe_names"):
+                    row["recipe_names"] = row["recipe_names"].split("|||")
+                else:
+                    row["recipe_names"] = []
+
+            return result
+
+        except Exception as e:
+            logger.error(
+                f"Error getting ingredient recommendations for user {user_id}: {str(e)}"
+            )
+            raise
+
     # --- End User Ingredient Tracking Methods ---
 
     # --- Count Methods ---

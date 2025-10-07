@@ -12,6 +12,8 @@ from models.responses import (
     UserIngredientListResponse,
     UserIngredientBulkResponse,
     MessageResponse,
+    IngredientRecommendationResponse,
+    IngredientRecommendationListResponse,
 )
 from core.exceptions import NotFoundException, DatabaseException
 
@@ -147,7 +149,7 @@ async def add_user_ingredients_bulk(
         logger.info(f"Bulk adding {len(bulk_data.ingredient_ids)} ingredients to user {user.user_id}")
 
         result = db.add_user_ingredients_bulk(user.user_id, bulk_data.ingredient_ids)
-        
+
         return UserIngredientBulkResponse(
             added_count=result["added_count"],
             already_exists_count=result["already_exists_count"],
@@ -158,3 +160,40 @@ async def add_user_ingredients_bulk(
     except Exception as e:
         logger.error(f"Error bulk adding ingredients to user inventory: {str(e)}")
         raise DatabaseException("Failed to bulk add ingredients to inventory", detail=str(e))
+
+
+@router.get("/recommendations", response_model=IngredientRecommendationListResponse)
+async def get_ingredient_recommendations(
+    limit: int = 20,
+    db: Database = Depends(get_db),
+    user: UserInfo = Depends(require_authentication),
+):
+    """Get ingredient recommendations that would unlock the most new recipes (requires authentication)"""
+    try:
+        logger.info(f"Getting ingredient recommendations for user {user.user_id} with limit {limit}")
+
+        recommendations = db.get_ingredient_recommendations(user.user_id, limit)
+
+        recommendation_responses = []
+        for rec in recommendations:
+            recommendation_responses.append(
+                IngredientRecommendationResponse(
+                    id=rec["id"],
+                    name=rec["name"],
+                    description=rec.get("description"),
+                    parent_id=rec.get("parent_id"),
+                    path=rec.get("path"),
+                    substitution_level=rec.get("substitution_level"),
+                    recipes_unlocked=rec["recipes_unlocked"],
+                    recipe_names=rec["recipe_names"]
+                )
+            )
+
+        return IngredientRecommendationListResponse(
+            recommendations=recommendation_responses,
+            total_count=len(recommendation_responses)
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting ingredient recommendations: {str(e)}")
+        raise DatabaseException("Failed to retrieve ingredient recommendations", detail=str(e))

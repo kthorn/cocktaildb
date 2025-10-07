@@ -330,3 +330,31 @@ class UserIngredientBulkResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class IngredientRecommendationResponse(BaseModel):
+    """Response model for ingredient recommendation data"""
+
+    id: int = Field(..., description="Ingredient ID")
+    name: str = Field(..., description="Ingredient name")
+    description: Optional[str] = Field(None, description="Ingredient description")
+    parent_id: Optional[int] = Field(None, description="Parent ingredient ID")
+    path: Optional[str] = Field(None, description="Ingredient hierarchy path")
+    substitution_level: Optional[int] = Field(None, description="Substitution level")
+    recipes_unlocked: int = Field(..., description="Number of recipes that would be unlocked")
+    recipe_names: List[str] = Field(default=[], description="Names of recipes that would be unlocked")
+
+    class Config:
+        from_attributes = True
+
+
+class IngredientRecommendationListResponse(BaseModel):
+    """Response model for list of ingredient recommendations"""
+
+    recommendations: List[IngredientRecommendationResponse] = Field(
+        default=[], description="List of recommended ingredients"
+    )
+    total_count: int = Field(..., description="Total number of recommendations")
+
+    class Config:
+        from_attributes = True

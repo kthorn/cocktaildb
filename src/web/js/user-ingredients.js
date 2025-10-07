@@ -12,7 +12,10 @@ class UserIngredientsManager {
         
         // Private tag management
         this.privateTags = [];
-        
+
+        // Ingredient recommendations
+        this.recommendations = [];
+
         this.init();
     }
 
@@ -27,6 +30,7 @@ class UserIngredientsManager {
         this.bindEvents();
         await this.loadData();
         await this.loadPrivateTags();
+        await this.loadRecommendations();
     }
 
     showAuthRequired() {
@@ -63,6 +67,11 @@ class UserIngredientsManager {
         // Private tag management
         document.getElementById('refresh-private-tags-btn').addEventListener('click', () => {
             this.loadPrivateTags();
+        });
+
+        // Ingredient recommendations
+        document.getElementById('refresh-recommendations-btn').addEventListener('click', () => {
+            this.loadRecommendations();
         });
     }
 
@@ -317,9 +326,10 @@ class UserIngredientsManager {
             this.selectedToAdd.clear();
             this.updateAddButton();
             
-            // Reload data
+            // Reload data and recommendations
             await this.loadData();
-            
+            await this.loadRecommendations();
+
             this.showSuccess(`Added ${ingredientIds.length} ingredient(s) to your inventory`);
         } catch (error) {
             console.error('Error adding ingredients:', error);
@@ -339,9 +349,10 @@ class UserIngredientsManager {
             this.selectedToRemove.clear();
             this.updateRemoveButton();
             
-            // Reload data
+            // Reload data and recommendations
             await this.loadData();
-            
+            await this.loadRecommendations();
+
             this.showSuccess(`Removed ${ingredientIds.length} ingredient(s) from your inventory`);
         } catch (error) {
             console.error('Error removing ingredients:', error);
@@ -505,6 +516,130 @@ class UserIngredientsManager {
             button.disabled = false;
             button.textContent = originalText;
         }
+    }
+
+    // Ingredient recommendation methods
+    async loadRecommendations() {
+        const recommendationsList = document.getElementById('recommendations-list');
+        const refreshBtn = document.getElementById('refresh-recommendations-btn');
+
+        if (!recommendationsList) return;
+
+        try {
+            // Show loading state
+            recommendationsList.innerHTML = '<div class="loading-message"><p>Loading recommendations...</p></div>';
+            if (refreshBtn) {
+                refreshBtn.disabled = true;
+                refreshBtn.textContent = 'Loading...';
+            }
+
+            const response = await api.getIngredientRecommendations(20);
+            this.recommendations = response.recommendations || [];
+
+            if (this.recommendations.length === 0) {
+                recommendationsList.innerHTML = '<div class="empty-message"><p>No recommendations available. You may already be able to make most recipes!</p></div>';
+                return;
+            }
+
+            this.renderRecommendations();
+
+        } catch (error) {
+            console.error('Error loading ingredient recommendations:', error);
+            recommendationsList.innerHTML = '<div class="error-message"><p>Error loading recommendations. Please try again.</p></div>';
+            this.showError('Error loading ingredient recommendations');
+        } finally {
+            if (refreshBtn) {
+                refreshBtn.disabled = false;
+                refreshBtn.textContent = 'Refresh';
+            }
+        }
+    }
+
+    renderRecommendations() {
+        const recommendationsList = document.getElementById('recommendations-list');
+
+        if (!recommendationsList || this.recommendations.length === 0) return;
+
+        let html = '<div class="recommendations-container">';
+
+        this.recommendations.forEach(rec => {
+            const recipeList = rec.recipe_names.map(name => `<li>${name}</li>`).join('');
+
+            html += `
+                <div class="recommendation-item" data-ingredient-id="${rec.id}">
+                    <div class="recommendation-header">
+                        <div class="recommendation-info">
+                            <span class="recommendation-name">${rec.name}</span>
+                            <span class="recommendation-badge">${rec.recipes_unlocked} recipe${rec.recipes_unlocked !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div class="recommendation-actions">
+                            <button class="btn btn-sm btn-primary quick-add-btn" data-ingredient-id="${rec.id}">
+                                Add to Inventory
+                            </button>
+                            <button class="btn btn-sm btn-link expand-btn" data-ingredient-id="${rec.id}">
+                                <span class="expand-icon">▼</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="recommendation-recipes hidden" data-ingredient-id="${rec.id}">
+                        <p class="recipes-label">Would enable:</p>
+                        <ul class="recipe-list">${recipeList}</ul>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        recommendationsList.innerHTML = html;
+
+        // Bind event listeners
+        this.bindRecommendationEvents(recommendationsList);
+    }
+
+    bindRecommendationEvents(container) {
+        // Expand/collapse buttons
+        const expandButtons = container.querySelectorAll('.expand-btn');
+        expandButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const ingredientId = e.currentTarget.dataset.ingredientId;
+                const recipesDiv = container.querySelector(`.recommendation-recipes[data-ingredient-id="${ingredientId}"]`);
+                const icon = e.currentTarget.querySelector('.expand-icon');
+
+                if (recipesDiv) {
+                    recipesDiv.classList.toggle('hidden');
+                    icon.textContent = recipesDiv.classList.contains('hidden') ? '▼' : '▲';
+                }
+            });
+        });
+
+        // Quick-add buttons
+        const quickAddButtons = container.querySelectorAll('.quick-add-btn');
+        quickAddButtons.forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const ingredientId = parseInt(e.currentTarget.dataset.ingredientId);
+                const originalText = e.currentTarget.textContent;
+
+                try {
+                    e.currentTarget.disabled = true;
+                    e.currentTarget.textContent = 'Adding...';
+
+                    await api.bulkAddUserIngredients([ingredientId]);
+
+                    // Reload data and recommendations
+                    await this.loadData();
+                    await this.loadRecommendations();
+
+                    this.showSuccess(`Added ingredient to your inventory`);
+                } catch (error) {
+                    console.error('Error adding ingredient from recommendations:', error);
+                    this.showError(error.message || 'Failed to add ingredient');
+
+                    // Restore button state
+                    e.currentTarget.disabled = false;
+                    e.currentTarget.textContent = originalText;
+                }
+            });
+        });
     }
 }
 

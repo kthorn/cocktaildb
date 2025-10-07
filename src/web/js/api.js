@@ -433,6 +433,10 @@ class CocktailAPI {
         return this._request('/user-ingredients/bulk', 'DELETE', { ingredient_ids: ingredientIds });
     }
 
+    async getIngredientRecommendations(limit = 20) {
+        return this._request(`/user-ingredients/recommendations?limit=${limit}`, 'GET', null, true);
+    }
+
     // Stats API
     async getStats() {
         return this._request('/stats', 'GET');
