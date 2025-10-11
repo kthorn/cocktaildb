@@ -1,6 +1,8 @@
 import { api } from './api.js';
 import { createIngredientUsageChart } from './charts/ingredientUsageChart.js';
 import { createRecipeComplexityChart } from './charts/recipeComplexityChart.js';
+import { createCocktailSpaceChart } from './charts/cocktailSpaceChart.js';
+import { createRecipeCard } from './recipeCard.js';
 
 // State management
 const state = {
@@ -64,6 +66,9 @@ async function loadTabData(tabName) {
             break;
         case 'complexity':
             await loadRecipeComplexityData();
+            break;
+        case 'cocktail-space':
+            await loadCocktailSpaceData();
             break;
     }
 }
@@ -257,6 +262,57 @@ async function loadRecipeComplexityData() {
     }
 }
 
+/**
+ * Load and render cocktail space analytics
+ */
+async function loadCocktailSpaceData() {
+    const chartContainer = document.getElementById('cocktail-space-chart');
+    const loadingState = document.getElementById('cocktail-space-loading');
+    const errorState = document.getElementById('cocktail-space-error');
+
+    chartContainer.innerHTML = '';
+    loadingState.classList.remove('hidden');
+    errorState.classList.add('hidden');
+
+    try {
+        const response = await api.getCocktailSpaceAnalytics();
+
+        // Update last updated time (present when served from cache)
+        if (response.metadata?.generated_at) {
+            updateLastUpdatedTime(response.metadata.generated_at);
+        } else {
+            updateLastUpdatedTime(new Date().toISOString());
+        }
+
+        loadingState.classList.add('hidden');
+
+        // Check for empty data
+        if (!response.data || response.data.length === 0) {
+            chartContainer.innerHTML = '<div class="no-data"><p>No cocktail space data available.</p></div>';
+            document.getElementById('cocktail-space-count').textContent = '0';
+            return;
+        }
+
+        // Render chart
+        createCocktailSpaceChart(chartContainer, response.data, {
+            onRecipeClick: handleRecipeClick
+        });
+
+        // Update stats
+        document.getElementById('cocktail-space-count').textContent = response.data.length;
+
+    } catch (error) {
+        console.error('Error loading cocktail space data:', error);
+        loadingState.classList.add('hidden');
+        errorState.classList.remove('hidden');
+        errorState.querySelector('.error-message').textContent =
+            `Failed to load cocktail space data: ${error.message}`;
+
+        // Setup retry button
+        errorState.querySelector('.retry-btn').onclick = () => loadCocktailSpaceData();
+    }
+}
+
 // Helper functions
 
 function updateLastUpdatedTime(timestamp) {
@@ -294,5 +350,72 @@ function highlightActiveNav() {
     });
 }
 
+/**
+ * Handle recipe click from cocktail space chart
+ */
+async function handleRecipeClick(recipeId, recipeName) {
+    console.log('Recipe clicked:', recipeId, recipeName);
+
+    const modal = document.getElementById('recipe-modal');
+    const modalBody = document.getElementById('recipe-modal-card');
+    const modalLoading = document.getElementById('recipe-modal-loading');
+    const modalLink = document.getElementById('recipe-modal-link');
+
+    // Show modal
+    modal.classList.remove('hidden');
+    modalBody.innerHTML = '';
+    modalLoading.classList.remove('hidden');
+
+    try {
+        // Fetch full recipe data
+        const recipe = await api.getRecipe(recipeId);
+
+        // Hide loading
+        modalLoading.classList.add('hidden');
+
+        // Create recipe card
+        const recipeCard = createRecipeCard(recipe, false);
+        modalBody.appendChild(recipeCard);
+
+        // Set up link to full recipe page
+        modalLink.href = `/recipe.html?name=${encodeURIComponent(recipeName)}`;
+
+    } catch (error) {
+        console.error('Error loading recipe:', error);
+        modalLoading.classList.add('hidden');
+        modalBody.innerHTML = `<div class="error-state"><p class="error-message">Failed to load recipe: ${error.message}</p></div>`;
+    }
+}
+
+/**
+ * Close recipe modal
+ */
+function closeRecipeModal() {
+    const modal = document.getElementById('recipe-modal');
+    modal.classList.add('hidden');
+}
+
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', initAnalytics);
+
+// Set up modal close handlers
+document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.getElementById('recipe-modal');
+    const modalClose = modal?.querySelector('.modal-close');
+    const modalBackdrop = modal?.querySelector('.modal-backdrop');
+
+    if (modalClose) {
+        modalClose.addEventListener('click', closeRecipeModal);
+    }
+
+    if (modalBackdrop) {
+        modalBackdrop.addEventListener('click', closeRecipeModal);
+    }
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeRecipeModal();
+        }
+    });
+});
