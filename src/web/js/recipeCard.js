@@ -740,14 +740,14 @@ function renderTagChipsInModal() {
         chip.innerHTML = `
             <span class="tag-icon">${tag.type === 'private' ? '&#x1F512;' : '&#x1F30D;'}</span>
             <span class="tag-name">${tag.name}</span>
-            <button class="remove-tag-chip-btn" title="Remove tag">&times;</button>
+            <button class="tag-remove-btn" title="Remove tag">&times;</button>
         `;
         chip.addEventListener('click', (e) => {
-            if (!e.target.classList.contains('remove-tag-chip-btn')) {
+            if (!e.target.classList.contains('tag-remove-btn')) {
                 toggleTagPrivacy(index);
             }
         });
-        chip.querySelector('.remove-tag-chip-btn').addEventListener('click', (e) => {
+        chip.querySelector('.tag-remove-btn').addEventListener('click', (e) => {
             e.stopPropagation();
             removeTagFromModal(index);
         });

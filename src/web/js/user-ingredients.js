@@ -444,7 +444,7 @@ class UserIngredientsManager {
                             <div class="tag-management-usage">Private tag - only visible to you</div>
                         </div>
                         <div class="tag-management-actions">
-                            <button class="delete-tag-btn" data-tag-id="${tag.id}" data-tag-name="${tag.name}">
+                            <button class="btn btn-danger btn-small delete-tag-btn" data-tag-id="${tag.id}" data-tag-name="${tag.name}">
                                 Delete
                             </button>
                         </div>

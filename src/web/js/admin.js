@@ -623,7 +623,7 @@ async function loadPublicTags() {
                         <div class="tag-management-usage">Used in ${tag.usage_count || 0} recipe${tag.usage_count === 1 ? '' : 's'}</div>
                     </div>
                     <div class="tag-management-actions">
-                        <button class="delete-tag-btn" data-tag-id="${tag.id}" data-tag-name="${tag.name}">
+                        <button class="btn btn-danger btn-small delete-tag-btn" data-tag-id="${tag.id}" data-tag-name="${tag.name}">
                             Delete
                         </button>
                     </div>
