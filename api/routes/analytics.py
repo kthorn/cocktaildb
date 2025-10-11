@@ -33,23 +33,20 @@ async def get_ingredient_usage_analytics(
     try:
         storage_key = f"ingredient-usage-{level}-{parent_id}"
 
-        # Try to get from storage
-        if storage_manager:
-            stored_data = storage_manager.get_analytics(storage_key)
-            if stored_data:
-                return stored_data
+        if not storage_manager:
+            raise DatabaseException("Analytics storage not configured")
 
-        # If no pre-generated data exists, compute on-the-fly
-        logger.info(f"No pre-generated data, computing stats (level={level}, parent_id={parent_id})")
-        analytics = AnalyticsQueries(db)
-        stats = analytics.get_ingredient_usage_stats(level=level, parent_id=parent_id)
-        total_recipes = db.execute_query("SELECT COUNT(*) as count FROM recipes")[0]["count"]
+        stored_data = storage_manager.get_analytics(storage_key)
+        if not stored_data:
+            raise DatabaseException(
+                "Analytics not generated. Please trigger analytics refresh.",
+                detail=f"{storage_key} data not found in storage"
+            )
 
-        return {
-            "data": stats,
-            "metadata": {"total_recipes": total_recipes}
-        }
+        return stored_data
 
+    except DatabaseException:
+        raise
     except Exception as e:
         logger.error(f"Error getting ingredient usage analytics: {str(e)}")
         raise DatabaseException("Failed to retrieve ingredient usage analytics", detail=str(e))
@@ -64,19 +61,20 @@ async def get_recipe_complexity_analytics(
     try:
         storage_key = "recipe-complexity"
 
-        # Try to get from storage
-        if storage_manager:
-            stored_data = storage_manager.get_analytics(storage_key)
-            if stored_data:
-                return stored_data
+        if not storage_manager:
+            raise DatabaseException("Analytics storage not configured")
 
-        # If no pre-generated data exists, compute on-the-fly
-        logger.info("No pre-generated data, computing recipe complexity")
-        analytics = AnalyticsQueries(db)
-        distribution = analytics.get_recipe_complexity_distribution()
+        stored_data = storage_manager.get_analytics(storage_key)
+        if not stored_data:
+            raise DatabaseException(
+                "Analytics not generated. Please trigger analytics refresh.",
+                detail=f"{storage_key} data not found in storage"
+            )
 
-        return {"data": distribution, "metadata": {}}
+        return stored_data
 
+    except DatabaseException:
+        raise
     except Exception as e:
         logger.error(f"Error getting recipe complexity analytics: {str(e)}")
         raise DatabaseException("Failed to retrieve recipe complexity analytics", detail=str(e))
