@@ -1,0 +1,82 @@
+"""Analytics endpoints for the CocktailDB API"""
+
+import logging
+import os
+from typing import Optional
+from fastapi import APIRouter, Depends
+
+from dependencies.auth import UserInfo, get_current_user_optional
+from db.database import get_database as get_db
+from db.db_core import Database
+from db.db_analytics import AnalyticsQueries
+from core.exceptions import DatabaseException
+from utils.analytics_cache import AnalyticsStorage
+
+# Configure logger (inherits from main.py configuration)
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/analytics", tags=["analytics"])
+
+# Initialize storage manager
+ANALYTICS_BUCKET = os.environ.get("ANALYTICS_BUCKET", "")
+storage_manager = AnalyticsStorage(ANALYTICS_BUCKET) if ANALYTICS_BUCKET else None
+
+
+@router.get("/ingredient-usage")
+async def get_ingredient_usage_analytics(
+    level: Optional[int] = None,
+    parent_id: Optional[int] = None,
+    db: Database = Depends(get_db),
+    user: Optional[UserInfo] = Depends(get_current_user_optional),
+):
+    """Get ingredient usage statistics with hierarchical aggregation"""
+    try:
+        storage_key = f"ingredient-usage-{level}-{parent_id}"
+
+        # Try to get from storage
+        if storage_manager:
+            stored_data = storage_manager.get_analytics(storage_key)
+            if stored_data:
+                return stored_data
+
+        # If no pre-generated data exists, compute on-the-fly
+        logger.info(f"No pre-generated data, computing stats (level={level}, parent_id={parent_id})")
+        analytics = AnalyticsQueries(db)
+        stats = analytics.get_ingredient_usage_stats(level=level, parent_id=parent_id)
+        total_recipes = db.execute_query("SELECT COUNT(*) as count FROM recipes")[0]["count"]
+
+        return {
+            "data": stats,
+            "metadata": {"total_recipes": total_recipes}
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting ingredient usage analytics: {str(e)}")
+        raise DatabaseException("Failed to retrieve ingredient usage analytics", detail=str(e))
+
+
+@router.get("/recipe-complexity")
+async def get_recipe_complexity_analytics(
+    db: Database = Depends(get_db),
+    user: Optional[UserInfo] = Depends(get_current_user_optional),
+):
+    """Get recipe complexity distribution"""
+    try:
+        storage_key = "recipe-complexity"
+
+        # Try to get from storage
+        if storage_manager:
+            stored_data = storage_manager.get_analytics(storage_key)
+            if stored_data:
+                return stored_data
+
+        # If no pre-generated data exists, compute on-the-fly
+        logger.info("No pre-generated data, computing recipe complexity")
+        analytics = AnalyticsQueries(db)
+        distribution = analytics.get_recipe_complexity_distribution()
+
+        return {"data": distribution, "metadata": {}}
+
+    except Exception as e:
+        logger.error(f"Error getting recipe complexity analytics: {str(e)}")
+        raise DatabaseException("Failed to retrieve recipe complexity analytics", detail=str(e))
