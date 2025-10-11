@@ -1110,7 +1110,7 @@ function setupIngredientHover(card, recipe) {
                         border-radius: 4px;
                         font-size: 12px;
                         white-space: nowrap;
-                        z-index: 1000;
+                        z-index: 9999;
                         pointer-events: none;
                         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
                         max-width: 300px;
