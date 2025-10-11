@@ -82,9 +82,12 @@ async function loadIngredientUsageData() {
     errorState.classList.add('hidden');
 
     try {
-        const response = await api.getIngredientUsageAnalytics({
-            parent_id: state.currentParentId
-        });
+        // Only include parent_id if it's not null
+        const options = {};
+        if (state.currentParentId !== null) {
+            options.parent_id = state.currentParentId;
+        }
+        const response = await api.getIngredientUsageAnalytics(options);
 
         // Update last updated time (present when served from cache)
         if (response.metadata?.generated_at) {
