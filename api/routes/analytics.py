@@ -29,25 +29,39 @@ async def get_ingredient_usage_analytics(
     db: Database = Depends(get_db),
     user: Optional[UserInfo] = Depends(get_current_user_optional),
 ):
-    """Get ingredient usage statistics with hierarchical aggregation"""
+    """Get ingredient usage statistics with hierarchical aggregation
+
+    Root level data is cached in S3. Hierarchical drill-down data is computed on-the-fly.
+    """
     try:
-        # For root level (no filters), use simple key
+        # For root level (no filters), use cached data from S3
         if level is None and parent_id is None:
-            storage_key = "ingredient-usage"
+            if not storage_manager:
+                raise DatabaseException("Analytics storage not configured")
+
+            stored_data = storage_manager.get_analytics("ingredient-usage")
+            if not stored_data:
+                raise DatabaseException(
+                    "Analytics not generated. Please trigger analytics refresh.",
+                    detail="ingredient-usage data not found in storage"
+                )
+
+            return stored_data
+
+        # For hierarchical drill-down, compute on-the-fly
         else:
-            storage_key = f"ingredient-usage-{level}-{parent_id}"
+            analytics_queries = AnalyticsQueries(db)
+            result = analytics_queries.get_ingredient_usage_stats(level=level, parent_id=parent_id)
 
-        if not storage_manager:
-            raise DatabaseException("Analytics storage not configured")
-
-        stored_data = storage_manager.get_analytics(storage_key)
-        if not stored_data:
-            raise DatabaseException(
-                "Analytics not generated. Please trigger analytics refresh.",
-                detail=f"{storage_key} data not found in storage"
-            )
-
-        return stored_data
+            # Return in same format as cached data
+            return {
+                "data": result,
+                "metadata": {
+                    "computed_on_the_fly": True,
+                    "level": level,
+                    "parent_id": parent_id
+                }
+            }
 
     except DatabaseException:
         raise

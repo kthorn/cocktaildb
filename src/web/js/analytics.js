@@ -393,6 +393,10 @@ async function handleRecipeClick(recipeId, recipeName) {
 function closeRecipeModal() {
     const modal = document.getElementById('recipe-modal');
     modal.classList.add('hidden');
+
+    // Clean up any lingering ingredient hierarchy tooltips
+    const tooltips = document.querySelectorAll('.ingredient-hierarchy-tooltip');
+    tooltips.forEach(tooltip => tooltip.remove());
 }
 
 // Initialize when DOM is ready

@@ -2307,6 +2307,7 @@ footer {
 
 .breadcrumb-item {
     background: white;
+    color: #333;
     border: 1px solid #ddd;
     padding: 0.25rem 0.75rem;
     border-radius: 4px;
@@ -2499,6 +2500,10 @@ footer {
     align-items: center;
     justify-content: center;
     padding: 40px;
+}
+
+.modal-loading.hidden {
+    display: none !important;
 }
 
 .modal-loading .spinner {
