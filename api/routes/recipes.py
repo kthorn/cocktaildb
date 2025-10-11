@@ -34,6 +34,7 @@ from .rating_handlers import (
     create_or_update_rating_handler,
     delete_rating_handler,
 )
+from utils.analytics_helpers import trigger_analytics_refresh
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +221,9 @@ async def create_recipe(
 
         created_recipe = db.create_recipe(recipe_dict)
 
+        # Trigger analytics refresh asynchronously
+        trigger_analytics_refresh()
+
         # Get the full recipe data with ingredients
         full_recipe = db.get_recipe(created_recipe["id"], user.user_id)
         return RecipeResponse(**full_recipe)
@@ -285,6 +289,9 @@ async def update_recipe(
 
         db.update_recipe(recipe_id, update_dict)
 
+        # Trigger analytics refresh asynchronously
+        trigger_analytics_refresh()
+
         # Get the full recipe data with ingredients
         full_recipe = db.get_recipe(recipe_id, user.user_id)
         return RecipeResponse(**full_recipe)
@@ -312,6 +319,10 @@ async def delete_recipe(
             raise NotFoundException(f"Recipe with ID {recipe_id} not found")
 
         db.delete_recipe(recipe_id)
+
+        # Trigger analytics refresh asynchronously
+        trigger_analytics_refresh()
+
         return MessageResponse(message=f"Recipe {recipe_id} deleted successfully")
 
     except NotFoundException:
@@ -623,6 +634,10 @@ async def bulk_upload_recipes(
         )
         logger.info(f"Creation phase took {creation_duration:.3f}s")
         logger.info(f"Total bulk upload took {total_duration:.3f}s")
+
+        # Trigger analytics refresh asynchronously if any recipes were uploaded
+        if uploaded_recipes:
+            trigger_analytics_refresh()
 
         return BulkUploadResponse(
             uploaded_count=len(uploaded_recipes),

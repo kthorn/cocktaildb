@@ -20,6 +20,7 @@ from models.responses import (
     BulkIngredientUploadValidationError,
 )
 from core.exceptions import NotFoundException, DatabaseException
+from utils.analytics_helpers import trigger_analytics_refresh
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,10 @@ async def create_ingredient(
         ingredient_dict["created_by"] = user.user_id
 
         created_ingredient = db.create_ingredient(ingredient_dict)
+
+        # Trigger analytics refresh asynchronously
+        trigger_analytics_refresh()
+
         return IngredientResponse(**created_ingredient)
 
     except Exception as e:
@@ -140,6 +145,10 @@ async def update_ingredient(
         }
 
         updated_ingredient = db.update_ingredient(ingredient_id, update_dict)
+
+        # Trigger analytics refresh asynchronously
+        trigger_analytics_refresh()
+
         return IngredientResponse(**updated_ingredient)
 
     except NotFoundException:
@@ -165,6 +174,10 @@ async def delete_ingredient(
             raise NotFoundException(f"Ingredient with ID {ingredient_id} not found")
 
         db.delete_ingredient(ingredient_id)
+
+        # Trigger analytics refresh asynchronously
+        trigger_analytics_refresh()
+
         return MessageResponse(
             message=f"Ingredient {ingredient_id} deleted successfully"
         )
@@ -377,6 +390,10 @@ async def bulk_upload_ingredients(
         )
         logger.info(f"Creation phase took {creation_duration:.3f}s")
         logger.info(f"Total bulk upload took {total_duration:.3f}s")
+
+        # Trigger analytics refresh asynchronously if any ingredients were uploaded
+        if uploaded_ingredients:
+            trigger_analytics_refresh()
 
         return BulkIngredientUploadResponse(
             uploaded_count=len(uploaded_ingredients),
