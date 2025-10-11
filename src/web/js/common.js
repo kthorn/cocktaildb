@@ -43,6 +43,7 @@ export function loadHeader() {
         <li><a href="user-ingredients.html">My Ingredients</a></li>
         <li><a href="recipes.html">Add Recipes</a></li>
         <li><a href="search.html">Search Recipes</a></li>
+        <li><a href="analytics.html">Analytics</a></li>
         <li><a href="about.html">About</a></li>
         <li><a href="admin.html">Admin</a></li>
       </ul>
