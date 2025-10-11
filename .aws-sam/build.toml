@@ -37,4 +37,11 @@ manifest_hash = ""
 packagetype = "Zip"
 functions = ["AnalyticsRefreshFunction"]
 
-[layer_build_definitions]
+[layer_build_definitions.f00621df-92e2-4ba3-b510-49430e16f02c]
+layer_name = "DataScienceLayer"
+codeuri = "/home/kurtt/cocktaildb/layers/data-science-layer"
+build_method = "python3.12"
+compatible_runtimes = ["python3.12"]
+architecture = "x86_64"
+manifest_hash = ""
+layer = "DataScienceLayer"
