@@ -1,7 +1,10 @@
 """Analytics-specific database queries for CocktailDB"""
 
 import logging
-from typing import Dict, List, Any, Optional, cast
+from typing import TYPE_CHECKING, Dict, List, Any, Optional, cast
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +92,7 @@ class AnalyticsQueries:
             logger.error(f"Error getting recipe complexity distribution: {str(e)}")
             raise
 
-    def get_recipe_ingredient_matrix(self) -> tuple[Dict[int, str], Any, Any]:
+    def get_recipe_ingredient_matrix(self) -> tuple[Dict[int, int], "pd.DataFrame", List[str]]:
         """Build normalized recipe-ingredient matrix for distance calculations
 
         Returns:
@@ -99,7 +102,6 @@ class AnalyticsQueries:
             - recipe_names: List of recipe names corresponding to matrix rows
         """
         import pandas as pd
-        import numpy as np
 
         try:
             # Load all recipes with ingredients and amounts
@@ -153,13 +155,15 @@ class AnalyticsQueries:
             normalized_matrix = normalized_matrix.loc[(normalized_matrix != 0).any(axis=1), :]
             normalized_matrix = normalized_matrix.loc[:, (normalized_matrix != 0).any(axis=0)]
 
+            # Before pivot, create mapping from unique recipes
+            recipe_id_to_name = df[['recipe_id', 'recipe_name']].drop_duplicates('recipe_id')
+            recipe_id_to_name = dict(zip(recipe_id_to_name['recipe_name'], recipe_id_to_name['recipe_id']))
+
             # Create mapping from matrix row index to recipe ID
             recipe_id_map = {}
             recipe_names = []
             for idx, recipe_name in enumerate(normalized_matrix.index):
-                # Find the recipe ID for this name
-                recipe_row = df[df['recipe_name'] == recipe_name].iloc[0]
-                recipe_id_map[idx] = int(recipe_row['recipe_id'])
+                recipe_id_map[idx] = int(recipe_id_to_name[recipe_name])
                 recipe_names.append(recipe_name)
 
             logger.info(f"Built recipe matrix: {normalized_matrix.shape[0]} recipes x {normalized_matrix.shape[1]} ingredients")
