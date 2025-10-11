@@ -172,3 +172,57 @@ class AnalyticsQueries:
         except Exception as e:
             logger.error(f"Error building recipe ingredient matrix: {str(e)}")
             raise
+
+    def compute_cocktail_space_umap(self) -> List[Dict[str, Any]]:
+        """Compute UMAP embedding of recipe space based on ingredient similarity
+
+        Uses Manhattan distance on normalized ingredient proportions, then UMAP
+        for 2D visualization.
+
+        Returns:
+            List of dicts with {recipe_id, recipe_name, x, y}
+        """
+        import numpy as np
+        from sklearn.metrics import pairwise_distances
+        import umap
+
+        try:
+            # Get normalized recipe-ingredient matrix
+            recipe_id_map, normalized_matrix, recipe_names = self.get_recipe_ingredient_matrix()
+
+            if normalized_matrix.empty:
+                logger.warning("Empty recipe matrix, returning empty UMAP")
+                return []
+
+            # Compute pairwise Manhattan distances
+            logger.info("Computing pairwise Manhattan distances")
+            distance_matrix = pairwise_distances(normalized_matrix, metric='manhattan')
+
+            # Run UMAP dimensionality reduction
+            logger.info("Running UMAP dimensionality reduction")
+            reducer = umap.UMAP(
+                n_neighbors=5,
+                min_dist=0.05,
+                n_components=2,
+                metric='precomputed',
+                random_state=42
+            )
+
+            embedding = reducer.fit_transform(distance_matrix)
+
+            # Build result list
+            result = []
+            for idx in range(len(embedding)):
+                result.append({
+                    'recipe_id': recipe_id_map[idx],
+                    'recipe_name': recipe_names[idx],
+                    'x': float(embedding[idx, 0]),
+                    'y': float(embedding[idx, 1])
+                })
+
+            logger.info(f"UMAP computation complete: {len(result)} recipes")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error computing cocktail space UMAP: {str(e)}")
+            raise
