@@ -870,6 +870,12 @@ Resources:
             RestApiId: !Ref CocktailAPI
             Path: /analytics/recipe-complexity
             Method: get
+        GetCocktailSpaceAnalytics:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /analytics/cocktail-space
+            Method: get
         # --- END Analytics Endpoints ---
 
         # --- Admin Endpoints ---
