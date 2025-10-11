@@ -121,11 +121,13 @@ Resources:
             Resource:
               - !Sub "arn:aws:s3:::cocktailwebsite-${AWS::AccountId}-${Environment}"
               - !Sub "arn:aws:s3:::cocktailwebsite-${AWS::AccountId}-${Environment}/*"
-              - !If 
+              - !Sub "arn:aws:s3:::cocktailanalytics-${AWS::AccountId}-${Environment}"
+              - !Sub "arn:aws:s3:::cocktailanalytics-${AWS::AccountId}-${Environment}/*"
+              - !If
                 - IsProdEnvironment
                 - !Sub "arn:aws:s3:::cocktaildbbackups-${AWS::AccountId}-${Environment}"
                 - !Ref "AWS::NoValue"
-              - !If 
+              - !If
                 - IsProdEnvironment
                 - !Sub "arn:aws:s3:::cocktaildbbackups-${AWS::AccountId}-${Environment}/*"
                 - !Ref "AWS::NoValue"
@@ -275,6 +277,19 @@ Resources:
           - Id: ExpireOldBackups
             Status: Enabled
             ExpirationInDays: 30
+
+  # S3 bucket for pre-generated analytics
+  AnalyticsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "cocktailanalytics-${AWS::AccountId}-${Environment}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldAnalytics
+            Status: Enabled
+            ExpirationInDays: 7
 
   # S3 bucket for website hosting
   WebsiteBucket:
@@ -470,6 +485,8 @@ Resources:
           APP_CLIENT_ID: !Ref CognitoUserPoolV3Client
           ENVIRONMENT: !Ref Environment
           DB_PATH: !Sub /mnt/efs/${DatabaseName}.db
+          ANALYTICS_BUCKET: !Ref AnalyticsBucket
+          ANALYTICS_REFRESH_FUNCTION: !Ref AnalyticsRefreshFunction
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -502,6 +519,20 @@ Resources:
                 - elasticfilesystem:ClientRootAccess
                 - elasticfilesystem:DescribeMountTargets
               Resource: "*"
+            - Sid: AnalyticsBucketAccess
+              Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+                - s3:ListBucket
+              Resource:
+                - !Sub "arn:aws:s3:::${AnalyticsBucket}"
+                - !Sub "arn:aws:s3:::${AnalyticsBucket}/*"
+            - Sid: AnalyticsRefreshFunctionInvoke
+              Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: !GetAtt AnalyticsRefreshFunction.Arn
       Events:
         GetIngredients:
           Type: Api
@@ -846,7 +877,7 @@ Resources:
   # Custom resource to create sqlite db on EFS
   SchemaDeployFunction:
     Type: AWS::Serverless::Function
-    DependsOn: 
+    DependsOn:
       - MountTarget
     Properties:
       FunctionName: !Sub ${AWS::StackName}-schema-deploy
@@ -874,6 +905,58 @@ Resources:
                 - elasticfilesystem:ClientRootAccess
               Resource: !GetAtt CocktailEFS.Arn
 
+  # Lambda Function for Analytics Refresh
+  AnalyticsRefreshFunction:
+    Type: AWS::Serverless::Function
+    DependsOn:
+      - MountTarget
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-analytics-refresh
+      CodeUri: api/
+      Handler: analytics_refresh.lambda_handler
+      Timeout: 120
+      Environment:
+        Variables:
+          DB_NAME: !Ref DatabaseName
+          DB_PATH: !Sub /mnt/efs/${DatabaseName}.db
+          ANALYTICS_BUCKET: !Ref AnalyticsBucket
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet
+      FileSystemConfigs:
+        - Arn: !GetAtt EFSAccessPoint.Arn
+          LocalMountPath: /mnt/efs
+      Policies:
+        - VPCAccessPolicy: {}
+        - Statement:
+            - Sid: AWSLambdaVPCAccessExecutionRole
+              Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - ec2:CreateNetworkInterface
+                - ec2:DescribeNetworkInterfaces
+                - ec2:DeleteNetworkInterface
+              Resource: "*"
+            - Sid: AmazonElasticFileSystemClientAccess
+              Effect: Allow
+              Action:
+                - elasticfilesystem:ClientMount
+                - elasticfilesystem:ClientRootAccess
+                - elasticfilesystem:DescribeMountTargets
+              Resource: "*"
+            - Sid: AnalyticsBucketAccess
+              Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+                - s3:ListBucket
+              Resource:
+                - !Sub "arn:aws:s3:::${AnalyticsBucket}"
+                - !Sub "arn:aws:s3:::${AnalyticsBucket}/*"
 
   # Cognito User Pool for Authentication
   CognitoUserPoolV3:
@@ -1261,4 +1344,12 @@ Outputs:
   EditorGroupName:
     Description: Name of the editor group in Cognito User Pool
     Value: !Ref CognitoEditorGroupV3
+
+  AnalyticsBucketName:
+    Description: S3 bucket for pre-generated analytics
+    Value: !Ref AnalyticsBucket
+
+  AnalyticsRefreshFunctionArn:
+    Description: ARN of the Analytics Refresh Lambda function
+    Value: !GetAtt AnalyticsRefreshFunction.Arn
 
