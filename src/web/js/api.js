@@ -458,6 +458,11 @@ class CocktailAPI {
         return this._request(url, 'GET', null, false);
     }
 
+    async getCocktailSpaceAnalytics() {
+        const url = `/analytics/cocktail-space`;
+        return this._request(url, 'GET', null, false);
+    }
+
 }
 
 // Create and export the API instance
