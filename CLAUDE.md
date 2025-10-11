@@ -18,12 +18,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Deploy to prod**: `scripts\deploy.bat prod` (requires HOSTED_ZONE_ID env var)
 - **Deploy without build**: `scripts\deploy.bat dev --no-build`
 
-### Database Operations  
+### Database Operations
 - **Apply migration to dev**: `.\scripts\apply-migration.ps1 -SqlFilePath "path\to\migration.sql" -Environment dev`
 - **Apply migration to prod**: `.\scripts\apply-migration.ps1 -SqlFilePath "path\to\migration.sql" -Environment prod`
 - **Force DB reinitialization**: `.\scripts\apply-migration.ps1 -SqlFilePath "schema.sql" -Environment dev -ForceInit`
 - **Unix migration script**: `./scripts/apply-migration.sh -f path/to/migration.sql -e dev`
 - **Unix force reinit**: `./scripts/apply-migration.sh -f schema.sql -e dev --force-init`
+
+### Analytics Operations
+- **Trigger analytics refresh**: `./scripts/trigger-analytics-refresh.sh [dev|prod]`
+- **View analytics**: GET `/api/v1/analytics/ingredient-usage` and `/api/v1/analytics/recipe-complexity`
+- Analytics automatically refresh after recipe/ingredient mutations
 
 ### Database Backup & Restore
 - **List available backups**: `.\scripts\restore-backup.ps1 -ListBackups` or `./scripts/restore-backup.sh --list`
@@ -51,18 +56,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **SQLite on Amazon EFS**: Shared database across Lambda instances
 - **Connection pooling**: Global `_DB_INSTANCE` persists between Lambda invocations via `database.py`
 - **Core database class**: `db_core.py` (Database class with all database operations)
+- **Analytics queries**: `db_analytics.py` (AnalyticsQueries class for pre-computed analytics)
 - **Schema management**: `schema-deploy/schema.sql` defines current schema state
 - **SQL queries**: Stored as constants in `sql_queries.py`
 - **Key tables**: `recipes`, `ingredients` (hierarchical), `recipe_ingredients`, `ratings`, `units`, tags
 
 ### API Layer (`api/`)
 - **FastAPI Application**: `main.py` - modern FastAPI app with automatic documentation and CORS middleware
-- **Route Modules**: `routes/` directory with organized endpoint handlers (recipes, ingredients, ratings, units, tags, auth)
+- **Route Modules**: `routes/` directory with organized endpoint handlers (recipes, ingredients, ratings, units, tags, auth, analytics)
 - **Authentication**: `dependencies/auth.py` - FastAPI dependencies for JWT validation
 - **Exception Handling**: `core/exceptions.py` (custom exception classes), `core/exception_handlers.py` (global handlers)
 - **Configuration**: `core/config.py` - application settings and environment configuration
 - **Request/Response Models**: `models/` directory with Pydantic models for API validation
 - **Database Integration**: Uses `db/database.py` dependency injection for database access
+- **Utility Functions**: `utils/analytics_helpers.py` (async Lambda invocation), `utils/analytics_cache.py` (S3 storage manager)
 
 ### Frontend (`src/web/`)
 - **Static web app**: Vanilla JavaScript, served via CloudFront + S3
@@ -73,7 +80,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Infrastructure (`template.yaml`)
 - **AWS SAM template**: Defines all AWS resources
 - **Multi-environment**: dev/prod configurations with conditional resources
-- **Key resources**: Lambda functions, API Gateway, Cognito User Pool, S3, CloudFront, EFS
+- **Key resources**: Lambda functions, API Gateway, Cognito User Pool, S3 (website, backups, analytics), CloudFront, EFS
+- **Lambda Functions**:
+  - `CocktailLambda`: Main API handler (FastAPI)
+  - `AnalyticsRefreshFunction`: Async analytics regeneration
+  - `SchemaDeployFunction`: Database schema initialization
+  - `BackupLambda`: Nightly database backups (prod only)
 
 ## Key Patterns
 
@@ -113,6 +125,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Response Format**: Includes `pagination` metadata with `total_count`, `total_pages`, `has_next`, `has_previous`
 - **Search Features**: Full-text search, ingredient filtering, rating filters, tag filtering
 - **Sorting**: Configurable sort fields (`name`, `created_at`, `avg_rating`) and order (`asc`, `desc`)
+
+### Analytics Backend
+- **Architecture**: Static pre-generated analytics stored in S3, served via API endpoints, async regeneration
+- **Storage**: JSON files in S3 (`AnalyticsBucket`) with versioned keys (`analytics/v1/{type}.json`)
+- **Components**:
+  - `db/db_analytics.py`: Database queries for ingredient usage and recipe complexity statistics
+  - `utils/analytics_cache.py`: S3 storage manager (`AnalyticsStorage` class)
+  - `utils/analytics_helpers.py`: Async Lambda invocation (`trigger_analytics_refresh()`)
+  - `routes/analytics.py`: API endpoints with S3-first fallback to on-the-fly computation
+  - `analytics_refresh.py`: Lambda handler for regenerating analytics
+- **Endpoints**:
+  - GET `/api/v1/analytics/ingredient-usage?level={N}&parent_id={id}` - hierarchical ingredient usage stats
+  - GET `/api/v1/analytics/recipe-complexity` - recipe complexity distribution
+- **Automatic Refresh**: Mutation endpoints (create/update/delete recipes/ingredients) trigger async regeneration
+- **Manual Refresh**: `./scripts/trigger-analytics-refresh.sh [dev|prod]`
+- **Caching Strategy**: S3-first retrieval with graceful fallback to on-the-fly computation
+- **Performance**: Pre-generated analytics reduce database load for expensive aggregate queries
 
 ## Database Schema Patterns
 
