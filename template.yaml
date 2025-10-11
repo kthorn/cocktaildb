@@ -931,13 +931,13 @@ Resources:
     Type: AWS::Serverless::LayerVersion
     Properties:
       LayerName: !Sub ${AWS::StackName}-data-science
-      Description: Numpy, Pandas, Scikit-learn, UMAP for analytics
+      Description: Numpy, Pandas, Scikit-learn, UMAP for analytics (stripped)
       ContentUri: layers/data-science-layer/
       CompatibleRuntimes:
         - python3.12
       RetentionPolicy: Retain
     Metadata:
-      BuildMethod: python3.12
+      BuildMethod: makefile
 
   # Lambda Function for Analytics Refresh
   AnalyticsRefreshFunction:
