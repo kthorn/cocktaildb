@@ -55,7 +55,6 @@ Parameters:
 
 Globals:
   Function:
-    Runtime: python3.12
     Timeout: 65
     MemorySize: 1536
 
@@ -471,12 +470,13 @@ Resources:
   # Lambda for API Backend
   CocktailLambda:
     Type: AWS::Serverless::Function
-    DependsOn: 
+    DependsOn:
       - MountTarget
     Properties:
       FunctionName: !Sub ${AWS::StackName}-api-handler
       CodeUri: api/
-      Handler: main.handler  
+      Handler: main.handler
+      Runtime: python3.12
       Timeout: 60
       Environment:
         Variables:
@@ -904,6 +904,7 @@ Resources:
       FunctionName: !Sub ${AWS::StackName}-schema-deploy
       CodeUri: schema-deploy/
       Handler: deploy.lambda_handler
+      Runtime: python3.12
       Timeout: 60
       Environment:
         Variables:
@@ -926,36 +927,46 @@ Resources:
                 - elasticfilesystem:ClientRootAccess
               Resource: !GetAtt CocktailEFS.Arn
 
-  # Lambda Layer for Data Science Libraries
-  DataScienceLayer:
-    Type: AWS::Serverless::LayerVersion
+  # ECR Repository for Analytics Lambda Docker Image
+  AnalyticsECRRepository:
+    Type: AWS::ECR::Repository
     Properties:
-      LayerName: !Sub ${AWS::StackName}-data-science
-      Description: Numpy, Pandas, Scikit-learn, UMAP for analytics (stripped)
-      ContentUri: layers/data-science-layer/
-      CompatibleRuntimes:
-        - python3.12
-      RetentionPolicy: Retain
-    Metadata:
-      BuildMethod: makefile
+      RepositoryName: !Sub ${AWS::StackName}-analytics
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep only 3 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 3
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
 
-  # Lambda Function for Analytics Refresh
+  # Lambda Function for Analytics Refresh (Docker Container)
   AnalyticsRefreshFunction:
     Type: AWS::Serverless::Function
     DependsOn:
       - MountTarget
     Properties:
-      FunctionName: !Sub ${AWS::StackName}-analytics-refresh
-      CodeUri: api/
-      Handler: analytics_refresh.lambda_handler
+      PackageType: Image
       Timeout: 120
-      Layers:
-        - !Ref DataScienceLayer
+      MemorySize: 2048
       Environment:
         Variables:
           DB_NAME: !Ref DatabaseName
           DB_PATH: !Sub /mnt/efs/${DatabaseName}.db
           ANALYTICS_BUCKET: !Ref AnalyticsBucket
+          NUMBA_CACHE_DIR: /tmp
+          NUMBA_DISABLE_JIT: "0"
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -993,6 +1004,10 @@ Resources:
               Resource:
                 - !Sub "arn:aws:s3:::${AnalyticsBucket}"
                 - !Sub "arn:aws:s3:::${AnalyticsBucket}/*"
+    Metadata:
+      DockerTag: latest
+      DockerContext: ./api
+      Dockerfile: analytics/Dockerfile
 
   # Cognito User Pool for Authentication
   CognitoUserPoolV3:
@@ -1202,6 +1217,7 @@ Resources:
       FunctionName: !Sub ${AWS::StackName}-db-backup-handler
       CodeUri: backup-lambda/
       Handler: backup.lambda_handler
+      Runtime: python3.12
       Timeout: 300 # 5 minutes, adjust if needed for large DBs
       Environment:
         Variables:

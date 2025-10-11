@@ -31,7 +31,11 @@ async def get_ingredient_usage_analytics(
 ):
     """Get ingredient usage statistics with hierarchical aggregation"""
     try:
-        storage_key = f"ingredient-usage-{level}-{parent_id}"
+        # For root level (no filters), use simple key
+        if level is None and parent_id is None:
+            storage_key = "ingredient-usage"
+        else:
+            storage_key = f"ingredient-usage-{level}-{parent_id}"
 
         if not storage_manager:
             raise DatabaseException("Analytics storage not configured")

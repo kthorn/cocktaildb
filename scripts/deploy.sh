@@ -82,6 +82,7 @@ if [ $NO_BUILD -eq 0 ]; then
         --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
         --no-fail-on-empty-changeset \
         --resolve-s3 \
+        --resolve-image-repos \
         --on-failure DELETE \
         --region "$REGION"
 
