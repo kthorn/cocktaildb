@@ -926,6 +926,19 @@ Resources:
                 - elasticfilesystem:ClientRootAccess
               Resource: !GetAtt CocktailEFS.Arn
 
+  # Lambda Layer for Data Science Libraries
+  DataScienceLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub ${AWS::StackName}-data-science
+      Description: Numpy, Pandas, Scikit-learn, UMAP for analytics
+      ContentUri: layers/data-science-layer/
+      CompatibleRuntimes:
+        - python3.12
+      RetentionPolicy: Retain
+    Metadata:
+      BuildMethod: python3.12
+
   # Lambda Function for Analytics Refresh
   AnalyticsRefreshFunction:
     Type: AWS::Serverless::Function
@@ -936,6 +949,8 @@ Resources:
       CodeUri: analytics-lambda/
       Handler: analytics_refresh.lambda_handler
       Timeout: 120
+      Layers:
+        - !Ref DataScienceLayer
       Environment:
         Variables:
           DB_NAME: !Ref DatabaseName

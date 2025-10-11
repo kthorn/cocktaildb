@@ -28,4 +28,13 @@ manifest_hash = ""
 packagetype = "Zip"
 functions = ["CocktailLambda"]
 
+[function_build_definitions.4c2f1096-83e9-4194-b8be-46cdb953527b]
+codeuri = "/home/kurtt/cocktaildb/analytics-lambda"
+runtime = "python3.12"
+architecture = "x86_64"
+handler = "analytics_refresh.lambda_handler"
+manifest_hash = ""
+packagetype = "Zip"
+functions = ["AnalyticsRefreshFunction"]
+
 [layer_build_definitions]
