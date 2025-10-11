@@ -933,7 +933,7 @@ Resources:
       - MountTarget
     Properties:
       FunctionName: !Sub ${AWS::StackName}-analytics-refresh
-      CodeUri: api/
+      CodeUri: analytics-lambda/
       Handler: analytics_refresh.lambda_handler
       Timeout: 120
       Environment:
