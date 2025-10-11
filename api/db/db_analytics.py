@@ -88,3 +88,83 @@ class AnalyticsQueries:
         except Exception as e:
             logger.error(f"Error getting recipe complexity distribution: {str(e)}")
             raise
+
+    def get_recipe_ingredient_matrix(self) -> tuple[Dict[int, str], Any, Any]:
+        """Build normalized recipe-ingredient matrix for distance calculations
+
+        Returns:
+            Tuple of (recipe_id_map, normalized_matrix, recipe_names)
+            - recipe_id_map: Dict mapping matrix row index to recipe ID
+            - normalized_matrix: pandas DataFrame with normalized ingredient proportions
+            - recipe_names: List of recipe names corresponding to matrix rows
+        """
+        import pandas as pd
+        import numpy as np
+
+        try:
+            # Load all recipes with ingredients and amounts
+            sql = """
+            SELECT
+                r.id as recipe_id,
+                r.name as recipe_name,
+                i.id as ingredient_id,
+                i.name as ingredient_name,
+                ri.amount,
+                ri.unit_id,
+                u.conversion_to_ml
+            FROM recipes r
+            JOIN recipe_ingredients ri ON r.id = ri.recipe_id
+            JOIN ingredients i ON ri.ingredient_id = i.id
+            LEFT JOIN units u ON ri.unit_id = u.id
+            ORDER BY r.id, i.id
+            """
+
+            rows = self.db.execute_query(sql)
+            if not rows:
+                logger.warning("No recipe data found for matrix building")
+                return {}, pd.DataFrame(), []
+
+            df = pd.DataFrame(rows)
+
+            # Convert amounts to ml where possible
+            df['amount_ml'] = df.apply(
+                lambda row: row['amount'] * row['conversion_to_ml']
+                if pd.notna(row['conversion_to_ml']) and pd.notna(row['amount'])
+                else row['amount']
+                if pd.notna(row['amount'])
+                else 1.0,  # Default to 1 if no amount
+                axis=1
+            )
+
+            # Create pivot table for amounts
+            amount_matrix = df.pivot_table(
+                index='recipe_name',
+                columns='ingredient_name',
+                values='amount_ml',
+                aggfunc='sum',
+                fill_value=0
+            )
+
+            # Normalize each recipe to sum to 1 (proportions)
+            normalized_matrix = amount_matrix.div(amount_matrix.sum(axis=1), axis=0)
+            normalized_matrix = normalized_matrix.fillna(0)
+
+            # Remove recipes/ingredients that are all zeros
+            normalized_matrix = normalized_matrix.loc[(normalized_matrix != 0).any(axis=1), :]
+            normalized_matrix = normalized_matrix.loc[:, (normalized_matrix != 0).any(axis=0)]
+
+            # Create mapping from matrix row index to recipe ID
+            recipe_id_map = {}
+            recipe_names = []
+            for idx, recipe_name in enumerate(normalized_matrix.index):
+                # Find the recipe ID for this name
+                recipe_row = df[df['recipe_name'] == recipe_name].iloc[0]
+                recipe_id_map[idx] = int(recipe_row['recipe_id'])
+                recipe_names.append(recipe_name)
+
+            logger.info(f"Built recipe matrix: {normalized_matrix.shape[0]} recipes x {normalized_matrix.shape[1]} ingredients")
+            return recipe_id_map, normalized_matrix, recipe_names
+
+        except Exception as e:
+            logger.error(f"Error building recipe ingredient matrix: {str(e)}")
+            raise
