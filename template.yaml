@@ -856,7 +856,22 @@ Resources:
             Path: /stats
             Method: get
         # --- END Stats Endpoints ---
-        
+
+        # --- Analytics Endpoints ---
+        GetIngredientUsageAnalytics:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /analytics/ingredient-usage
+            Method: get
+        GetRecipeComplexityAnalytics:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /analytics/recipe-complexity
+            Method: get
+        # --- END Analytics Endpoints ---
+
         # --- Admin Endpoints ---
         GetAdminDatabaseDownload:
           Type: Api

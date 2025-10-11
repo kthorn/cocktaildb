@@ -442,6 +442,21 @@ class CocktailAPI {
         return this._request('/stats', 'GET');
     }
 
+    // Analytics API
+    async getIngredientUsageAnalytics(options = {}) {
+        const params = new URLSearchParams();
+        if (options.parent_id !== undefined) params.append('parent_id', options.parent_id);
+
+        const queryString = params.toString();
+        const url = `/analytics/ingredient-usage${queryString ? '?' + queryString : ''}`;
+
+        return this._request(url, 'GET', null, false);
+    }
+
+    async getRecipeComplexityAnalytics() {
+        const url = `/analytics/recipe-complexity`;
+        return this._request(url, 'GET', null, false);
+    }
 
 }
 
