@@ -7,7 +7,16 @@ from unittest.mock import patch, Mock
 # Add api directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'api'))
 
+from utils import analytics_helpers
 from utils.analytics_helpers import trigger_analytics_refresh
+
+
+@pytest.fixture(autouse=True)
+def reset_lambda_client():
+    """Reset the module-level Lambda client cache for test isolation"""
+    analytics_helpers._lambda_client = None
+    yield
+    analytics_helpers._lambda_client = None
 
 
 @patch('boto3.client')

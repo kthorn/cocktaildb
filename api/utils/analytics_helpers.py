@@ -5,6 +5,23 @@ import os
 
 logger = logging.getLogger(__name__)
 
+# Initialize boto3 client at module level for Lambda optimization
+# This avoids creating a new client on every request, which is slow
+_lambda_client = None
+
+
+def _get_lambda_client():
+    """Get or create the Lambda client (cached at module level)"""
+    global _lambda_client
+    if _lambda_client is None:
+        try:
+            import boto3
+            _lambda_client = boto3.client('lambda')
+        except Exception as e:
+            logger.error(f"Failed to create Lambda client: {str(e)}")
+            raise
+    return _lambda_client
+
 
 def trigger_analytics_refresh():
     """Trigger async analytics regeneration
@@ -18,8 +35,7 @@ def trigger_analytics_refresh():
             logger.debug("ANALYTICS_REFRESH_FUNCTION not configured, skipping trigger")
             return
 
-        import boto3
-        lambda_client = boto3.client('lambda')
+        lambda_client = _get_lambda_client()
         lambda_client.invoke(
             FunctionName=function_name,
             InvocationType='Event'  # Async - non-blocking
