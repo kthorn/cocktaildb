@@ -168,6 +168,21 @@ Resources:
           ToPort: 443
           SourceSecurityGroupId: !Ref LambdaSecurityGroup
 
+  # Lambda VPC Endpoint for Lambda-to-Lambda API communication
+  # This allows Lambdas in the VPC to invoke other Lambda functions
+  # without requiring a NAT Gateway (saves ~$32/month)
+  LambdaVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.lambda
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref LambdaSecurityGroup
+      PrivateDnsEnabled: true
+
   # EFS File System
   CocktailEFS:
     Type: AWS::EFS::FileSystem
