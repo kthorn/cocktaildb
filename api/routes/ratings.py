@@ -15,7 +15,6 @@ from models.responses import RatingSummaryResponse, RatingResponse, MessageRespo
 from .rating_handlers import (
     get_recipe_ratings_handler,
     create_or_update_rating_handler,
-    delete_rating_handler,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,25 +43,3 @@ async def create_or_update_rating(
 ):
     """Create or update a rating for a recipe (requires authentication)"""
     return await create_or_update_rating_handler(recipe_id, rating_data, db, user)
-
-
-@router.put("/{recipe_id}", response_model=RatingResponse)
-async def update_rating(
-    recipe_id: int,
-    rating_data: RatingCreate,
-    db: Database = Depends(get_db),
-    user: UserInfo = Depends(require_authentication),
-):
-    """Update a rating for a recipe (requires authentication)"""
-    # PUT and POST have the same logic for ratings (upsert)
-    return await create_or_update_rating_handler(recipe_id, rating_data, db, user)
-
-
-@router.delete("/{recipe_id}", response_model=MessageResponse)
-async def delete_rating(
-    recipe_id: int,
-    db: Database = Depends(get_db),
-    user: UserInfo = Depends(require_authentication),
-):
-    """Delete a user's rating for a recipe (requires authentication)"""
-    return await delete_rating_handler(recipe_id, db, user)

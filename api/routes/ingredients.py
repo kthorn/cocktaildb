@@ -42,22 +42,6 @@ async def get_ingredients(
         raise DatabaseException("Failed to retrieve ingredients", detail=str(e))
 
 
-@router.get("/search", response_model=List[IngredientResponse])
-async def search_ingredients(
-    q: str,
-    db: Database = Depends(get_db),
-    user: Optional[UserInfo] = Depends(get_current_user_optional),
-):
-    """Search ingredients by name"""
-    try:
-        logger.info(f"Searching ingredients with query: {q}")
-        ingredients = db.search_ingredients(q)
-        return [IngredientResponse(**ingredient) for ingredient in ingredients]
-    except Exception as e:
-        logger.error(f"Error searching ingredients: {str(e)}")
-        raise DatabaseException("Failed to search ingredients", detail=str(e))
-
-
 @router.post("", response_model=IngredientResponse, status_code=status.HTTP_201_CREATED)
 async def create_ingredient(
     ingredient_data: IngredientCreate,

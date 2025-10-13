@@ -11,7 +11,7 @@ from dependencies.auth import (
 from db.database import get_database as get_db
 from db.db_core import Database
 from models.responses import UnitResponse
-from core.exceptions import NotFoundException, DatabaseException
+from core.exceptions import DatabaseException
 
 logger = logging.getLogger(__name__)
 
@@ -38,26 +38,3 @@ async def get_units(
     except Exception as e:
         logger.error(f"Error getting units: {str(e)}")
         raise DatabaseException("Failed to retrieve units", detail=str(e))
-
-
-@router.get("/{unit_id}", response_model=UnitResponse)
-async def get_unit(
-    unit_id: int,
-    db: Database = Depends(get_db),
-    user: Optional[UserInfo] = Depends(get_current_user_optional),
-):
-    """Get a specific unit by ID"""
-    try:
-        logger.info(f"Getting unit {unit_id}")
-        unit = db.get_unit(unit_id)
-
-        if not unit:
-            raise NotFoundException(f"Unit with ID {unit_id} not found")
-
-        return UnitResponse(**unit)
-
-    except NotFoundException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting unit {unit_id}: {str(e)}")
-        raise DatabaseException("Failed to retrieve unit", detail=str(e))
