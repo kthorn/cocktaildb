@@ -1051,94 +1051,82 @@ async function deleteRecipe(id, onRecipeDeleted = null) {
     }
 }
 
-// Global cache for ingredient hierarchy data to minimize API calls
-const ingredientHierarchyCache = new Map();
-
 /**
  * Sets up ingredient hierarchy hover functionality for a recipe card
  * @param {HTMLElement} card - The recipe card element
  * @param {Object} recipe - The recipe object containing ingredient data
  */
 function setupIngredientHover(card, recipe) {
-    const ingredientNames = card.querySelectorAll('.ingredient-name');
+    const ingredientElements = card.querySelectorAll('.ingredient-name');
     let currentTooltip = null;
-    
-    // Pre-load hierarchies for all ingredients in this recipe to minimize API calls
-    preloadIngredientHierarchies(recipe);
-    
-    ingredientNames.forEach(ingredientElement => {
-        const ingredientPath = ingredientElement.dataset.ingredientPath;
-        
-        // Set all ingredient names to normal font weight
+
+    ingredientElements.forEach((ingredientElement, index) => {
+        const ingredient = recipe.ingredients[index];
+        if (!ingredient) return;
+
+        // Set normal font weight
         ingredientElement.style.fontWeight = 'normal';
-        
-        // Skip ingredients without path data or with single-level paths
-        if (!ingredientPath || ingredientPath === '' || ingredientPath.split('/').filter(p => p).length <= 1) {
+
+        // Get hierarchy from ingredient data (no API call needed!)
+        const hierarchy = ingredient.hierarchy;
+
+        // Skip ingredients without hierarchy (single-level)
+        if (!hierarchy || hierarchy.length <= 1) {
             return;
         }
-        
+
         // Add visual indication that ingredient has hierarchy
         ingredientElement.style.cursor = 'help';
         ingredientElement.style.textDecoration = 'underline';
         ingredientElement.style.textDecorationStyle = 'dotted';
-        
-        ingredientElement.addEventListener('mouseenter', async () => {
-            try {
-                // Remove any existing tooltip
-                if (currentTooltip) {
-                    currentTooltip.remove();
-                    currentTooltip = null;
-                }
-                
-                // Get ingredient hierarchy from cache or API
-                const hierarchy = await getIngredientHierarchy(ingredientPath);
-                
-                if (hierarchy && hierarchy.length > 1) {
-                    // Create hierarchy display (from general to specific)
-                    const hierarchyNames = hierarchy.map(ing => ing.name);
-                    const hierarchyText = hierarchyNames.join(' → ');
-                    
-                    // Create tooltip
-                    currentTooltip = document.createElement('div');
-                    currentTooltip.className = 'ingredient-hierarchy-tooltip';
-                    currentTooltip.textContent = hierarchyText;
-                    currentTooltip.style.cssText = `
-                        position: absolute;
-                        background: rgba(0, 0, 0, 0.9);
-                        color: white;
-                        padding: 8px 12px;
-                        border-radius: 4px;
-                        font-size: 12px;
-                        white-space: nowrap;
-                        z-index: 9999;
-                        pointer-events: none;
-                        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-                        max-width: 300px;
-                        word-wrap: break-word;
-                        white-space: normal;
-                    `;
-                    
-                    // Position tooltip
-                    const rect = ingredientElement.getBoundingClientRect();
-                    currentTooltip.style.left = `${rect.left + window.scrollX}px`;
-                    currentTooltip.style.top = `${rect.bottom + window.scrollY + 5}px`;
-                    
-                    document.body.appendChild(currentTooltip);
-                    
-                    // Adjust position if tooltip goes off screen
-                    const tooltipRect = currentTooltip.getBoundingClientRect();
-                    if (tooltipRect.right > window.innerWidth) {
-                        currentTooltip.style.left = `${window.innerWidth - tooltipRect.width - 10 + window.scrollX}px`;
-                    }
-                    if (tooltipRect.bottom > window.innerHeight) {
-                        currentTooltip.style.top = `${rect.top + window.scrollY - tooltipRect.height - 5}px`;
-                    }
-                }
-            } catch (error) {
-                console.error('Error fetching ingredient hierarchy:', error);
+
+        ingredientElement.addEventListener('mouseenter', () => {
+            // Remove any existing tooltip
+            if (currentTooltip) {
+                currentTooltip.remove();
+                currentTooltip = null;
+            }
+
+            // Create hierarchy display (root to leaf)
+            const hierarchyText = hierarchy.join(' → ');
+
+            // Create tooltip
+            currentTooltip = document.createElement('div');
+            currentTooltip.className = 'ingredient-hierarchy-tooltip';
+            currentTooltip.textContent = hierarchyText;
+            currentTooltip.style.cssText = `
+                position: absolute;
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                padding: 8px 12px;
+                border-radius: 4px;
+                font-size: 12px;
+                white-space: nowrap;
+                z-index: 9999;
+                pointer-events: none;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                max-width: 300px;
+                word-wrap: break-word;
+                white-space: normal;
+            `;
+
+            // Position tooltip
+            const rect = ingredientElement.getBoundingClientRect();
+            currentTooltip.style.left = `${rect.left + window.scrollX}px`;
+            currentTooltip.style.top = `${rect.bottom + window.scrollY + 5}px`;
+
+            document.body.appendChild(currentTooltip);
+
+            // Adjust position if tooltip goes off screen
+            const tooltipRect = currentTooltip.getBoundingClientRect();
+            if (tooltipRect.right > window.innerWidth) {
+                currentTooltip.style.left = `${window.innerWidth - tooltipRect.width - 10 + window.scrollX}px`;
+            }
+            if (tooltipRect.bottom > window.innerHeight) {
+                currentTooltip.style.top = `${rect.top + window.scrollY - tooltipRect.height - 5}px`;
             }
         });
-        
+
         ingredientElement.addEventListener('mouseleave', () => {
             if (currentTooltip) {
                 currentTooltip.remove();
@@ -1146,53 +1134,4 @@ function setupIngredientHover(card, recipe) {
             }
         });
     });
-}
-
-/**
- * Pre-loads ingredient hierarchies for a recipe to minimize API calls
- * @param {Object} recipe - The recipe object
- */
-async function preloadIngredientHierarchies(recipe) {
-    if (!recipe.ingredients) return;
-    
-    // Get unique paths that have hierarchies (more than one level)
-    const uniquePaths = new Set();
-    recipe.ingredients.forEach(ing => {
-        const path = ing.ingredient_path;
-        if (path && path.split('/').filter(p => p).length > 1 && !ingredientHierarchyCache.has(path)) {
-            uniquePaths.add(path);
-        }
-    });
-    
-    // Fetch hierarchies for all unique paths in parallel
-    const promises = Array.from(uniquePaths).map(async (path) => {
-        try {
-            const hierarchy = await api.getIngredientHierarchy(path);
-            ingredientHierarchyCache.set(path, hierarchy);
-        } catch (error) {
-            console.error('Error preloading hierarchy for path:', path, error);
-        }
-    });
-    
-    await Promise.allSettled(promises);
-}
-
-/**
- * Gets ingredient hierarchy from cache or API
- * @param {string} ingredientPath - The ingredient path
- * @returns {Array} The ingredient hierarchy
- */
-async function getIngredientHierarchy(ingredientPath) {
-    if (ingredientHierarchyCache.has(ingredientPath)) {
-        return ingredientHierarchyCache.get(ingredientPath);
-    }
-    
-    try {
-        const hierarchy = await api.getIngredientHierarchy(ingredientPath);
-        ingredientHierarchyCache.set(ingredientPath, hierarchy);
-        return hierarchy;
-    } catch (error) {
-        console.error('Error fetching ingredient hierarchy:', error);
-        return [];
-    }
 } 

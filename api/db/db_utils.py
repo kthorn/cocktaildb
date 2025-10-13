@@ -41,9 +41,11 @@ def extract_all_ingredient_ids(ingredients_list: List[Dict[str, Any]]) -> set[in
 def assemble_ingredient_full_names(
     ingredients_list: List[Dict[str, Any]], ingredient_names_map: Dict[int, str]
 ) -> None:
-    """Helper to assemble the 'full_name' for a list of ingredients using a pre-fetched name map.
+    """Helper to assemble the 'full_name' and 'hierarchy' for a list of ingredients.
 
-    Modifies the dictionaries in ingredients_list in-place.
+    Modifies the dictionaries in ingredients_list in-place, adding two fields:
+    - full_name: "Base Name [Parent;Grandparent]" (for inline display)
+    - hierarchy: ["Grandparent", "Parent", "Base Name"] (for tooltips)
     """
     for ingredient in ingredients_list:
         ingredient_id = ingredient["ingredient_id"]
@@ -64,6 +66,12 @@ def assemble_ingredient_full_names(
                     ancestor_name = ingredient_names_map.get(ancestor_id)
                     if ancestor_name:
                         ancestor_names.append(ancestor_name)
+
+        # Set hierarchy array (root to leaf order)
+        if ancestor_names:
+            ingredient["hierarchy"] = ancestor_names + [base_name]
+        else:
+            ingredient["hierarchy"] = [base_name]
 
         # Construct full name (e.g., "Lime Juice [Lime;Citrus]")
         if ancestor_names:

@@ -1069,6 +1069,14 @@ Resources:
       PreventUserExistenceErrors: ENABLED
       SupportedIdentityProviders:
         - COGNITO
+      # Token validity configuration - controls session duration
+      AccessTokenValidity: 4  # 4 hours
+      IdTokenValidity: 4      # 4 hours
+      RefreshTokenValidity: 30 # 30 days (default)
+      TokenValidityUnits:
+        AccessToken: hours
+        IdToken: hours
+        RefreshToken: days
       CallbackURLs: !If
         - IsProdEnvironment
         - - !Sub "https://${DomainName}/callback.html"

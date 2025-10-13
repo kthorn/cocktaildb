@@ -58,22 +58,6 @@ async def search_ingredients(
         raise DatabaseException("Failed to search ingredients", detail=str(e))
 
 
-@router.get("/hierarchy", response_model=List[IngredientResponse])
-async def get_ingredient_hierarchy(
-    path: str,
-    db: Database = Depends(get_db),
-    user: Optional[UserInfo] = Depends(get_current_user_optional),
-):
-    """Get ingredient hierarchy from path (e.g., /1/23/45/)"""
-    try:
-        logger.info(f"Getting ingredient hierarchy for path: {path}")
-        hierarchy = db.get_ingredient_hierarchy(path)
-        return [IngredientResponse(**ingredient) for ingredient in hierarchy]
-    except Exception as e:
-        logger.error(f"Error getting ingredient hierarchy: {str(e)}")
-        raise DatabaseException("Failed to retrieve ingredient hierarchy", detail=str(e))
-
-
 @router.post("", response_model=IngredientResponse, status_code=status.HTTP_201_CREATED)
 async def create_ingredient(
     ingredient_data: IngredientCreate,

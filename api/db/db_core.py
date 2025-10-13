@@ -683,47 +683,6 @@ class Database:
             )
             raise
 
-    def get_ingredient_hierarchy(self, ingredient_path: str) -> List[Dict[str, Any]]:
-        """Get the ingredient hierarchy from root to leaf based on the path"""
-        try:
-            if not ingredient_path:
-                return []
-            
-            # Parse the path to get ingredient IDs (format: /1/23/45/)
-            path_parts = [part for part in ingredient_path.split("/") if part]
-            if not path_parts:
-                return []
-            
-            ingredient_ids = [int(part) for part in path_parts]
-            
-            # Get all ingredients in the hierarchy
-            if len(ingredient_ids) == 1:
-                # Single ingredient, no hierarchy
-                result = cast(
-                    List[Dict[str, Any]],
-                    self.execute_query(
-                        "SELECT id, name, description, parent_id, path FROM ingredients WHERE id = ?",
-                        (ingredient_ids[0],),
-                    ),
-                )
-            else:
-                # Multiple ingredients in hierarchy
-                placeholders = ",".join("?" * len(ingredient_ids))
-                result = cast(
-                    List[Dict[str, Any]],
-                    self.execute_query(
-                        f"SELECT id, name, description, parent_id, path FROM ingredients WHERE id IN ({placeholders}) ORDER BY path",
-                        ingredient_ids,
-                    ),
-                )
-            
-            return result
-        except Exception as e:
-            logger.error(
-                f"Error getting ingredient hierarchy for path {ingredient_path}: {str(e)}"
-            )
-            raise
-
     def _validate_recipe_ingredients(self, ingredients: List[Dict[str, Any]]) -> None:
         """Validate recipe ingredients before database operations"""
         if not ingredients:

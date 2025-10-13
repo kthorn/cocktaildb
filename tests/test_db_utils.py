@@ -247,11 +247,13 @@ class TestAssembleIngredientFullNames:
             }
         ]
         ingredient_names_map = {5: "Gin"}
-        
+
         assemble_ingredient_full_names(ingredients_list, ingredient_names_map)
-        
+
         # Root level ingredient should just use its own name
         assert ingredients_list[0]["full_name"] == "Gin"
+        # Hierarchy should contain just the ingredient itself
+        assert ingredients_list[0]["hierarchy"] == ["Gin"]
 
     def test_assemble_full_names_two_level_hierarchy(self):
         """Test assembling full name for two-level hierarchy"""
@@ -266,10 +268,12 @@ class TestAssembleIngredientFullNames:
             5: "Gin",
             10: "London Dry Gin"
         }
-        
+
         assemble_ingredient_full_names(ingredients_list, ingredient_names_map)
-        
+
         assert ingredients_list[0]["full_name"] == "London Dry Gin [Gin]"
+        # Hierarchy should be root to leaf order
+        assert ingredients_list[0]["hierarchy"] == ["Gin", "London Dry Gin"]
 
     def test_assemble_full_names_deep_hierarchy(self):
         """Test assembling full name for deep hierarchy"""
@@ -282,14 +286,16 @@ class TestAssembleIngredientFullNames:
         ]
         ingredient_names_map = {
             1: "Spirits",
-            5: "Gin", 
+            5: "Gin",
             10: "London Dry Gin",
             20: "Bombay Sapphire"
         }
-        
+
         assemble_ingredient_full_names(ingredients_list, ingredient_names_map)
-        
+
         assert ingredients_list[0]["full_name"] == "Bombay Sapphire [London Dry Gin;Gin;Spirits]"
+        # Hierarchy should be root to leaf order
+        assert ingredients_list[0]["hierarchy"] == ["Spirits", "Gin", "London Dry Gin", "Bombay Sapphire"]
 
     def test_assemble_full_names_multiple_ingredients(self):
         """Test assembling full names for multiple ingredients"""
@@ -403,10 +409,10 @@ class TestAssembleIngredientFullNames:
             5: "Gin",
             10: "London Dry Gin"
         }
-        
+
         assemble_ingredient_full_names(ingredients_list, ingredient_names_map)
-        
-        # Should preserve all original fields
+
+        # Should preserve all original fields and add new ones
         ingredient = ingredients_list[0]
         assert ingredient["ingredient_id"] == 10
         assert ingredient["ingredient_name"] == "London Dry Gin"
@@ -415,6 +421,7 @@ class TestAssembleIngredientFullNames:
         assert ingredient["unit_id"] == 1
         assert ingredient["other_field"] == "preserved"
         assert ingredient["full_name"] == "London Dry Gin [Gin]"
+        assert ingredient["hierarchy"] == ["Gin", "London Dry Gin"]
 
     def test_assemble_full_names_malformed_path(self):
         """Test assembling full name with malformed path"""
@@ -542,10 +549,13 @@ class TestUtilsIntegration:
         
         # Step 4: Assemble full names
         assemble_ingredient_full_names(recipe_ingredients, ingredient_names_map)
-        
+
         # Verify final result
         assert recipe_ingredients[0]["full_name"] == "Bombay Sapphire [London Dry Gin;Gin;Spirits]"
         assert recipe_ingredients[1]["full_name"] == "Dry Vermouth [Vermouth]"
+        # Verify hierarchy arrays
+        assert recipe_ingredients[0]["hierarchy"] == ["Spirits", "Gin", "London Dry Gin", "Bombay Sapphire"]
+        assert recipe_ingredients[1]["hierarchy"] == ["Vermouth", "Dry Vermouth"]
 
     def test_utils_performance_with_many_ingredients(self):
         """Test utility functions with a large number of ingredients"""
