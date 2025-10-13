@@ -5,7 +5,7 @@
 
 set -e
 
-BACKUP_BUCKET="cocktail-db-prod-db-backups"
+BACKUP_BUCKET="cocktaildbbackups-732940910135-prod"
 BACKUP_FILE=""  # Will be auto-detected if not specified
 TARGET_ENVIRONMENT="dev"
 REGION="us-east-1"
