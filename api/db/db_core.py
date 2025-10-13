@@ -2080,6 +2080,28 @@ class Database:
                     }
                     recipes[recipe_id]["ingredients"].append(ingredient)
 
+            # Assemble full names and hierarchy for all ingredients
+            all_ingredients = []
+            for recipe in recipes.values():
+                all_ingredients.extend(recipe["ingredients"])
+
+            # Extract all ingredient IDs for batch name lookup
+            all_needed_ingredient_ids = extract_all_ingredient_ids(all_ingredients)
+            ingredient_names_map = {}
+            if all_needed_ingredient_ids:
+                placeholders = ",".join("?" for _ in all_needed_ingredient_ids)
+                names_result = cast(
+                    List[Dict[str, Any]],
+                    self.execute_query(
+                        f"SELECT id, name FROM ingredients WHERE id IN ({placeholders})",
+                        tuple(all_needed_ingredient_ids),
+                    ),
+                )
+                ingredient_names_map = {row["id"]: row["name"] for row in names_result}
+
+            # Assemble full_name and hierarchy for all ingredients
+            assemble_ingredient_full_names(all_ingredients, ingredient_names_map)
+
             result = list(recipes.values())
             logger.info(f"Found {len(result)} recipes from search")
             return result
