@@ -8,12 +8,12 @@ from unittest.mock import Mock, patch
 # Add api directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'api'))
 
-from analytics_refresh import lambda_handler
+from analytics.analytics_refresh import lambda_handler
 
 
-@patch('analytics_refresh.get_database')
-@patch('analytics_refresh.AnalyticsQueries')
-@patch('analytics_refresh.AnalyticsStorage')
+@patch('analytics.analytics_refresh.get_database')
+@patch('analytics.analytics_refresh.AnalyticsQueries')
+@patch('analytics.analytics_refresh.AnalyticsStorage')
 def test_lambda_handler_success(mock_storage_class, mock_analytics_class, mock_get_db):
     """Test successful analytics generation"""
     # Setup mocks
@@ -25,6 +25,7 @@ def test_lambda_handler_success(mock_storage_class, mock_analytics_class, mock_g
     mock_analytics_class.return_value = mock_analytics
     mock_analytics.get_ingredient_usage_stats.return_value = [{"test": "data"}]
     mock_analytics.get_recipe_complexity_distribution.return_value = [{"count": 5}]
+    mock_analytics.compute_cocktail_space_umap.return_value = [{"x": 1.0, "y": 2.0}]
 
     mock_storage = Mock()
     mock_storage_class.return_value = mock_storage
@@ -40,7 +41,7 @@ def test_lambda_handler_success(mock_storage_class, mock_analytics_class, mock_g
     assert "message" in body
 
 
-@patch('analytics_refresh.get_database')
+@patch('analytics.analytics_refresh.get_database')
 def test_lambda_handler_failure(mock_get_db):
     """Test analytics generation failure handling"""
     mock_get_db.side_effect = Exception("Database connection failed")

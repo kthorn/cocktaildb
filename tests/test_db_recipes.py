@@ -170,6 +170,10 @@ class TestRecipeIngredientRelationships:
             assert "Gin1" in ingredient["full_name"]
             assert "London Dry Gin" in ingredient["full_name"]
 
+            # The hierarchy array should be in root-to-leaf order
+            assert "hierarchy" in ingredient
+            assert ingredient["hierarchy"] == ["Spirits", "Gin1", "London Dry Gin"]
+
     def test_recipe_with_units(self, memory_db_with_schema):
         """Test recipe with ingredient units"""
         with patch.dict(os.environ, {"DB_PATH": memory_db_with_schema}):
