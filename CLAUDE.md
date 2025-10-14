@@ -43,10 +43,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Local testing**: Use `sam local` commands with template.yaml
 
 ### Testing
-- **Run tests**: `python -m pytest tests/` 
+- **Run tests**: `python -m pytest tests/`
 - **Test database**: `python tests/test_db.py`
 - **FastAPI tests**: `pytest tests/test_fastapi.py`
 - **Download test database**: `./scripts/download-test-db.sh`
+
+### Issue Tracking (Beads)
+- **List ready work**: `bd ready` - Show issues with no blockers
+- **Create issue**: `bd create "title" --type TYPE --priority N` - Types: bug, feature, task, epic, chore
+- **List all issues**: `bd list`
+- **Show details**: `bd show ID`
+- **Update status**: `bd update ID --status STATUS` - Status: open, in_progress, blocked, closed
+- **Add dependency**: `bd dep add CHILD PARENT` - CHILD depends on PARENT (use underscores in status values)
+- **View dependency tree**: `bd dep tree ID`
+- **Find blocked work**: `bd blocked`
+- **View statistics**: `bd stats`
+- **Documentation**: See skills/tools/beads/SKILL.md for workflows and patterns
 
 ## Architecture Overview
 
