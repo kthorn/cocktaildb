@@ -134,12 +134,16 @@ def build_search_recipes_paginated_sql(
     sort_by: str = "name",
     sort_order: str = "asc",
     inventory_filter: bool = False,
+    rating_type: str = "average",
 ) -> str:
     """Build the paginated search SQL with optional ingredient filtering"""
-    base_sql = """
+    # Determine which rating field to use for filtering
+    rating_field = "r.avg_rating" if rating_type == "average" else "ur.rating"
+
+    base_sql = f"""
     WITH search_results AS (
         SELECT
-            r.id, r.name, r.instructions, r.description, r.image_url, 
+            r.id, r.name, r.instructions, r.description, r.image_url,
             r.source, r.source_url, r.avg_rating, r.rating_count,
             GROUP_CONCAT(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
             GROUP_CONCAT(CASE WHEN t.created_by = :cognito_user_id THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data,
@@ -157,12 +161,12 @@ def build_search_recipes_paginated_sql(
         LEFT JOIN
             ingredients i ON ri.ingredient_id = i.id
         WHERE
-            (:search_query IS NULL OR 
-             LOWER(r.name) LIKE LOWER(:search_query_with_wildcards)) 
+            (:search_query IS NULL OR
+             LOWER(r.name) LIKE LOWER(:search_query_with_wildcards))
         AND
-            (:min_rating IS NULL OR COALESCE(r.avg_rating, 0) >= :min_rating)
+            (:min_rating IS NULL OR COALESCE({rating_field}, 0) >= :min_rating)
         AND
-            (:max_rating IS NULL OR COALESCE(r.avg_rating, 0) <= :max_rating)"""
+            (:max_rating IS NULL OR COALESCE({rating_field}, 0) <= :max_rating)"""
 
     # Add MUST ingredient filtering - recipe must contain ALL of the specified ingredients
     for condition in must_conditions:

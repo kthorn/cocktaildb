@@ -1,6 +1,7 @@
 import { api } from './api.js';
 import { displayRecipes, createProgressiveRecipeLoader, createRecipeCard } from './recipeCard.js';
 import { createInteractiveStars } from './common.js';
+import { isAuthenticated } from './auth.js';
 
 // Keep a global reference to ingredients for type-ahead
 let availableIngredients = [];
@@ -50,6 +51,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load ingredients and tags for type-ahead
     loadIngredients();
     loadTags();
+
+    // Setup auth-dependent UI elements
+    updateAuthDependentUI();
 
     // Setup add/remove ingredient rows
     addIngredientRowBtn.addEventListener('click', addIngredientRow);
@@ -333,7 +337,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Function to build the search query from form fields
     function buildSearchQuery() {
         const query = {};
-        
+
         // Add name search if provided
         const nameValue = nameSearch.value.trim();
         console.log('Name search value:', nameValue);
@@ -341,7 +345,7 @@ document.addEventListener('DOMContentLoaded', () => {
             query.name = nameValue;
             console.log('Added name to query:', query.name);
         }
-        
+
         // Add rating filter from star selection
         if (starRatingFilterComponent) {
             const selectedRating = starRatingFilterComponent.dataset.rating;
@@ -350,7 +354,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 query.rating = parseInt(selectedRating);
             }
         }
-        
+
+        // Add rating type filter (average vs user rating)
+        const useUserRatingCheckbox = document.getElementById('use-user-rating');
+        if (useUserRatingCheckbox && useUserRatingCheckbox.checked) {
+            query.rating_type = 'user';
+        } else {
+            query.rating_type = 'average';
+        }
+
         // Add exclude unrated filter
         const excludeUnratedCheckbox = document.getElementById('exclude-unrated');
         if (excludeUnratedCheckbox && excludeUnratedCheckbox.checked) {
@@ -913,19 +925,48 @@ document.addEventListener('DOMContentLoaded', () => {
     // Sort select functionality
     function setupSortSelect() {
         if (!sortSelect) return;
-        
+
         // Handle sort selection changes
         sortSelect.addEventListener('change', (e) => {
             const [sortBy, sortOrder] = e.target.value.split(':');
             currentSortBy = sortBy;
             currentSortOrder = sortOrder;
-            
+
             console.log('Sort changed:', { sortBy: currentSortBy, sortOrder: currentSortOrder });
-            
+
             // Trigger search with new sort parameters if we have search results
             if (currentSearchQuery !== null) {
                 performSearch();
             }
         });
+    }
+
+    // Update auth-dependent UI elements
+    function updateAuthDependentUI() {
+        const useUserRatingCheckbox = document.getElementById('use-user-rating');
+        const inventoryCheckbox = document.getElementById('inventory-search');
+        const authenticated = isAuthenticated();
+
+        // Enable/disable user rating checkbox based on authentication
+        if (useUserRatingCheckbox) {
+            useUserRatingCheckbox.disabled = !authenticated;
+            if (!authenticated) {
+                useUserRatingCheckbox.checked = false;
+                useUserRatingCheckbox.title = 'Log in to search by your ratings';
+            } else {
+                useUserRatingCheckbox.title = 'Filter by your personal ratings instead of average ratings';
+            }
+        }
+
+        // Enable/disable inventory checkbox based on authentication
+        if (inventoryCheckbox) {
+            inventoryCheckbox.disabled = !authenticated;
+            if (!authenticated) {
+                inventoryCheckbox.checked = false;
+                inventoryCheckbox.title = 'Log in to search your inventory';
+            } else {
+                inventoryCheckbox.title = 'Show only recipes you can make with your inventory';
+            }
+        }
     }
 }); 

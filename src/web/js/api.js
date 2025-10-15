@@ -179,7 +179,12 @@ class CocktailAPI {
         if (searchQuery.rating) {
             queryParams.append('min_rating', searchQuery.rating);
         }
-        
+
+        // Add rating type filter (average vs user)
+        if (searchQuery.rating_type) {
+            queryParams.append('rating_type', searchQuery.rating_type);
+        }
+
         if (searchQuery.tags && searchQuery.tags.length > 0) {
             // Send tags as a comma-separated string
             const tagsString = searchQuery.tags.join(',');

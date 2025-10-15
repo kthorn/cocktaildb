@@ -1896,6 +1896,7 @@ class Database:
         sort_by: str = "name",
         sort_order: str = "asc",
         user_id: Optional[str] = None,
+        rating_type: str = "average",
     ) -> List[Dict[str, Any]]:
         """Search recipes with pagination"""
         try:
@@ -2011,6 +2012,7 @@ class Database:
                 sort_by,
                 sort_order,
                 inventory_filter,
+                rating_type,
             )
             # Get paginated results
             rows = cast(

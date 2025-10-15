@@ -51,10 +51,13 @@ async def search_recipes(
     ),
     sort_order: str = Query("asc", description="Sort order: asc, desc"),
     min_rating: Optional[float] = Query(
-        None, description="Minimum average rating", ge=0, le=5
+        None, description="Minimum rating (type depends on rating_type)", ge=0, le=5
     ),
     max_rating: Optional[float] = Query(
-        None, description="Maximum average rating", ge=0, le=5
+        None, description="Maximum rating (type depends on rating_type)", ge=0, le=5
+    ),
+    rating_type: str = Query(
+        "average", description="Rating filter type: 'average' (avg_rating) or 'user' (user's personal rating)"
     ),
     tags: Optional[str] = Query(None, description="Comma-separated list of tags"),
     ingredients: Optional[str] = Query(
@@ -78,6 +81,7 @@ async def search_recipes(
         # Validate sort parameters
         valid_sort_fields = ["name", "created_at", "avg_rating"]
         valid_sort_orders = ["asc", "desc"]
+        valid_rating_types = ["average", "user"]
 
         if sort_by not in valid_sort_fields:
             raise ValidationException(
@@ -87,6 +91,17 @@ async def search_recipes(
         if sort_order not in valid_sort_orders:
             raise ValidationException(
                 f"Invalid sort_order. Must be one of: {valid_sort_orders}"
+            )
+
+        if rating_type not in valid_rating_types:
+            raise ValidationException(
+                f"Invalid rating_type. Must be one of: {valid_rating_types}"
+            )
+
+        # Validate that user rating filter requires authentication
+        if rating_type == "user" and user is None:
+            raise ValidationException(
+                "Filtering by user ratings requires authentication. Please log in to use this feature."
             )
 
         # Calculate offset
@@ -133,6 +148,7 @@ async def search_recipes(
             sort_by=sort_by,
             sort_order=sort_order,
             user_id=user_id,
+            rating_type=rating_type,
         )
 
         logger.info(f"Database returned {len(recipes_data)} recipes")
@@ -170,10 +186,13 @@ async def search_recipes_authenticated(
     ),
     sort_order: str = Query("asc", description="Sort order: asc, desc"),
     min_rating: Optional[float] = Query(
-        None, description="Minimum average rating", ge=0, le=5
+        None, description="Minimum rating (type depends on rating_type)", ge=0, le=5
     ),
     max_rating: Optional[float] = Query(
-        None, description="Maximum average rating", ge=0, le=5
+        None, description="Maximum rating (type depends on rating_type)", ge=0, le=5
+    ),
+    rating_type: str = Query(
+        "average", description="Rating filter type: 'average' (avg_rating) or 'user' (user's personal rating)"
     ),
     tags: Optional[str] = Query(None, description="Comma-separated list of tags"),
     ingredients: Optional[str] = Query(
@@ -197,6 +216,7 @@ async def search_recipes_authenticated(
         sort_order=sort_order,
         min_rating=min_rating,
         max_rating=max_rating,
+        rating_type=rating_type,
         tags=tags,
         ingredients=ingredients,
         inventory=inventory,
