@@ -60,12 +60,12 @@
     --focus-outline-offset: 2px;
 
     /* Font sizes */
-    --text-xs: 0.8rem;
-    --text-sm: 0.9rem;
-    --text-md: 1rem;
-    --text-lg: 1.2rem;
-    --text-xl: 1.4rem;
-    --text-xxl: 1.6rem;
+    --text-xs: 0.875rem;  /* 14px - for badges/labels only */
+    --text-sm: 1rem;      /* 16px - updated to meet WCAG minimum */
+    --text-md: 1rem;      /* 16px */
+    --text-lg: 1.125rem;  /* 18px */
+    --text-xl: 1.25rem;   /* 20px */
+    --text-xxl: 1.5rem;   /* 24px */
 
     /* Border radius */
     --radius-sm: 4px;
@@ -99,6 +99,7 @@ body {
 .modal-content h3 {
     margin-bottom: var(--space-sm);
     color: var(--primary-color);
+    line-height: var(--line-height-normal);
 }
 
 .results-section h3 {
@@ -110,22 +111,26 @@ body {
 .modal-content h3 {
     margin-top: 0;
     margin-bottom: var(--space-md);
-    font-size: 1.1rem;
+    font-size: var(--text-lg);
     font-family: Georgia, 'Times New Roman', Times, serif;
+    line-height: var(--line-height-normal);
 }
 
 .recipes-list h3 {
     margin-bottom: 1.5rem;
     font-size: var(--text-xxl);
     color: var(--primary-color);
+    line-height: var(--line-height-normal);
 }
 
 .ingredients-section h2 {
-    font-size: 1.4rem;
+    font-size: var(--text-xl);
+    line-height: var(--line-height-tight);
 }
 
 .ingredients-section h3 {
-    font-size: 1.1rem;
+    font-size: var(--text-lg);
+    line-height: var(--line-height-normal);
 }
 
 /* ==========================================================================
@@ -141,6 +146,7 @@ header {
 
 header h1 {
     margin-bottom: var(--space-md);
+    line-height: var(--line-height-tight);
 }
 
 /* Navigation */
@@ -166,6 +172,7 @@ nav ul li a {
     color: white;
     text-decoration: none;
     padding: var(--space-sm);
+    line-height: var(--line-height-normal);
 }
 
 nav ul li a:hover {
@@ -327,11 +334,12 @@ section, .card-container {
 
 .recipe-card .ingredients h5,
 .recipe-card .instructions h5 {
-    font-size: 1.1rem;
+    font-size: var(--text-lg);
     color: var(--accent-color);
     margin-bottom: var(--space-sm);
     font-weight: 600;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: var(--line-height-normal);
 }
 
 .recipe-card .ingredients ul {
@@ -344,27 +352,28 @@ section, .card-container {
     padding: var(--space-xs) 0;
     border-bottom: none;
     display: list-item;
-    line-height: 1.4;
+    line-height: var(--line-height-normal);
 }
 
 .recipe-card .instructions p {
     font-style: normal;
     white-space: pre-line;
-    line-height: 1.5;
+    line-height: var(--line-height-normal);
     color: var(--text-dark);
 }
 
 .recipe-card .recipe-source h5 {
-    font-size: 1.1rem;
+    font-size: var(--text-lg);
     color: var(--accent-color);
     margin-bottom: var(--space-sm);
     font-weight: 600;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: var(--line-height-normal);
 }
 
 .recipe-card .recipe-source p {
     font-style: normal;
-    line-height: 1.5;
+    line-height: var(--line-height-normal);
     color: var(--text-dark);
     word-wrap: break-word;
     overflow-wrap: break-word;
@@ -387,14 +396,16 @@ section, .card-container {
 /* Ingredient card specific */
 .ingredient-name {
     font-weight: bold;
-    font-size: 1.1rem;
+    font-size: var(--text-lg);
     margin-right: var(--space-sm);
     color: var(--primary-color);
+    line-height: var(--line-height-normal);
 }
 
 .ingredient-description {
     font-size: var(--text-sm);
     margin-top: var(--space-xs);
+    line-height: var(--line-height-normal);
 }
 
 /* Analytics cards */
@@ -417,7 +428,8 @@ section, .card-container {
 
 .card-description {
     color: #666;
-    font-size: 0.95rem;
+    font-size: var(--text-sm);
+    line-height: var(--line-height-normal);
 }
 
 /* Buttons
@@ -578,9 +590,10 @@ button:disabled, .btn:disabled {
     border: none;
     border-bottom: 3px solid transparent;
     cursor: pointer;
-    font-size: 1rem;
+    font-size: var(--text-sm);
     color: #666;
     transition: all 0.2s;
+    line-height: var(--line-height-normal);
 }
 
 .tab-button:hover {
@@ -602,8 +615,9 @@ button:disabled, .btn:disabled {
     padding: var(--space-xs) var(--space-md);
     border-radius: 4px;
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     transition: all 0.2s;
+    line-height: var(--line-height-normal);
 }
 
 .breadcrumb-item:hover {
@@ -1697,10 +1711,12 @@ textarea {
 .about-content ul {
     padding-left: 1.5rem;
     margin: var(--space-sm) 0;
+    line-height: var(--line-height-normal);
 }
 
 .about-content li {
     margin-bottom: var(--space-xs);
+    line-height: var(--line-height-normal);
 }
 
 /* User ingredients page */
@@ -1715,10 +1731,12 @@ textarea {
 .page-header h2 {
     color: var(--text-dark);
     margin-bottom: var(--space-sm);
+    line-height: var(--line-height-tight);
 }
 
 .page-header p {
     color: var(--text-medium);
+    line-height: var(--line-height-normal);
 }
 
 .section-header {
@@ -1735,6 +1753,7 @@ textarea {
 .section-header h3 {
     color: var(--text-dark);
     margin: 0;
+    line-height: var(--line-height-normal);
 }
 
 .section-header .controls {
@@ -1809,6 +1828,7 @@ textarea {
     cursor: pointer;
     flex: 1;
     font-weight: normal;
+    line-height: var(--line-height-normal);
 }
 
 .empty-state {
@@ -1816,6 +1836,7 @@ textarea {
     color: var(--text-medium);
     padding: var(--space-xl);
     font-style: italic;
+    line-height: var(--line-height-normal);
 }
 
 .auth-required-message {
@@ -1824,6 +1845,7 @@ textarea {
     background-color: var(--bg-light);
     border-radius: var(--radius-md);
     color: var(--text-medium);
+    line-height: var(--line-height-normal);
 }
 
 .auth-required-message .btn-link {
@@ -1936,17 +1958,20 @@ textarea {
 
 .analytics-header h2 {
     margin-bottom: var(--space-sm);
+    line-height: var(--line-height-tight);
 }
 
 .analytics-description {
     color: #666;
     margin-bottom: var(--space-sm);
+    line-height: var(--line-height-normal);
 }
 
 .analytics-meta {
     color: #888;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     margin-top: var(--space-sm);
+    line-height: var(--line-height-normal);
 }
 
 .analytics-tabs {
@@ -2039,7 +2064,8 @@ textarea {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
+    line-height: var(--line-height-normal);
 }
 
 .legend-color {
@@ -2050,7 +2076,8 @@ textarea {
 
 .chart-stats {
     color: #666;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
+    line-height: var(--line-height-normal);
 }
 
 .stats-summary {
@@ -2066,7 +2093,8 @@ textarea {
 
 .stat-label {
     color: #666;
-    font-size: 0.85rem;
+    font-size: var(--text-xs);  /* Exception: supplementary label */
+    line-height: var(--line-height-normal);
 }
 
 .stat-value {
@@ -2090,7 +2118,8 @@ textarea {
 
 .info-text {
     color: #666;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
+    line-height: var(--line-height-normal);
 }
 
 #cocktail-space-chart {
@@ -2120,15 +2149,18 @@ textarea {
 .upload-results h4 {
     color: var(--text-dark);
     margin-bottom: var(--space-sm);
+    line-height: var(--line-height-normal);
 }
 
 .upload-results ul {
     padding-left: var(--space-lg);
     margin-bottom: var(--space-sm);
+    line-height: var(--line-height-normal);
 }
 
 .upload-results li {
     margin-bottom: var(--space-xs);
+    line-height: var(--line-height-normal);
 }
 
 .success-results {
@@ -2271,6 +2303,7 @@ textarea {
     padding: var(--space-lg);
     color: var(--text-light);
     font-style: italic;
+    line-height: var(--line-height-normal);
 }
 
 /* Progress bar */
