@@ -213,17 +213,31 @@ label {
 /* Input styles consolidated */
 input[type="text"],
 input[type="number"],
+input[type="email"],
+input[type="password"],
 select,
 textarea {
     width: 100%;
-    padding: 0.35rem;
+    padding: var(--form-input-padding);
+    min-height: var(--form-input-height-min);
     border: 1px solid var(--border-light);
     border-radius: var(--radius-sm);
-    font-size: var(--text-sm);
+    font-size: var(--form-input-font-size);
+    line-height: var(--line-height-normal);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    outline: var(--focus-outline-width) solid var(--focus-outline-color);
+    outline-offset: var(--focus-outline-offset);
+    border-color: var(--accent-color);
 }
 
 textarea {
     resize: vertical;
+    min-height: calc(var(--form-input-height-min) * 2);
 }
 
 /* Button base - consolidated with WCAG touch targets */
