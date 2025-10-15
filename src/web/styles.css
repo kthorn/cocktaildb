@@ -8,10 +8,10 @@
     --secondary-color: #7f8c8d;
     --accent-color: #A61816;
     --accent-hover: #8A1412;
-    --success-color: #4CAF50;
-    --success-hover: #388E3C;
-    --danger-color: #F44336;
-    --danger-hover: #d32f2f;
+    --success-color: #39833c; /* WCAG AA compliant: 4.68:1 with white */
+    --success-hover: #2d6930; /* Darker hover state */
+    --danger-color: #cf382d; /* WCAG AA compliant: 4.93:1 with white */
+    --danger-hover: #aa2e25; /* Darker hover state */
     --info-color: #2196F3;
     --warn-color: #ffc107;
 
@@ -1578,7 +1578,7 @@ input[type="radio"] {
 }
 
 .close-tag-modal-btn {
-    color: #888;
+    color: #737373; /* WCAG AA compliant: 4.74:1 with white (was #888) */
     position: absolute;
     top: 8px;
     right: 12px;
