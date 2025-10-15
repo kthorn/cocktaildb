@@ -2372,7 +2372,7 @@ textarea {
 
     /* Search results constraints */
     .results-section {
-        padding: 0 var(--space-md);
+        padding: 0 var(--mobile-padding);  /* 16px minimum for viewport */
         margin: 0 auto;
         max-width: 100vw;
         box-sizing: border-box;
@@ -2464,7 +2464,7 @@ textarea {
 
     /* Analytics page */
     .analytics-container {
-        padding: var(--space-md);
+        padding: var(--mobile-padding);  /* 16px minimum for viewport */
     }
 
     .analytics-tabs {
