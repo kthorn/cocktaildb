@@ -13,6 +13,7 @@ export function loadCommonHead() {
         <style>
             body { visibility: hidden; }
         </style>
+        <link rel="stylesheet" href="normalize.css">
         <link rel="stylesheet" href="styles.css"
             onload="document.body.style.visibility=''"
             onerror="document.body.style.visibility=''">
@@ -24,7 +25,7 @@ export function loadCommonHead() {
         <meta name="apple-mobile-web-app-title" content="CocktailDB" />
         <link rel="manifest" href="site.webmanifest" />
     `;
-    
+
     // Insert the common head elements
     document.head.insertAdjacentHTML('beforeend', headContent);
 }
