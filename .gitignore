@@ -178,3 +178,6 @@ cython_debug/
 *.md
 src/web/js/config.js
 *.db
+
+# Git worktrees
+.worktrees/
