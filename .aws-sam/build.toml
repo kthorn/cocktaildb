@@ -28,11 +28,11 @@ manifest_hash = ""
 packagetype = "Zip"
 functions = ["CocktailLambda"]
 
-[function_build_definitions.9fcc910c-815f-4f1c-9cb6-1242c31a5562]
+[function_build_definitions.4cb951ef-ed73-46bd-a52d-5c61d22d2d63]
 packagetype = "Image"
 functions = ["AnalyticsRefreshFunction"]
 
-[function_build_definitions.9fcc910c-815f-4f1c-9cb6-1242c31a5562.metadata]
+[function_build_definitions.4cb951ef-ed73-46bd-a52d-5c61d22d2d63.metadata]
 DockerTag = "latest"
 DockerContext = "/home/kurtt/cocktaildb/api"
 Dockerfile = "analytics/Dockerfile"
