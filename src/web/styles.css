@@ -192,7 +192,7 @@ nav ul li a:focus {
 main {
     max-width: 1200px;
     margin: var(--space-xl) auto;
-    padding: 0 var(--space-md);
+    padding: 0 var(--space-xl);
 }
 
 /* Footer */
@@ -1633,7 +1633,7 @@ input[type="radio"]:focus {
     position: relative;
     background-color: #fff;
     margin: 10% auto;
-    padding: var(--mobile-padding);
+    padding: var(--space-xl);
     border: 1px solid #ccc;
     width: 90%;
     max-width: 600px;
@@ -2492,6 +2492,43 @@ input[type="radio"]:focus {
    ========================================================================== */
 
 @media (max-width: 768px) {
+    /* Main layout - ensure 16-20px viewport padding */
+    main {
+        padding: 0 var(--mobile-padding);
+    }
+
+    header {
+        padding: var(--space-md) var(--mobile-padding);
+    }
+
+    footer {
+        padding: var(--space-md) var(--mobile-padding);
+    }
+
+    /* Sections - consistent padding on mobile */
+    section, .card-container {
+        padding: var(--mobile-padding);
+    }
+
+    /* Cards - consistent padding on mobile */
+    .ingredient-card,
+    .recipe-card {
+        padding: var(--mobile-padding);
+    }
+
+    /* Modals - use mobile padding */
+    .modal-content {
+        padding: var(--mobile-padding);
+    }
+
+    #recipe-modal-body {
+        padding: var(--mobile-padding);
+    }
+
+    .modal-footer {
+        padding: var(--space-md) var(--mobile-padding);
+    }
+
     /* Grid layouts */
     #recipes-container, #search-results-container {
         grid-template-columns: 1fr;
@@ -2542,6 +2579,15 @@ input[type="radio"]:focus {
         flex-direction: column;
     }
 
+    nav ul li {
+        margin-right: 0;
+        margin-bottom: var(--space-xs);
+    }
+
+    nav ul li:last-child {
+        margin-bottom: 0;
+    }
+
     /* Carousel */
     .carousel-container {
         flex-direction: column;
@@ -2587,6 +2633,27 @@ input[type="radio"]:focus {
 
     .btn-circle {
         align-self: flex-end;
+    }
+
+    /* Page-specific adjustments */
+    .page-header {
+        padding: var(--space-md) var(--mobile-padding);
+    }
+
+    .section-header {
+        padding: var(--space-md) var(--mobile-padding);
+    }
+
+    .ingredients-list {
+        padding: var(--mobile-padding);
+    }
+
+    .recipe-carousel {
+        padding: var(--mobile-padding);
+    }
+
+    .upload-results {
+        padding: var(--mobile-padding);
     }
 
     /* Analytics page */
