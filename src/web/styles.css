@@ -2507,7 +2507,21 @@ input[type="radio"]:focus {
 
     /* Sections - consistent padding on mobile */
     section, .card-container {
-        padding: var(--mobile-padding);
+        padding: var(--space-md); /* 12px - compact on mobile */
+        margin-bottom: var(--space-sm); /* 8px - tighter */
+    }
+
+    /* Section title - compact on mobile */
+    .section-title {
+        margin-bottom: var(--space-sm); /* 8px - tighter */
+    }
+
+    .section-title h2 {
+        margin-bottom: var(--space-xs); /* 4px - very tight */
+    }
+
+    .section-title p {
+        margin-bottom: 0;
     }
 
     /* Cards - compact padding on mobile */
@@ -2563,12 +2577,40 @@ input[type="radio"]:focus {
     }
 
     .form-group {
-        margin-bottom: 0.375rem; /* 6px - maintain compact spacing */
+        margin-bottom: var(--space-xs); /* 4px - very compact on mobile */
     }
 
     .form-row {
-        margin-bottom: 0.375rem; /* 6px - maintain compact spacing */
-        gap: var(--space-sm); /* 8px - tighter on mobile */
+        flex-direction: column; /* Stack vertically on mobile */
+        margin-bottom: var(--space-xs); /* 4px - very compact */
+        gap: var(--space-xs); /* 4px - minimal gap */
+    }
+
+    /* Reduce label spacing on mobile */
+    label {
+        margin-bottom: var(--space-xs); /* 4px - tighter labels */
+    }
+
+    /* Rating search group - compact on mobile */
+    .rating-search-group {
+        gap: var(--space-xs); /* 4px - tighter */
+    }
+
+    /* Compact star rating filter on mobile */
+    .star-rating-filter {
+        font-size: 1.2rem; /* Smaller stars on mobile */
+        gap: 1px;
+    }
+
+    /* Compact tag input on mobile */
+    .tag-input-wrapper {
+        min-height: 44px; /* Match touch target minimum */
+        padding: var(--space-xs); /* Smaller padding */
+    }
+
+    /* Compact ingredient search on mobile */
+    .ingredient-search-container .add-row-wrapper {
+        margin-top: var(--space-xs); /* 4px - tighter */
     }
 
     .form-actions {
