@@ -1463,7 +1463,7 @@ input[type="radio"]:focus {
 
 .star {
     color: #ddd;
-    margin-right: var(--space-xs);
+    margin-right: 1px; /* Minimal spacing for compact star display */
 }
 
 .star.filled {
@@ -2633,7 +2633,7 @@ input[type="radio"]:focus {
 
     nav ul li {
         margin-right: 0;
-        margin-bottom: var(--space-xs);
+        margin-bottom: 2px; /* Minimal spacing for compact mobile menu */
     }
 
     nav ul li:last-child {
