@@ -29,12 +29,12 @@
     --border-light: #ddd;
     --border-lighter: #eee;
 
-    /* Spacing */
-    --space-xs: 0.25rem;
-    --space-sm: 0.5rem;
-    --space-md: 1rem;
-    --space-lg: 1.5rem;
-    --space-xl: 2rem;
+    /* Spacing - compact for mobile */
+    --space-xs: 0.25rem;  /* 4px */
+    --space-sm: 0.5rem;   /* 8px */
+    --space-md: 0.75rem;  /* 12px - tighter */
+    --space-lg: 1rem;     /* 16px - tighter */
+    --space-xl: 1.5rem;   /* 24px - tighter */
 
     /* Touch targets (WCAG 2.5.5) */
     --touch-target-min: 44px;
@@ -49,23 +49,23 @@
     --mobile-padding: 16px;
     --mobile-padding-comfortable: 20px;
 
-    /* Line heights for typography */
+    /* Line heights for typography - compact for mobile */
     --line-height-tight: 1.2;
-    --line-height-normal: 1.5;
-    --line-height-relaxed: 1.8;
+    --line-height-normal: 1.4;   /* Tighter than WCAG 1.5, more compact */
+    --line-height-relaxed: 1.6;
 
     /* Focus indicators */
     --focus-outline-width: 3px;
     --focus-outline-color: var(--accent-color);
     --focus-outline-offset: 2px;
 
-    /* Font sizes */
-    --text-xs: 0.875rem;  /* 14px - for badges/labels only */
-    --text-sm: 1rem;      /* 16px - updated to meet WCAG minimum */
-    --text-md: 1rem;      /* 16px */
-    --text-lg: 1.125rem;  /* 18px */
-    --text-xl: 1.25rem;   /* 20px */
-    --text-xxl: 1.5rem;   /* 24px */
+    /* Font sizes - mobile-optimized (compact but readable) */
+    --text-xs: 0.8125rem; /* 13px - small labels */
+    --text-sm: 0.875rem;  /* 14px - body text */
+    --text-md: 0.9375rem; /* 15px - default body */
+    --text-lg: 1rem;      /* 16px - headings */
+    --text-xl: 1.125rem;  /* 18px - larger headings */
+    --text-xxl: 1.25rem;  /* 20px - page titles */
 
     /* Border radius */
     --radius-sm: 4px;
@@ -86,7 +86,8 @@
 /* Base typography */
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    line-height: 1.6;
+    font-size: var(--text-md);  /* 15px - compact but readable */
+    line-height: var(--line-height-normal);  /* 1.4 - compact */
     color: var(--text-dark);
     background-color: var(--bg-light);
 }
