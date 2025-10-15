@@ -32,7 +32,30 @@
     --space-md: 1rem;
     --space-lg: 1.5rem;
     --space-xl: 2rem;
-    
+
+    /* Touch targets (WCAG 2.5.5) */
+    --touch-target-min: 44px;
+    --touch-target-comfortable: 48px;
+
+    /* Form elements */
+    --form-input-height-min: 44px;
+    --form-input-padding: 0.75rem 1rem;
+    --form-input-font-size: 16px;  /* Prevents iOS zoom on focus */
+
+    /* Mobile viewport */
+    --mobile-padding: 16px;
+    --mobile-padding-comfortable: 20px;
+
+    /* Line heights for typography */
+    --line-height-tight: 1.2;
+    --line-height-normal: 1.5;
+    --line-height-relaxed: 1.8;
+
+    /* Focus indicators */
+    --focus-outline-width: 3px;
+    --focus-outline-color: var(--accent-color);
+    --focus-outline-offset: 2px;
+
     /* Font sizes */
     --text-xs: 0.8rem;
     --text-sm: 0.9rem;
