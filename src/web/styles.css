@@ -522,30 +522,6 @@ header {
     border-left: 3px solid var(--accent-color);
 }
 
-/* Auth indicators - only in desktop nav and mobile menu (not mobile bottom nav) */
-.nav-desktop .nav-item.nav-auth-required::after,
-.nav-mobile-menu .nav-item.nav-auth-required::after {
-    content: '🔒';
-    font-size: 0.7rem;
-    margin-left: var(--space-xs);
-    opacity: 0.6;
-}
-
-/* Explicitly hide auth indicators in mobile bottom nav */
-.nav-mobile-bottom .nav-item.nav-auth-required::after,
-.nav-mobile-bottom .nav-item.nav-admin-only::after {
-    content: none;
-    display: none;
-}
-
-.nav-desktop .nav-item.nav-admin-only::after,
-.nav-mobile-menu .nav-item.nav-admin-only::after {
-    content: '⚙️';
-    font-size: 0.7rem;
-    margin-left: var(--space-xs);
-    opacity: 0.6;
-}
-
 /* Disabled navigation items */
 .nav-item.nav-disabled a {
     opacity: 0.5;
