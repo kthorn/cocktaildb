@@ -27,6 +27,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Build**: `sam build --template-file template.yaml`
 - **Local testing**: Use `sam local` commands with template.yaml
 
+### Local Development
+- **Setup local environment**: `./scripts/local-config.sh` - Generate local dev config pointing to dev API
+- **Start local server**: `./scripts/serve.sh` - Serve frontend on http://localhost:8000
+- **Start with live-reload**: `npx live-server src/web --port=8000` - Auto-refresh on file changes
+- **Stop server**: Press `Ctrl+C`
+- **Restore prod config**: `git checkout src/web/js/config.js` - Before committing
+- **Documentation**: See `docs/local-development.md` for detailed setup and troubleshooting
+
 ### Testing
 - **Run tests**: `python -m pytest tests/`
 - **Test database**: `python tests/test_db.py`
@@ -179,4 +187,5 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Check Lambda logs**: Use AWS CloudWatch logs to debug API errors
 - **Error format**: Lambda errors typically show in format `[ERROR] timestamp request-id Error message`
 - **Common issues**: Check method signatures, parameter counts, and data validation
-- **Local testing**: Run FastAPI locally with `cd api && python main.py` for easier debugging
+- **Local frontend testing**: Use `./scripts/local-config.sh && ./scripts/serve.sh` to test UI changes without deploying
+- **Local API testing**: Run FastAPI locally with `cd api && python main.py` for easier debugging

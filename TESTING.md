@@ -373,9 +373,48 @@ python -m pytest tests/test_fastapi.py tests/test_api_unit.py -v
 python -m pytest tests/test_api_integration.py -v
 ```
 
+## Frontend/UI Testing
+
+### Local Development Testing
+
+For testing frontend changes without deploying:
+
+```bash
+# Generate local config (points to dev API)
+./scripts/local-config.sh
+
+# Start local server
+./scripts/serve.sh
+
+# Open browser to http://localhost:8000
+```
+
+**What to test:**
+- UI/UX changes
+- Navigation and routing
+- Form submissions
+- Authentication flows
+- Responsive design (mobile, tablet, desktop)
+- Accessibility (keyboard navigation, screen readers)
+
+**Testing workflow:**
+1. Make changes to HTML/CSS/JS in `src/web/`
+2. Refresh browser to see changes
+3. Test across different user roles (guest, user, editor, admin)
+4. Test across different viewports/devices
+5. Check browser console for JavaScript errors
+
+**Enhanced testing with live-reload:**
+```bash
+npx live-server src/web --port=8000
+```
+
+See [docs/local-development.md](docs/local-development.md) for detailed frontend testing setup and troubleshooting.
+
 ## Additional Resources
 
 - [pytest Documentation](https://docs.pytest.org/)
 - [FastAPI Testing Guide](https://fastapi.tiangolo.com/tutorial/testing/)
 - [pytest-mock Documentation](https://pytest-mock.readthedocs.io/)
 - [Project CLAUDE.md](./CLAUDE.md) - Development commands and architecture
+- [Local Development Guide](./docs/local-development.md) - Frontend testing setup
