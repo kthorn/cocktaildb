@@ -93,12 +93,16 @@ body {
 }
 
 /* Headings */
+h1, h2, h3, h4, h5, h6 {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
 .section-title h2,
 .section-title h3,
 .stat-card h3,
 .results-section h3,
 .modal-content h3 {
-    margin-bottom: var(--space-sm);
     color: var(--primary-color);
     line-height: var(--line-height-normal);
 }
@@ -599,6 +603,10 @@ section, .card-container {
     padding: var(--space-md);
     margin-bottom: var(--space-md);
     box-shadow: var(--shadow-sm);
+}
+
+.section-title {
+    padding: var(--space-md) var(--space-md);
 }
 
 /* Generic cards */
@@ -1970,6 +1978,18 @@ input[type="radio"]:focus {
 }
 
 /* Star rating filter for search */
+.rating-label-stars-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-bottom: var(--space-xs);
+}
+
+.rating-label-stars-row label {
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
 .rating-search-group {
     display: flex;
     flex-direction: column;
@@ -3019,10 +3039,6 @@ input[type="radio"]:focus {
     /* Section title - compact on mobile */
     .section-title {
         margin-bottom: var(--space-sm); /* 8px - tighter */
-    }
-
-    .section-title h2 {
-        margin-bottom: var(--space-xs); /* 4px - very tight */
     }
 
     .section-title p {
