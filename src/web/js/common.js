@@ -45,11 +45,7 @@ export function loadHeader() {
   const header = document.createElement('header');
   header.innerHTML = `
     <div class="header-container">
-      <h1 class="site-title">Mixology Tools</h1>
-      <nav id="header-nav-container">
-        <!-- Desktop navigation will be inserted here -->
-        <!-- Hamburger button for mobile will be inserted here -->
-      </nav>
+      <h1 class="site-title"><span class="title-line">Mixology</span><span class="title-line">Tools</span></h1>
       <div class="auth-controls">
         <span id="user-info" class="hidden">
           <span id="username-display"></span>
@@ -58,6 +54,10 @@ export function loadHeader() {
         <button id="login-btn" class="btn-auth">Login</button>
         <button id="signup-btn" class="btn-auth btn-signup">Sign Up</button>
       </div>
+      <nav id="header-nav-container">
+        <!-- Desktop navigation will be inserted here -->
+        <!-- Hamburger button for mobile will be inserted here -->
+      </nav>
     </div>
   `;
 
