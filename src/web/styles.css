@@ -150,42 +150,11 @@ header h1 {
     line-height: var(--line-height-tight);
 }
 
-/* Navigation */
-nav {
+/* Header nav container */
+#header-nav-container {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-top: var(--space-md);
-}
-
-nav ul {
-    display: flex;
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-nav ul li {
-    margin-right: var(--space-md);
-}
-
-nav ul li a {
-    color: white;
-    text-decoration: none;
-    padding: var(--space-sm) var(--space-md);
-    min-height: var(--touch-target-min);
-    display: inline-flex;
-    align-items: center;
-    line-height: var(--line-height-normal);
-}
-
-nav ul li a:hover {
-    text-decoration: underline;
-}
-
-nav ul li a:focus {
-    outline: var(--focus-outline-width) solid var(--focus-outline-color);
-    outline-offset: var(--focus-outline-offset);
+    gap: var(--space-md);
 }
 
 /* ==========================================================================
@@ -3064,19 +3033,6 @@ input[type="radio"]:focus {
         max-width: 150px;
     }
 
-    /* Old navigation styles - only apply to header nav if not using new nav system */
-    header nav > ul {
-        flex-direction: column;
-    }
-
-    header nav > ul li {
-        margin-right: 0;
-        margin-bottom: 2px; /* Minimal spacing for compact mobile menu */
-    }
-
-    header nav > ul li:last-child {
-        margin-bottom: 0;
-    }
 
     /* Carousel */
     .carousel-container {
