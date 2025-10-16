@@ -1,5 +1,13 @@
 // Common components for the cocktail database
-import { initAuth } from './auth.js';
+import { initAuth, isAuthenticated, getUserInfo } from './auth.js';
+import { getMobileBottomNav } from './mobileBottomNav.js';
+import { getMobileHamburgerMenu } from './mobileHamburgerMenu.js';
+import { getDesktopNav } from './desktopNav.js';
+
+// Store navigation instances
+let mobileBottomNav = null;
+let mobileHamburgerMenu = null;
+let desktopNav = null;
 
 /**
  * Loads common head elements into the document
@@ -36,28 +44,22 @@ export function loadCommonHead() {
 export function loadHeader() {
   const header = document.createElement('header');
   header.innerHTML = `
-    <h1>Cocktail Database</h1>
-    <nav>
-      <ul>
-        <li><a href="index.html">Home</a></li>
-        <li><a href="ingredients.html">All Ingredients</a></li>
-        <li><a href="user-ingredients.html">My Ingredients</a></li>
-        <li><a href="recipes.html">Add Recipes</a></li>
-        <li><a href="search.html">Search Recipes</a></li>
-        <li><a href="analytics.html">Analytics</a></li>
-        <li><a href="about.html">About</a></li>
-        <li><a href="admin.html">Admin</a></li>
-      </ul>
-      <div class="auth-controls">
-        <span id="user-info" class="hidden">
-          <button id="logout-btn">Logout</button>
-        </span>
-        <button id="login-btn">Login</button>
-        <button id="signup-btn">Sign Up</button>
-      </div>
-    </nav>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h1>Cocktail Database</h1>
+      <nav id="header-nav-container">
+        <!-- Desktop navigation will be inserted here -->
+        <!-- Hamburger button for mobile will be inserted here -->
+        <div class="auth-controls">
+          <span id="user-info" class="hidden">
+            <button id="logout-btn">Logout</button>
+          </span>
+          <button id="login-btn">Login</button>
+          <button id="signup-btn">Sign Up</button>
+        </div>
+      </nav>
+    </div>
   `;
-  
+
   // Find the existing header and replace it
   const existingHeader = document.querySelector('header');
   if (existingHeader) {
@@ -65,6 +67,91 @@ export function loadHeader() {
   } else {
     // If no header exists, insert at the beginning of the body
     document.body.insertBefore(header, document.body.firstChild);
+  }
+}
+
+/**
+ * Get user groups from ID token
+ */
+function getUserGroups() {
+  const userInfo = getUserInfo();
+  if (!userInfo.idToken) return [];
+
+  try {
+    const parts = userInfo.idToken.split('.');
+    if (parts.length === 3) {
+      const payload = JSON.parse(atob(parts[1]));
+      return payload['cognito:groups'] || [];
+    }
+  } catch (e) {
+    console.error('Error parsing groups from token:', e);
+  }
+  return [];
+}
+
+/**
+ * Initialize all navigation components
+ */
+export function initNavigation() {
+  // Get current auth state
+  const authenticated = isAuthenticated();
+  const groups = getUserGroups();
+  const isAdmin = groups.includes('admin');
+
+  const authState = {
+    isAuthenticated: authenticated,
+    isAdmin: isAdmin
+  };
+
+  // Get header nav container for hamburger button
+  const headerNavContainer = document.querySelector('#header-nav-container');
+
+  // Initialize desktop navigation
+  desktopNav = getDesktopNav(authState);
+
+  // Insert desktop nav into header before auth controls
+  if (headerNavContainer && desktopNav.container) {
+    const authControls = headerNavContainer.querySelector('.auth-controls');
+    headerNavContainer.insertBefore(desktopNav.container, authControls);
+  }
+
+  // Initialize mobile bottom navigation
+  mobileBottomNav = getMobileBottomNav(authState);
+
+  // Initialize mobile hamburger menu
+  mobileHamburgerMenu = getMobileHamburgerMenu({
+    ...authState,
+    hamburgerButtonContainer: headerNavContainer
+  });
+}
+
+/**
+ * Update navigation when authentication state changes
+ */
+export function updateNavigationAuth() {
+  const authenticated = isAuthenticated();
+  const groups = getUserGroups();
+  const isAdmin = groups.includes('admin');
+
+  const authState = {
+    isAuthenticated: authenticated,
+    isAdmin: isAdmin
+  };
+
+  // Dispatch custom auth state change event
+  document.dispatchEvent(new CustomEvent('auth-state-changed', {
+    detail: authState
+  }));
+
+  // Update all navigation components
+  if (desktopNav) {
+    desktopNav.updateAuthState(authState);
+  }
+  if (mobileBottomNav) {
+    mobileBottomNav.updateAuthState(authState);
+  }
+  if (mobileHamburgerMenu) {
+    mobileHamburgerMenu.updateAuthState(authState);
   }
 }
 
@@ -94,15 +181,21 @@ export function loadFooter() {
 document.addEventListener('DOMContentLoaded', () => {
   // Load the common head elements first
   loadCommonHead();
-  
+
   // Then load the header
   loadHeader();
-  
+
   // Load the footer
   loadFooter();
-  
+
   // Initialize authentication
   initAuth();
+
+  // Initialize navigation (after auth is set up)
+  // Delay slightly to ensure auth state is available
+  setTimeout(() => {
+    initNavigation();
+  }, 100);
 });
 
 /**
