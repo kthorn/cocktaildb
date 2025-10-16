@@ -947,10 +947,14 @@ button:focus, .btn:focus {
     gap: var(--space-sm);
 }
 
-#user-info {
+#user-info:not(.hidden) {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
+}
+
+#user-info.hidden {
+    display: none !important;
 }
 
 #username-display {
