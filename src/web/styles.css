@@ -1197,7 +1197,8 @@ button:focus, .btn:focus {
 
 .form-group-inline input,
 .form-group-inline select,
-.form-group-inline .tag-input-wrapper {
+.form-group-inline .tag-input-wrapper,
+.form-group-inline .rating-search-group {
     flex: 1;
 }
 
