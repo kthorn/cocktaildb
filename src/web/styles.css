@@ -531,6 +531,13 @@ header {
     opacity: 0.6;
 }
 
+/* Explicitly hide auth indicators in mobile bottom nav */
+.nav-mobile-bottom .nav-item.nav-auth-required::after,
+.nav-mobile-bottom .nav-item.nav-admin-only::after {
+    content: none;
+    display: none;
+}
+
 .nav-desktop .nav-item.nav-admin-only::after,
 .nav-mobile-menu .nav-item.nav-admin-only::after {
     content: '⚙️';
