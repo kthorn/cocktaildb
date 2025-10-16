@@ -1183,6 +1183,24 @@ button:focus, .btn:focus {
     margin-bottom: 0.375rem; /* 6px - compact */
 }
 
+.form-group-inline {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.form-group-inline label {
+    margin-bottom: 0;
+    white-space: nowrap;
+    min-width: fit-content;
+}
+
+.form-group-inline input,
+.form-group-inline select,
+.form-group-inline .tag-input-wrapper {
+    flex: 1;
+}
+
 .form-row {
     display: flex;
     gap: var(--space-md);

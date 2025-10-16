@@ -12,15 +12,14 @@
         <main>
             <section class="section-title">
                 <h2>Search Recipes</h2>
-                <p>Find cocktails by name, rating, ingredients, and more.</p>
             </section>
 
             <section class="form-container">
                 <form id="recipe-search-form" class="form-stack">
                     <div class="form-content-wrapper">
                         <div class="main-search-fields">
-                            <div class="form-group">
-                                <label for="name-search">Recipe Name</label>
+                            <div class="form-group form-group-inline">
+                                <label for="name-search">Name</label>
                                 <input type="text" id="name-search"
                                     name="name-search"
                                     placeholder="Search by recipe name">
@@ -46,7 +45,7 @@
                                     </div>
                                 </div>
 
-                                <div class="form-group tag-search-container">
+                                <div class="form-group form-group-inline tag-search-container">
                                     <label for="tags-search">Tags</label>
                                     <div class="tag-input-wrapper">
                                         <div id="selected-tags-chips" class="selected-tags-chips"></div>
@@ -66,7 +65,7 @@
                                 </label>
                             </div>
 
-                            <div class="form-group">
+                            <div class="form-group form-group-inline">
                                 <label for="sort-select">Sort by</label>
                                 <select id="sort-select" name="sort-select" class="form-select">
                                     <option value="name:asc">Name (A-Z)</option>
