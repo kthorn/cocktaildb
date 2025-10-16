@@ -118,7 +118,7 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
             </div>
             <div id="rating-container-${recipe.id}" class="recipe-rating"></div>
         </div>
-        <p>${recipe.description || 'No description'}</p>
+        ${recipe.description ? `<p class="recipe-description">${recipe.description}</p>` : ''}
         <div class="ingredients">
             <h5>Ingredients</h5>
             <ul>

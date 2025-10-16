@@ -620,11 +620,11 @@ section, .card-container {
 /* Card headers */
 .ingredient-card h4,
 .recipe-card h4 {
-    margin-bottom: var(--space-sm); /* 8px - compact */
-    font-size: var(--text-xl);
+    margin-bottom: var(--space-xs); /* 4px - more compact */
+    font-size: var(--text-lg); /* 16px - smaller */
     font-weight: 600;
     border-bottom: 1px solid #f0f0f0;
-    padding-bottom: var(--space-sm);
+    padding-bottom: var(--space-xs); /* 4px - more compact */
     color: var(--primary-color);
 }
 
@@ -633,6 +633,7 @@ section, .card-container {
     font-family: Georgia, 'Times New Roman', Times, serif;
     text-align: center;
     position: relative;
+    line-height: var(--line-height-tight);
 }
 
 .recipe-card h4.recipe-title::after {
@@ -681,7 +682,7 @@ section, .card-container {
     display: flex;
     flex-direction: column;
     gap: var(--space-xs);
-    margin-bottom: var(--space-sm); /* 8px - compact */
+    margin-bottom: var(--space-xs); /* 4px - more compact */
 }
 
 .recipe-card .recipe-rating {
@@ -696,57 +697,65 @@ section, .card-container {
     width: 100%;
 }
 
+/* Recipe description */
+.recipe-card .recipe-description {
+    margin-bottom: var(--space-sm);
+    font-size: var(--text-sm);
+}
+
 /* Recipe ingredients, instructions, source */
 .recipe-card .ingredients,
 .recipe-card .instructions,
 .recipe-card .recipe-source {
-    margin: var(--space-sm) 0; /* 8px - compact */
+    margin: var(--space-xs) 0; /* 4px - more compact */
     font-family: Georgia, 'Times New Roman', Times, serif;
 }
 
 .recipe-card .ingredients h5,
 .recipe-card .instructions h5 {
-    font-size: var(--text-lg);
+    font-size: var(--text-md); /* Smaller heading - 15px */
     color: var(--accent-color);
-    margin-bottom: var(--space-sm);
+    margin-bottom: var(--space-xs); /* 4px - more compact */
     font-weight: 600;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    line-height: var(--line-height-normal);
+    line-height: var(--line-height-tight);
 }
 
 .recipe-card .ingredients ul {
     list-style-type: disc;
     padding-left: 1.5rem;
-    margin-top: var(--space-sm);
+    margin-top: var(--space-xs); /* 4px - more compact */
 }
 
 .recipe-card .ingredients ul li {
-    padding: var(--space-xs) 0;
+    padding: 2px 0; /* Tighter list items */
     border-bottom: none;
     display: list-item;
-    line-height: var(--line-height-normal);
+    line-height: var(--line-height-tight); /* 1.2 - tighter */
 }
 
 .recipe-card .instructions p {
     font-style: normal;
     white-space: pre-line;
-    line-height: var(--line-height-normal);
+    line-height: var(--line-height-tight); /* 1.2 - tighter */
     color: var(--text-dark);
+    font-size: var(--text-sm);
 }
 
 .recipe-card .recipe-source h5 {
-    font-size: var(--text-lg);
+    font-size: var(--text-md); /* Smaller heading - 15px */
     color: var(--accent-color);
-    margin-bottom: var(--space-sm);
+    margin-bottom: var(--space-xs); /* 4px - more compact */
     font-weight: 600;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    line-height: var(--line-height-normal);
+    line-height: var(--line-height-tight);
 }
 
 .recipe-card .recipe-source p {
     font-style: normal;
-    line-height: var(--line-height-normal);
+    line-height: var(--line-height-tight); /* 1.2 - tighter */
     color: var(--text-dark);
+    font-size: var(--text-sm);
     word-wrap: break-word;
     overflow-wrap: break-word;
 }
