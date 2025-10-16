@@ -509,7 +509,7 @@ header h1 {
     border-left: 3px solid var(--accent-color);
 }
 
-/* Auth indicators - only show in desktop and mobile menu, not bottom nav */
+/* Auth indicators - only in desktop nav and mobile menu (not mobile bottom nav) */
 .nav-desktop .nav-item.nav-auth-required::after,
 .nav-mobile-menu .nav-item.nav-auth-required::after {
     content: '🔒';
@@ -524,12 +524,6 @@ header h1 {
     font-size: 0.7rem;
     margin-left: var(--space-xs);
     opacity: 0.6;
-}
-
-/* Hide auth indicators in mobile bottom nav (grayed out appearance is enough) */
-.nav-mobile-bottom .nav-item.nav-auth-required::after,
-.nav-mobile-bottom .nav-item.nav-admin-only::after {
-    display: none;
 }
 
 /* Disabled navigation items */
