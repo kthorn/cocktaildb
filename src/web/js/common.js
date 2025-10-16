@@ -30,7 +30,7 @@ export function loadCommonHead() {
         <link rel="icon" type="image/svg+xml" href="img/favicon.svg" />
         <link rel="shortcut icon" href="img/favicon.ico" />
         <link rel="apple-touch-icon" sizes="180x180" href="img/apple-touch-icon.png" />
-        <meta name="apple-mobile-web-app-title" content="CocktailDB" />
+        <meta name="apple-mobile-web-app-title" content="Mixology Tools" />
         <link rel="manifest" href="site.webmanifest" />
     `;
 
@@ -44,19 +44,20 @@ export function loadCommonHead() {
 export function loadHeader() {
   const header = document.createElement('header');
   header.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-      <h1>Cocktail Database</h1>
+    <div class="header-container">
+      <h1 class="site-title">Mixology Tools</h1>
       <nav id="header-nav-container">
         <!-- Desktop navigation will be inserted here -->
         <!-- Hamburger button for mobile will be inserted here -->
-        <div class="auth-controls">
-          <span id="user-info" class="hidden">
-            <button id="logout-btn">Logout</button>
-          </span>
-          <button id="login-btn">Login</button>
-          <button id="signup-btn">Sign Up</button>
-        </div>
       </nav>
+      <div class="auth-controls">
+        <span id="user-info" class="hidden">
+          <span id="username-display"></span>
+          <button id="logout-btn" class="btn-logout">Logout</button>
+        </span>
+        <button id="login-btn" class="btn-auth">Login</button>
+        <button id="signup-btn" class="btn-auth btn-signup">Sign Up</button>
+      </div>
     </div>
   `;
 

@@ -142,12 +142,25 @@ body {
 header {
     background-color: var(--primary-color);
     color: white;
-    padding: var(--space-md) var(--space-xl);
+    padding: var(--space-lg) var(--space-xl);
+    box-shadow: var(--shadow-md);
 }
 
-header h1 {
-    margin-bottom: var(--space-md);
+.header-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-lg);
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.site-title {
+    margin: 0;
+    font-size: 1.75rem;
+    font-weight: 600;
     line-height: var(--line-height-tight);
+    white-space: nowrap;
 }
 
 /* Header nav container */
@@ -931,34 +944,76 @@ button:focus, .btn:focus {
 .auth-controls {
     display: flex;
     align-items: center;
-    margin-left: auto;
+    gap: var(--space-sm);
 }
 
-.auth-controls button {
-    padding: var(--space-sm) var(--space-sm);
-    background-color: var(--success-color);
+#user-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+#username-display {
+    font-size: var(--text-sm);
+    font-weight: 500;
     color: white;
-    border: none;
+    opacity: 0.9;
+}
+
+.btn-auth {
+    padding: var(--space-sm) var(--space-lg);
+    background-color: rgba(255, 255, 255, 0.15);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    margin-left: var(--space-sm);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    transition: all 0.2s ease;
+    min-height: var(--touch-target-min);
 }
 
-.auth-controls button:hover {
+.btn-auth:hover {
+    background-color: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: translateY(-1px);
+}
+
+.btn-auth:focus {
+    outline: var(--focus-outline-width) solid white;
+    outline-offset: var(--focus-outline-offset);
+}
+
+.btn-signup {
+    background-color: var(--success-color);
+    border-color: var(--success-color);
+}
+
+.btn-signup:hover {
     background-color: var(--success-hover);
+    border-color: var(--success-hover);
 }
 
-#logout-btn {
+.btn-logout {
+    padding: var(--space-sm) var(--space-md);
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--text-sm);
+    transition: all 0.2s ease;
+    min-height: var(--touch-target-min);
+}
+
+.btn-logout:hover {
     background-color: var(--danger-color);
+    border-color: var(--danger-color);
 }
 
-#logout-btn:hover {
-    background-color: var(--danger-hover);
-}
-
-#username {
-    font-weight: bold;
-    margin-right: var(--space-sm);
+.btn-logout:focus {
+    outline: var(--focus-outline-width) solid white;
+    outline-offset: var(--focus-outline-offset);
 }
 
 /* Tab buttons */
@@ -2892,6 +2947,33 @@ input[type="radio"]:focus {
 
     header {
         padding: var(--space-md) var(--mobile-padding);
+    }
+
+    .header-container {
+        flex-wrap: wrap;
+        gap: var(--space-sm);
+    }
+
+    .site-title {
+        font-size: 1.25rem;
+        flex: 1;
+    }
+
+    .auth-controls {
+        order: 3;
+        width: 100%;
+        justify-content: flex-end;
+        margin-top: var(--space-xs);
+    }
+
+    .btn-auth,
+    .btn-logout {
+        padding: var(--space-xs) var(--space-md);
+        font-size: var(--text-xs);
+    }
+
+    #header-nav-container {
+        order: 2;
     }
 
     footer {

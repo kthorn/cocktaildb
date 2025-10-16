@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (pageTitle) {
                 pageTitle.textContent = 'Add Recipe';
             }
-            document.title = 'Add Recipe - Cocktail Database';
+            document.title = 'Add Recipe - Mixology Tools';
             
             // Add one ingredient row by default after reset
             addIngredientInput();
@@ -509,7 +509,7 @@ async function editRecipe(id) {
             pageTitle.textContent = 'Edit Recipe';
         }
         // Update page title in browser tab
-        document.title = 'Edit Recipe - Cocktail Database';
+        document.title = 'Edit Recipe - Mixology Tools';
 
         // Scroll to form
         form.scrollIntoView({ behavior: 'smooth' });

@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Update page title
             pageTitle.textContent = recipe.name;
-            document.title = `${recipe.name} - Cocktail Database`;
+            document.title = `${recipe.name} - Mixology Tools`;
 
             // Create and display the recipe card
             const recipeCard = createRecipeCard(recipe, true);

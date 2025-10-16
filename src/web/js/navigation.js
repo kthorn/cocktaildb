@@ -1,4 +1,4 @@
-// Navigation configuration and utilities for the Cocktail Database
+// Navigation configuration and utilities for the Mixology Tools
 
 /**
  * Navigation configuration object
