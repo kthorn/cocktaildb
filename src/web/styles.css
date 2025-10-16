@@ -2896,6 +2896,11 @@ input[type="radio"]:focus {
         display: block;
     }
 
+    /* Ensure mobile bottom nav stays horizontal */
+    .nav-mobile-bottom .nav-items {
+        flex-direction: row !important;
+    }
+
     /* Show hamburger button in header */
     .nav-hamburger-btn {
         display: flex;
@@ -3059,17 +3064,17 @@ input[type="radio"]:focus {
         max-width: 150px;
     }
 
-    /* Navigation */
-    nav ul {
+    /* Old navigation styles - only apply to header nav if not using new nav system */
+    header nav > ul {
         flex-direction: column;
     }
 
-    nav ul li {
+    header nav > ul li {
         margin-right: 0;
         margin-bottom: 2px; /* Minimal spacing for compact mobile menu */
     }
 
-    nav ul li:last-child {
+    header nav > ul li:last-child {
         margin-bottom: 0;
     }
 
