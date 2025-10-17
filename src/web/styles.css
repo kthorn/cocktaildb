@@ -1256,6 +1256,35 @@ textarea {
     min-height: calc(var(--form-input-height-min) * 2);
 }
 
+/* Inline validation errors */
+.field-error {
+    display: block;
+    color: var(--danger-color);
+    font-size: var(--text-xs);
+    margin-top: 0.25rem;
+    line-height: var(--line-height-tight);
+}
+
+.form-group.has-error input,
+.form-group.has-error select,
+.form-group.has-error textarea {
+    border-color: var(--danger-color);
+}
+
+.form-group.has-error input:focus,
+.form-group.has-error select:focus,
+.form-group.has-error textarea:focus {
+    outline-color: var(--danger-color);
+    border-color: var(--danger-color);
+}
+
+.ingredient-input.has-error {
+    background-color: rgba(244, 67, 54, 0.05);
+    padding: var(--space-sm);
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(244, 67, 54, 0.2);
+}
+
 /* Checkboxes and radios - WCAG 2.5.5 touch targets */
 input[type="checkbox"],
 input[type="radio"] {

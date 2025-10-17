@@ -1,6 +1,45 @@
 import { api } from './api.js';
 import { isAuthenticated } from './auth.js';
 
+// Error display utilities
+function showFieldError(element, message) {
+    // Clear any existing error
+    clearFieldError(element);
+
+    // Add error class to parent form-group or ingredient-input
+    const container = element.closest('.form-group') || element.closest('.ingredient-input');
+    if (container) {
+        container.classList.add('has-error');
+    }
+
+    // Create and add error message
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'field-error';
+    errorDiv.textContent = message;
+    element.parentElement.appendChild(errorDiv);
+
+    // Scroll to first error if not visible
+    if (element === document.querySelector('.has-error input, .has-error select, .has-error textarea')) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+
+function clearFieldError(element) {
+    const container = element.closest('.form-group') || element.closest('.ingredient-input');
+    if (container) {
+        container.classList.remove('has-error');
+        const errorDiv = container.querySelector('.field-error');
+        if (errorDiv) {
+            errorDiv.remove();
+        }
+    }
+}
+
+function clearAllErrors() {
+    document.querySelectorAll('.has-error').forEach(el => el.classList.remove('has-error'));
+    document.querySelectorAll('.field-error').forEach(el => el.remove());
+}
+
 // Shared utility functions for recipe management
 function isSpecialUnit(unitName) {
     return unitName === 'to top' || unitName === 'to rinse';
@@ -41,39 +80,63 @@ function setupAmountInputForUnit(amountInput, unitSelect) {
 
 function processIngredientData(ingredientInputs, availableIngredients) {
     const ingredients = [];
-    
+    let firstError = null;
+
     ingredientInputs.forEach(input => {
-        const ingredientName = input.querySelector('.ingredient-name').value;
-        const ingredientUnitName = input.querySelector('.ingredient-unit').value;
+        const ingredientNameSelect = input.querySelector('.ingredient-name');
+        const ingredientUnitSelect = input.querySelector('.ingredient-unit');
         const amountInput = input.querySelector('.ingredient-amount');
+
+        const ingredientName = ingredientNameSelect.value;
+        const ingredientUnitName = ingredientUnitSelect.value;
         const amount = parseFloat(amountInput.value);
-        
+
+        // Validate and show errors inline
         if (!ingredientName) {
-            throw new Error('Please select an ingredient');
+            showFieldError(ingredientNameSelect, 'Please select an ingredient');
+            if (!firstError) firstError = ingredientNameSelect;
+            return;
         }
         if (!ingredientUnitName) {
-            throw new Error(`Please select a unit for "${ingredientName}"`);
+            showFieldError(ingredientUnitSelect, `Please select a unit for "${ingredientName}"`);
+            if (!firstError) firstError = ingredientUnitSelect;
+            return;
         }
-        
-        const finalAmount = validateIngredientAmount(ingredientName, ingredientUnitName, amount);
-        
-        const ingredient = availableIngredients.find(ing => ing.name === ingredientName);
-        const unit = window.availableUnits?.find(u => u.name === ingredientUnitName);
-        
-        if (!ingredient) {
-            throw new Error(`Ingredient "${ingredientName}" not found`);
+
+        try {
+            const finalAmount = validateIngredientAmount(ingredientName, ingredientUnitName, amount);
+
+            const ingredient = availableIngredients.find(ing => ing.name === ingredientName);
+            const unit = window.availableUnits?.find(u => u.name === ingredientUnitName);
+
+            if (!ingredient) {
+                showFieldError(ingredientNameSelect, `Ingredient "${ingredientName}" not found`);
+                if (!firstError) firstError = ingredientNameSelect;
+                return;
+            }
+            if (!unit) {
+                showFieldError(ingredientUnitSelect, `Unit "${ingredientUnitName}" not found`);
+                if (!firstError) firstError = ingredientUnitSelect;
+                return;
+            }
+
+            ingredients.push({
+                ingredient_id: ingredient.id,
+                amount: finalAmount,
+                unit_id: unit.id
+            });
+        } catch (error) {
+            showFieldError(amountInput, error.message);
+            if (!firstError) firstError = amountInput;
         }
-        if (!unit) {
-            throw new Error(`Unit "${ingredientUnitName}" not found`);
-        }
-        
-        ingredients.push({
-            ingredient_id: ingredient.id,
-            amount: finalAmount,
-            unit_id: unit.id
-        });
     });
-    
+
+    // If there were errors, scroll to first error and throw
+    if (firstError) {
+        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        throw new Error('Please fix the ingredient errors above');
+    }
+
     return ingredients;
 }
 
@@ -91,6 +154,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     let availableIngredients = [];
+
+    // Add event listeners to clear errors on main form fields
+    const recipeNameInput = document.getElementById('recipe-name');
+    const recipeInstructionsInput = document.getElementById('recipe-instructions');
+    [recipeNameInput, recipeInstructionsInput].forEach(element => {
+        if (element) {
+            element.addEventListener('input', () => clearFieldError(element));
+        }
+    });
 
     // Load units and ingredients on page load
     Promise.all([loadUnits(), loadIngredients()]).then(() => {
@@ -111,6 +183,9 @@ document.addEventListener('DOMContentLoaded', () => {
     recipeForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
+        // Clear any existing errors
+        clearAllErrors();
+
         // Check editor permissions first
         if (!api.isEditor()) {
             alert('Editor access required. Only editors and admins can create or edit recipes.');
@@ -124,14 +199,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error('Please add at least one ingredient');
             }
 
-            const recipeName = document.getElementById('recipe-name').value.trim();
+            const recipeNameInput = document.getElementById('recipe-name');
+            const recipeName = recipeNameInput.value.trim();
             if (!recipeName) {
-                throw new Error('Recipe name is required');
+                showFieldError(recipeNameInput, 'Recipe name is required');
+                throw new Error('Please complete all required fields');
             }
 
-            const recipeInstructions = document.getElementById('recipe-instructions').value.trim();
+            const recipeInstructionsInput = document.getElementById('recipe-instructions');
+            const recipeInstructions = recipeInstructionsInput.value.trim();
             if (!recipeInstructions) {
-                throw new Error('Recipe instructions are required');
+                showFieldError(recipeInstructionsInput, 'Recipe instructions are required');
+                throw new Error('Please complete all required fields');
             }
 
             // Use the shared function to process ingredient data
@@ -153,15 +232,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 await api.createRecipe(recipeData);
                 alert('Recipe created successfully!');
             }
-            
+
             recipeForm.reset();
             ingredientsList.innerHTML = '';
             delete recipeForm.dataset.mode;
             delete recipeForm.dataset.id;
-            
+
             // Reset button text and page title to add mode
             const submitButton = document.getElementById('submit-button');
-            const pageTitle = document.querySelector('h2');
+            const pageTitle = document.querySelector('.section-title h2');
             if (submitButton) {
                 submitButton.textContent = 'Add Recipe';
             }
@@ -169,12 +248,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 pageTitle.textContent = 'Add Recipe';
             }
             document.title = 'Add Recipe - Mixology Tools';
-            
+
             // Add one ingredient row by default after reset
             addIngredientInput();
         } catch (error) {
             console.error('Error saving recipe:', error);
-            alert(`Failed to save recipe: ${error.message || 'Please try again.'}`);
+            // Don't show alert for validation errors since they're shown inline
+            if (!error.message.includes('Please fix') && !error.message.includes('Please complete')) {
+                alert(`Failed to save recipe: ${error.message || 'Please try again.'}`);
+            }
         }
     });
 
@@ -217,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <input type="number" class="ingredient-amount" name="ingredient-amount" placeholder="Amount" step="0.25" min="0">
                 </div>
                 <div class="form-group">
-                    <select class="ingredient-unit" name="ingredient-unit" required>
+                    <select class="ingredient-unit" name="ingredient-unit">
                         <option value="">Select unit</option>
                         ${window.availableUnits ? window.availableUnits.map(unit =>
             `<option value="${unit.name}">${unit.name} (${unit.abbreviation})</option>`
@@ -228,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="ingredient-search-container">
                         <input type="text" class="ingredient-search" name="ingredient-search" placeholder="Search ingredients..." autocomplete="off">
                         <div class="autocomplete-dropdown"></div>
-                        <select class="ingredient-name" name="ingredient-name" required>
+                        <select class="ingredient-name" name="ingredient-name">
                             <option value="">Select ingredient</option>
                             ${availableIngredients && availableIngredients.length > 0 ? availableIngredients.map(ingredient =>
             `<option value="${ingredient.name}">${ingredient.name}</option>`
@@ -388,6 +470,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const amountInput = div.querySelector('.ingredient-amount');
         setupAmountInputForUnit(amountInput, unitSelect);
 
+        // Add event listeners to clear errors on input
+        const ingredientNameSelect = div.querySelector('.ingredient-name');
+        [amountInput, unitSelect, ingredientNameSelect].forEach(element => {
+            if (element) {
+                element.addEventListener('input', () => clearFieldError(element));
+                element.addEventListener('change', () => clearFieldError(element));
+            }
+        });
+
         ingredientsList.appendChild(div);
     };
 
@@ -501,7 +592,7 @@ async function editRecipe(id) {
 
         // Update button text and page title for edit mode
         const submitButton = document.getElementById('submit-button');
-        const pageTitle = document.querySelector('h2');
+        const pageTitle = document.querySelector('.section-title h2');
         if (submitButton) {
             submitButton.textContent = 'Update Recipe';
         }
