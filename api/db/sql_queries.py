@@ -294,6 +294,8 @@ def build_search_recipes_paginated_sql(
             END DESC
         LIMIT :limit OFFSET :offset
     ),"""
+
+    base_sql += """
     paginated_with_ingredients AS (
         SELECT
             sr.id, sr.name, sr.instructions, sr.description, sr.image_url,
