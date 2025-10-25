@@ -58,7 +58,7 @@ async function loadMoreRecipes() {
     
     try {
         console.log(`Loading page ${currentPage}...`);
-        const result = await api.searchRecipes({}, currentPage, recipesPerPage); // Empty search returns all recipes
+        const result = await api.searchRecipes({}, currentPage, recipesPerPage, 'random', 'asc'); // Empty search returns all recipes in random order
         console.log(`Page ${currentPage} result:`, result);
         
         if (result && result.recipes && result.recipes.length > 0) {

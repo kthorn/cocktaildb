@@ -269,22 +269,31 @@ def build_search_recipes_paginated_sql(
 
     base_sql += """
         GROUP BY
-            r.id, r.name, r.instructions, r.description, r.image_url, 
+            r.id, r.name, r.instructions, r.description, r.image_url,
             r.source, r.source_url, r.avg_rating, r.rating_count,
-            ur.rating
+            ur.rating"""
+
+    # Handle random sorting separately
+    if sort_by == 'random':
+        base_sql += """
+        ORDER BY RANDOM()
+        LIMIT :limit OFFSET :offset
+    ),"""
+    else:
+        base_sql += """
         ORDER BY
-            CASE 
+            CASE
                 WHEN :sort_by = 'name' AND :sort_order = 'asc' THEN r.name
                 WHEN :sort_by = 'avg_rating' AND :sort_order = 'asc' THEN CAST(COALESCE(r.avg_rating, 0) AS TEXT)
                 WHEN :sort_by = 'created_at' AND :sort_order = 'asc' THEN r.id
             END ASC,
-            CASE 
+            CASE
                 WHEN :sort_by = 'name' AND :sort_order = 'desc' THEN r.name
                 WHEN :sort_by = 'avg_rating' AND :sort_order = 'desc' THEN CAST(COALESCE(r.avg_rating, 0) AS TEXT)
                 WHEN :sort_by = 'created_at' AND :sort_order = 'desc' THEN r.id
             END DESC
         LIMIT :limit OFFSET :offset
-    ),
+    ),"""
     paginated_with_ingredients AS (
         SELECT
             sr.id, sr.name, sr.instructions, sr.description, sr.image_url,
@@ -300,14 +309,27 @@ def build_search_recipes_paginated_sql(
         LEFT JOIN
             ingredients i ON ri.ingredient_id = i.id
         LEFT JOIN
-            units u ON ri.unit_id = u.id
+            units u ON ri.unit_id = u.id"""
+
+    # Handle random sorting for ingredient ordering
+    if sort_by == 'random':
+        base_sql += """
         ORDER BY
-            CASE 
+            sr.id ASC,
+            COALESCE(ri.amount * u.conversion_to_ml, 0) DESC,
+            ri.id ASC
+    )
+    SELECT * FROM paginated_with_ingredients
+    """
+    else:
+        base_sql += """
+        ORDER BY
+            CASE
                 WHEN :sort_by = 'name' AND :sort_order = 'asc' THEN sr.name
                 WHEN :sort_by = 'avg_rating' AND :sort_order = 'asc' THEN CAST(COALESCE(sr.avg_rating, 0) AS TEXT)
                 WHEN :sort_by = 'created_at' AND :sort_order = 'asc' THEN sr.id
             END ASC,
-            CASE 
+            CASE
                 WHEN :sort_by = 'name' AND :sort_order = 'desc' THEN sr.name
                 WHEN :sort_by = 'avg_rating' AND :sort_order = 'desc' THEN CAST(COALESCE(sr.avg_rating, 0) AS TEXT)
                 WHEN :sort_by = 'created_at' AND :sort_order = 'desc' THEN sr.id
