@@ -97,7 +97,7 @@ export function initNavigation() {
   // Get current auth state
   const authenticated = isAuthenticated();
   const groups = getUserGroups();
-  const isAdmin = groups.includes('admin');
+  const isAdmin = groups.includes('editor') || groups.includes('admin');
 
   const authState = {
     isAuthenticated: authenticated,
@@ -132,7 +132,7 @@ export function initNavigation() {
 export function updateNavigationAuth() {
   const authenticated = isAuthenticated();
   const groups = getUserGroups();
-  const isAdmin = groups.includes('admin');
+  const isAdmin = groups.includes('editor') || groups.includes('admin');
 
   const authState = {
     isAuthenticated: authenticated,
