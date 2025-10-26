@@ -19,7 +19,7 @@ from models.responses import (
     BulkIngredientUploadResponse,
     BulkIngredientUploadValidationError,
 )
-from core.exceptions import NotFoundException, DatabaseException
+from core.exceptions import NotFoundException, DatabaseException, ConflictException
 from utils.analytics_helpers import trigger_analytics_refresh
 
 logger = logging.getLogger(__name__)
@@ -63,6 +63,9 @@ async def create_ingredient(
 
         return IngredientResponse(**created_ingredient)
 
+    except ConflictException:
+        # Re-raise ConflictException to preserve the user-friendly error message
+        raise
     except Exception as e:
         logger.error(f"Error creating ingredient: {str(e)}")
         raise DatabaseException("Failed to create ingredient", detail=str(e))

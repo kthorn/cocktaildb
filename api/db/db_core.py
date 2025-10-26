@@ -16,6 +16,7 @@ from .sql_queries import (
     get_ingredients_count_sql,
     INGREDIENT_SELECT_FIELDS,
 )
+from core.exceptions import ConflictException
 
 # Configure logging
 logger = logging.getLogger()
@@ -307,6 +308,18 @@ class Database:
                     ),
                 )
                 return ingredient[0]
+            except sqlite3.IntegrityError as e:
+                if conn:
+                    conn.rollback()
+                error_msg = str(e).lower()
+                # Check if it's a UNIQUE constraint violation on the name field
+                if 'unique' in error_msg and 'name' in error_msg:
+                    raise ConflictException(
+                        f"An ingredient with the name '{data.get('name')}' already exists. Please use a different name.",
+                        detail=str(e)
+                    )
+                # Re-raise other integrity errors
+                raise
             except Exception:
                 if conn:
                     conn.rollback()
@@ -314,6 +327,9 @@ class Database:
             finally:
                 if conn:
                     conn.close()
+        except ConflictException:
+            # Re-raise ConflictException without wrapping it
+            raise
         except Exception as e:
             logger.error(f"Error creating ingredient: {str(e)}")
             raise

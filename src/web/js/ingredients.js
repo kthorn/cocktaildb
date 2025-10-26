@@ -254,11 +254,9 @@ document.addEventListener('DOMContentLoaded', () => {
             loadIngredients();
         } catch (error) {
             console.error('Error saving ingredient:', error);
-            if (error.message && error.message.includes('already exists')) {
-                showNotification(error.message, 'error');
-            } else {
-                showNotification('Failed to save ingredient. Please try again.', 'error');
-            }
+            // Display the error message from the backend (now reliably user-friendly)
+            const errorMsg = error.message || 'Failed to save ingredient. Please try again.';
+            showNotification(errorMsg, 'error');
         }
     });
 
