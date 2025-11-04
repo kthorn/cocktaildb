@@ -11,7 +11,7 @@ class IngredientResponse(BaseModel):
     description: Optional[str] = Field(None, description="Ingredient description")
     parent_id: Optional[int] = Field(None, description="Parent ingredient ID")
     path: Optional[str] = Field(None, description="Ingredient hierarchy path")
-    substitution_level: Optional[int] = Field(None, description="Substitution level: 0=no substitution, 1=parent-level, 2=grandparent-level, null=inherit")
+    allow_substitution: bool = Field(..., description="Whether this ingredient can be substituted with siblings/ancestors")
     exact_match: Optional[bool] = Field(None, description="Whether this was an exact match for search queries")
 
     class Config:
@@ -341,7 +341,7 @@ class IngredientRecommendationResponse(BaseModel):
     description: Optional[str] = Field(None, description="Ingredient description")
     parent_id: Optional[int] = Field(None, description="Parent ingredient ID")
     path: Optional[str] = Field(None, description="Ingredient hierarchy path")
-    substitution_level: Optional[int] = Field(None, description="Substitution level")
+    allow_substitution: bool = Field(..., description="Whether this ingredient can be substituted with siblings/ancestors")
     recipes_unlocked: int = Field(..., description="Number of recipes that would be unlocked")
     recipe_names: List[str] = Field(default=[], description="Names of recipes that would be unlocked")
 
