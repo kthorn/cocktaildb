@@ -2610,7 +2610,7 @@ class Database:
 
         This finds ingredients the user doesn't have that would complete the most
         "almost makeable" recipes (recipes where user has all but one ingredient).
-        Respects substitution_level rules for ingredient matching.
+        Respects allow_substitution rules for ingredient matching.
         """
         try:
             # This complex query:
@@ -2627,18 +2627,9 @@ class Database:
                     ui.ingredient_id,
                     i.path,
                     i.parent_id,
-                    COALESCE(
-                        i.substitution_level,
-                        ip1.substitution_level,
-                        ip2.substitution_level,
-                        ip3.substitution_level,
-                        0
-                    ) as effective_substitution_level
+                    COALESCE(i.allow_substitution, 0) as user_allow_substitution
                 FROM user_ingredients ui
                 JOIN ingredients i ON ui.ingredient_id = i.id
-                LEFT JOIN ingredients ip1 ON i.parent_id = ip1.id
-                LEFT JOIN ingredients ip2 ON ip1.parent_id = ip2.id
-                LEFT JOIN ingredients ip3 ON ip2.parent_id = ip3.id
                 WHERE ui.cognito_user_id = :user_id
             ),
             -- For each recipe, find all required ingredients
@@ -2649,18 +2640,9 @@ class Database:
                     i.name as required_ingredient_name,
                     i.path as required_ingredient_path,
                     i.parent_id as required_parent_id,
-                    COALESCE(
-                        i.substitution_level,
-                        ip1.substitution_level,
-                        ip2.substitution_level,
-                        ip3.substitution_level,
-                        0
-                    ) as required_effective_substitution_level
+                    COALESCE(i.allow_substitution, 0) as required_allow_substitution
                 FROM recipe_ingredients ri
                 JOIN ingredients i ON ri.ingredient_id = i.id
-                LEFT JOIN ingredients ip1 ON i.parent_id = ip1.id
-                LEFT JOIN ingredients ip2 ON ip1.parent_id = ip2.id
-                LEFT JOIN ingredients ip3 ON ip2.parent_id = ip3.id
             ),
             -- Check each recipe requirement against user inventory
             requirement_satisfaction AS (
@@ -2672,36 +2654,30 @@ class Database:
                         WHEN EXISTS (
                             SELECT 1 FROM user_inventory ui
                             WHERE
-                                -- Level 0: Exact match only
-                                (rr.required_effective_substitution_level = 0
-                                 AND rr.required_ingredient_id = ui.ingredient_id)
+                                -- Direct match
+                                (rr.required_ingredient_id = ui.ingredient_id)
                                 OR
-                                -- Level 1: Parent-level substitution (siblings)
-                                (rr.required_effective_substitution_level = 1
-                                 AND ui.effective_substitution_level = 1
-                                 AND ((rr.required_parent_id = ui.parent_id AND rr.required_parent_id IS NOT NULL)
-                                      OR ui.path LIKE rr.required_ingredient_path || '%'))
+                                -- User has ancestor of recipe ingredient
+                                (rr.required_ingredient_path LIKE ui.path || '%')
                                 OR
-                                -- Level 2: Grandparent-level substitution (cousins)
-                                (rr.required_effective_substitution_level = 2
-                                 AND ui.effective_substitution_level = 2
-                                 AND (EXISTS (
-                                    SELECT 1 FROM ingredients irp
-                                    WHERE irp.id = rr.required_parent_id
-                                    AND EXISTS (
-                                        SELECT 1 FROM ingredients iup
-                                        WHERE iup.id = ui.parent_id
-                                        AND irp.parent_id = iup.parent_id
-                                        AND irp.parent_id IS NOT NULL
+                                -- Recipe allows substitution
+                                (rr.required_allow_substitution = 1 AND (
+                                    -- Sibling match: same parent, both allow substitution
+                                    (rr.required_parent_id = ui.parent_id
+                                     AND rr.required_parent_id IS NOT NULL
+                                     AND ui.user_allow_substitution = 1)
+                                    OR
+                                    -- User has parent
+                                    (ui.ingredient_id = rr.required_parent_id)
+                                    OR
+                                    -- Recursive match through common ancestor
+                                    EXISTS (
+                                        SELECT 1 FROM ingredients anc
+                                        WHERE ui.path LIKE anc.path || '%'
+                                        AND rr.required_ingredient_path LIKE anc.path || '%'
+                                        AND anc.allow_substitution = 1
                                     )
-                                 ) OR (
-                                    ui.path LIKE rr.required_ingredient_path || '%'
-                                    OR (rr.required_parent_id IS NOT NULL AND EXISTS (
-                                        SELECT 1 FROM ingredients irp2
-                                        WHERE irp2.id = rr.required_parent_id
-                                        AND ui.path LIKE irp2.path || '%'
-                                    ))
-                                 )))
+                                ))
                         ) THEN 1
                         ELSE 0
                     END as is_satisfied
@@ -2747,7 +2723,7 @@ class Database:
                 i.description,
                 i.parent_id,
                 i.path,
-                i.substitution_level,
+                i.allow_substitution,
                 ii.recipes_unlocked,
                 ii.recipe_names
             FROM ingredient_impact ii
