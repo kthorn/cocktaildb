@@ -375,18 +375,18 @@ function downloadIngredientTemplate() {
                 name: "Vodka",
                 description: "A clear distilled spirit with a neutral taste",
                 parent_name: "Spirits",
-                substitution_level: 0
+                allow_substitution: false
             },
             {
                 name: "Lime Juice",
                 description: "Fresh lime juice for cocktails",
-                substitution_level: 1
+                allow_substitution: true
             },
             {
                 name: "Premium Vodka",
                 description: "High-quality vodka with exceptional purity",
                 parent_name: "Vodka",
-                substitution_level: 2
+                allow_substitution: true
             }
         ]
     };
@@ -514,9 +514,9 @@ function validateIngredientJsonStructure(data) {
             return false;
         }
         
-        if (ingredient.substitution_level !== undefined && ingredient.substitution_level !== null) {
-            if (!Number.isInteger(ingredient.substitution_level) || ingredient.substitution_level < 0) {
-                showMessage(`Ingredient "${ingredient.name}" substitution_level must be a non-negative integer or null`, 'error');
+        if (ingredient.allow_substitution !== undefined && ingredient.allow_substitution !== null) {
+            if (typeof ingredient.allow_substitution !== 'boolean') {
+                showMessage(`Ingredient "${ingredient.name}" allow_substitution must be a boolean (true or false)`, 'error');
                 return false;
             }
         }

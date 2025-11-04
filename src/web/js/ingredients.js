@@ -23,12 +23,10 @@ window.editIngredient = async function(id) {
         document.getElementById('ingredient-name').value = ingredient.name;
         document.getElementById('ingredient-description').value = ingredient.description || '';
         
-        // Set substitution level (handle both null and numeric values)
-        const substitutionLevelSelect = document.getElementById('ingredient-substitution-level');
-        if (ingredient.substitution_level === null || ingredient.substitution_level === undefined) {
-            substitutionLevelSelect.value = '';
-        } else {
-            substitutionLevelSelect.value = ingredient.substitution_level.toString();
+        // Set allow_substitution checkbox
+        const allowSubstitutionCheckbox = document.getElementById('ingredient-allow-substitution');
+        if (allowSubstitutionCheckbox) {
+            allowSubstitutionCheckbox.checked = ingredient.allow_substitution || false;
         }
         
         // Set parent ingredient if it exists
@@ -203,14 +201,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const name = document.getElementById('ingredient-name').value;
         const description = document.getElementById('ingredient-description').value;
-        
-        // Get substitution level value
-        const substitutionLevelSelect = document.getElementById('ingredient-substitution-level');
-        let substitutionLevel = null;
-        if (substitutionLevelSelect.value !== '') {
-            substitutionLevel = parseInt(substitutionLevelSelect.value, 10);
-        }
-        
+
+        // Get allow_substitution checkbox value
+        const allowSubstitutionCheckbox = document.getElementById('ingredient-allow-substitution');
+        const allowSubstitution = allowSubstitutionCheckbox ? allowSubstitutionCheckbox.checked : false;
+
         // Find parent ingredient id based on the search input value
         let parentId = null;
         const parentName = parentSearchInput.value.trim();
@@ -229,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
             name,
             description,
             parent_id: parentId,
-            substitution_level: substitutionLevel
+            allow_substitution: allowSubstitution
         };
 
         try {
@@ -244,7 +239,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             ingredientForm.reset();
             parentSearchInput.value = '';
-            document.getElementById('ingredient-substitution-level').value = '0'; // Reset to default
+            // Reset checkbox to unchecked (false)
+            const resetCheckbox = document.getElementById('ingredient-allow-substitution');
+            if (resetCheckbox) {
+                resetCheckbox.checked = false;
+            }
             delete ingredientForm.dataset.mode;
             delete ingredientForm.dataset.id;
             const submitButton = ingredientForm.querySelector('button[type="submit"]');
@@ -400,7 +399,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="tree-info">
                                 <span class="tree-name">${ingredient.name}</span>
                                 ${ingredient.description ? `<span class="tree-description">${ingredient.description}</span>` : ''}
-                                <span class="tree-substitution">[Sub: ${ingredient.substitution_level === null || ingredient.substitution_level === undefined ? 'inherit' : ingredient.substitution_level}]</span>
+                                <span class="tree-substitution">[Substitutable: ${ingredient.allow_substitution ? 'Yes' : 'No'}]</span>
                             </div>
                             ${actionButtons}
                         </div>
