@@ -197,71 +197,31 @@ def build_search_recipes_paginated_sql(
                     LEFT JOIN ingredients i_user ON ui_check.ingredient_id = i_user.id
                     WHERE ui_check.cognito_user_id = :cognito_user_id
                     AND (
-                        -- Get effective substitution levels by walking up the hierarchy (max 3 levels deep to prevent infinite loops)
-                        WITH resolved_levels AS (
-                            -- For recipe ingredient: resolve its effective substitution_level
-                            SELECT 
-                                i_recipe.id as recipe_ingredient_id,
-                                COALESCE(
-                                    i_recipe.substitution_level,
-                                    i_recipe_p1.substitution_level,
-                                    i_recipe_p2.substitution_level,
-                                    i_recipe_p3.substitution_level,
-                                    0  -- Default to 0 if not found in hierarchy
-                                ) as recipe_effective_level,
-                                -- For user ingredient: resolve its effective substitution_level  
-                                i_user.id as user_ingredient_id,
-                                COALESCE(
-                                    i_user.substitution_level,
-                                    i_user_p1.substitution_level,
-                                    i_user_p2.substitution_level,
-                                    i_user_p3.substitution_level,
-                                    0  -- Default to 0 if not found in hierarchy
-                                ) as user_effective_level
-                            FROM ingredients i_recipe
-                            CROSS JOIN ingredients i_user
-                            -- Recipe ingredient parent chain
-                            LEFT JOIN ingredients i_recipe_p1 ON i_recipe.parent_id = i_recipe_p1.id
-                            LEFT JOIN ingredients i_recipe_p2 ON i_recipe_p1.parent_id = i_recipe_p2.id  
-                            LEFT JOIN ingredients i_recipe_p3 ON i_recipe_p2.parent_id = i_recipe_p3.id
-                            -- User ingredient parent chain
-                            LEFT JOIN ingredients i_user_p1 ON i_user.parent_id = i_user_p1.id
-                            LEFT JOIN ingredients i_user_p2 ON i_user_p1.parent_id = i_user_p2.id
-                            LEFT JOIN ingredients i_user_p3 ON i_user_p2.parent_id = i_user_p3.id
-                            WHERE i_recipe.id = i_recipe.id AND i_user.id = i_user.id
-                        )
-                        SELECT 1 FROM resolved_levels rl
-                        WHERE rl.recipe_ingredient_id = i_recipe.id 
-                          AND rl.user_ingredient_id = i_user.id
-                          AND (
-                            -- Level 0: Exact match only
-                            (rl.recipe_effective_level = 0 AND i_recipe.id = i_user.id)
+                        -- Direct match
+                        i_user.id = i_recipe.id
+                        OR
+                        -- User has ancestor of recipe ingredient (user has "Whiskey", recipe needs "Bourbon")
+                        i_recipe.path LIKE i_user.path || '%'
+                        OR
+                        -- Recipe allows substitution AND user ingredient can substitute
+                        (i_recipe.allow_substitution = 1 AND (
+                            -- Sibling match: same parent, both allow substitution
+                            (i_recipe.parent_id = i_user.parent_id
+                             AND i_recipe.parent_id IS NOT NULL
+                             AND i_user.allow_substitution = 1)
                             OR
-                            -- Level 1: Parent-level substitution
-                            (rl.recipe_effective_level = 1 AND rl.user_effective_level = 1
-                             AND (i_recipe.parent_id = i_user.parent_id AND i_recipe.parent_id IS NOT NULL
-                                  OR i_user.path LIKE i_recipe.path || '%'))
-                            OR  
-                            -- Level 2: Grandparent-level substitution
-                            (rl.recipe_effective_level = 2 AND rl.user_effective_level = 2
-                             AND (EXISTS (
-                                SELECT 1 FROM ingredients i_recipe_parent
-                                WHERE i_recipe_parent.id = i_recipe.parent_id
-                                AND EXISTS (
-                                    SELECT 1 FROM ingredients i_user_parent  
-                                    WHERE i_user_parent.id = i_user.parent_id
-                                    AND i_recipe_parent.parent_id = i_user_parent.parent_id
-                                    AND i_recipe_parent.parent_id IS NOT NULL
-                                )
-                             ) OR (
-                                i_user.path LIKE i_recipe.path || '%'
-                                OR (i_recipe.parent_id IS NOT NULL AND EXISTS (
-                                    SELECT 1 FROM ingredients i_recipe_parent
-                                    WHERE i_recipe_parent.id = i_recipe.parent_id
-                                    AND i_user.path LIKE i_recipe_parent.path || '%'
-                                ))
-                             )))
-                          )
+                            -- User has parent of recipe ingredient
+                            (i_user.id = i_recipe.parent_id)
+                            OR
+                            -- Recursive: user has ancestor, check path up to 5 levels
+                            EXISTS (
+                                SELECT 1 FROM ingredients anc
+                                WHERE i_user.path LIKE anc.path || '%'
+                                AND i_recipe.path LIKE anc.path || '%'
+                                AND anc.allow_substitution = 1
+                                AND LENGTH(anc.path) - LENGTH(REPLACE(anc.path, '/', '')) <= 6
+                            )
+                        ))
                     )
                 )
             )
