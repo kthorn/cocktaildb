@@ -183,7 +183,7 @@ async def get_ingredient_recommendations(
                     description=rec.get("description"),
                     parent_id=rec.get("parent_id"),
                     path=rec.get("path"),
-                    substitution_level=rec.get("substitution_level"),
+                    allow_substitution=rec.get("allow_substitution", False),
                     recipes_unlocked=rec["recipes_unlocked"],
                     recipe_names=rec["recipe_names"]
                 )
