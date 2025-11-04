@@ -271,14 +271,14 @@ class Database:
                 cursor = conn.cursor()
                 cursor.execute(
                     """
-                    INSERT INTO ingredients (name, description, parent_id, substitution_level)
-                    VALUES (:name, :description, :parent_id, :substitution_level)
+                    INSERT INTO ingredients (name, description, parent_id, allow_substitution)
+                    VALUES (:name, :description, :parent_id, :allow_substitution)
                     """,
                     {
                         "name": data.get("name"),
                         "description": data.get("description"),
                         "parent_id": data.get("parent_id"),
-                        "substitution_level": data.get("substitution_level"),
+                        "allow_substitution": data.get("allow_substitution", False),
                     },
                 )
                 new_id = cursor.lastrowid
@@ -303,7 +303,7 @@ class Database:
                 ingredient = cast(
                     List[Dict[str, Any]],
                     self.execute_query(
-                        "SELECT id, name, description, parent_id, path, substitution_level FROM ingredients WHERE id = :id",
+                        "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE id = :id",
                         {"id": new_id},
                     ),
                 )
@@ -403,12 +403,12 @@ class Database:
                     "parent_id": new_parent_id,
                     "path": new_path,
                 }
-                
-                # Handle substitution_level explicitly to allow None values
-                if "substitution_level" in data:
-                    set_clauses.append("substitution_level = :substitution_level")
-                    query_params["substitution_level"] = data.get("substitution_level")
-                
+
+                # Handle allow_substitution explicitly
+                if "allow_substitution" in data:
+                    set_clauses.append("allow_substitution = :allow_substitution")
+                    query_params["allow_substitution"] = data.get("allow_substitution")
+
                 # Update ingredient with new path
                 self.execute_query(
                     f"""
@@ -441,12 +441,12 @@ class Database:
                     "name": data.get("name"),
                     "description": data.get("description"),
                 }
-                
-                # Handle substitution_level explicitly to allow None values
-                if "substitution_level" in data:
-                    set_clauses.append("substitution_level = :substitution_level")
-                    query_params["substitution_level"] = data.get("substitution_level")
-                
+
+                # Handle allow_substitution explicitly
+                if "allow_substitution" in data:
+                    set_clauses.append("allow_substitution = :allow_substitution")
+                    query_params["allow_substitution"] = data.get("allow_substitution")
+
                 self.execute_query(
                     f"""
                     UPDATE ingredients 
@@ -460,7 +460,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, substitution_level FROM ingredients WHERE id = :id",
+                    "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE id = :id",
                     {"id": ingredient_id},
                 ),
             )
@@ -521,7 +521,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, substitution_level FROM ingredients ORDER BY path"
+                    "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients ORDER BY path"
                 ),
             )
             return result
@@ -552,7 +552,7 @@ class Database:
             exact_result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, substitution_level FROM ingredients WHERE LOWER(name) = LOWER(?)",
+                    "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE LOWER(name) = LOWER(?)",
                     (search_term,),
                 ),
             )
@@ -565,7 +565,7 @@ class Database:
             partial_result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, substitution_level FROM ingredients WHERE LOWER(name) LIKE LOWER(?) ORDER BY name",
+                    "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE LOWER(name) LIKE LOWER(?) ORDER BY name",
                     (f"%{search_term}%",),
                 ),
             )
@@ -593,7 +593,7 @@ class Database:
             exact_results = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    f"SELECT id, name, description, parent_id, path, substitution_level FROM ingredients WHERE LOWER(name) IN ({placeholders})",
+                    f"SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE LOWER(name) IN ({placeholders})",
                     tuple(unique_names),
                 ),
             )
@@ -652,7 +652,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, substitution_level FROM ingredients WHERE id = :id",
+                    "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE id = :id",
                     {"id": ingredient_id},
                 ),
             )
