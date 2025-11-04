@@ -10,8 +10,9 @@ class IngredientCreate(BaseModel):
     parent_id: Optional[int] = Field(
         None, description="Parent ingredient ID for hierarchy"
     )
-    substitution_level: Optional[int] = Field(
-        None, description="Substitution level: 0=no substitution, 1=parent-level, 2=grandparent-level, null=inherit"
+    allow_substitution: bool = Field(
+        default=False,
+        description="Whether this ingredient can be substituted with siblings/ancestors"
     )
 
 
@@ -23,8 +24,9 @@ class IngredientUpdate(BaseModel):
     parent_id: Optional[int] = Field(
         None, description="Parent ingredient ID for hierarchy"
     )
-    substitution_level: Optional[int] = Field(
-        None, description="Substitution level: 0=no substitution, 1=parent-level, 2=grandparent-level, null=inherit"
+    allow_substitution: Optional[bool] = Field(
+        None,
+        description="Whether this ingredient can be substituted with siblings/ancestors"
     )
 
 
@@ -159,14 +161,15 @@ class SearchParams(PaginationParams):
 
 class BulkIngredientCreate(BaseModel):
     """Ingredient specification for bulk upload"""
-    
+
     name: str = Field(..., min_length=1, description="Ingredient name")
     description: Optional[str] = Field(None, description="Ingredient description")
     parent_name: Optional[str] = Field(None, description="Parent ingredient name (will be looked up by exact match)")
     # Kept for backward compatibility - deprecated in favor of parent_name
     parent_id: Optional[int] = Field(None, description="Parent ingredient ID (deprecated, use parent_name)")
-    substitution_level: Optional[int] = Field(
-        None, description="Substitution level: 0=no substitution, 1=parent-level, 2=grandparent-level, null=inherit"
+    allow_substitution: Optional[bool] = Field(
+        default=False,
+        description="Whether this ingredient can be substituted with siblings/ancestors"
     )
 
 
