@@ -14,4 +14,8 @@ END;
 
 ALTER TABLE ingredients DROP COLUMN allow_substitution;
 
+-- Recreate the indexes that were dropped in the forward migration
+CREATE INDEX idx_ingredients_substitution_level ON ingredients(substitution_level);
+CREATE INDEX idx_ingredients_parent_substitution ON ingredients(parent_id, substitution_level);
+
 COMMIT;

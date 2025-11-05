@@ -14,6 +14,10 @@ SET allow_substitution = CASE
   ELSE 0
 END;
 
+-- Drop both indexes on substitution_level before dropping the column
+DROP INDEX IF EXISTS idx_ingredients_substitution_level;
+DROP INDEX IF EXISTS idx_ingredients_parent_substitution;
+
 -- Drop old column
 ALTER TABLE ingredients DROP COLUMN substitution_level;
 
