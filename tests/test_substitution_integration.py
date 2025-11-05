@@ -32,42 +32,42 @@ class TestSubstitutionIntegration:
         
         # Base whiskey category - allows substitution
         whiskey = db.create_ingredient({
-            "name": "Test Whiskey Category", 
+            "name": "Test Whiskey Category",
             "description": "Base whiskey category for testing",
             "parent_id": None,
-            "substitution_level": 1,  # Allow brand substitution within parent
+            "allow_substitution": True,  # Allow brand substitution
             "created_by": "test-user"
         })
-        print(f"Created Test Whiskey Category: ID={whiskey['id']}, sub_level={whiskey['substitution_level']}")
-        
-        # Bourbon subcategory - inherits substitution level
+        print(f"Created Test Whiskey Category: ID={whiskey['id']}, allow_sub={whiskey['allow_substitution']}")
+
+        # Bourbon subcategory - allows substitution
         bourbon = db.create_ingredient({
             "name": "Test Bourbon Category",
-            "description": "American bourbon whiskey for testing", 
+            "description": "American bourbon whiskey for testing",
             "parent_id": whiskey["id"],
-            "substitution_level": None,  # Inherit from parent (1)
+            "allow_substitution": True,
             "created_by": "test-user"
         })
-        print(f"Created Test Bourbon Category: ID={bourbon['id']}, sub_level={bourbon['substitution_level']}, parent_id={bourbon['parent_id']}")
-        
+        print(f"Created Test Bourbon Category: ID={bourbon['id']}, allow_sub={bourbon['allow_substitution']}, parent_id={bourbon['parent_id']}")
+
         # Specific bourbon brands
         makers = db.create_ingredient({
             "name": "Test Maker's Mark",
             "description": "Premium wheated bourbon for testing",
-            "parent_id": bourbon["id"], 
-            "substitution_level": None,  # Inherit from parent (1)
+            "parent_id": bourbon["id"],
+            "allow_substitution": True,
             "created_by": "test-user"
         })
-        print(f"Created Test Maker's Mark: ID={makers['id']}, sub_level={makers['substitution_level']}, parent_id={makers['parent_id']}")
-        
+        print(f"Created Test Maker's Mark: ID={makers['id']}, allow_sub={makers['allow_substitution']}, parent_id={makers['parent_id']}")
+
         buffalo = db.create_ingredient({
             "name": "Test Buffalo Trace",
             "description": "Classic bourbon whiskey for testing",
             "parent_id": bourbon["id"],
-            "substitution_level": None,  # Inherit from parent (1) 
+            "allow_substitution": True,
             "created_by": "test-user"
         })
-        print(f"Created Test Buffalo Trace: ID={buffalo['id']}, sub_level={buffalo['substitution_level']}, parent_id={buffalo['parent_id']}")
+        print(f"Created Test Buffalo Trace: ID={buffalo['id']}, allow_sub={buffalo['allow_substitution']}, parent_id={buffalo['parent_id']}")
         
         # Step 2: Create recipes with different bourbon specificity
         print("\n=== Creating recipes ===")
@@ -153,30 +153,30 @@ class TestSubstitutionIntegration:
             "name": "Amaro",
             "description": "Italian herbal liqueurs - each unique",
             "parent_id": None,
-            "substitution_level": 0,  # No substitution
+            "allow_substitution": False,  # No substitution
             "created_by": "test-user"
         })
-        print(f"Created Amaro: ID={amaro['id']}, sub_level={amaro['substitution_level']}")
-        
+        print(f"Created Amaro: ID={amaro['id']}, allow_sub={amaro['allow_substitution']}")
+
         # Specific amaro types
         nonino = db.create_ingredient({
             "name": "Amaro Nonino",
             "description": "Light, elegant amaro with grape brandy base",
             "parent_id": amaro["id"],
-            "substitution_level": None,  # Inherit from parent (0)
+            "allow_substitution": False,
             "created_by": "test-user"
         })
-        
+
         montenegro = db.create_ingredient({
             "name": "Amaro Montenegro",
             "description": "Medium-bodied, herbal amaro",
             "parent_id": amaro["id"],
-            "substitution_level": None,  # Inherit from parent (0)
+            "allow_substitution": False,
             "created_by": "test-user"
         })
-        
-        print(f"Created Amaro Nonino: ID={nonino['id']}, sub_level={nonino['substitution_level']}")
-        print(f"Created Amaro Montenegro: ID={montenegro['id']}, sub_level={montenegro['substitution_level']}")
+
+        print(f"Created Amaro Nonino: ID={nonino['id']}, allow_sub={nonino['allow_substitution']}")
+        print(f"Created Amaro Montenegro: ID={montenegro['id']}, allow_sub={montenegro['allow_substitution']}")
         
         # Create recipe requiring specific Amaro Nonino
         paper_plane = db.create_recipe({
@@ -248,49 +248,49 @@ class TestSubstitutionIntegration:
         # Create bourbon hierarchy (substitutable)
         whiskey_mixed = db.create_ingredient({
             "name": "Mixed Test Whiskey",
-            "substitution_level": 1,
+            "allow_substitution": True,
             "created_by": "test-user"
         })
-        
+
         bourbon_mixed = db.create_ingredient({
             "name": "Mixed Test Bourbon",
             "parent_id": whiskey_mixed["id"],
-            "substitution_level": None,
+            "allow_substitution": True,
             "created_by": "test-user"
         })
-        
+
         makers_mixed = db.create_ingredient({
             "name": "Mixed Test Maker's Mark",
-            "parent_id": bourbon_mixed["id"], 
-            "substitution_level": None,
+            "parent_id": bourbon_mixed["id"],
+            "allow_substitution": True,
             "created_by": "test-user"
         })
-        
+
         buffalo_mixed = db.create_ingredient({
             "name": "Mixed Test Buffalo Trace",
             "parent_id": bourbon_mixed["id"],
-            "substitution_level": None,
+            "allow_substitution": True,
             "created_by": "test-user"
         })
-        
+
         # Create amaro hierarchy (not substitutable)
         amaro_mixed = db.create_ingredient({
             "name": "Mixed Test Amaro",
-            "substitution_level": 0,  # No substitution
+            "allow_substitution": False,  # No substitution
             "created_by": "test-user"
         })
-        
+
         nonino_mixed = db.create_ingredient({
             "name": "Mixed Test Amaro Nonino",
             "parent_id": amaro_mixed["id"],
-            "substitution_level": None,  # Inherit 0
+            "allow_substitution": False,
             "created_by": "test-user"
         })
-        
+
         montenegro_mixed = db.create_ingredient({
-            "name": "Mixed Test Amaro Montenegro", 
+            "name": "Mixed Test Amaro Montenegro",
             "parent_id": amaro_mixed["id"],
-            "substitution_level": None,  # Inherit 0
+            "allow_substitution": False,
             "created_by": "test-user"
         })
         
@@ -330,42 +330,42 @@ class TestSubstitutionIntegration:
         assert len(search_results) == 1
         assert search_results[0]['name'] == "Boulevardier Variation"
 
-    def test_inheritance_behavior(self, db: Database):
-        """Test that NULL substitution_level properly inherits from parent"""
-        
-        print("\n=== Testing inheritance ===")
-        
-        # Create parent with substitution level 1
+    def test_explicit_allow_substitution(self, db: Database):
+        """Test that allow_substitution can be set explicitly for each ingredient"""
+
+        print("\n=== Testing explicit allow_substitution ===")
+
+        # Create parent with allow_substitution=True
         parent = db.create_ingredient({
             "name": "Parent Category",
-            "substitution_level": 1,
+            "allow_substitution": True,
             "created_by": "test-user"
         })
-        
-        # Create child with NULL (should inherit)
+
+        # Create child with allow_substitution=True
         child = db.create_ingredient({
             "name": "Child Brand",
             "parent_id": parent["id"],
-            "substitution_level": None,  # Should inherit 1 from parent
+            "allow_substitution": True,
             "created_by": "test-user"
         })
-        
-        # Create another child with explicit level 0
+
+        # Create another child with explicit False
         child_no_sub = db.create_ingredient({
             "name": "Child No Substitution",
             "parent_id": parent["id"],
-            "substitution_level": 0,  # Explicit no substitution
+            "allow_substitution": False,  # Explicit no substitution
             "created_by": "test-user"
         })
-        
-        print(f"Parent: substitution_level = {parent['substitution_level']}")
-        print(f"Child (inherit): substitution_level = {child['substitution_level']}")
-        print(f"Child (explicit 0): substitution_level = {child_no_sub['substitution_level']}")
-        
+
+        print(f"Parent: allow_substitution = {parent['allow_substitution']}")
+        print(f"Child (True): allow_substitution = {child['allow_substitution']}")
+        print(f"Child (explicit False): allow_substitution = {child_no_sub['allow_substitution']}")
+
         # Verify values are stored correctly
-        assert parent['substitution_level'] == 1
-        assert child['substitution_level'] is None  # NULL in database
-        assert child_no_sub['substitution_level'] == 0
+        assert parent['allow_substitution'] is True
+        assert child['allow_substitution'] is True
+        assert child_no_sub['allow_substitution'] is False
 
 
 if __name__ == "__main__":

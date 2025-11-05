@@ -55,209 +55,206 @@ class TestSubstitutionAPI:
         # Clean up
         app.dependency_overrides.clear()
 
-    def test_create_ingredient_with_substitution_level(self, editor_authenticated_client: TestClient):
-        """Test POST /ingredients with substitution_level"""
-        
+    def test_create_ingredient_with_allow_substitution(self, editor_authenticated_client: TestClient):
+        """Test POST /ingredients with allow_substitution"""
+
         # Test data
         ingredient_data = {
             "name": "Test Rum",
-            "description": "Test rum with substitution level",
-            "substitution_level": 1
+            "description": "Test rum with allow substitution",
+            "allow_substitution": True
         }
-        
+
         # Make request (no headers needed - authentication is mocked)
         response = editor_authenticated_client.post(
             "/ingredients",
             json=ingredient_data
         )
-        
+
         # Verify response
         assert response.status_code == 201
-        
+
         result = response.json()
         assert result["name"] == "Test Rum"
-        assert result["substitution_level"] == 1
+        assert result["allow_substitution"] is True
         assert "id" in result
 
-    def test_create_ingredient_with_null_substitution_level(self, editor_authenticated_client: TestClient):
-        """Test creating ingredient with NULL substitution_level (inherits)"""
-        
+    def test_create_ingredient_with_false_allow_substitution(self, editor_authenticated_client: TestClient):
+        """Test creating ingredient with allow_substitution=False"""
+
         ingredient_data = {
             "name": "Test Brand",
-            "description": "Test brand that inherits substitution level",
-            "substitution_level": None
+            "description": "Test brand that does not allow substitution",
+            "allow_substitution": False
         }
-        
+
         response = editor_authenticated_client.post(
             "/ingredients",
             json=ingredient_data
         )
-        
+
         assert response.status_code == 201
-        
+
         result = response.json()
         assert result["name"] == "Test Brand"
-        assert result["substitution_level"] is None
+        assert result["allow_substitution"] is False
 
-    def test_get_ingredient_includes_substitution_level(self, editor_authenticated_client: TestClient):
-        """Test GET /ingredients/{id} returns substitution_level"""
-        
+    def test_get_ingredient_includes_allow_substitution(self, editor_authenticated_client: TestClient):
+        """Test GET /ingredients/{id} returns allow_substitution"""
+
         # First create an ingredient
         create_response = editor_authenticated_client.post(
             "/ingredients",
             json={
                 "name": "Test Whiskey",
-                "substitution_level": 1
+                "allow_substitution": True
             }
         )
-        
+
         assert create_response.status_code == 201
         ingredient_id = create_response.json()["id"]
-        
+
         # Get the ingredient (no auth needed for GET)
         response = editor_authenticated_client.get(f"/ingredients/{ingredient_id}")
-        
+
         assert response.status_code == 200
         result = response.json()
         assert result["id"] == ingredient_id
-        assert result["substitution_level"] == 1
+        assert result["allow_substitution"] is True
 
-    def test_update_ingredient_substitution_level(self, editor_authenticated_client: TestClient):
-        """Test PUT /ingredients/{id} to update substitution_level"""
-        
+    def test_update_ingredient_allow_substitution(self, editor_authenticated_client: TestClient):
+        """Test PUT /ingredients/{id} to update allow_substitution"""
+
         # Create ingredient
         create_response = editor_authenticated_client.post(
             "/ingredients",
             json={
                 "name": "Test Brandy",
-                "substitution_level": 0
+                "allow_substitution": False
             }
         )
-        
+
         assert create_response.status_code == 201
         ingredient_id = create_response.json()["id"]
-        
-        # Update substitution level
+
+        # Update allow_substitution
         update_response = editor_authenticated_client.put(
             f"/ingredients/{ingredient_id}",
             json={
-                "substitution_level": 1
+                "allow_substitution": True
             }
         )
-        
+
         assert update_response.status_code == 200
         result = update_response.json()
-        assert result["substitution_level"] == 1
-        
+        assert result["allow_substitution"] is True
+
         # Verify the change persisted
         get_response = editor_authenticated_client.get(f"/ingredients/{ingredient_id}")
-        assert get_response.json()["substitution_level"] == 1
+        assert get_response.json()["allow_substitution"] is True
 
-    def test_get_all_ingredients_includes_substitution_level(self, client: TestClient):
-        """Test GET /api/v1/ingredients returns substitution_level for all ingredients"""
-        
+    def test_get_all_ingredients_includes_allow_substitution(self, client: TestClient):
+        """Test GET /api/v1/ingredients returns allow_substitution for all ingredients"""
+
         response = client.get("/ingredients")
         assert response.status_code == 200
-        
-        ingredients = response.json()
-        
-        # All ingredients should have substitution_level field
-        for ingredient in ingredients:
-            assert "substitution_level" in ingredient
-            # Should be int, None, or missing (treated as None)
-            sub_level = ingredient["substitution_level"]
-            assert sub_level is None or isinstance(sub_level, int)
 
-    def test_search_ingredients_includes_substitution_level(self, client: TestClient):
-        """Test GET /api/v1/ingredients/search returns substitution_level"""
-        
+        ingredients = response.json()
+
+        # All ingredients should have allow_substitution field
+        for ingredient in ingredients:
+            assert "allow_substitution" in ingredient
+            # Should be boolean
+            allow_sub = ingredient["allow_substitution"]
+            assert isinstance(allow_sub, bool)
+
+    def test_search_ingredients_includes_allow_substitution(self, client: TestClient):
+        """Test GET /api/v1/ingredients/search returns allow_substitution"""
+
         response = client.get("/ingredients/search?q=whiskey")
         assert response.status_code == 200
-        
-        ingredients = response.json()
-        
-        # All returned ingredients should have substitution_level
-        for ingredient in ingredients:
-            assert "substitution_level" in ingredient
 
-    def test_bulk_ingredient_upload_with_substitution_levels(self, editor_authenticated_client: TestClient):
-        """Test POST /ingredients/bulk with substitution levels"""
-        
+        ingredients = response.json()
+
+        # All returned ingredients should have allow_substitution
+        for ingredient in ingredients:
+            assert "allow_substitution" in ingredient
+
+    def test_bulk_ingredient_upload_with_allow_substitution(self, editor_authenticated_client: TestClient):
+        """Test POST /ingredients/bulk with allow_substitution"""
+
         bulk_data = {
             "ingredients": [
                 {
                     "name": "Bulk Rum Category",
                     "description": "Rum category for bulk test",
-                    "substitution_level": 1
+                    "allow_substitution": True
                 },
                 {
                     "name": "Bulk Rum Brand 1",
                     "description": "Specific rum brand",
                     "parent_name": "Bulk Rum Category",
-                    "substitution_level": None  # Inherit from parent
+                    "allow_substitution": False
                 },
                 {
-                    "name": "Bulk Rum Brand 2", 
+                    "name": "Bulk Rum Brand 2",
                     "description": "Another specific rum brand",
                     "parent_name": "Bulk Rum Category",
-                    "substitution_level": None  # Inherit from parent
+                    "allow_substitution": False
                 }
             ]
         }
-        
+
         response = editor_authenticated_client.post(
             "/ingredients/bulk",
             json=bulk_data
         )
-        
+
         # Note: Bulk upload might have validation that prevents this test from working
         # without proper parent relationships being created first
-        
+
         if response.status_code == 201:
             result = response.json()
-            
-            # Check that uploaded ingredients have correct substitution levels
+
+            # Check that uploaded ingredients have correct allow_substitution values
             uploaded = result.get("uploaded_ingredients", [])
-            
+
             # Find the category ingredient
             category = next((ing for ing in uploaded if ing["name"] == "Bulk Rum Category"), None)
             if category:
-                assert category["substitution_level"] == 1
-                
-            # Find brand ingredients  
+                assert category["allow_substitution"] is True
+
+            # Find brand ingredients
             brand1 = next((ing for ing in uploaded if ing["name"] == "Bulk Rum Brand 1"), None)
             if brand1:
-                assert brand1["substitution_level"] is None
+                assert brand1["allow_substitution"] is False
 
-    def test_substitution_level_validation(self, editor_authenticated_client: TestClient):
-        """Test that invalid substitution_level values are rejected"""
-        
-        # Test invalid substitution level (negative)
+    def test_allow_substitution_accepts_boolean(self, editor_authenticated_client: TestClient):
+        """Test that allow_substitution accepts boolean values"""
+
+        # Test with True
         response = editor_authenticated_client.post(
             "/ingredients",
             json={
-                "name": "Invalid Ingredient",
-                "substitution_level": -1  # Should be rejected
+                "name": "Test Ingredient True",
+                "allow_substitution": True
             }
         )
-        
-        # Should be rejected (400 Bad Request) if validation is implemented
-        # Current implementation might not have this validation yet
-        # For now we'll accept it passes - this test documents expected future behavior
-        if response.status_code not in [400, 422]:
-            pytest.skip("Validation not yet implemented - this test documents expected behavior")
-        
-        # Test invalid substitution level (too high)  
+
+        assert response.status_code == 201
+        assert response.json()["allow_substitution"] is True
+
+        # Test with False
         response = editor_authenticated_client.post(
-            "/ingredients", 
+            "/ingredients",
             json={
-                "name": "Invalid Ingredient 2",
-                "substitution_level": 10  # Should be rejected (only 0, 1, 2 are meaningful)
+                "name": "Test Ingredient False",
+                "allow_substitution": False
             }
         )
-        
-        # This might pass currently if no validation is implemented
-        # The test documents expected behavior
+
+        assert response.status_code == 201
+        assert response.json()["allow_substitution"] is False
 
 
 class TestSubstitutionRecipeSearch:
@@ -273,27 +270,27 @@ class TestSubstitutionRecipeSearch:
         
         app.dependency_overrides.clear()
 
-    def test_recipe_search_with_substitution(self, client: TestClient):
-        """Test that recipe search API respects substitution levels"""
-        
+    def test_recipe_search_with_allow_substitution(self, client: TestClient):
+        """Test that recipe search API respects allow_substitution"""
+
         # This would require:
-        # 1. Setting up ingredients with substitution levels
-        # 2. Creating recipes 
+        # 1. Setting up ingredients with allow_substitution
+        # 2. Creating recipes
         # 3. Setting up user inventory
         # 4. Calling recipe search API
         # 5. Verifying substitution logic works
-        
+
         # For now, just test that the endpoint exists and returns expected format
-        
+
         response = client.get("/recipes/search")
-        
+
         # Should return valid response structure even if empty
         assert response.status_code == 200
-        
+
         result = response.json()
         assert "recipes" in result
         assert "pagination" in result
-        
+
         # The pagination should include expected fields
         pagination = result["pagination"]
         assert "total_count" in pagination
