@@ -7,6 +7,55 @@ INGREDIENT_SELECT_FIELDS = """
     i.path as ingredient_path, u.conversion_to_ml
 """
 
+# Shared substitution matching logic
+# This SQL fragment checks if a user's ingredient can satisfy a recipe's ingredient requirement
+# Variables that must be available in context:
+#   - i_user.id, i_user.path, i_user.allow_substitution (user's ingredient)
+#   - i_recipe.id, i_recipe.path, i_recipe.parent_id, i_recipe.allow_substitution (recipe's ingredient)
+INGREDIENT_SUBSTITUTION_MATCH = """
+    -- Direct match
+    i_user.id = i_recipe.id
+    OR
+    -- Recipe allows substitution AND user ingredient can substitute
+    (i_recipe.allow_substitution = 1 AND (
+        -- User has ancestor of recipe ingredient (user has "Rum", recipe needs "Wray And Nephew")
+        -- BUT: no blocking parents in between (e.g., "Pot Still Unaged Rum" with allow_sub=false)
+        (i_recipe.path LIKE i_user.path || '%'
+         AND NOT EXISTS (
+             SELECT 1 FROM ingredients blocking
+             WHERE i_recipe.path LIKE blocking.path || '%'  -- blocking is ancestor of recipe ingredient
+             AND blocking.path LIKE i_user.path || '%'      -- blocking is descendant of user ingredient
+             AND blocking.id != i_user.id                    -- not the user ingredient itself
+             AND blocking.allow_substitution = 0             -- blocks substitution
+         ))
+        OR
+        -- Sibling match: same parent, both allow substitution
+        (i_recipe.parent_id = i_user.parent_id
+         AND i_recipe.parent_id IS NOT NULL
+         AND i_user.allow_substitution = 1)
+        OR
+        -- User has parent of recipe ingredient
+        (i_user.id = i_recipe.parent_id)
+        OR
+        -- Recursive: user has common ancestor with recipe ingredient
+        EXISTS (
+            SELECT 1 FROM ingredients anc
+            WHERE i_user.path LIKE anc.path || '%'
+            AND i_recipe.path LIKE anc.path || '%'
+            AND anc.allow_substitution = 1
+            AND LENGTH(anc.path) - LENGTH(REPLACE(anc.path, '/', '')) <= 6
+            -- Ensure no blocking parents between common ancestor and recipe ingredient
+            AND NOT EXISTS (
+                SELECT 1 FROM ingredients blocking
+                WHERE i_recipe.path LIKE blocking.path || '%'
+                AND blocking.path LIKE anc.path || '%'
+                AND blocking.id != anc.id
+                AND blocking.allow_substitution = 0
+            )
+        )
+    ))
+"""
+
 
 get_recipe_by_id_sql = """
     SELECT
@@ -197,31 +246,7 @@ def build_search_recipes_paginated_sql(
                     LEFT JOIN ingredients i_user ON ui_check.ingredient_id = i_user.id
                     WHERE ui_check.cognito_user_id = :cognito_user_id
                     AND (
-                        -- Direct match
-                        i_user.id = i_recipe.id
-                        OR
-                        -- User has ancestor of recipe ingredient (user has "Whiskey", recipe needs "Bourbon")
-                        i_recipe.path LIKE i_user.path || '%'
-                        OR
-                        -- Recipe allows substitution AND user ingredient can substitute
-                        (i_recipe.allow_substitution = 1 AND (
-                            -- Sibling match: same parent, both allow substitution
-                            (i_recipe.parent_id = i_user.parent_id
-                             AND i_recipe.parent_id IS NOT NULL
-                             AND i_user.allow_substitution = 1)
-                            OR
-                            -- User has parent of recipe ingredient
-                            (i_user.id = i_recipe.parent_id)
-                            OR
-                            -- Recursive: user has ancestor, check path up to 5 levels
-                            EXISTS (
-                                SELECT 1 FROM ingredients anc
-                                WHERE i_user.path LIKE anc.path || '%'
-                                AND i_recipe.path LIKE anc.path || '%'
-                                AND anc.allow_substitution = 1
-                                AND LENGTH(anc.path) - LENGTH(REPLACE(anc.path, '/', '')) <= 6
-                            )
-                        ))
+                        {substitution_match}
                     )
                 )
             )
@@ -301,4 +326,127 @@ def build_search_recipes_paginated_sql(
     )
     SELECT * FROM paginated_with_ingredients
     """
-    return base_sql
+    # Substitute the shared substitution matching logic
+    return base_sql.format(substitution_match=INGREDIENT_SUBSTITUTION_MATCH)
+
+
+# Ingredient Recommendations Query
+# This query finds ingredients the user doesn't have that would unlock the most "almost makeable" recipes
+# (recipes where user has all but one ingredient), respecting allow_substitution rules.
+def get_ingredient_recommendations_sql() -> str:
+    """Build SQL query for ingredient recommendations with substitution logic"""
+
+    # Need to adapt variable names for the CTE context:
+    # In recipe search: i_user and i_recipe
+    # In recommendations CTE: ui (from user_inventory) and rr (from recipe_requirements)
+    # We'll create a modified version of the substitution match for this context
+    # IMPORTANT: Replace more specific patterns FIRST to avoid partial matches
+
+    substitution_match_adapted = INGREDIENT_SUBSTITUTION_MATCH.replace(
+        'i_user.allow_substitution', 'ui.user_allow_substitution'
+    ).replace(
+        'i_user.parent_id', 'ui.parent_id'
+    ).replace(
+        'i_user.path', 'ui.path'
+    ).replace(
+        'i_user.id', 'ui.ingredient_id'
+    ).replace(
+        'i_recipe.allow_substitution', 'rr.required_allow_substitution'
+    ).replace(
+        'i_recipe.parent_id', 'rr.required_parent_id'
+    ).replace(
+        'i_recipe.path', 'rr.required_ingredient_path'
+    ).replace(
+        'i_recipe.id', 'rr.required_ingredient_id'
+    )
+
+    query = f"""
+    WITH
+    -- Get user's ingredient IDs and their hierarchy info
+    user_inventory AS (
+        SELECT
+            ui.ingredient_id,
+            i.path,
+            i.parent_id,
+            COALESCE(i.allow_substitution, 0) as user_allow_substitution
+        FROM user_ingredients ui
+        JOIN ingredients i ON ui.ingredient_id = i.id
+        WHERE ui.cognito_user_id = :user_id
+    ),
+    -- For each recipe, find all required ingredients
+    recipe_requirements AS (
+        SELECT
+            ri.recipe_id,
+            ri.ingredient_id as required_ingredient_id,
+            i.name as required_ingredient_name,
+            i.path as required_ingredient_path,
+            i.parent_id as required_parent_id,
+            COALESCE(i.allow_substitution, 0) as required_allow_substitution
+        FROM recipe_ingredients ri
+        JOIN ingredients i ON ri.ingredient_id = i.id
+    ),
+    -- Check each recipe requirement against user inventory
+    requirement_satisfaction AS (
+        SELECT
+            rr.recipe_id,
+            rr.required_ingredient_id,
+            rr.required_ingredient_name,
+            CASE
+                WHEN EXISTS (
+                    SELECT 1 FROM user_inventory ui
+                    WHERE
+                        {substitution_match_adapted}
+                ) THEN 1
+                ELSE 0
+            END as is_satisfied
+        FROM recipe_requirements rr
+    ),
+    -- Find recipes where user has all but exactly 1 ingredient
+    almost_makeable_recipes AS (
+        SELECT
+            recipe_id,
+            COUNT(*) as total_requirements,
+            SUM(is_satisfied) as satisfied_count,
+            COUNT(*) - SUM(is_satisfied) as missing_count
+        FROM requirement_satisfaction
+        GROUP BY recipe_id
+        HAVING missing_count = 1
+    ),
+    -- Find the missing ingredient for each almost-makeable recipe
+    missing_ingredients AS (
+        SELECT
+            rs.recipe_id,
+            rs.required_ingredient_id as missing_ingredient_id,
+            rs.required_ingredient_name as missing_ingredient_name
+        FROM requirement_satisfaction rs
+        JOIN almost_makeable_recipes amr ON rs.recipe_id = amr.recipe_id
+        WHERE rs.is_satisfied = 0
+    ),
+    -- Aggregate: count recipes unlocked by each missing ingredient
+    ingredient_impact AS (
+        SELECT
+            mi.missing_ingredient_id,
+            COUNT(*) as recipes_unlocked,
+            GROUP_CONCAT(r.name, '|||') as recipe_names
+        FROM missing_ingredients mi
+        JOIN recipes r ON mi.recipe_id = r.id
+        GROUP BY mi.missing_ingredient_id
+        ORDER BY recipes_unlocked DESC
+        LIMIT :limit
+    )
+    -- Get full ingredient details for the recommendations
+    SELECT
+        i.id,
+        i.name,
+        i.description,
+        i.parent_id,
+        i.path,
+        i.allow_substitution,
+        ii.recipes_unlocked,
+        ii.recipe_names
+    FROM ingredient_impact ii
+    JOIN ingredients i ON ii.missing_ingredient_id = i.id
+    ORDER BY ii.recipes_unlocked DESC
+    """
+
+    return query

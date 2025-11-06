@@ -313,10 +313,10 @@ class Database:
                     conn.rollback()
                 error_msg = str(e).lower()
                 # Check if it's a UNIQUE constraint violation on the name field
-                if 'unique' in error_msg and 'name' in error_msg:
+                if "unique" in error_msg and "name" in error_msg:
                     raise ConflictException(
                         f"An ingredient with the name '{data.get('name')}' already exists. Please use a different name.",
-                        detail=str(e)
+                        detail=str(e),
                     )
                 # Re-raise other integrity errors
                 raise
@@ -394,7 +394,7 @@ class Database:
                     "name = COALESCE(:name, name)",
                     "description = COALESCE(:description, description)",
                     "parent_id = :parent_id",
-                    "path = :path"
+                    "path = :path",
                 ]
                 query_params = {
                     "id": ingredient_id,
@@ -413,7 +413,7 @@ class Database:
                 self.execute_query(
                     f"""
                     UPDATE ingredients 
-                    SET {', '.join(set_clauses)}
+                    SET {", ".join(set_clauses)}
                     WHERE id = :id
                     """,
                     query_params,
@@ -434,7 +434,7 @@ class Database:
                 # Build the update query dynamically to handle None values properly
                 set_clauses = [
                     "name = COALESCE(:name, name)",
-                    "description = COALESCE(:description, description)"
+                    "description = COALESCE(:description, description)",
                 ]
                 query_params = {
                     "id": ingredient_id,
@@ -450,7 +450,7 @@ class Database:
                 self.execute_query(
                     f"""
                     UPDATE ingredients 
-                    SET {', '.join(set_clauses)}
+                    SET {", ".join(set_clauses)}
                     WHERE id = :id
                     """,
                     query_params,
@@ -703,53 +703,69 @@ class Database:
         """Validate recipe ingredients before database operations"""
         if not ingredients:
             return
-        
+
         # Collect all ingredient IDs for batch validation
         ingredient_ids = []
-        
+
         for i, ingredient in enumerate(ingredients):
             # Validate required fields
             if "ingredient_id" not in ingredient:
-                raise ValueError(f"Ingredient {i + 1}: missing required field 'ingredient_id'")
-            
+                raise ValueError(
+                    f"Ingredient {i + 1}: missing required field 'ingredient_id'"
+                )
+
             ingredient_id = ingredient["ingredient_id"]
             if ingredient_id is None:
                 raise ValueError(f"Ingredient {i + 1}: 'ingredient_id' cannot be None")
-            
+
             # Validate ingredient_id is an integer
             if not isinstance(ingredient_id, int):
                 try:
                     ingredient_id = int(ingredient_id)
-                    ingredient["ingredient_id"] = ingredient_id  # Update the dict with converted value
+                    ingredient["ingredient_id"] = (
+                        ingredient_id  # Update the dict with converted value
+                    )
                 except (ValueError, TypeError):
-                    raise ValueError(f"Ingredient {i + 1}: 'ingredient_id' must be an integer, got {type(ingredient_id).__name__}")
-            
+                    raise ValueError(
+                        f"Ingredient {i + 1}: 'ingredient_id' must be an integer, got {type(ingredient_id).__name__}"
+                    )
+
             ingredient_ids.append(ingredient_id)
-            
+
             # Validate amount if present
             if "amount" in ingredient and ingredient["amount"] is not None:
                 amount = ingredient["amount"]
                 if not isinstance(amount, (int, float)):
                     try:
                         amount = float(amount)
-                        ingredient["amount"] = amount  # Update the dict with converted value
+                        ingredient["amount"] = (
+                            amount  # Update the dict with converted value
+                        )
                     except (ValueError, TypeError):
-                        raise ValueError(f"Ingredient {i + 1}: 'amount' must be numeric, got {type(amount).__name__}: '{amount}'")
-                
+                        raise ValueError(
+                            f"Ingredient {i + 1}: 'amount' must be numeric, got {type(amount).__name__}: '{amount}'"
+                        )
+
                 # Validate amount is not negative
                 if amount < 0:
-                    raise ValueError(f"Ingredient {i + 1}: 'amount' cannot be negative, got {amount}")
-            
+                    raise ValueError(
+                        f"Ingredient {i + 1}: 'amount' cannot be negative, got {amount}"
+                    )
+
             # Validate unit_id if present
             if "unit_id" in ingredient and ingredient["unit_id"] is not None:
                 unit_id = ingredient["unit_id"]
                 if not isinstance(unit_id, int):
                     try:
                         unit_id = int(unit_id)
-                        ingredient["unit_id"] = unit_id  # Update the dict with converted value
+                        ingredient["unit_id"] = (
+                            unit_id  # Update the dict with converted value
+                        )
                     except (ValueError, TypeError):
-                        raise ValueError(f"Ingredient {i + 1}: 'unit_id' must be an integer, got {type(unit_id).__name__}")
-        
+                        raise ValueError(
+                            f"Ingredient {i + 1}: 'unit_id' must be an integer, got {type(unit_id).__name__}"
+                        )
+
         # Batch validate that all ingredient IDs exist
         if ingredient_ids:
             self._validate_ingredients_exist(ingredient_ids)
@@ -760,16 +776,16 @@ class Database:
             placeholders = ",".join("?" for _ in ingredient_ids)
             existing_ids_result = self.execute_query(
                 f"SELECT id FROM ingredients WHERE id IN ({placeholders})",
-                tuple(ingredient_ids)
+                tuple(ingredient_ids),
             )
-            
+
             existing_ids = set(row["id"] for row in existing_ids_result)
             missing_ids = set(ingredient_ids) - existing_ids
-            
+
             if missing_ids:
                 missing_ids_str = ", ".join(str(id) for id in sorted(missing_ids))
                 raise ValueError(f"Invalid ingredient IDs: {missing_ids_str}")
-                
+
         except Exception as e:
             if "Invalid ingredient IDs" in str(e):
                 raise  # Re-raise our custom validation error
@@ -782,7 +798,7 @@ class Database:
         # Validate ingredients before starting database transaction
         if "ingredients" in data and data["ingredients"]:
             self._validate_recipe_ingredients(data["ingredients"])
-        
+
         conn = None
         try:
             conn = self._get_connection()
@@ -942,35 +958,51 @@ class Database:
                 for tag_data_str in public_tags_str.split(":::"):
                     try:
                         tag_id_str, tag_name = tag_data_str.split("|||", 1)
-                        tag_obj = {"id": int(tag_id_str), "name": tag_name, "type": "public"}
+                        tag_obj = {
+                            "id": int(tag_id_str),
+                            "name": tag_name,
+                            "type": "public",
+                        }
                         recipe["tags"].append(tag_obj)
-                        logger.info(f"Added public tag to recipe {recipe_id}: {tag_obj}")
+                        logger.info(
+                            f"Added public tag to recipe {recipe_id}: {tag_obj}"
+                        )
                     except ValueError as ve:
                         logger.warning(
                             f"Could not parse public tag_data_str '{tag_data_str}': {ve}"
                         )
             # Process private tags
             private_tags_str = recipe_data.get("private_tags_data")
-            logger.info(f"Recipe {recipe_id} private_tags_data: '{private_tags_str}' for user {cognito_user_id}")
+            logger.info(
+                f"Recipe {recipe_id} private_tags_data: '{private_tags_str}' for user {cognito_user_id}"
+            )
             if (
                 private_tags_str and cognito_user_id
             ):  # Only process if user_id was present for the query
                 for tag_data_str in private_tags_str.split(":::"):
                     try:
                         tag_id_str, tag_name = tag_data_str.split("|||", 1)
-                        tag_obj = {"id": int(tag_id_str), "name": tag_name, "type": "private"}
+                        tag_obj = {
+                            "id": int(tag_id_str),
+                            "name": tag_name,
+                            "type": "private",
+                        }
                         recipe["tags"].append(tag_obj)
-                        logger.info(f"Added private tag to recipe {recipe_id}: {tag_obj}")
+                        logger.info(
+                            f"Added private tag to recipe {recipe_id}: {tag_obj}"
+                        )
                     except ValueError as ve:
                         logger.warning(
                             f"Could not parse private tag_data_str '{tag_data_str}': {ve}"
                         )
             # Fetch ingredients separately
             recipe["ingredients"] = self._get_recipe_ingredients(recipe_id)
-            
+
             # Log final tag list
-            logger.info(f"Recipe {recipe_id} final tag list ({len(recipe['tags'])} tags): {recipe['tags']}")
-            
+            logger.info(
+                f"Recipe {recipe_id} final tag list ({len(recipe['tags'])} tags): {recipe['tags']}"
+            )
+
             return recipe
 
         except Exception as e:
@@ -1510,7 +1542,9 @@ class Database:
                 ),
             )
             if not tag:  # Should not happen if insert succeeded
-                logger.error(f"DB: Failed to retrieve public tag '{name}' after creation")
+                logger.error(
+                    f"DB: Failed to retrieve public tag '{name}' after creation"
+                )
                 raise sqlite3.DatabaseError("Failed to retrieve tag after creation.")
             logger.info(f"DB: Successfully created public tag: {tag[0]}")
             return tag[0]
@@ -1670,9 +1704,13 @@ class Database:
             )
             rows_affected = result.get("rowCount", 0)
             if rows_affected > 0:
-                logger.info(f"DB: Successfully added tag {tag_id} to recipe {recipe_id}")
+                logger.info(
+                    f"DB: Successfully added tag {tag_id} to recipe {recipe_id}"
+                )
             else:
-                logger.warning(f"DB: Tag {tag_id} already associated with recipe {recipe_id} (conflict ignored)")
+                logger.warning(
+                    f"DB: Tag {tag_id} already associated with recipe {recipe_id} (conflict ignored)"
+                )
             return rows_affected > 0
         except Exception as e:
             logger.error(
@@ -1697,9 +1735,13 @@ class Database:
             )
             rows_affected = result.get("rowCount", 0)
             if rows_affected > 0:
-                logger.info(f"DB: Successfully added private tag {tag_id} to recipe {recipe_id}")
+                logger.info(
+                    f"DB: Successfully added private tag {tag_id} to recipe {recipe_id}"
+                )
             else:
-                logger.warning(f"DB: Private tag {tag_id} already associated with recipe {recipe_id} (conflict ignored)")
+                logger.warning(
+                    f"DB: Private tag {tag_id} already associated with recipe {recipe_id} (conflict ignored)"
+                )
             return rows_affected > 0
         except Exception as e:
             logger.error(
@@ -1853,17 +1895,17 @@ class Database:
     def delete_public_tag(self, tag_id: int) -> bool:
         """Delete a public tag completely from the database.
         This will CASCADE delete all recipe_tags associations.
-        
+
         Args:
             tag_id: ID of the public tag to delete
-            
+
         Returns:
             bool: True if tag was deleted, False if not found or is private
         """
         try:
             result = self.execute_query(
                 "DELETE FROM tags WHERE id = :tag_id AND created_by IS NULL",
-                {"tag_id": tag_id}
+                {"tag_id": tag_id},
             )
             success = result.get("rowCount", 0) > 0
             if success:
@@ -1878,27 +1920,30 @@ class Database:
         """Delete a private tag completely from the database.
         This will CASCADE delete all recipe_tags associations.
         Only the tag owner can delete their private tags.
-        
+
         Args:
             tag_id: ID of the private tag to delete
             user_id: ID of the user attempting to delete (must be tag owner)
-            
+
         Returns:
             bool: True if tag was deleted, False if not found or not owned by user
         """
         try:
             result = self.execute_query(
                 "DELETE FROM tags WHERE id = :tag_id AND created_by = :user_id",
-                {"tag_id": tag_id, "user_id": user_id}
+                {"tag_id": tag_id, "user_id": user_id},
             )
             success = result.get("rowCount", 0) > 0
             if success:
-                logger.info(f"Successfully deleted private tag {tag_id} for user {user_id}")
+                logger.info(
+                    f"Successfully deleted private tag {tag_id} for user {user_id}"
+                )
             return success
         except Exception as e:
-            logger.error(f"Error deleting private tag {tag_id} for user {user_id}: {str(e)}")
+            logger.error(
+                f"Error deleting private tag {tag_id} for user {user_id}: {str(e)}"
+            )
             raise
-
 
     # --- End Tag Management ---
 
@@ -2613,123 +2658,9 @@ class Database:
         Respects allow_substitution rules for ingredient matching.
         """
         try:
-            # This complex query:
-            # 1. Finds all recipes where user is missing exactly 1 ingredient (accounting for substitution rules)
-            # 2. Groups by the missing ingredient
-            # 3. Counts how many recipes each missing ingredient would unlock
-            # 4. Returns top N recommendations with recipe names
+            from .sql_queries import get_ingredient_recommendations_sql
 
-            query = """
-            WITH
-            -- Get user's ingredient IDs and their hierarchy info
-            user_inventory AS (
-                SELECT
-                    ui.ingredient_id,
-                    i.path,
-                    i.parent_id,
-                    COALESCE(i.allow_substitution, 0) as user_allow_substitution
-                FROM user_ingredients ui
-                JOIN ingredients i ON ui.ingredient_id = i.id
-                WHERE ui.cognito_user_id = :user_id
-            ),
-            -- For each recipe, find all required ingredients
-            recipe_requirements AS (
-                SELECT
-                    ri.recipe_id,
-                    ri.ingredient_id as required_ingredient_id,
-                    i.name as required_ingredient_name,
-                    i.path as required_ingredient_path,
-                    i.parent_id as required_parent_id,
-                    COALESCE(i.allow_substitution, 0) as required_allow_substitution
-                FROM recipe_ingredients ri
-                JOIN ingredients i ON ri.ingredient_id = i.id
-            ),
-            -- Check each recipe requirement against user inventory
-            requirement_satisfaction AS (
-                SELECT
-                    rr.recipe_id,
-                    rr.required_ingredient_id,
-                    rr.required_ingredient_name,
-                    CASE
-                        WHEN EXISTS (
-                            SELECT 1 FROM user_inventory ui
-                            WHERE
-                                -- Direct match
-                                (rr.required_ingredient_id = ui.ingredient_id)
-                                OR
-                                -- User has ancestor of recipe ingredient
-                                (rr.required_ingredient_path LIKE ui.path || '%')
-                                OR
-                                -- Recipe allows substitution
-                                (rr.required_allow_substitution = 1 AND (
-                                    -- Sibling match: same parent, both allow substitution
-                                    (rr.required_parent_id = ui.parent_id
-                                     AND rr.required_parent_id IS NOT NULL
-                                     AND ui.user_allow_substitution = 1)
-                                    OR
-                                    -- User has parent
-                                    (ui.ingredient_id = rr.required_parent_id)
-                                    OR
-                                    -- Recursive match through common ancestor
-                                    EXISTS (
-                                        SELECT 1 FROM ingredients anc
-                                        WHERE ui.path LIKE anc.path || '%'
-                                        AND rr.required_ingredient_path LIKE anc.path || '%'
-                                        AND anc.allow_substitution = 1
-                                    )
-                                ))
-                        ) THEN 1
-                        ELSE 0
-                    END as is_satisfied
-                FROM recipe_requirements rr
-            ),
-            -- Find recipes where user has all but exactly 1 ingredient
-            almost_makeable_recipes AS (
-                SELECT
-                    recipe_id,
-                    COUNT(*) as total_requirements,
-                    SUM(is_satisfied) as satisfied_count,
-                    COUNT(*) - SUM(is_satisfied) as missing_count
-                FROM requirement_satisfaction
-                GROUP BY recipe_id
-                HAVING missing_count = 1
-            ),
-            -- Find the missing ingredient for each almost-makeable recipe
-            missing_ingredients AS (
-                SELECT
-                    rs.recipe_id,
-                    rs.required_ingredient_id as missing_ingredient_id,
-                    rs.required_ingredient_name as missing_ingredient_name
-                FROM requirement_satisfaction rs
-                JOIN almost_makeable_recipes amr ON rs.recipe_id = amr.recipe_id
-                WHERE rs.is_satisfied = 0
-            ),
-            -- Aggregate: count recipes unlocked by each missing ingredient
-            ingredient_impact AS (
-                SELECT
-                    mi.missing_ingredient_id,
-                    COUNT(*) as recipes_unlocked,
-                    GROUP_CONCAT(r.name, '|||') as recipe_names
-                FROM missing_ingredients mi
-                JOIN recipes r ON mi.recipe_id = r.id
-                GROUP BY mi.missing_ingredient_id
-                ORDER BY recipes_unlocked DESC
-                LIMIT :limit
-            )
-            -- Get full ingredient details for the recommendations
-            SELECT
-                i.id,
-                i.name,
-                i.description,
-                i.parent_id,
-                i.path,
-                i.allow_substitution,
-                ii.recipes_unlocked,
-                ii.recipe_names
-            FROM ingredient_impact ii
-            JOIN ingredients i ON ii.missing_ingredient_id = i.id
-            ORDER BY ii.recipes_unlocked DESC
-            """
+            query = get_ingredient_recommendations_sql()
 
             result = cast(
                 List[Dict[str, Any]],

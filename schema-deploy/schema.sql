@@ -13,7 +13,7 @@ CREATE TABLE ingredients (
   description TEXT,
   parent_id INTEGER,
   path TEXT,
-  substitution_level INTEGER DEFAULT 0,
+  allow_substitution BOOLEAN NOT NULL DEFAULT 0,
   created_by TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

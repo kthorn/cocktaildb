@@ -138,11 +138,11 @@ class TestIngredientSubstitution:
             "created_by": "test-user"
         })
 
-        assert ingredient["allow_substitution"] is True
+        assert ingredient["allow_substitution"] == 1  # SQLite stores booleans as integers
 
         # Retrieve and verify
         retrieved = db.get_ingredient(ingredient["id"])
-        assert retrieved["allow_substitution"] is True
+        assert retrieved["allow_substitution"] == 1  # SQLite stores booleans as integers
 
         # Create ingredient with allow_substitution=False
         no_sub_ingredient = db.create_ingredient({
@@ -153,7 +153,7 @@ class TestIngredientSubstitution:
             "created_by": "test-user"
         })
 
-        assert no_sub_ingredient["allow_substitution"] is False
+        assert no_sub_ingredient["allow_substitution"] == 0  # SQLite stores booleans as integers
 
         # Create child ingredient with allow_substitution=True
         child_ingredient = db.create_ingredient({
@@ -164,7 +164,7 @@ class TestIngredientSubstitution:
             "created_by": "test-user"
         })
 
-        assert child_ingredient["allow_substitution"] is True
+        assert child_ingredient["allow_substitution"] == 1  # SQLite stores booleans as integers
 
     def test_allow_substitution_update(self, db: Database):
         """Test updating allow_substitution"""
@@ -182,14 +182,14 @@ class TestIngredientSubstitution:
             "allow_substitution": False
         })
 
-        assert updated["allow_substitution"] is False
+        assert updated["allow_substitution"] == 0  # SQLite stores booleans as integers
 
         # Update back to True
         updated = db.update_ingredient(ingredient["id"], {
             "allow_substitution": True
         })
 
-        assert updated["allow_substitution"] is True
+        assert updated["allow_substitution"] == 1  # SQLite stores booleans as integers
 
     def test_bourbon_substitution_in_search(self, db: Database):
         """Test that bourbon brands can substitute for each other in recipe search"""
@@ -530,8 +530,9 @@ class TestIngredientSubstitution:
         # Verify all ingredients have allow_substitution field
         for ingredient in ingredients:
             assert "allow_substitution" in ingredient
-            # Should be boolean
-            assert isinstance(ingredient["allow_substitution"], bool)
+            # Should be integer (SQLite stores booleans as 0/1)
+            assert isinstance(ingredient["allow_substitution"], int)
+            assert ingredient["allow_substitution"] in (0, 1)
 
     def test_search_ingredients_includes_allow_substitution(self, db: Database):
         """Test that search_ingredients returns allow_substitution"""
@@ -547,12 +548,140 @@ class TestIngredientSubstitution:
             assert "allow_substitution" in ingredient
             # All bourbon test ingredients should have allow_substitution=True
             if "Bourbon" in ingredient["name"] or "Whiskey" in ingredient["name"]:
-                assert ingredient["allow_substitution"] is True
+                assert ingredient["allow_substitution"] == 1  # SQLite stores booleans as integers
 
 
 class TestSubstitutionAPI:
     """Test API endpoints with substitution functionality"""
-    
+
+    @pytest.fixture
+    def db(self, db_instance) -> Database:
+        """Get a fresh database instance for each test"""
+        return db_instance
+
+    def test_parent_child_no_substitution_blocks_match(self, db: Database):
+        """
+        Test that user having parent ingredient doesn't match child that blocks substitution.
+        Regression test for bug: User has Gin (allow_sub=false), recipe needs Old Tom Gin (allow_sub=false)
+        → should NOT match (was incorrectly matching before fix)
+        """
+        # Create Gin (parent) with no substitution
+        gin = db.create_ingredient({
+            "name": "Test Gin",
+            "description": "Base gin category",
+            "parent_id": None,
+            "allow_substitution": False,  # Parent doesn't allow substitution
+            "created_by": "test-user"
+        })
+
+        # Create Old Tom Gin (child) with no substitution
+        old_tom_gin = db.create_ingredient({
+            "name": "Test Old Tom Gin",
+            "description": "Sweetened gin style",
+            "parent_id": gin["id"],
+            "allow_substitution": False,  # Child doesn't allow substitution
+            "created_by": "test-user"
+        })
+
+        # Create recipe requiring Old Tom Gin
+        recipe = db.create_recipe({
+            "name": "Martinez",
+            "instructions": "Stir with ice and strain",
+            "description": "Classic gin cocktail",
+            "created_by": "test-user",
+            "ingredients": [
+                {
+                    "ingredient_id": old_tom_gin["id"],
+                    "amount": 2.0,
+                    "unit_id": 1
+                }
+            ]
+        })
+
+        # User has only the parent Gin (not Old Tom Gin)
+        user_id = "test-user-gin-parent"
+        db.add_user_ingredient(user_id, gin["id"])
+
+        # Search should NOT find the recipe because:
+        # - User has parent (Gin)
+        # - Recipe needs child (Old Tom Gin) with allow_substitution=False
+        # - Child doesn't allow parent substitution
+        results = db.search_recipes_paginated(
+            search_params={"inventory": True},
+            limit=10,
+            offset=0,
+            user_id=user_id
+        )
+
+        assert len(results) == 0, "Recipe should NOT match when user has parent but child doesn't allow substitution"
+
+    def test_blocking_middle_parent_prevents_match(self, db: Database):
+        """
+        Test that a blocking parent in the middle of hierarchy prevents substitution.
+        Regression test for bug: User has Rum, recipe needs Wray And Nephew,
+        but "Pot Still Unaged Rum" in between has allow_sub=false → should NOT match
+
+        Hierarchy: Rum (yes) → Pot Still Unaged Rum (NO) → Wray And Nephew (yes)
+        """
+        # Create Rum (grandparent) with substitution allowed
+        rum = db.create_ingredient({
+            "name": "Test Rum Grandparent",
+            "description": "Base rum category",
+            "parent_id": None,
+            "allow_substitution": True,  # Allows substitution
+            "created_by": "test-user"
+        })
+
+        # Create Pot Still Unaged Rum (parent) with NO substitution
+        pot_still = db.create_ingredient({
+            "name": "Test Pot Still Unaged Rum",
+            "description": "Unaged rum category - BLOCKS substitution",
+            "parent_id": rum["id"],
+            "allow_substitution": False,  # BLOCKS substitution
+            "created_by": "test-user"
+        })
+
+        # Create Wray And Nephew (child) with substitution allowed
+        wray_nephew = db.create_ingredient({
+            "name": "Test Wray And Nephew",
+            "description": "Specific overproof rum",
+            "parent_id": pot_still["id"],
+            "allow_substitution": True,  # Allows substitution
+            "created_by": "test-user"
+        })
+
+        # Create recipe requiring Wray And Nephew
+        recipe = db.create_recipe({
+            "name": "Zombie",
+            "instructions": "Mix all ingredients",
+            "description": "Tiki classic requiring overproof rum",
+            "created_by": "test-user",
+            "ingredients": [
+                {
+                    "ingredient_id": wray_nephew["id"],
+                    "amount": 1.0,
+                    "unit_id": 1
+                }
+            ]
+        })
+
+        # User has only the grandparent Rum (not Pot Still or Wray And Nephew)
+        user_id = "test-user-blocking-middle"
+        db.add_user_ingredient(user_id, rum["id"])
+
+        # Search should NOT find the recipe because:
+        # - User has grandparent (Rum with allow_sub=true)
+        # - Recipe needs grandchild (Wray And Nephew with allow_sub=true)
+        # - BUT middle parent (Pot Still Unaged Rum) has allow_sub=false, BLOCKING the path
+        results = db.search_recipes_paginated(
+            search_params={"inventory": True},
+            limit=10,
+            offset=0,
+            user_id=user_id
+        )
+
+        assert len(results) == 0, "Recipe should NOT match when blocking parent exists in substitution path"
+
     def test_ingredient_create_with_substitution_level(self):
         """Test creating ingredient via API with substitution_level"""
         # This would test the FastAPI endpoints
