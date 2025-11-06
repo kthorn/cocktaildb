@@ -78,6 +78,79 @@ function setupAmountInputForUnit(amountInput, unitSelect) {
     return updateAmountField; // Return function so it can be called immediately for edit mode
 }
 
+// Check for duplicate ingredients by ingredient_id
+function checkDuplicateIngredients(ingredients, availableIngredients) {
+    const ingredientIdCounts = {};
+    const duplicates = [];
+
+    ingredients.forEach(ing => {
+        const ingredientId = ing.ingredient_id;
+        if (ingredientIdCounts[ingredientId]) {
+            ingredientIdCounts[ingredientId]++;
+        } else {
+            ingredientIdCounts[ingredientId] = 1;
+        }
+    });
+
+    // Find ingredient names for duplicates
+    for (const [ingredientId, count] of Object.entries(ingredientIdCounts)) {
+        if (count > 1) {
+            const ingredient = availableIngredients.find(ing => ing.id === parseInt(ingredientId));
+            if (ingredient) {
+                duplicates.push(ingredient.name);
+            }
+        }
+    }
+
+    return duplicates;
+}
+
+// Clear all duplicate errors and re-validate
+function clearAndRevalidateDuplicates(ingredientsList, availableIngredients) {
+    // Clear all duplicate errors first
+    const allIngredientInputs = ingredientsList.querySelectorAll('.ingredient-input');
+    allIngredientInputs.forEach(input => {
+        const ingredientNameSelect = input.querySelector('.ingredient-name');
+        if (ingredientNameSelect) {
+            // Only clear if it's a duplicate error (not other validation errors)
+            const container = ingredientNameSelect.closest('.ingredient-input');
+            const errorDiv = container?.querySelector('.field-error');
+            if (errorDiv && errorDiv.textContent.includes('Duplicate ingredient')) {
+                clearFieldError(ingredientNameSelect);
+            }
+        }
+    });
+
+    // Re-validate to check if duplicates still exist
+    const currentIngredients = [];
+    allIngredientInputs.forEach(input => {
+        const ingredientNameSelect = input.querySelector('.ingredient-name');
+        const ingredientName = ingredientNameSelect?.value;
+
+        if (ingredientName) {
+            const ingredient = availableIngredients.find(ing => ing.name === ingredientName);
+            if (ingredient) {
+                currentIngredients.push({ ingredient_id: ingredient.id, name: ingredientName });
+            }
+        }
+    });
+
+    // Check if duplicates still exist
+    const duplicateNames = checkDuplicateIngredients(currentIngredients, availableIngredients);
+
+    // If duplicates still exist, show errors on those fields
+    if (duplicateNames.length > 0) {
+        allIngredientInputs.forEach(input => {
+            const ingredientNameSelect = input.querySelector('.ingredient-name');
+            const ingredientName = ingredientNameSelect?.value;
+
+            if (duplicateNames.includes(ingredientName)) {
+                showFieldError(ingredientNameSelect, `Duplicate ingredient: "${ingredientName}" appears multiple times`);
+            }
+        });
+    }
+}
+
 function processIngredientData(ingredientInputs, availableIngredients) {
     const ingredients = [];
     let firstError = null;
@@ -135,6 +208,26 @@ function processIngredientData(ingredientInputs, availableIngredients) {
     if (firstError) {
         firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
         throw new Error('Please fix the ingredient errors above');
+    }
+
+    // Check for duplicate ingredients
+    const duplicateNames = checkDuplicateIngredients(ingredients, availableIngredients);
+    if (duplicateNames.length > 0) {
+        // Show error on all inputs that have duplicate ingredients
+        ingredientInputs.forEach(input => {
+            const ingredientNameSelect = input.querySelector('.ingredient-name');
+            const ingredientName = ingredientNameSelect.value;
+
+            if (duplicateNames.includes(ingredientName)) {
+                showFieldError(ingredientNameSelect, `Duplicate ingredient: "${ingredientName}" appears multiple times`);
+                if (!firstError) firstError = ingredientNameSelect;
+            }
+        });
+
+        if (firstError) {
+            firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        throw new Error(`Recipe cannot have duplicate ingredients: ${duplicateNames.join(', ')}`);
     }
 
     return ingredients;
@@ -325,6 +418,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add remove button functionality
         div.querySelector('.remove-ingredient').addEventListener('click', () => {
             div.remove();
+            // Re-validate duplicates after removing an ingredient
+            clearAndRevalidateDuplicates(ingredientsList, availableIngredients);
         });
 
         // Add ingredient search functionality
@@ -372,6 +467,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     searchInput.value = ingredient.name;
                     selectElement.value = ingredient.name;
                     autocompleteDropdown.style.display = 'none';
+                    // Trigger change event to validate duplicates
+                    selectElement.dispatchEvent(new Event('change', { bubbles: true }));
                 });
                 
                 item.addEventListener('mouseenter', () => {
@@ -410,6 +507,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 searchInput.value = selectedValue;
                 selectElement.value = selectedValue;
                 autocompleteDropdown.style.display = 'none';
+                // Trigger change event to validate duplicates
+                selectElement.dispatchEvent(new Event('change', { bubbles: true }));
             }
         }
         
@@ -475,7 +574,13 @@ document.addEventListener('DOMContentLoaded', () => {
         [amountInput, unitSelect, ingredientNameSelect].forEach(element => {
             if (element) {
                 element.addEventListener('input', () => clearFieldError(element));
-                element.addEventListener('change', () => clearFieldError(element));
+                element.addEventListener('change', () => {
+                    clearFieldError(element);
+                    // Re-validate duplicates when ingredient changes
+                    if (element === ingredientNameSelect) {
+                        clearAndRevalidateDuplicates(ingredientsList, availableIngredients);
+                    }
+                });
             }
         });
 

@@ -290,11 +290,20 @@ function validateJsonStructure(data) {
         // Check each ingredient
         for (let j = 0; j < recipe.ingredients.length; j++) {
             const ingredient = recipe.ingredients[j];
-            
+
             if (!ingredient.ingredient_name || typeof ingredient.ingredient_name !== 'string') {
                 showMessage(`Recipe "${recipe.name}" ingredient ${j + 1} must have an "ingredient_name" field`, 'error');
                 return false;
             }
+        }
+
+        // Check for duplicate ingredients in this recipe
+        const ingredientNames = recipe.ingredients.map(ing => ing.ingredient_name.toLowerCase().trim());
+        const duplicates = ingredientNames.filter((name, index) => ingredientNames.indexOf(name) !== index);
+        if (duplicates.length > 0) {
+            const uniqueDuplicates = [...new Set(duplicates)];
+            showMessage(`Recipe "${recipe.name}" has duplicate ingredients: ${uniqueDuplicates.join(', ')}`, 'error');
+            return false;
         }
     }
     

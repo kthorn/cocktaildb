@@ -41,6 +41,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 
 
+def check_duplicate_ingredients(ingredients: list) -> list[int]:
+    """
+    Check for duplicate ingredient_ids in a recipe's ingredients list.
+
+    Args:
+        ingredients: List of ingredient dicts, each containing 'ingredient_id'
+
+    Returns:
+        List of duplicate ingredient_ids (empty if no duplicates)
+    """
+    ingredient_id_counts = {}
+    for ingredient in ingredients:
+        ingredient_id = ingredient.get("ingredient_id")
+        if ingredient_id is not None:
+            ingredient_id_counts[ingredient_id] = ingredient_id_counts.get(ingredient_id, 0) + 1
+
+    # Return list of ingredient_ids that appear more than once
+    duplicates = [ing_id for ing_id, count in ingredient_id_counts.items() if count > 1]
+    return duplicates
+
+
 @router.get("/search", response_model=PaginatedSearchResponse)
 async def search_recipes(
     q: Optional[str] = Query(None, description="Search query"),
@@ -239,6 +260,23 @@ async def create_recipe(
         recipe_dict = recipe_data.model_dump()
         recipe_dict["created_by"] = user.user_id
 
+        # Check for duplicate ingredients
+        if "ingredients" in recipe_dict and recipe_dict["ingredients"]:
+            duplicate_ids = check_duplicate_ingredients(recipe_dict["ingredients"])
+            if duplicate_ids:
+                # Get ingredient names for better error message
+                ingredient_names = []
+                for ing_id in duplicate_ids:
+                    ingredient = db.execute_query(
+                        "SELECT name FROM ingredients WHERE id = ?", (ing_id,)
+                    )
+                    if ingredient:
+                        ingredient_names.append(ingredient[0]["name"])
+
+                raise ValidationException(
+                    f"Recipe cannot have duplicate ingredients: {', '.join(ingredient_names)}"
+                )
+
         created_recipe = db.create_recipe(recipe_dict)
 
         # Trigger analytics refresh asynchronously
@@ -248,6 +286,8 @@ async def create_recipe(
         full_recipe = db.get_recipe(created_recipe["id"], user.user_id)
         return RecipeResponse(**full_recipe)
 
+    except ValidationException:
+        raise  # Re-raise ValidationException without wrapping
     except Exception as e:
         logger.error(f"Error creating recipe: {str(e)}")
         raise DatabaseException("Failed to create recipe", detail=str(e))
@@ -477,6 +517,29 @@ async def bulk_upload_recipes(
                             )
                             failed_recipe_indices.add(idx)
                             break
+
+                # Check for duplicate ingredients in this recipe (by ingredient_name)
+                ingredient_names = [ing.ingredient_name.lower().strip() for ing in recipe_data.ingredients]
+                seen_names = set()
+                duplicate_names = []
+                for name in ingredient_names:
+                    if name in seen_names:
+                        duplicate_names.append(name)
+                    else:
+                        seen_names.add(name)
+
+                if duplicate_names:
+                    unique_duplicates = list(set(duplicate_names))
+                    validation_errors.append(
+                        BulkUploadValidationError(
+                            recipe_index=idx,
+                            recipe_name=recipe_data.name,
+                            error_type="duplicate_ingredient",
+                            error_message=f"Recipe has duplicate ingredients: {', '.join(unique_duplicates)}",
+                        )
+                    )
+                    failed_recipe_indices.add(idx)
+                    continue
 
                 recipe_validation_duration = time.time() - recipe_validation_start
                 logger.info(

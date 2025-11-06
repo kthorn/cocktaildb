@@ -359,6 +359,71 @@ class TestBulkUploadValidation:
             in response_data["validation_errors"][0]["error_message"]
         )
 
+    def test_single_recipe_duplicate_ingredients(self, editor_client):
+        """Test single recipe creation with duplicate ingredients fails"""
+        recipe_data = {
+            "name": "Test Single Duplicate Recipe",
+            "instructions": "This should fail due to duplicate ingredients",
+            "ingredients": [
+                {"ingredient_id": 1, "amount": 2.0, "unit_id": 1},
+                {"ingredient_id": 1, "amount": 0.5, "unit_id": 1},  # Duplicate
+            ],
+        }
+
+        response = editor_client.post("/recipes", json=recipe_data)
+
+        # Should fail with validation error (400)
+        # The important thing is that it rejects the duplicate, which it does
+        assert response.status_code == 400
+
+    def test_bulk_upload_duplicate_ingredients(self, editor_client):
+        """Test bulk upload validation for duplicate ingredients in a recipe"""
+        # Create the Lime Juice ingredient first so the only validation error is the duplicate
+        editor_client.post("/ingredients", json={"name": "Lime Juice", "description": "Fresh lime juice"})
+
+        bulk_data = {
+            "recipes": [
+                {
+                    "name": "Test Duplicate Ingredients Recipe",
+                    "instructions": "Mix ingredients",
+                    "ingredients": [
+                        {
+                            "ingredient_name": "Vodka",
+                            "amount": 2.0,
+                            "unit_name": "oz",
+                        },
+                        {
+                            "ingredient_name": "Vodka",
+                            "amount": 0.5,
+                            "unit_name": "oz",
+                        },
+                        {
+                            "ingredient_name": "Lime Juice",
+                            "amount": 0.5,
+                            "unit_name": "oz",
+                        },
+                    ],
+                }
+            ]
+        }
+
+        response = editor_client.post("/recipes/bulk", json=bulk_data)
+        assert response.status_code == 201
+
+        response_data = response.json()
+        assert response_data["uploaded_count"] == 0
+        assert response_data["failed_count"] == 1
+
+        # Check that the duplicate ingredient error is present
+        assert len(response_data["validation_errors"]) >= 1
+        duplicate_errors = [
+            err for err in response_data["validation_errors"]
+            if err["error_type"] == "duplicate_ingredient"
+        ]
+        assert len(duplicate_errors) == 1
+        assert "duplicate ingredients" in duplicate_errors[0]["error_message"].lower()
+        assert "vodka" in duplicate_errors[0]["error_message"].lower()
+
     def test_bulk_upload_partial_name_match(self, editor_client):
         """Test that partial ingredient name matches are rejected"""
         # Create an ingredient with a specific name
