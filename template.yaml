@@ -122,6 +122,8 @@ Resources:
               - !Sub "arn:aws:s3:::cocktailwebsite-${AWS::AccountId}-${Environment}/*"
               - !Sub "arn:aws:s3:::cocktailanalytics-${AWS::AccountId}-${Environment}"
               - !Sub "arn:aws:s3:::cocktailanalytics-${AWS::AccountId}-${Environment}/*"
+              - !Sub "arn:aws:s3:::cocktailcflogs-${AWS::AccountId}-${Environment}"
+              - !Sub "arn:aws:s3:::cocktailcflogs-${AWS::AccountId}-${Environment}/*"
               - !If
                 - IsProdEnvironment
                 - !Sub "arn:aws:s3:::cocktaildbbackups-${AWS::AccountId}-${Environment}"
@@ -305,6 +307,30 @@ Resources:
             Status: Enabled
             ExpirationInDays: 7
 
+  # S3 bucket for CloudFront access logs
+  CloudFrontLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "cocktailcflogs-${AWS::AccountId}-${Environment}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldLogs
+            Status: Enabled
+            ExpirationInDays: 90  # Keep logs for 90 days
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA  # Move to cheaper storage after 30 days
+
   # S3 bucket for website hosting
   WebsiteBucket:
     Type: AWS::S3::Bucket
@@ -405,6 +431,10 @@ Resources:
             SslSupportMethod: sni-only
             MinimumProtocolVersion: TLSv1.2_2021
           - CloudFrontDefaultCertificate: true # Use default CF cert for dev
+        Logging:
+          Bucket: !GetAtt CloudFrontLogsBucket.DomainName
+          IncludeCookies: false
+          Prefix: !Sub "cloudfront-logs/${Environment}/"
         Origins:
           - Id: S3Origin
             DomainName: !GetAtt WebsiteBucket.RegionalDomainName
@@ -1401,6 +1431,10 @@ Outputs:
   AnalyticsBucketName:
     Description: S3 bucket for pre-generated analytics
     Value: !Ref AnalyticsBucket
+
+  CloudFrontLogsBucketName:
+    Description: S3 bucket for CloudFront access logs
+    Value: !Ref CloudFrontLogsBucket
 
   AnalyticsRefreshFunctionArn:
     Description: ARN of the Analytics Refresh Lambda function
