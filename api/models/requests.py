@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class IngredientCreate(BaseModel):
@@ -15,6 +15,22 @@ class IngredientCreate(BaseModel):
         description="Whether this ingredient can be substituted with siblings/ancestors"
     )
 
+    @field_validator("name")
+    @classmethod
+    def trim_name(cls, v: str) -> str:
+        """Trim leading and trailing whitespace from name"""
+        if v:
+            return v.strip()
+        return v
+
+    @field_validator("description")
+    @classmethod
+    def trim_description(cls, v: Optional[str]) -> Optional[str]:
+        """Trim leading and trailing whitespace from description"""
+        if v:
+            return v.strip()
+        return v
+
 
 class IngredientUpdate(BaseModel):
     """Request model for updating an ingredient"""
@@ -28,6 +44,14 @@ class IngredientUpdate(BaseModel):
         None,
         description="Whether this ingredient can be substituted with siblings/ancestors"
     )
+
+    @field_validator("name", "description")
+    @classmethod
+    def trim_strings(cls, v: Optional[str]) -> Optional[str]:
+        """Trim leading and trailing whitespace from string fields"""
+        if v:
+            return v.strip()
+        return v
 
 
 class RecipeIngredient(BaseModel):
@@ -48,7 +72,15 @@ class BulkRecipeIngredient(BaseModel):
     unit_name: Optional[str] = Field(None, description="Unit name (will be looked up by exact match)")
     # Kept for backward compatibility - deprecated in favor of unit_name
     unit_id: Optional[int] = Field(None, description="Unit ID (deprecated, use unit_name)")
-    
+
+    @field_validator("ingredient_name", "unit_name")
+    @classmethod
+    def trim_strings(cls, v: Optional[str]) -> Optional[str]:
+        """Trim leading and trailing whitespace from string fields"""
+        if v:
+            return v.strip()
+        return v
+
     def get_unit_identifier(self) -> Optional[str]:
         """Get the unit identifier - prioritize unit_name over unit_id"""
         return self.unit_name if self.unit_name is not None else str(self.unit_id) if self.unit_id is not None else None
@@ -66,6 +98,14 @@ class RecipeCreate(BaseModel):
         default=[], description="Recipe ingredients"
     )
 
+    @field_validator("name", "instructions", "description", "source", "source_url")
+    @classmethod
+    def trim_strings(cls, v: Optional[str]) -> Optional[str]:
+        """Trim leading and trailing whitespace from string fields"""
+        if v:
+            return v.strip()
+        return v
+
 
 class BulkRecipeCreate(BaseModel):
     """Request model for creating a recipe in bulk upload using ingredient names"""
@@ -79,6 +119,14 @@ class BulkRecipeCreate(BaseModel):
         default=[], description="Recipe ingredients"
     )
 
+    @field_validator("name", "instructions", "description", "source", "source_url")
+    @classmethod
+    def trim_strings(cls, v: Optional[str]) -> Optional[str]:
+        """Trim leading and trailing whitespace from string fields"""
+        if v:
+            return v.strip()
+        return v
+
 
 class RecipeUpdate(BaseModel):
     """Request model for updating a recipe"""
@@ -91,6 +139,14 @@ class RecipeUpdate(BaseModel):
     ingredients: Optional[List[RecipeIngredient]] = Field(
         None, description="Recipe ingredients"
     )
+
+    @field_validator("name", "instructions", "description", "source", "source_url")
+    @classmethod
+    def trim_strings(cls, v: Optional[str]) -> Optional[str]:
+        """Trim leading and trailing whitespace from string fields"""
+        if v:
+            return v.strip()
+        return v
 
 
 class RecipeSearchRequest(BaseModel):
@@ -116,6 +172,14 @@ class TagCreate(BaseModel):
 
     name: str = Field(..., description="Tag name")
     description: Optional[str] = Field(None, description="Tag description")
+
+    @field_validator("name", "description")
+    @classmethod
+    def trim_strings(cls, v: Optional[str]) -> Optional[str]:
+        """Trim leading and trailing whitespace from string fields"""
+        if v:
+            return v.strip()
+        return v
 
 
 class RecipeTagAssociation(BaseModel):
@@ -171,6 +235,14 @@ class BulkIngredientCreate(BaseModel):
         default=False,
         description="Whether this ingredient can be substituted with siblings/ancestors"
     )
+
+    @field_validator("name", "description", "parent_name")
+    @classmethod
+    def trim_strings(cls, v: Optional[str]) -> Optional[str]:
+        """Trim leading and trailing whitespace from string fields"""
+        if v:
+            return v.strip()
+        return v
 
 
 class BulkIngredientUpload(BaseModel):

@@ -199,8 +199,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const name = document.getElementById('ingredient-name').value;
-        const description = document.getElementById('ingredient-description').value;
+        const name = document.getElementById('ingredient-name').value.trim();
+        const description = document.getElementById('ingredient-description').value.trim();
 
         // Get allow_substitution checkbox value
         const allowSubstitutionCheckbox = document.getElementById('ingredient-allow-substitution');
