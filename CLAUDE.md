@@ -57,6 +57,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **CocktailDB** is a serverless cocktail recipe management application with the following key components:
 
+### Packages (`packages/`)
+- **Barcart**: Cocktail analytics algorithms (similarity, distance metrics)
+  - Location: `packages/barcart/`
+  - Purpose: Recipe/ingredient similarity using Earth Mover's Distance and optimal transport
+  - Dependencies: numpy, pandas, POT, tqdm, joblib
+  - Installation: `pip install -e packages/barcart` (local), automatic in analytics Lambda
+  - Tests: `pytest packages/barcart/tests/`
+  - **Data-agnostic**: Works with DataFrames, database access handled by callers
+  - **Usage pattern**: Local exploration → develop analytics → migrate to `analytics_refresh.py`
+
 ### Database Layer (`api/db/`)
 - **SQLite on Amazon EFS**: Shared database across Lambda instances
 - **Connection pooling**: Global `_DB_INSTANCE` persists between Lambda invocations via `database.py`
