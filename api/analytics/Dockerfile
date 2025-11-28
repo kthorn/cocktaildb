@@ -1,17 +1,23 @@
 FROM public.ecr.aws/lambda/python:3.12
 
-# Copy requirements first for better caching
-COPY analytics/requirements.txt ${LAMBDA_TASK_ROOT}/
+# Layer 1: Install barcart dependencies (heavy, rarely change)
+COPY packages/barcart/requirements.txt /tmp/barcart-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/barcart-requirements.txt
 
-# Install dependencies
+# Layer 2: Install analytics dependencies (rarely change)
+COPY analytics/requirements.txt ${LAMBDA_TASK_ROOT}/
 RUN pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt
 
-# Copy shared modules from parent api/ directory
+# Layer 3: Copy shared modules (change occasionally)
 COPY db/ ${LAMBDA_TASK_ROOT}/db/
 COPY utils/ ${LAMBDA_TASK_ROOT}/utils/
 COPY core/ ${LAMBDA_TASK_ROOT}/core/
 
-# Copy analytics function code
+# Layer 4: Install barcart package code (changes frequently)
+COPY packages/barcart/ ${LAMBDA_TASK_ROOT}/packages/barcart/
+RUN pip install --no-deps ${LAMBDA_TASK_ROOT}/packages/barcart/
+
+# Layer 5: Copy analytics function code (changes frequently)
 COPY analytics/analytics_refresh.py ${LAMBDA_TASK_ROOT}/
 
 # Set the CMD to your handler
