@@ -21,12 +21,11 @@ class AnalyticsQueries:
         self.db = db
 
     def get_ingredient_usage_stats(
-        self, level: Optional[int] = None, parent_id: Optional[int] = None
+        self, parent_id: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """Get ingredient usage statistics with hierarchical aggregation
 
         Args:
-            level: Hierarchy level (0=root, 1=first level children, etc.) - currently unused
             parent_id: Filter to children of specific ingredient
 
         Returns:
@@ -34,7 +33,11 @@ class AnalyticsQueries:
         """
         try:
             # Build WHERE clause for parent_id filtering
-            where_clause = "WHERE i.parent_id IS NULL" if parent_id is None else "WHERE i.parent_id = :parent_id"
+            where_clause = (
+                "WHERE i.parent_id IS NULL"
+                if parent_id is None
+                else "WHERE i.parent_id = :parent_id"
+            )
             params = {} if parent_id is None else {"parent_id": parent_id}
 
             sql = f"""
@@ -92,7 +95,9 @@ class AnalyticsQueries:
             logger.error(f"Error getting recipe complexity distribution: {str(e)}")
             raise
 
-    def get_recipe_ingredient_matrix(self) -> tuple[Dict[int, int], "pd.DataFrame", List[str]]:
+    def get_recipe_ingredient_matrix(
+        self,
+    ) -> tuple[Dict[int, int], "pd.DataFrame", List[str]]:
         """Build normalized recipe-ingredient matrix for distance calculations
 
         Returns:
@@ -129,22 +134,22 @@ class AnalyticsQueries:
             df = pd.DataFrame(rows)
 
             # Convert amounts to ml where possible
-            df['amount_ml'] = df.apply(
-                lambda row: row['amount'] * row['conversion_to_ml']
-                if pd.notna(row['conversion_to_ml']) and pd.notna(row['amount'])
-                else row['amount']
-                if pd.notna(row['amount'])
+            df["amount_ml"] = df.apply(
+                lambda row: row["amount"] * row["conversion_to_ml"]
+                if pd.notna(row["conversion_to_ml"]) and pd.notna(row["amount"])
+                else row["amount"]
+                if pd.notna(row["amount"])
                 else 1.0,  # Default to 1 if no amount
-                axis=1
+                axis=1,
             )
 
             # Create pivot table for amounts
             amount_matrix = df.pivot_table(
-                index='recipe_name',
-                columns='ingredient_name',
-                values='amount_ml',
-                aggfunc='sum',
-                fill_value=0
+                index="recipe_name",
+                columns="ingredient_name",
+                values="amount_ml",
+                aggfunc="sum",
+                fill_value=0,
             )
 
             # Normalize each recipe to sum to 1 (proportions)
@@ -152,12 +157,20 @@ class AnalyticsQueries:
             normalized_matrix = normalized_matrix.fillna(0)
 
             # Remove recipes/ingredients that are all zeros
-            normalized_matrix = normalized_matrix.loc[(normalized_matrix != 0).any(axis=1), :]
-            normalized_matrix = normalized_matrix.loc[:, (normalized_matrix != 0).any(axis=0)]
+            normalized_matrix = normalized_matrix.loc[
+                (normalized_matrix != 0).any(axis=1), :
+            ]
+            normalized_matrix = normalized_matrix.loc[
+                :, (normalized_matrix != 0).any(axis=0)
+            ]
 
             # Before pivot, create mapping from unique recipes
-            recipe_id_to_name = df[['recipe_id', 'recipe_name']].drop_duplicates('recipe_id')
-            recipe_id_to_name = dict(zip(recipe_id_to_name['recipe_name'], recipe_id_to_name['recipe_id']))
+            recipe_id_to_name = df[["recipe_id", "recipe_name"]].drop_duplicates(
+                "recipe_id"
+            )
+            recipe_id_to_name = dict(
+                zip(recipe_id_to_name["recipe_name"], recipe_id_to_name["recipe_id"])
+            )
 
             # Create mapping from matrix row index to recipe ID
             recipe_id_map = {}
@@ -166,7 +179,9 @@ class AnalyticsQueries:
                 recipe_id_map[idx] = int(recipe_id_to_name[recipe_name])
                 recipe_names.append(recipe_name)
 
-            logger.info(f"Built recipe matrix: {normalized_matrix.shape[0]} recipes x {normalized_matrix.shape[1]} ingredients")
+            logger.info(
+                f"Built recipe matrix: {normalized_matrix.shape[0]} recipes x {normalized_matrix.shape[1]} ingredients"
+            )
             return recipe_id_map, normalized_matrix, recipe_names
 
         except Exception as e:
@@ -188,7 +203,9 @@ class AnalyticsQueries:
 
         try:
             # Get normalized recipe-ingredient matrix
-            recipe_id_map, normalized_matrix, recipe_names = self.get_recipe_ingredient_matrix()
+            recipe_id_map, normalized_matrix, recipe_names = (
+                self.get_recipe_ingredient_matrix()
+            )
 
             if normalized_matrix.empty:
                 logger.warning("Empty recipe matrix, returning empty UMAP")
@@ -196,7 +213,7 @@ class AnalyticsQueries:
 
             # Compute pairwise Manhattan distances
             logger.info("Computing pairwise Manhattan distances")
-            distance_matrix = pairwise_distances(normalized_matrix, metric='manhattan')
+            distance_matrix = pairwise_distances(normalized_matrix, metric="manhattan")
 
             # Run UMAP dimensionality reduction
             logger.info("Running UMAP dimensionality reduction")
@@ -204,8 +221,8 @@ class AnalyticsQueries:
                 n_neighbors=5,
                 min_dist=0.05,
                 n_components=2,
-                metric='precomputed',
-                random_state=42
+                metric="precomputed",
+                random_state=42,
             )
 
             embedding = reducer.fit_transform(distance_matrix)
@@ -213,12 +230,14 @@ class AnalyticsQueries:
             # Build result list
             result = []
             for idx in range(len(embedding)):
-                result.append({
-                    'recipe_id': recipe_id_map[idx],
-                    'recipe_name': recipe_names[idx],
-                    'x': float(embedding[idx, 0]),
-                    'y': float(embedding[idx, 1])
-                })
+                result.append(
+                    {
+                        "recipe_id": recipe_id_map[idx],
+                        "recipe_name": recipe_names[idx],
+                        "x": float(embedding[idx, 0]),
+                        "y": float(embedding[idx, 1]),
+                    }
+                )
 
             logger.info(f"UMAP computation complete: {len(result)} recipes")
             return result
