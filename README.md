@@ -2,6 +2,17 @@
 
 A serverless cocktail database application with SQLite on AWS Lambda.
 
+## Monorepo Structure
+
+This repository contains multiple packages:
+
+- **`packages/barcart/`** - Cocktail analytics algorithms (recipe similarity, ingredient distance metrics)
+  - Install: `pip install -e packages/barcart`
+  - Used by analytics Lambda and local analysis scripts
+  - Independent package with own tests and documentation
+
+See individual package READMEs for details.
+
 ## Database Architecture
 
 This project uses a SQLite database stored on an Amazon EFS volume that is mounted to Lambda functions. The database is automatically created and initialized during stack deployment.
