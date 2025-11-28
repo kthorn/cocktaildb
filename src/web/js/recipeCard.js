@@ -124,7 +124,7 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
             <ul>
                 ${(recipe.ingredients || []).map(ing => {
                     // Use base ingredient name only (hierarchy will show in tooltip on hover)
-                    const ingredientName = ing.ingredient_name || ing.name || ing.full_name || 'Unknown ingredient';
+                    const ingredientName = (ing.ingredient_name || ing.name || ing.full_name || 'Unknown ingredient').trim();
                     
                     // Special handling for specific units
                     if (ing.unit_name === 'to top' && (ing.amount === null || ing.amount === undefined || ing.amount === 0)) {

@@ -445,11 +445,26 @@ async def bulk_upload_recipes(
         batch_validation_start = time.time()
         duplicate_names = db.check_recipe_names_batch(all_recipe_names)
 
+        # Defensive check: ensure duplicate_names is a dict
+        if not isinstance(duplicate_names, dict):
+            logger.error(f"check_recipe_names_batch returned {type(duplicate_names)} instead of dict: {duplicate_names}")
+            raise DatabaseException(f"Internal error: batch recipe name validation returned invalid type {type(duplicate_names)}")
+
         # Batch validate ingredients
         valid_ingredients = db.search_ingredients_batch(all_ingredient_names)
 
+        # Defensive check: ensure valid_ingredients is a dict
+        if not isinstance(valid_ingredients, dict):
+            logger.error(f"search_ingredients_batch returned {type(valid_ingredients)} instead of dict: {valid_ingredients}")
+            raise DatabaseException(f"Internal error: batch ingredient validation returned invalid type {type(valid_ingredients)}")
+
         # Batch validate units
         valid_units = db.validate_units_batch(all_unit_names)
+
+        # Defensive check: ensure valid_units is a dict
+        if not isinstance(valid_units, dict):
+            logger.error(f"validate_units_batch returned {type(valid_units)} instead of dict: {valid_units}")
+            raise DatabaseException(f"Internal error: batch unit validation returned invalid type {type(valid_units)}")
 
         batch_validation_duration = time.time() - batch_validation_start
         logger.info(f"Batch validation completed in {batch_validation_duration:.3f}s")
@@ -521,15 +536,15 @@ async def bulk_upload_recipes(
                 # Check for duplicate ingredients in this recipe (by ingredient_name)
                 ingredient_names = [ing.ingredient_name.lower().strip() for ing in recipe_data.ingredients]
                 seen_names = set()
-                duplicate_names = []
+                duplicate_ingredient_names = []
                 for name in ingredient_names:
                     if name in seen_names:
-                        duplicate_names.append(name)
+                        duplicate_ingredient_names.append(name)
                     else:
                         seen_names.add(name)
 
-                if duplicate_names:
-                    unique_duplicates = list(set(duplicate_names))
+                if duplicate_ingredient_names:
+                    unique_duplicates = list(set(duplicate_ingredient_names))
                     validation_errors.append(
                         BulkUploadValidationError(
                             recipe_index=idx,
@@ -547,12 +562,17 @@ async def bulk_upload_recipes(
                 )
 
             except Exception as e:
+                # Log detailed error for debugging
+                logger.error(
+                    f"Validation error for recipe {idx} ('{recipe_data.name}'): {type(e).__name__}: {str(e)}",
+                    exc_info=True
+                )
                 validation_errors.append(
                     BulkUploadValidationError(
                         recipe_index=idx,
                         recipe_name=recipe_data.name,
                         error_type="validation_error",
-                        error_message=f"Validation error: {str(e)}",
+                        error_message=f"Validation error: {type(e).__name__}: {str(e)}",
                     )
                 )
                 failed_recipe_indices.add(idx)

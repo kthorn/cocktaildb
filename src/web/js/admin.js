@@ -295,6 +295,21 @@ function validateJsonStructure(data) {
                 showMessage(`Recipe "${recipe.name}" ingredient ${j + 1} must have an "ingredient_name" field`, 'error');
                 return false;
             }
+
+            if (ingredient.amount === undefined || ingredient.amount === null || ingredient.amount === '') {
+                showMessage(`Recipe "${recipe.name}" ingredient "${ingredient.ingredient_name}" is missing an "amount" field`, 'error');
+                return false;
+            }
+
+            if (typeof ingredient.amount !== 'number' || isNaN(ingredient.amount)) {
+                showMessage(`Recipe "${recipe.name}" ingredient "${ingredient.ingredient_name}" must have a numeric "amount" value`, 'error');
+                return false;
+            }
+
+            if (!ingredient.unit_name || typeof ingredient.unit_name !== 'string') {
+                showMessage(`Recipe "${recipe.name}" ingredient "${ingredient.ingredient_name}" is missing a "unit_name" field`, 'error');
+                return false;
+            }
         }
 
         // Check for duplicate ingredients in this recipe
