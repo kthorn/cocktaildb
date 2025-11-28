@@ -45,6 +45,4 @@ __all__ = [
     "m_step_blosum",
     "em_fit",
     "build_index_to_id",
-    "report_neighbors",
-    "em_fit",
 ]
