@@ -123,3 +123,35 @@ async def get_cocktail_space_analytics(
     except Exception as e:
         logger.error(f"Error getting cocktail space analytics: {str(e)}")
         raise DatabaseException("Failed to retrieve cocktail space analytics", detail=str(e))
+
+
+@router.get("/ingredient-tree")
+async def get_ingredient_tree_analytics(
+    db: Database = Depends(get_db),
+    user: Optional[UserInfo] = Depends(get_current_user_optional),
+):
+    """Get hierarchical ingredient tree with recipe counts
+
+    Returns a D3-compatible tree structure with recipe_count (direct usage)
+    and hierarchical_recipe_count for each node, suitable for tooltips and
+    tree visualizations.
+    """
+    try:
+        storage_key = "ingredient-tree"
+
+        if not storage_manager:
+            raise DatabaseException("Analytics storage not configured")
+
+        stored_data = storage_manager.get_analytics(storage_key)
+        if not stored_data:
+            raise DatabaseException(
+                "Analytics not generated. Please trigger analytics refresh.",
+                detail="ingredient-tree data not found in storage"
+            )
+
+        return stored_data
+    except DatabaseException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting ingredient tree analytics: {str(e)}")
+        raise DatabaseException("Failed to retrieve ingredient tree analytics", detail=str(e))

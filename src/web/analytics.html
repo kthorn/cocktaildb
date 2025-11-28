@@ -25,6 +25,9 @@
             <button class="tab-button active" data-tab="ingredients">
                 Ingredient Usage
             </button>
+            <button class="tab-button" data-tab="ingredient-tree">
+                Ingredient Tree
+            </button>
             <button class="tab-button" data-tab="complexity">
                 Recipe Complexity
             </button>
@@ -81,6 +84,53 @@
                         </div>
                         <div class="chart-stats">
                             <span id="ingredients-shown-count">-</span> ingredients displayed
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Ingredient Tree Tab -->
+            <section id="tab-ingredient-tree" class="tab-content">
+                <div class="analytics-card">
+                    <div class="card-header">
+                        <h3>Ingredient Hierarchy Tree</h3>
+                        <p class="card-description">
+                            Interactive radial tree showing ingredient relationships. Click nodes to expand/collapse.
+                            Hover to see recipe counts (direct and with children).
+                        </p>
+                    </div>
+
+                    <div class="chart-container" style="min-height: 700px;">
+                        <div id="ingredient-tree-chart" class="chart-area" style="height: 700px;">
+                            <!-- D3.js tree will be rendered here -->
+                        </div>
+                        <div id="ingredient-tree-loading" class="loading-state">
+                            <div class="spinner"></div>
+                            <p>Loading ingredient tree...</p>
+                        </div>
+                        <div id="ingredient-tree-error" class="error-state hidden">
+                            <p class="error-message"></p>
+                            <button class="btn btn-primary retry-btn">Retry</button>
+                        </div>
+                    </div>
+
+                    <div class="chart-info">
+                        <div class="legend">
+                            <span class="legend-item">
+                                <span class="legend-color" style="background: #1565C0; border: 3px solid #616161;"></span>
+                                Has children (click to expand)
+                            </span>
+                            <span class="legend-item">
+                                <span class="legend-color" style="background: #ffc107;"></span>
+                                Collapsed node
+                            </span>
+                            <span class="legend-item">
+                                <span class="legend-color" style="background: #1565C0;"></span>
+                                Leaf ingredient
+                            </span>
+                        </div>
+                        <div class="chart-stats">
+                            <span id="ingredient-tree-count">-</span> ingredients
                         </div>
                     </div>
                 </div>
@@ -196,7 +246,9 @@
     <script type="module" src="js/common.js"></script>
     <script type="module" src="js/api.js"></script>
     <script type="module" src="js/charts/ingredientUsageChart.js"></script>
+    <script type="module" src="js/charts/ingredientTreeChart.js"></script>
     <script type="module" src="js/charts/recipeComplexityChart.js"></script>
+    <script type="module" src="js/charts/cocktailSpaceChart.js"></script>
     <script type="module" src="js/analytics.js"></script>
 </body>
 

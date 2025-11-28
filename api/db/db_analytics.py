@@ -21,24 +21,28 @@ class AnalyticsQueries:
         self.db = db
 
     def get_ingredient_usage_stats(
-        self, parent_id: Optional[int] = None
+        self, parent_id: Optional[int] = None, all_ingredients: bool = False
     ) -> List[Dict[str, Any]]:
         """Get ingredient usage statistics with hierarchical aggregation
 
         Args:
-            parent_id: Filter to children of specific ingredient
+            parent_id: Filter to children of specific ingredient (ignored if all_ingredients=True)
+            all_ingredients: If True, return all ingredients without filtering
 
         Returns:
             List of ingredient usage statistics with direct and hierarchical counts
         """
         try:
-            # Build WHERE clause for parent_id filtering
-            where_clause = (
-                "WHERE i.parent_id IS NULL"
-                if parent_id is None
-                else "WHERE i.parent_id = :parent_id"
-            )
-            params = {} if parent_id is None else {"parent_id": parent_id}
+            # Build WHERE clause for filtering
+            if all_ingredients:
+                where_clause = ""
+                params = {}
+            elif parent_id is None:
+                where_clause = "WHERE i.parent_id IS NULL"
+                params = {}
+            else:
+                where_clause = "WHERE i.parent_id = :parent_id"
+                params = {"parent_id": parent_id}
 
             sql = f"""
             SELECT
@@ -244,4 +248,41 @@ class AnalyticsQueries:
 
         except Exception as e:
             logger.error(f"Error computing cocktail space UMAP: {str(e)}")
+            raise
+
+    def get_ingredients_for_tree(self) -> "pd.DataFrame":
+        """Get all ingredient data needed for building the ingredient tree
+
+        Returns:
+            pandas DataFrame with columns: ingredient_id, ingredient_name,
+            ingredient_path (from path field), substitution_level,
+            direct_recipe_count (from direct_usage),
+            hierarchical_recipe_count (from hierarchical_usage)
+        """
+        import pandas as pd
+
+        try:
+            # Reuse the ingredient usage stats query with all_ingredients=True
+            rows = self.get_ingredient_usage_stats(all_ingredients=True)
+
+            if not rows:
+                logger.warning("No ingredient data found for tree building")
+                return pd.DataFrame()
+
+            # Convert to DataFrame and rename columns for tree building
+            df = pd.DataFrame(rows)
+            df = df.rename(columns={
+                'path': 'ingredient_path',
+                'direct_usage': 'direct_recipe_count',
+                'hierarchical_usage': 'hierarchical_recipe_count'
+            })
+
+            # Add substitution_level column (using default weight)
+            df['substitution_level'] = 1.0
+
+            logger.info(f"Retrieved {len(df)} ingredients for tree building")
+            return df
+
+        except Exception as e:
+            logger.error(f"Error getting ingredients for tree: {str(e)}")
             raise

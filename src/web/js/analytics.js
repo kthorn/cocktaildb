@@ -1,5 +1,6 @@
 import { api } from './api.js';
 import { createIngredientUsageChart } from './charts/ingredientUsageChart.js';
+import { createIngredientTreeChart } from './charts/ingredientTreeChart.js';
 import { createRecipeComplexityChart } from './charts/recipeComplexityChart.js';
 import { createCocktailSpaceChart } from './charts/cocktailSpaceChart.js';
 import { createRecipeCard } from './recipeCard.js';
@@ -63,6 +64,9 @@ async function loadTabData(tabName) {
     switch (tabName) {
         case 'ingredients':
             await loadIngredientUsageData();
+            break;
+        case 'ingredient-tree':
+            await loadIngredientTreeData();
             break;
         case 'complexity':
             await loadRecipeComplexityData();
@@ -206,6 +210,73 @@ async function navigateToBreadcrumbLevel(level) {
 
     updateBreadcrumb();
     await loadIngredientUsageData();
+}
+
+/**
+ * Load and render ingredient tree analytics
+ */
+async function loadIngredientTreeData() {
+    const chartContainer = document.getElementById('ingredient-tree-chart');
+    const loadingState = document.getElementById('ingredient-tree-loading');
+    const errorState = document.getElementById('ingredient-tree-error');
+
+    // Show loading state
+    chartContainer.innerHTML = '';
+    loadingState.classList.remove('hidden');
+    errorState.classList.add('hidden');
+
+    try {
+        const response = await api.getIngredientTreeAnalytics();
+
+        // Update last updated time
+        if (response.metadata?.generated_at) {
+            updateLastUpdatedTime(response.metadata.generated_at);
+        } else {
+            updateLastUpdatedTime(new Date().toISOString());
+        }
+
+        // Hide loading
+        loadingState.classList.add('hidden');
+
+        // Extract tree data from response (stored in S3 with data/metadata wrapper)
+        const treeData = response.data || response;
+
+        // Check for empty data
+        if (!treeData || !treeData.id) {
+            chartContainer.innerHTML = '<div class="no-data"><p>No ingredient tree data available.</p></div>';
+            document.getElementById('ingredient-tree-count').textContent = '0';
+            return;
+        }
+
+        // Count total ingredients (recursive)
+        function countIngredients(node) {
+            let count = node.id === 'root' ? 0 : 1;
+            if (node.children) {
+                node.children.forEach(child => {
+                    count += countIngredients(child);
+                });
+            }
+            return count;
+        }
+
+        const totalIngredients = countIngredients(treeData);
+
+        // Render tree
+        createIngredientTreeChart(chartContainer, treeData);
+
+        // Update stats
+        document.getElementById('ingredient-tree-count').textContent = totalIngredients;
+
+    } catch (error) {
+        console.error('Error loading ingredient tree data:', error);
+        loadingState.classList.add('hidden');
+        errorState.classList.remove('hidden');
+        errorState.querySelector('.error-message').textContent =
+            `Failed to load ingredient tree data: ${error.message}`;
+
+        // Setup retry button
+        errorState.querySelector('.retry-btn').onclick = () => loadIngredientTreeData();
+    }
 }
 
 /**
