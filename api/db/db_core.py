@@ -861,6 +861,88 @@ class Database:
             if conn:
                 conn.close()
 
+    @retry_on_db_locked()
+    def bulk_create_recipes(self, recipes_data: List[Dict[str, Any]], user_id: str) -> List[Dict[str, Any]]:
+        """Create multiple recipes in a single transaction (optimized for bulk uploads)"""
+        conn = None
+        created_recipes = []
+
+        try:
+            conn = self._get_connection()
+            conn.execute("BEGIN IMMEDIATE")
+            cursor = conn.cursor()
+
+            for data in recipes_data:
+                # Validate ingredients before inserting
+                if "ingredients" in data and data["ingredients"]:
+                    self._validate_recipe_ingredients(data["ingredients"])
+
+                # Insert recipe
+                cursor.execute(
+                    """
+                    INSERT INTO recipes (name, instructions, description, image_url, source, source_url, created_by)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        data["name"] if data["name"] else None,
+                        data.get("instructions"),
+                        data.get("description"),
+                        data.get("image_url"),
+                        data.get("source"),
+                        data.get("source_url"),
+                        user_id
+                    )
+                )
+
+                recipe_id = cursor.lastrowid
+                if recipe_id is None:
+                    raise ValueError(f"Failed to get recipe ID after inserting '{data['name']}'")
+
+                # Batch insert ingredients using executemany
+                if "ingredients" in data and data["ingredients"]:
+                    ingredient_rows = [
+                        (
+                            recipe_id,
+                            ing["ingredient_id"],
+                            ing.get("unit_id"),
+                            ing.get("amount")
+                        )
+                        for ing in data["ingredients"]
+                    ]
+                    cursor.executemany(
+                        """
+                        INSERT INTO recipe_ingredients (recipe_id, ingredient_id, unit_id, amount)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        ingredient_rows
+                    )
+
+                # Store minimal data to avoid extra queries
+                created_recipes.append({
+                    "id": recipe_id,
+                    "name": data["name"],
+                    "instructions": data.get("instructions"),
+                    "description": data.get("description"),
+                    "source": data.get("source"),
+                    "source_url": data.get("source_url")
+                })
+
+            # Commit all recipes at once
+            conn.commit()
+            conn.close()
+            conn = None
+
+            return created_recipes
+
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            logger.error(f"Error in bulk_create_recipes: {str(e)}")
+            raise
+        finally:
+            if conn:
+                conn.close()
+
     def get_recipes_with_ingredients(
         self, cognito_user_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:

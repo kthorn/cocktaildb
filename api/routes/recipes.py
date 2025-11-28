@@ -598,88 +598,86 @@ async def bulk_upload_recipes(
                 uploaded_recipes=[],
             )
 
-        # Step 3: Create all recipes (all validations passed)
+        # Step 3: Create all recipes (all validations passed) - using bulk transaction
         creation_start = time.time()
-        logger.info("Starting recipe creation phase")
+        logger.info("Starting recipe creation phase (bulk transaction)")
 
+        # Prepare all recipes data for bulk creation
+        recipes_to_create = []
         for idx, recipe_data in enumerate(bulk_data.recipes):
-            try:
-                recipe_creation_start = time.time()
-                logger.debug(f"Creating recipe {idx}: {recipe_data.name}")
+            # Skip recipes that failed validation
+            if idx in failed_recipe_indices:
+                continue
 
-                # Convert ingredient names to IDs and unit names to IDs (using batch results)
-                converted_ingredients = []
-                for ingredient in recipe_data.ingredients:
-                    # Get the ingredient by exact name match from batch results
-                    ingredient_data = valid_ingredients.get(ingredient.ingredient_name)
-                    if ingredient_data:
-                        ingredient_id = ingredient_data["id"]
+            # Convert ingredient names to IDs and unit names to IDs (using batch results)
+            converted_ingredients = []
+            for ingredient in recipe_data.ingredients:
+                # Get the ingredient by exact name match from batch results
+                ingredient_data = valid_ingredients.get(ingredient.ingredient_name)
+                if ingredient_data:
+                    ingredient_id = ingredient_data["id"]
 
-                        # Handle unit conversion
-                        unit_id = None
-                        if ingredient.unit_name is not None:
-                            # Convert unit name to ID using batch results
-                            unit_data = valid_units.get(ingredient.unit_name)
-                            if unit_data:
-                                unit_id = unit_data["id"]
-                            else:
-                                # This shouldn't happen since we validated above, but just in case
-                                raise ValueError(
-                                    f"Unit '{ingredient.unit_name}' not found during conversion"
-                                )
-                        elif ingredient.unit_id is not None:
-                            # Use unit ID directly (backward compatibility)
-                            unit_id = ingredient.unit_id
+                    # Handle unit conversion
+                    unit_id = None
+                    if ingredient.unit_name is not None:
+                        # Convert unit name to ID using batch results
+                        unit_data = valid_units.get(ingredient.unit_name)
+                        if unit_data:
+                            unit_id = unit_data["id"]
+                        else:
+                            # This shouldn't happen since we validated above, but just in case
+                            raise ValueError(
+                                f"Unit '{ingredient.unit_name}' not found during conversion"
+                            )
+                    elif ingredient.unit_id is not None:
+                        # Use unit ID directly (backward compatibility)
+                        unit_id = ingredient.unit_id
 
-                        converted_ingredients.append(
-                            {
-                                "ingredient_id": ingredient_id,
-                                "amount": ingredient.amount,
-                                "unit_id": unit_id,
-                            }
-                        )
-                    else:
-                        # This shouldn't happen since we validated above, but just in case
-                        raise ValueError(
-                            f"Ingredient '{ingredient.ingredient_name}' not found during conversion"
-                        )
-
-                # Prepare data for database
-                recipe_dict = {
-                    "name": recipe_data.name,
-                    "instructions": recipe_data.instructions,
-                    "description": recipe_data.description,
-                    "source": recipe_data.source,
-                    "source_url": recipe_data.source_url,
-                    "ingredients": converted_ingredients,
-                    "created_by": user.user_id,
-                }
-
-                # Create the recipe
-                created_recipe = db.create_recipe(recipe_dict)
-
-                # Get the full recipe data with ingredients for response
-                full_recipe = db.get_recipe(created_recipe["id"], user.user_id)
-                uploaded_recipes.append(RecipeResponse(**full_recipe))
-
-                recipe_creation_duration = time.time() - recipe_creation_start
-                logger.debug(
-                    f"Recipe {idx} creation took {recipe_creation_duration:.3f}s"
-                )
-
-            except Exception as e:
-                logger.error(
-                    f"Error creating recipe {idx} ('{recipe_data.name}'): {str(e)}"
-                )
-                validation_errors.append(
-                    BulkUploadValidationError(
-                        recipe_index=idx,
-                        recipe_name=recipe_data.name,
-                        error_type="creation_error",
-                        error_message=f"Failed to create recipe: {str(e)}",
+                    converted_ingredients.append(
+                        {
+                            "ingredient_id": ingredient_id,
+                            "amount": ingredient.amount,
+                            "unit_id": unit_id,
+                        }
                     )
+                else:
+                    # This shouldn't happen since we validated above, but just in case
+                    raise ValueError(
+                        f"Ingredient '{ingredient.ingredient_name}' not found during conversion"
+                    )
+
+            # Prepare data for database
+            recipe_dict = {
+                "name": recipe_data.name,
+                "instructions": recipe_data.instructions,
+                "description": recipe_data.description,
+                "source": recipe_data.source,
+                "source_url": recipe_data.source_url,
+                "ingredients": converted_ingredients,
+            }
+            recipes_to_create.append(recipe_dict)
+
+        # Create all recipes in a single transaction
+        try:
+            created_recipes = db.bulk_create_recipes(recipes_to_create, user.user_id)
+
+            # Convert to response format (no extra queries needed!)
+            for created_recipe in created_recipes:
+                uploaded_recipes.append(RecipeResponse(**created_recipe))
+
+            logger.info(f"Successfully created {len(created_recipes)} recipes in bulk transaction")
+
+        except Exception as e:
+            logger.error(f"Error in bulk recipe creation: {str(e)}")
+            # If bulk creation fails, log it as a general error
+            validation_errors.append(
+                BulkUploadValidationError(
+                    recipe_index=0,
+                    recipe_name="Bulk creation",
+                    error_type="creation_error",
+                    error_message=f"Bulk creation failed: {str(e)}",
                 )
-                failed_recipe_indices.add(idx)
+            )
 
         creation_duration = time.time() - creation_start
         total_duration = time.time() - start_time
