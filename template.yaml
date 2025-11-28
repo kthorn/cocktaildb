@@ -1029,8 +1029,8 @@ Resources:
                 - !Sub "arn:aws:s3:::${AnalyticsBucket}/*"
     Metadata:
       DockerTag: latest
-      DockerContext: ./api
-      Dockerfile: analytics/Dockerfile
+      DockerContext: .
+      Dockerfile: api/analytics/Dockerfile
 
   # Cognito User Pool for Authentication
   CognitoUserPoolV3:
