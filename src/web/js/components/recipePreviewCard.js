@@ -22,23 +22,32 @@ export function createRecipePreviewCard(container) {
     let currentRecipe = null;
 
     /**
-     * Build the preview card HTML
+     * Build the preview card element using DOM methods (XSS-safe)
      * @param {Object} recipe - Recipe data with name and ingredients array
-     * @returns {string} HTML string for preview card
+     * @returns {HTMLElement} The preview card element
      */
     function buildPreviewHTML(recipe) {
+        const card = document.createElement('div');
+        card.className = 'recipe-preview-card';
+
+        // Recipe name (safe - uses textContent)
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'recipe-name';
+        nameDiv.textContent = recipe.recipe_name;
+        card.appendChild(nameDiv);
+
+        // Ingredients list (safe - uses textContent)
+        const ingredientsDiv = document.createElement('div');
+        ingredientsDiv.className = 'ingredients';
+
         const ingredientsList = recipe.ingredients || [];
         const displayIngredients = ingredientsList.slice(0, MAX_PREVIEW_INGREDIENTS);
         const hasMore = ingredientsList.length > MAX_PREVIEW_INGREDIENTS;
 
-        const ingredientsText = displayIngredients.join(' • ') + (hasMore ? ' • ...' : '');
+        ingredientsDiv.textContent = displayIngredients.join(' • ') + (hasMore ? ' • ...' : '');
+        card.appendChild(ingredientsDiv);
 
-        return `
-            <div class="recipe-preview-card">
-                <div class="recipe-name">${recipe.recipe_name}</div>
-                <div class="ingredients">${ingredientsText}</div>
-            </div>
-        `;
+        return card;
     }
 
     /**
@@ -87,10 +96,8 @@ export function createRecipePreviewCard(container) {
 
         currentRecipe = recipe;
 
-        // Create preview element
-        const div = document.createElement('div');
-        div.innerHTML = buildPreviewHTML(recipe);
-        previewElement = div.firstElementChild;
+        // Create preview element (buildPreviewHTML now returns element, not HTML string)
+        previewElement = buildPreviewHTML(recipe);
 
         // Add to container
         container.appendChild(previewElement);
