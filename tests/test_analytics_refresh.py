@@ -48,7 +48,7 @@ def test_lambda_handler_success(mock_storage_class, mock_analytics_class, mock_g
     mock_analytics_class.return_value = mock_analytics
     mock_analytics.get_ingredient_usage_stats.return_value = mock_ingredient_data
     mock_analytics.get_recipe_complexity_distribution.return_value = [{"count": 5}]
-    mock_analytics.compute_cocktail_space_umap.return_value = {"data": [{"x": 1.0, "y": 2.0}]}
+    mock_analytics.compute_cocktail_space_umap.return_value = [{"recipe_id": 1, "recipe_name": "Test", "x": 1.0, "y": 2.0, "ingredients": []}]
 
     # Mock tree building
     mock_tree = {"id": "root", "name": "All Ingredients", "children": []}

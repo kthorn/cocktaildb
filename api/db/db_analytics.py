@@ -210,7 +210,7 @@ class AnalyticsQueries:
 
             if normalized_matrix.empty:
                 logger.warning("Empty recipe matrix, returning empty UMAP")
-                return {"data": []}
+                return []
 
             # Compute pairwise Manhattan distances
             logger.info("Computing pairwise Manhattan distances")
@@ -297,7 +297,7 @@ class AnalyticsQueries:
             logger.info(
                 f"UMAP computation complete: {len(result)} recipes with ingredients"
             )
-            return {"data": result}
+            return result
 
         except Exception as e:
             logger.error(f"Error computing cocktail space UMAP: {str(e)}")
