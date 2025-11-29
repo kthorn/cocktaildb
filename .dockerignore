@@ -37,7 +37,6 @@ htmlcov/
 
 # Documentation and configs not needed in container
 *.md
-!packages/barcart/README.md
 LICENSE
 .editorconfig
 .gitattributes
