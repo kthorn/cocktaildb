@@ -13,6 +13,7 @@ from barcart.distance import (
     build_ingredient_tree,
     build_recipe_volume_matrix,
     compute_emd,
+    compute_umap_embedding,
     emd_matrix,
     expected_ingredient_match_matrix,
     knn_matrix,
@@ -32,6 +33,7 @@ __all__ = [
     # Distance computations
     "weighted_distance",
     "build_ingredient_distance_matrix",
+    "compute_umap_embedding",
     # Recipe analysis
     "build_recipe_volume_matrix",
     "compute_emd",

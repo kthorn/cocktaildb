@@ -201,45 +201,97 @@ function handleFileSelection(event) {
 async function handleBulkUpload() {
     const fileInput = document.getElementById('recipe-file-input');
     const file = fileInput.files[0];
-    
+
     if (!file) {
         showMessage('Please select a file first', 'error');
         return;
     }
-    
+
     try {
         // Read and parse the JSON file
         const fileText = await readFile(file);
         let recipesData;
-        
+
         try {
             recipesData = JSON.parse(fileText);
         } catch (error) {
             showMessage('Invalid JSON file. Please check the file format.', 'error');
             return;
         }
-        
+
         // Validate JSON structure
         if (!validateJsonStructure(recipesData)) {
             return; // Error message already shown in validation
         }
-        
+
+        const recipes = recipesData.recipes;
+        const BATCH_SIZE = 25; // Process 25 recipes per batch to stay under 29s API Gateway timeout
+
         // Show progress
-        showUploadProgress(true);
-        
-        // Upload recipes
-        const result = await api.bulkUploadRecipes(recipesData);
-        
+        showUploadProgress(true, `Uploading ${recipes.length} recipes in batches...`);
+
+        // Batch upload to avoid API Gateway timeout
+        const allResults = {
+            uploaded_count: 0,
+            failed_count: 0,
+            validation_errors: [],
+            uploaded_recipes: []
+        };
+
+        for (let i = 0; i < recipes.length; i += BATCH_SIZE) {
+            const batch = recipes.slice(i, i + BATCH_SIZE);
+            const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+            const totalBatches = Math.ceil(recipes.length / BATCH_SIZE);
+
+            // Update progress message
+            showUploadProgress(true, `Uploading batch ${batchNum}/${totalBatches} (${i + batch.length}/${recipes.length} recipes)...`);
+
+            try {
+                // Upload this batch
+                const result = await api.bulkUploadRecipes({ recipes: batch });
+
+                // Aggregate results
+                allResults.uploaded_count += result.uploaded_count;
+                allResults.failed_count += result.failed_count;
+
+                if (result.validation_errors) {
+                    // Adjust recipe indices for overall result
+                    const adjustedErrors = result.validation_errors.map(err => ({
+                        ...err,
+                        recipe_index: err.recipe_index + i
+                    }));
+                    allResults.validation_errors.push(...adjustedErrors);
+                }
+
+                if (result.uploaded_recipes) {
+                    allResults.uploaded_recipes.push(...result.uploaded_recipes);
+                }
+
+            } catch (error) {
+                console.error(`Error uploading batch ${batchNum}:`, error);
+                // Track batch failure
+                allResults.failed_count += batch.length;
+                for (let j = 0; j < batch.length; j++) {
+                    allResults.validation_errors.push({
+                        recipe_index: i + j,
+                        recipe_name: batch[j].name,
+                        error_type: 'upload_error',
+                        error_message: `Batch upload failed: ${error.message}`
+                    });
+                }
+            }
+        }
+
         // Hide progress
         showUploadProgress(false);
-        
-        // Display results
-        displayUploadResults(result);
-        
+
+        // Display aggregated results
+        displayUploadResults(allResults);
+
         // Clear file input
         fileInput.value = '';
         document.getElementById('upload-recipes-btn').disabled = true;
-        
+
     } catch (error) {
         showUploadProgress(false);
         console.error('Error uploading recipes:', error);
@@ -325,14 +377,18 @@ function validateJsonStructure(data) {
     return true;
 }
 
-function showUploadProgress(show) {
+function showUploadProgress(show, message = 'Uploading recipes...') {
     const progressDiv = document.getElementById('upload-progress');
+    const progressText = progressDiv.querySelector('p');
     const uploadBtn = document.getElementById('upload-recipes-btn');
-    
+
     if (show) {
         progressDiv.style.display = 'block';
         uploadBtn.disabled = true;
         uploadBtn.textContent = 'Uploading...';
+        if (progressText) {
+            progressText.textContent = message;
+        }
     } else {
         progressDiv.style.display = 'none';
         uploadBtn.disabled = false;
@@ -460,45 +516,97 @@ function handleIngredientFileSelection(event) {
 async function handleBulkIngredientUpload() {
     const fileInput = document.getElementById('ingredient-file-input');
     const file = fileInput.files[0];
-    
+
     if (!file) {
         showMessage('Please select a file first', 'error');
         return;
     }
-    
+
     try {
         // Read and parse the JSON file
         const fileText = await readFile(file);
         let ingredientsData;
-        
+
         try {
             ingredientsData = JSON.parse(fileText);
         } catch (error) {
             showMessage('Invalid JSON file. Please check the file format.', 'error');
             return;
         }
-        
+
         // Validate JSON structure
         if (!validateIngredientJsonStructure(ingredientsData)) {
             return; // Error message already shown in validation
         }
-        
+
+        const ingredients = ingredientsData.ingredients;
+        const BATCH_SIZE = 50; // Ingredients are simpler, can use larger batches
+
         // Show progress
-        showIngredientUploadProgress(true);
-        
-        // Upload ingredients
-        const result = await api.bulkUploadIngredients(ingredientsData);
-        
+        showIngredientUploadProgress(true, `Uploading ${ingredients.length} ingredients in batches...`);
+
+        // Batch upload to avoid API Gateway timeout
+        const allResults = {
+            uploaded_count: 0,
+            failed_count: 0,
+            validation_errors: [],
+            uploaded_ingredients: []
+        };
+
+        for (let i = 0; i < ingredients.length; i += BATCH_SIZE) {
+            const batch = ingredients.slice(i, i + BATCH_SIZE);
+            const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+            const totalBatches = Math.ceil(ingredients.length / BATCH_SIZE);
+
+            // Update progress message
+            showIngredientUploadProgress(true, `Uploading batch ${batchNum}/${totalBatches} (${i + batch.length}/${ingredients.length} ingredients)...`);
+
+            try {
+                // Upload this batch
+                const result = await api.bulkUploadIngredients({ ingredients: batch });
+
+                // Aggregate results
+                allResults.uploaded_count += result.uploaded_count;
+                allResults.failed_count += result.failed_count;
+
+                if (result.validation_errors) {
+                    // Adjust ingredient indices for overall result
+                    const adjustedErrors = result.validation_errors.map(err => ({
+                        ...err,
+                        ingredient_index: err.ingredient_index + i
+                    }));
+                    allResults.validation_errors.push(...adjustedErrors);
+                }
+
+                if (result.uploaded_ingredients) {
+                    allResults.uploaded_ingredients.push(...result.uploaded_ingredients);
+                }
+
+            } catch (error) {
+                console.error(`Error uploading batch ${batchNum}:`, error);
+                // Track batch failure
+                allResults.failed_count += batch.length;
+                for (let j = 0; j < batch.length; j++) {
+                    allResults.validation_errors.push({
+                        ingredient_index: i + j,
+                        ingredient_name: batch[j].name,
+                        error_type: 'upload_error',
+                        error_message: `Batch upload failed: ${error.message}`
+                    });
+                }
+            }
+        }
+
         // Hide progress
         showIngredientUploadProgress(false);
-        
-        // Display results
-        displayIngredientUploadResults(result);
-        
+
+        // Display aggregated results
+        displayIngredientUploadResults(allResults);
+
         // Clear file input
         fileInput.value = '';
         document.getElementById('upload-ingredients-btn').disabled = true;
-        
+
     } catch (error) {
         showIngredientUploadProgress(false);
         console.error('Error uploading ingredients:', error);
@@ -549,14 +657,18 @@ function validateIngredientJsonStructure(data) {
     return true;
 }
 
-function showIngredientUploadProgress(show) {
+function showIngredientUploadProgress(show, message = 'Uploading ingredients...') {
     const progressDiv = document.getElementById('ingredient-upload-progress');
+    const progressText = progressDiv.querySelector('p');
     const uploadBtn = document.getElementById('upload-ingredients-btn');
-    
+
     if (show) {
         progressDiv.style.display = 'block';
         uploadBtn.disabled = true;
         uploadBtn.textContent = 'Uploading...';
+        if (progressText) {
+            progressText.textContent = message;
+        }
     } else {
         progressDiv.style.display = 'none';
         uploadBtn.disabled = false;

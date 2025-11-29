@@ -1,3 +1,5 @@
+import { createRecipePreviewCard } from '../components/recipePreviewCard.js';
+
 /**
  * Creates an interactive D3.js scatter plot for cocktail space UMAP visualization
  * @param {HTMLElement} container - Container element for the chart
@@ -38,60 +40,6 @@ export function createCocktailSpaceChart(container, data, options = {}) {
         .domain([yExtent[0] - yPadding, yExtent[1] + yPadding])
         .range([height, 0]);
 
-    // Add grid lines
-    g.append('g')
-        .attr('class', 'grid')
-        .attr('opacity', 0.1)
-        .call(d3.axisLeft(yScale)
-            .tickSize(-width)
-            .tickFormat(''));
-
-    g.append('g')
-        .attr('class', 'grid')
-        .attr('opacity', 0.1)
-        .attr('transform', `translate(0,${height})`)
-        .call(d3.axisBottom(xScale)
-            .tickSize(-height)
-            .tickFormat(''));
-
-    // Add X axis
-    g.append('g')
-        .attr('transform', `translate(0,${height})`)
-        .call(d3.axisBottom(xScale))
-        .append('text')
-        .attr('x', width / 2)
-        .attr('y', 45)
-        .attr('fill', 'black')
-        .attr('font-size', '14px')
-        .attr('font-weight', 'bold')
-        .text('UMAP Dimension 1');
-
-    // Add Y axis
-    g.append('g')
-        .call(d3.axisLeft(yScale))
-        .append('text')
-        .attr('transform', 'rotate(-90)')
-        .attr('x', -height / 2)
-        .attr('y', -45)
-        .attr('fill', 'black')
-        .attr('font-size', '14px')
-        .attr('font-weight', 'bold')
-        .attr('text-anchor', 'middle')
-        .text('UMAP Dimension 2');
-
-    // Create tooltip
-    const tooltip = d3.select('body')
-        .append('div')
-        .style('position', 'absolute')
-        .style('background', 'rgba(0, 0, 0, 0.8)')
-        .style('color', 'white')
-        .style('padding', '8px 12px')
-        .style('border-radius', '4px')
-        .style('font-size', '12px')
-        .style('pointer-events', 'none')
-        .style('opacity', 0)
-        .style('z-index', 1000);
-
     // Create clip path for zoom
     svg.append('defs')
         .append('clipPath')
@@ -100,13 +48,18 @@ export function createCocktailSpaceChart(container, data, options = {}) {
         .attr('width', width)
         .attr('height', height);
 
+    // Create recipe preview card
+    const previewCard = createRecipePreviewCard(document.body);
+
     // Add circles for data points
     const circles = g.append('g')
         .attr('clip-path', 'url(#clip)')
         .selectAll('circle')
         .data(data)
         .enter()
-        .append('circle')
+        .append('circle');
+
+    circles
         .attr('cx', d => xScale(d.x))
         .attr('cy', d => yScale(d.y))
         .attr('r', 6)
@@ -115,34 +68,31 @@ export function createCocktailSpaceChart(container, data, options = {}) {
         .attr('stroke-width', 1)
         .attr('opacity', 0.7)
         .style('cursor', 'pointer')
-        .on('mouseover', function(event, d) {
+        .on('mouseenter', function(event, d) {
+            // Enlarge circle
             d3.select(this)
                 .transition()
                 .duration(200)
                 .attr('r', 8)
                 .attr('opacity', 1);
 
-            tooltip
-                .style('opacity', 1)
-                .html(`<strong>${d.recipe_name}</strong>`)
-                .style('left', (event.pageX + 10) + 'px')
-                .style('top', (event.pageY - 10) + 'px');
+            // Start preview card hover timer
+            previewCard.startHover(d, event.pageX, event.pageY);
         })
-        .on('mousemove', function(event) {
-            tooltip
-                .style('left', (event.pageX + 10) + 'px')
-                .style('top', (event.pageY - 10) + 'px');
-        })
-        .on('mouseout', function() {
+        .on('mouseleave', function() {
+            // Restore circle size
             d3.select(this)
                 .transition()
                 .duration(200)
                 .attr('r', 6)
                 .attr('opacity', 0.7);
 
-            tooltip.style('opacity', 0);
+            // Cancel preview
+            previewCard.cancelHover();
         })
         .on('click', function(event, d) {
+            // Hide preview and trigger modal
+            previewCard.hide();
             if (options.onRecipeClick) {
                 options.onRecipeClick(d.recipe_id, d.recipe_name);
             }
@@ -152,17 +102,14 @@ export function createCocktailSpaceChart(container, data, options = {}) {
     const zoom = d3.zoom()
         .scaleExtent([0.5, 10])
         .on('zoom', (event) => {
+            // Hide preview during zoom/pan
+            previewCard.hide();
+
             const transform = event.transform;
 
             circles
                 .attr('cx', d => transform.applyX(xScale(d.x)))
                 .attr('cy', d => transform.applyY(yScale(d.y)));
-
-            g.select('.x-axis')
-                .call(d3.axisBottom(xScale).scale(transform.rescaleX(xScale)));
-
-            g.select('.y-axis')
-                .call(d3.axisLeft(yScale).scale(transform.rescaleY(yScale)));
         });
 
     svg.call(zoom);

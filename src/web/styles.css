@@ -2111,7 +2111,7 @@ input[type="radio"]:focus {
    ========================================================================== */
 
 .modal {
-    display: none;
+    display: flex;
     position: fixed;
     z-index: 2000;
     left: 0;
@@ -2239,6 +2239,35 @@ input[type="radio"]:focus {
 
 .modal-footer .btn-primary:hover {
     background: #0056b3;
+}
+
+/* Recipe Preview Card (Cocktail Space hover)
+   ========================================================================== */
+
+.recipe-preview-card {
+    position: absolute;
+    background: white;
+    border: 2px solid var(--accent-color);
+    border-radius: 8px;
+    padding: 12px 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    pointer-events: none; /* Click-through to data point */
+    max-width: 300px;
+    font-size: 14px;
+}
+
+.recipe-preview-card .recipe-name {
+    font-weight: bold;
+    margin-bottom: 8px;
+    color: var(--text-color, #2c3e50);
+    font-size: 15px;
+}
+
+.recipe-preview-card .ingredients {
+    color: var(--text-color-secondary, #666);
+    line-height: 1.5;
+    font-size: 13px;
 }
 
 .modal-footer .btn-primary:focus {
@@ -2615,6 +2644,11 @@ input[type="radio"]:focus {
     gap: var(--space-sm);
     border-bottom: 2px solid #ddd;
     margin-bottom: var(--space-xl);
+}
+
+/* Mobile view selector - hidden on desktop */
+.analytics-view-selector {
+    display: none;
 }
 
 .tab-content {
@@ -3288,12 +3322,38 @@ input[type="radio"]:focus {
         padding: var(--mobile-padding);  /* 16px minimum for viewport */
     }
 
+    /* Hide desktop tabs on mobile */
     .analytics-tabs {
-        overflow-x: auto;
+        display: none;
     }
 
-    .tab-button {
+    /* Show mobile view selector */
+    .analytics-view-selector {
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+        margin-bottom: var(--space-lg);
+        padding: var(--space-sm) var(--space-md);
+        background-color: var(--bg-light);
+        border-radius: var(--radius-md);
+    }
+
+    .view-selector-label {
+        font-size: var(--text-sm);
+        font-weight: 500;
+        color: var(--text-dark);
         white-space: nowrap;
+    }
+
+    .mobile-view-select {
+        flex: 1;
+        padding: var(--space-sm) var(--space-md);
+        font-size: var(--text-sm);
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius-sm);
+        background-color: white;
+        color: var(--text-dark);
+        min-height: var(--touch-target-min);
     }
 
     .chart-info {

@@ -837,3 +837,57 @@ def m_step_blosum(
     # Keep scale consistent
     C_new = _median_rescale(C_new, median_target)
     return C_new
+
+
+def compute_umap_embedding(
+    distance_matrix: np.ndarray,
+    n_components: int = 2,
+    n_neighbors: int = 5,
+    min_dist: float = 0.05,
+    random_state: int | None = None,
+) -> np.ndarray:
+    """
+    Compute UMAP embedding from a precomputed distance matrix.
+
+    Uses UMAP (Uniform Manifold Approximation and Projection) for dimensionality
+    reduction, projecting high-dimensional distance relationships into a lower-dimensional
+    space while preserving local and global structure.
+
+    Parameters
+    ----------
+    distance_matrix : np.ndarray
+        Precomputed pairwise distance matrix of shape (n_samples, n_samples).
+        Should be symmetric with zeros on the diagonal.
+    n_components : int, default 2
+        Number of dimensions in the embedded space.
+    n_neighbors : int, default 5
+        Number of neighboring points used in local approximations of manifold structure.
+        Larger values result in more global views, smaller values more local.
+    min_dist : float, default 0.05
+        Minimum distance between points in the embedded space. Controls how tightly
+        UMAP packs points together.
+    random_state : int or None, default None
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    np.ndarray
+        Embedded coordinates of shape (n_samples, n_components).
+
+    Notes
+    -----
+    The distance matrix is used with metric='precomputed' in UMAP, meaning the
+    input is treated as pairwise distances rather than raw feature vectors.
+    """
+    import umap
+
+    reducer = umap.UMAP(
+        n_neighbors=n_neighbors,
+        min_dist=min_dist,
+        n_components=n_components,
+        metric="precomputed",
+        random_state=random_state,
+    )
+
+    embedding = reducer.fit_transform(distance_matrix)
+    return embedding
