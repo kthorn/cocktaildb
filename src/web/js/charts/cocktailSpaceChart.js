@@ -40,47 +40,6 @@ export function createCocktailSpaceChart(container, data, options = {}) {
         .domain([yExtent[0] - yPadding, yExtent[1] + yPadding])
         .range([height, 0]);
 
-    // Add grid lines
-    g.append('g')
-        .attr('class', 'grid')
-        .attr('opacity', 0.1)
-        .call(d3.axisLeft(yScale)
-            .tickSize(-width)
-            .tickFormat(''));
-
-    g.append('g')
-        .attr('class', 'grid')
-        .attr('opacity', 0.1)
-        .attr('transform', `translate(0,${height})`)
-        .call(d3.axisBottom(xScale)
-            .tickSize(-height)
-            .tickFormat(''));
-
-    // Add X axis
-    g.append('g')
-        .attr('transform', `translate(0,${height})`)
-        .call(d3.axisBottom(xScale))
-        .append('text')
-        .attr('x', width / 2)
-        .attr('y', 45)
-        .attr('fill', 'black')
-        .attr('font-size', '14px')
-        .attr('font-weight', 'bold')
-        .text('UMAP Dimension 1');
-
-    // Add Y axis
-    g.append('g')
-        .call(d3.axisLeft(yScale))
-        .append('text')
-        .attr('transform', 'rotate(-90)')
-        .attr('x', -height / 2)
-        .attr('y', -45)
-        .attr('fill', 'black')
-        .attr('font-size', '14px')
-        .attr('font-weight', 'bold')
-        .attr('text-anchor', 'middle')
-        .text('UMAP Dimension 2');
-
     // Create clip path for zoom
     svg.append('defs')
         .append('clipPath')
@@ -151,12 +110,6 @@ export function createCocktailSpaceChart(container, data, options = {}) {
             circles
                 .attr('cx', d => transform.applyX(xScale(d.x)))
                 .attr('cy', d => transform.applyY(yScale(d.y)));
-
-            g.select('.x-axis')
-                .call(d3.axisBottom(xScale).scale(transform.rescaleX(xScale)));
-
-            g.select('.y-axis')
-                .call(d3.axisLeft(yScale).scale(transform.rescaleY(yScale)));
         });
 
     svg.call(zoom);
