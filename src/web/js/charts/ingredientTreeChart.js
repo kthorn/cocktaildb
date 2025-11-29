@@ -2,26 +2,47 @@
  * Ingredient Tree Chart - Radial tree visualization of ingredient hierarchy
  */
 
-// Color constants for easy customization
-const COLORS = {
-    // Node fill colors
-    nodeFill: '#1565C0',           // Dark blue for all nodes
-    nodeHoverFill: '#1976D2',      // Lighter blue on hover
-    collapsedFill: '#ffc107',      // Yellow for collapsed nodes
-    collapsedHoverFill: '#ffca28', // Lighter yellow on hover
+/**
+ * Get a CSS variable value from the document
+ * @param {string} varName - CSS variable name (with or without --)
+ * @param {string} fallback - Fallback value if variable not found
+ * @returns {string} The CSS variable value or fallback
+ */
+function getCSSVariable(varName, fallback) {
+    const name = varName.startsWith('--') ? varName : `--${varName}`;
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return value || fallback;
+}
 
-    // Stroke colors
-    leafStroke: '#0D47A1',         // Darker blue for leaf nodes
-    internalStroke: '#616161',     // Dark gray for nodes with children
-    internalHoverStroke: '#424242',// Darker gray on hover
-    collapsedStroke: '#f57f17',    // Orange for collapsed nodes
+/**
+ * Color constants - reads from CSS variables for consistency across the website
+ * Falls back to hardcoded values if CSS variables aren't available
+ *
+ * CSS Variables Used:
+ * --primary-color: #2c3e50 (dark blue-gray, used for leaf nodes)
+ * --accent-color: #A61816 (red, used for nodes with children)
+ * --secondary-color: #7f8c8d (gray, used for strokes and links)
+ *
+ * Note: Update analytics.html legend colors if you change these values
+ */
+function getColors() {
+    return {
+        // Node fill colors
+        leafFill: getCSSVariable('--primary-color', '#2c3e50'),     // Primary color for leaf nodes
+        internalFill: getCSSVariable('--accent-color', '#A61816'),  // Accent color for nodes with children
+        hoverFill: 'rgba(166, 24, 22, 0.8)',                        // Slightly transparent accent on hover
 
-    // Other colors
-    linkStroke: '#7f8c8d',         // Gray for links
-    textFill: '#2c3e50',           // Dark text
-    tooltipBg: 'rgba(44, 62, 80, 0.95)', // Dark blue tooltip background
-    svgBg: '#f8f9fa'               // Light gray background
-};
+        // Stroke colors - same for all nodes
+        stroke: getCSSVariable('--secondary-color', '#7f8c8d'),     // Gray stroke for all nodes
+        hoverStroke: '#5a6163',                                      // Darker gray on hover
+
+        // Other colors
+        linkStroke: getCSSVariable('--secondary-color', '#7f8c8d'), // Gray for links
+        textFill: getCSSVariable('--text-dark', '#333'),     // Dark text for visibility on light background
+        tooltipBg: 'rgba(44, 62, 80, 0.95)',                        // Dark tooltip background
+        svgBg: getCSSVariable('--bg-light', '#f5f5f5')                                         // Light gray background
+    };
+}
 
 /**
  * Create a radial tree chart showing ingredient hierarchy with recipe counts
@@ -32,6 +53,9 @@ const COLORS = {
 export function createIngredientTreeChart(container, data, options = {}) {
     // Clear container
     container.innerHTML = '';
+
+    // Get colors from CSS variables
+    const COLORS = getColors();
 
     // Configuration constants
     const FONT_SIZE_PARENT = '8px';
@@ -118,10 +142,15 @@ export function createIngredientTreeChart(container, data, options = {}) {
             .on('mouseover', function(event, d) {
                 const directCount = d.data.recipe_count || 0;
                 const hierarchicalCount = d.data.hierarchical_recipe_count || 0;
+                const hasChildren = d.children || d._children;
 
                 let tooltipHtml = `<strong>${d.data.name}</strong><br/>`;
-                tooltipHtml += `Direct: ${directCount} recipe${directCount !== 1 ? 's' : ''}<br/>`;
-                tooltipHtml += `With children: ${hierarchicalCount} recipe${hierarchicalCount !== 1 ? 's' : ''}`;
+                tooltipHtml += `Direct: ${directCount} recipe${directCount !== 1 ? 's' : ''}`;
+
+                // Only show hierarchical count if node has children
+                if (hasChildren) {
+                    tooltipHtml += `<br/>With children: ${hierarchicalCount} recipe${hierarchicalCount !== 1 ? 's' : ''}`;
+                }
 
                 const rect = container.getBoundingClientRect();
                 tooltip
@@ -141,8 +170,7 @@ export function createIngredientTreeChart(container, data, options = {}) {
             });
 
         nodeEnter.append('circle')
-            .attr('r', 0)
-            .attr('class', d => d._children ? 'collapsed' : '');
+            .attr('r', 0);
 
         const textEnter = nodeEnter.append('text')
             .attr('dy', '0.31em')
@@ -158,10 +186,15 @@ export function createIngredientTreeChart(container, data, options = {}) {
         node.on('mouseover', function(event, d) {
                 const directCount = d.data.recipe_count || 0;
                 const hierarchicalCount = d.data.hierarchical_recipe_count || 0;
+                const hasChildren = d.children || d._children;
 
                 let tooltipHtml = `<strong>${d.data.name}</strong><br/>`;
-                tooltipHtml += `Direct: ${directCount} recipe${directCount !== 1 ? 's' : ''}<br/>`;
-                tooltipHtml += `With children: ${hierarchicalCount} recipe${hierarchicalCount !== 1 ? 's' : ''}`;
+                tooltipHtml += `Direct: ${directCount} recipe${directCount !== 1 ? 's' : ''}`;
+
+                // Only show hierarchical count if node has children
+                if (hasChildren) {
+                    tooltipHtml += `<br/>With children: ${hierarchicalCount} recipe${hierarchicalCount !== 1 ? 's' : ''}`;
+                }
 
                 const rect = container.getBoundingClientRect();
                 tooltip
@@ -188,8 +221,7 @@ export function createIngredientTreeChart(container, data, options = {}) {
         node.select('circle')
             .transition()
             .duration(duration)
-            .attr('r', 5)
-            .attr('class', d => d._children ? 'collapsed' : '');
+            .attr('r', 5);
 
         node.select('text')
             .text(d => truncateText(d))
@@ -212,8 +244,7 @@ export function createIngredientTreeChart(container, data, options = {}) {
             .transition()
             .delay(duration)
             .duration(duration)
-            .attr('r', 5)
-            .attr('class', d => d._children ? 'collapsed' : '');
+            .attr('r', 5);
 
         nodeEnter.select('text')
             .transition()
@@ -319,10 +350,10 @@ export function createIngredientTreeChart(container, data, options = {}) {
         .call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2));
 
     // Add CSS styles
-    addTreeStyles();
+    addTreeStyles(COLORS);
 }
 
-function addTreeStyles() {
+function addTreeStyles(COLORS) {
     // Check if styles already exist
     if (document.getElementById('ingredient-tree-styles')) {
         return;
@@ -335,48 +366,39 @@ function addTreeStyles() {
             background-color: ${COLORS.svgBg};
         }
 
-        .node circle {
-            fill: ${COLORS.nodeFill};
-            stroke: ${COLORS.leafStroke};
+        /* Leaf nodes (no children) - use primary color */
+        .node.node--leaf circle {
+            fill: ${COLORS.leafFill};
+            stroke: ${COLORS.stroke};
             stroke-width: 2px;
             cursor: pointer;
             transition: all 0.3s;
         }
 
-        .node circle:hover {
-            fill: ${COLORS.nodeHoverFill};
-            stroke: ${COLORS.leafStroke};
+        .node.node--leaf circle:hover {
+            fill: ${COLORS.leafFill};
+            stroke: ${COLORS.hoverStroke};
             stroke-width: 3px;
         }
 
+        /* Internal nodes (have children) - use accent color */
         .node.node--internal circle {
-            fill: ${COLORS.nodeFill};
-            stroke: ${COLORS.internalStroke};
-            stroke-width: 3px;
+            fill: ${COLORS.internalFill};
+            stroke: ${COLORS.stroke};
+            stroke-width: 2px;
+            cursor: pointer;
+            transition: all 0.3s;
         }
 
         .node.node--internal circle:hover {
-            fill: ${COLORS.nodeHoverFill};
-            stroke: ${COLORS.internalHoverStroke};
-            stroke-width: 4px;
-        }
-
-        .node.collapsed circle {
-            fill: ${COLORS.collapsedFill};
-            stroke: ${COLORS.collapsedStroke};
-            stroke-width: 2px;
-        }
-
-        .node.collapsed circle:hover {
-            fill: ${COLORS.collapsedHoverFill};
-            stroke: ${COLORS.collapsedStroke};
+            fill: ${COLORS.hoverFill};
+            stroke: ${COLORS.hoverStroke};
             stroke-width: 3px;
         }
 
         .node text {
             font-size: 12px;
             fill: ${COLORS.textFill};
-            text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
             pointer-events: none;
         }
 

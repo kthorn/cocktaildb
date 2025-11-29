@@ -115,17 +115,14 @@
                     </div>
 
                     <div class="chart-info">
+                        <!-- Note: Legend colors should match those in ingredientTreeChart.js getColors() -->
                         <div class="legend">
                             <span class="legend-item">
-                                <span class="legend-color" style="background: #1565C0; border: 3px solid #616161;"></span>
+                                <span class="legend-color" style="background: var(--accent-color, #A61816);"></span>
                                 Has children (click to expand)
                             </span>
                             <span class="legend-item">
-                                <span class="legend-color" style="background: #ffc107;"></span>
-                                Collapsed node
-                            </span>
-                            <span class="legend-item">
-                                <span class="legend-color" style="background: #1565C0;"></span>
+                                <span class="legend-color" style="background: var(--primary-color, #2c3e50);"></span>
                                 Leaf ingredient
                             </span>
                         </div>
