@@ -120,13 +120,6 @@ export function createCocktailSpaceChart(container, data, options = {}) {
             // Start preview card hover timer
             previewCard.startHover(d, event.pageX, event.pageY);
         })
-        .on('mousemove', function(event, d) {
-            // Update preview position on move (if visible)
-            if (previewCard.isVisible()) {
-                previewCard.hide();
-                previewCard.startHover(d, event.pageX, event.pageY);
-            }
-        })
         .on('mouseleave', function() {
             // Restore circle size
             d3.select(this)
