@@ -168,3 +168,73 @@ Add a lightweight recipe preview card that appears on hover in the Cocktail Spac
 - Add visual indicators for ingredient categories
 - Progressive disclosure (show more on longer hover)
 - Keyboard navigation support
+
+## Implementation Notes
+
+**Completed:** 2025-11-29
+
+**Changes from Design:**
+
+1. **Conversion Logic Moved to SQL** (Major Improvement)
+   - Original design: Python helper function `_convert_amount_to_ml()` in `db_analytics.py`
+   - Actual implementation: SQL CASE statement directly in the ingredient query
+   - Rationale: More efficient to compute conversions in database rather than Python
+   - Impact: Cleaner code, better performance, easier to maintain
+   - Location: `compute_cocktail_space_umap()` method, lines 251-259
+
+2. **Modified Existing Method Instead of Separate Query**
+   - Original design: New `get_cocktail_space_analytics()` method in `db_analytics.py`
+   - Actual implementation: Extended existing `compute_cocktail_space_umap()` method
+   - Rationale: Method already computed UMAP embeddings, natural place to add ingredient data
+   - Impact: No duplicate code, single source of truth for cocktail space data
+
+3. **Batch Ingredient Query**
+   - Implementation added efficient batch query using `IN` clause with placeholders
+   - Fetches all recipe ingredients in one query instead of per-recipe queries
+   - Significantly better performance for large recipe collections
+
+**Technical Details:**
+
+- SQL CASE statement handles all special unit conversions:
+  - "to top" → 90.0 mL (3 oz equivalent)
+  - "to rinse" → 5.0 mL
+  - "each" → -1.0 (sorts to end)
+  - Standard units use `conversion_to_ml` from units table
+- Ingredient sorting: DESC by volume_ml, with negative values at end
+- Frontend component matches design spec exactly (no changes)
+
+**Performance Observations:**
+
+- Analytics file size: ~400KB raw JSON (as predicted)
+- Gzipped size: ~120KB (matches design estimate)
+- Hover delay (250ms): Feels natural, prevents accidental popups
+- No noticeable performance impact on chart rendering or interactions
+- Preview positioning works smoothly at all screen edges
+
+**Known Issues:**
+
+- None identified during testing
+- All edge cases handled correctly:
+  - Short ingredient lists (2-3 items) display without truncation
+  - Long lists (10+ items) properly truncated with "..."
+  - Smart positioning prevents off-screen rendering
+  - Preview correctly hides during zoom/pan
+  - Modal interaction properly dismisses preview
+
+**Testing Completed:**
+
+- ✅ Backend ingredient query returns sorted lists correctly
+- ✅ Special unit conversions ("to top", "to rinse", "each") work as expected
+- ✅ Analytics refresh generates new data format
+- ✅ Preview appears after 250ms hover delay
+- ✅ Smart edge detection prevents off-screen positioning
+- ✅ Click-to-open-modal behavior preserved
+- ✅ Zoom/pan interactions hide preview appropriately
+- ✅ No console errors or warnings
+
+**Commits:**
+
+- `59c1dc5` - Backend: Add ingredient lists to cocktail space UMAP
+- `1bbba77` - Frontend: Add recipe preview card component
+- `b862440` - Frontend: Add recipe preview card styles
+- `16e9d3d` - Frontend: Integrate recipe preview into cocktail space chart
