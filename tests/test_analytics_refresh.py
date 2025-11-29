@@ -22,25 +22,33 @@ def test_lambda_handler_success(mock_storage_class, mock_analytics_class, mock_g
     mock_get_db.return_value = mock_db
     mock_db.execute_query.return_value = [{"count": 150}]
 
-    # Mock DataFrame for ingredient tree
-    import pandas as pd
-    mock_df = pd.DataFrame([
+    # Mock ingredient data with both root-level and child ingredients
+    mock_ingredient_data = [
         {
             'ingredient_id': 1,
             'ingredient_name': 'Gin',
-            'ingredient_path': '/1/',
-            'substitution_level': 1.0,
-            'direct_recipe_count': 10,
-            'hierarchical_recipe_count': 15
+            'path': '/1/',
+            'parent_id': None,  # Root level
+            'direct_usage': 10,
+            'hierarchical_usage': 15,
+            'has_children': True
+        },
+        {
+            'ingredient_id': 2,
+            'ingredient_name': 'London Dry Gin',
+            'path': '/1/2/',
+            'parent_id': 1,  # Child of Gin
+            'direct_usage': 5,
+            'hierarchical_usage': 5,
+            'has_children': False
         }
-    ])
+    ]
 
     mock_analytics = Mock()
     mock_analytics_class.return_value = mock_analytics
-    mock_analytics.get_ingredient_usage_stats.return_value = [{"test": "data"}]
+    mock_analytics.get_ingredient_usage_stats.return_value = mock_ingredient_data
     mock_analytics.get_recipe_complexity_distribution.return_value = [{"count": 5}]
     mock_analytics.compute_cocktail_space_umap.return_value = {"data": [{"x": 1.0, "y": 2.0}]}
-    mock_analytics.get_ingredients_for_tree.return_value = mock_df
 
     # Mock tree building
     mock_tree = {"id": "root", "name": "All Ingredients", "children": []}

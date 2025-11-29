@@ -4,6 +4,8 @@ import logging
 import os
 from typing import Dict, Any
 
+import pandas as pd
+
 from db.database import get_database
 from db.db_analytics import AnalyticsQueries
 from utils.analytics_cache import AnalyticsStorage
@@ -70,9 +72,26 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         analytics_queries = AnalyticsQueries(db)
         storage = AnalyticsStorage(bucket_name)
 
-        # Generate root-level ingredient usage stats
-        logger.info("Generating ingredient usage statistics")
-        ingredient_stats = analytics_queries.get_ingredient_usage_stats()
+        # Query all ingredient data once (used for both stats and tree)
+        logger.info("Querying all ingredient usage statistics")
+        all_ingredient_stats = analytics_queries.get_ingredient_usage_stats(all_ingredients=True)
+
+        # Filter to root-level ingredients for the ingredient-usage endpoint
+        ingredient_stats = [
+            ing for ing in all_ingredient_stats
+            if ing['parent_id'] is None
+        ]
+        logger.info(f"Filtered to {len(ingredient_stats)} root-level ingredients")
+
+        # Convert all ingredients to DataFrame for tree building
+        ingredients_df = pd.DataFrame(all_ingredient_stats)
+        if not ingredients_df.empty:
+            ingredients_df = ingredients_df.rename(columns={
+                "path": "ingredient_path",
+                "direct_usage": "direct_recipe_count",
+                "hierarchical_usage": "hierarchical_recipe_count",
+            })
+            ingredients_df["substitution_level"] = 1.0
 
         # Generate recipe complexity distribution
         logger.info("Generating recipe complexity distribution")
@@ -83,11 +102,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         cocktail_space = analytics_queries.compute_cocktail_space_umap()
 
         # Generate ingredient tree
-        logger.info("Generating ingredient tree with recipe counts")
+        logger.info("Building ingredient tree with recipe counts")
         from barcart.distance import build_ingredient_tree
-
-        # Get ingredient data for tree building
-        ingredients_df = analytics_queries.get_ingredients_for_tree()
 
         if not ingredients_df.empty:
             # Build the tree structure
