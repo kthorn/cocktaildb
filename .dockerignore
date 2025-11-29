@@ -1,0 +1,63 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# AWS SAM
+.aws-sam/
+
+# Environment
+.env
+.env.*
+*.log
+
+# Documentation and configs not needed in container
+*.md
+!packages/barcart/README.md
+LICENSE
+.editorconfig
+.gitattributes
+
+# Scripts not needed in container
+scripts/
+schema-deploy/
+
+# Web frontend
+src/
+
+# Test files
+tests/
+*_test.py
+test_*.py
+
+# Backup lambda (not needed for analytics)
+backup-lambda/
+
+# Other build artifacts
+*.egg
+*.manifest
+*.spec

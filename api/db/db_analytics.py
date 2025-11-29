@@ -210,7 +210,7 @@ class AnalyticsQueries:
 
             if normalized_matrix.empty:
                 logger.warning("Empty recipe matrix, returning empty UMAP")
-                return {'data': []}
+                return {"data": []}
 
             # Compute pairwise Manhattan distances
             logger.info("Computing pairwise Manhattan distances")
@@ -220,7 +220,6 @@ class AnalyticsQueries:
             logger.info("Running UMAP dimensionality reduction")
             embedding = compute_umap_embedding(
                 distance_matrix,
-                n_components=2,
                 n_neighbors=5,
                 min_dist=0.05,
                 random_state=42,
@@ -238,13 +237,13 @@ class AnalyticsQueries:
                         "recipe_name": recipe_names[idx],
                         "x": float(embedding[idx, 0]),
                         "y": float(embedding[idx, 1]),
-                        "ingredients": []  # Will populate below
+                        "ingredients": [],  # Will populate below
                     }
                 )
 
             # Query ingredients for all recipes in one go
             if recipe_ids:
-                placeholders = ','.join(['?'] * len(recipe_ids))
+                placeholders = ",".join(["?"] * len(recipe_ids))
                 ingredient_query = f"""
                     SELECT
                         ri.recipe_id,
@@ -265,37 +264,40 @@ class AnalyticsQueries:
                     ORDER BY ri.recipe_id
                 """
 
-                ingredient_rows = self.db.execute_query(ingredient_query, tuple(recipe_ids))
+                ingredient_rows = self.db.execute_query(
+                    ingredient_query, tuple(recipe_ids)
+                )
 
                 # Group ingredients by recipe and sort by volume
                 recipe_ingredients = {}
                 for row in ingredient_rows:
-                    recipe_id = row['recipe_id']
+                    recipe_id = row["recipe_id"]
                     if recipe_id not in recipe_ingredients:
                         recipe_ingredients[recipe_id] = []
 
                     # Use pre-computed volume from SQL
-                    amount_ml = row['volume_ml']
+                    amount_ml = row["volume_ml"]
 
-                    recipe_ingredients[recipe_id].append({
-                        'name': row['ingredient_name'],
-                        'amount_ml': amount_ml
-                    })
+                    recipe_ingredients[recipe_id].append(
+                        {"name": row["ingredient_name"], "amount_ml": amount_ml}
+                    )
 
                 # Sort ingredients by volume and add to results
                 for item in result:
-                    recipe_id = item['recipe_id']
+                    recipe_id = item["recipe_id"]
                     if recipe_id in recipe_ingredients:
                         # Sort by amount (DESC), with "each" units (-1) at end
                         sorted_ings = sorted(
                             recipe_ingredients[recipe_id],
-                            key=lambda x: x['amount_ml'],
-                            reverse=True
+                            key=lambda x: x["amount_ml"],
+                            reverse=True,
                         )
-                        item['ingredients'] = [ing['name'] for ing in sorted_ings]
+                        item["ingredients"] = [ing["name"] for ing in sorted_ings]
 
-            logger.info(f"UMAP computation complete: {len(result)} recipes with ingredients")
-            return {'data': result}
+            logger.info(
+                f"UMAP computation complete: {len(result)} recipes with ingredients"
+            )
+            return {"data": result}
 
         except Exception as e:
             logger.error(f"Error computing cocktail space UMAP: {str(e)}")
@@ -322,14 +324,16 @@ class AnalyticsQueries:
 
             # Convert to DataFrame and rename columns for tree building
             df = pd.DataFrame(rows)
-            df = df.rename(columns={
-                'path': 'ingredient_path',
-                'direct_usage': 'direct_recipe_count',
-                'hierarchical_usage': 'hierarchical_recipe_count'
-            })
+            df = df.rename(
+                columns={
+                    "path": "ingredient_path",
+                    "direct_usage": "direct_recipe_count",
+                    "hierarchical_usage": "hierarchical_recipe_count",
+                }
+            )
 
             # Add substitution_level column (using default weight)
-            df['substitution_level'] = 1.0
+            df["substitution_level"] = 1.0
 
             logger.info(f"Retrieved {len(df)} ingredients for tree building")
             return df
@@ -337,5 +341,3 @@ class AnalyticsQueries:
         except Exception as e:
             logger.error(f"Error getting ingredients for tree: {str(e)}")
             raise
-
-
