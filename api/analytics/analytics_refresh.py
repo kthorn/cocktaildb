@@ -140,7 +140,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "message": "Analytics regenerated successfully",
                 "ingredient_stats_count": len(ingredient_stats),
                 "complexity_stats_count": len(complexity_stats),
-                "cocktail_space_count": len(cocktail_space),
+                "cocktail_space_count": len(cocktail_space.get('data', [])),
                 "ingredient_tree_nodes": len(recipe_counts) if not ingredients_df.empty else 0
             })
         }

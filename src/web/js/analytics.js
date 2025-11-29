@@ -50,8 +50,55 @@ function setupTabNavigation() {
             // Update state and load data
             state.currentTab = tabName;
             await loadTabData(tabName);
+
+            // Sync mobile view selector
+            syncMobileViewSelector(tabName);
         });
     });
+
+    // Setup mobile view selector
+    setupMobileViewSelector(tabButtons, tabContents);
+}
+
+/**
+ * Setup mobile view selector event listener
+ */
+function setupMobileViewSelector(tabButtons, tabContents) {
+    const mobileViewSelect = document.getElementById('mobile-view-select');
+    if (!mobileViewSelect) return;
+
+    mobileViewSelect.addEventListener('change', async (e) => {
+        const selectedTab = e.target.value;
+
+        // Update active states
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        tabContents.forEach(content => content.classList.remove('active'));
+
+        // Find and activate the corresponding tab button and content
+        const tabButton = document.querySelector(`.tab-button[data-tab="${selectedTab}"]`);
+        if (tabButton) {
+            tabButton.classList.add('active');
+        }
+
+        const tabContent = document.getElementById(`tab-${selectedTab}`);
+        if (tabContent) {
+            tabContent.classList.add('active');
+        }
+
+        // Update state and load data
+        state.currentTab = selectedTab;
+        await loadTabData(selectedTab);
+    });
+}
+
+/**
+ * Sync mobile view selector with current tab
+ */
+function syncMobileViewSelector(tabName) {
+    const mobileViewSelect = document.getElementById('mobile-view-select');
+    if (mobileViewSelect) {
+        mobileViewSelect.value = tabName;
+    }
 }
 
 /**

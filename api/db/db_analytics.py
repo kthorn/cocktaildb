@@ -192,18 +192,15 @@ class AnalyticsQueries:
             logger.error(f"Error building recipe ingredient matrix: {str(e)}")
             raise
 
-    def compute_cocktail_space_umap(self) -> List[Dict[str, Any]]:
-        """Compute UMAP embedding of recipe space based on ingredient similarity
+    def compute_cocktail_space_umap(self) -> dict:
+        """Compute UMAP embedding of recipe space with ingredient lists
 
-        Uses Manhattan distance on normalized ingredient proportions, then UMAP
-        for 2D visualization.
-
-        Returns:
-            List of dicts with {recipe_id, recipe_name, x, y}
+        Returns dict with 'data' key containing list of:
+            {recipe_id, recipe_name, x, y, ingredients: [sorted ingredient names]}
         """
         import numpy as np
         from sklearn.metrics import pairwise_distances
-        import umap
+        from barcart import compute_umap_embedding
 
         try:
             # Get normalized recipe-ingredient matrix
@@ -213,7 +210,7 @@ class AnalyticsQueries:
 
             if normalized_matrix.empty:
                 logger.warning("Empty recipe matrix, returning empty UMAP")
-                return []
+                return {'data': []}
 
             # Compute pairwise Manhattan distances
             logger.info("Computing pairwise Manhattan distances")
@@ -221,30 +218,84 @@ class AnalyticsQueries:
 
             # Run UMAP dimensionality reduction
             logger.info("Running UMAP dimensionality reduction")
-            reducer = umap.UMAP(
+            embedding = compute_umap_embedding(
+                distance_matrix,
+                n_components=2,
                 n_neighbors=5,
                 min_dist=0.05,
-                n_components=2,
-                metric="precomputed",
                 random_state=42,
             )
 
-            embedding = reducer.fit_transform(distance_matrix)
-
-            # Build result list
+            # Build result list with UMAP coordinates
             result = []
+            recipe_ids = []
             for idx in range(len(embedding)):
+                recipe_id = recipe_id_map[idx]
+                recipe_ids.append(recipe_id)
                 result.append(
                     {
-                        "recipe_id": recipe_id_map[idx],
+                        "recipe_id": recipe_id,
                         "recipe_name": recipe_names[idx],
                         "x": float(embedding[idx, 0]),
                         "y": float(embedding[idx, 1]),
+                        "ingredients": []  # Will populate below
                     }
                 )
 
-            logger.info(f"UMAP computation complete: {len(result)} recipes")
-            return result
+            # Query ingredients for all recipes in one go
+            if recipe_ids:
+                placeholders = ','.join(['?'] * len(recipe_ids))
+                ingredient_query = f"""
+                    SELECT
+                        ri.recipe_id,
+                        i.name as ingredient_name,
+                        CASE
+                            WHEN u.name = 'to top' THEN 90.0
+                            WHEN u.name = 'to rinse' THEN 5.0
+                            WHEN u.name = 'each' OR u.name = 'Each' THEN -1.0
+                            WHEN u.conversion_to_ml IS NOT NULL AND ri.amount IS NOT NULL
+                                THEN u.conversion_to_ml * ri.amount
+                            WHEN ri.amount IS NOT NULL THEN ri.amount
+                            ELSE 0.0
+                        END as volume_ml
+                    FROM recipe_ingredients ri
+                    JOIN ingredients i ON ri.ingredient_id = i.id
+                    LEFT JOIN units u ON ri.unit_id = u.id
+                    WHERE ri.recipe_id IN ({placeholders})
+                    ORDER BY ri.recipe_id
+                """
+
+                ingredient_rows = self.db.execute_query(ingredient_query, tuple(recipe_ids))
+
+                # Group ingredients by recipe and sort by volume
+                recipe_ingredients = {}
+                for row in ingredient_rows:
+                    recipe_id = row['recipe_id']
+                    if recipe_id not in recipe_ingredients:
+                        recipe_ingredients[recipe_id] = []
+
+                    # Use pre-computed volume from SQL
+                    amount_ml = row['volume_ml']
+
+                    recipe_ingredients[recipe_id].append({
+                        'name': row['ingredient_name'],
+                        'amount_ml': amount_ml
+                    })
+
+                # Sort ingredients by volume and add to results
+                for item in result:
+                    recipe_id = item['recipe_id']
+                    if recipe_id in recipe_ingredients:
+                        # Sort by amount (DESC), with "each" units (-1) at end
+                        sorted_ings = sorted(
+                            recipe_ingredients[recipe_id],
+                            key=lambda x: x['amount_ml'],
+                            reverse=True
+                        )
+                        item['ingredients'] = [ing['name'] for ing in sorted_ings]
+
+            logger.info(f"UMAP computation complete: {len(result)} recipes with ingredients")
+            return {'data': result}
 
         except Exception as e:
             logger.error(f"Error computing cocktail space UMAP: {str(e)}")
@@ -286,3 +337,5 @@ class AnalyticsQueries:
         except Exception as e:
             logger.error(f"Error getting ingredients for tree: {str(e)}")
             raise
+
+

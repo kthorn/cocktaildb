@@ -339,6 +339,81 @@ class TestBuildRecipeVolumeMatrix:
         assert volume_matrix.shape[1] == len(ingredient_registry)
 
 
+class TestComputeUmapEmbedding:
+    """Test compute_umap_embedding function."""
+
+    def test_computes_2d_embedding_from_distance_matrix(self):
+        """Test that UMAP produces 2D coordinates from a distance matrix."""
+        import numpy as np
+
+        from barcart.distance import compute_umap_embedding
+
+        # Create a simple 5x5 distance matrix
+        distance_matrix = np.array(
+            [
+                [0.0, 1.0, 2.0, 3.0, 4.0],
+                [1.0, 0.0, 1.0, 2.0, 3.0],
+                [2.0, 1.0, 0.0, 1.0, 2.0],
+                [3.0, 2.0, 1.0, 0.0, 1.0],
+                [4.0, 3.0, 2.0, 1.0, 0.0],
+            ]
+        )
+
+        # Compute UMAP embedding
+        embedding = compute_umap_embedding(distance_matrix, n_components=2, random_state=42)
+
+        # Verify shape: (n_samples, n_components)
+        assert embedding.shape == (5, 2)
+
+        # Verify all values are finite
+        assert np.all(np.isfinite(embedding))
+
+    def test_respects_n_components_parameter(self):
+        """Test that n_components parameter controls dimensionality."""
+        import numpy as np
+
+        from barcart.distance import compute_umap_embedding
+
+        # Use larger matrix for testing different dimensions
+        distance_matrix = np.array(
+            [
+                [0.0, 1.0, 2.0, 3.0, 4.0],
+                [1.0, 0.0, 1.0, 2.0, 3.0],
+                [2.0, 1.0, 0.0, 1.0, 2.0],
+                [3.0, 2.0, 1.0, 0.0, 1.0],
+                [4.0, 3.0, 2.0, 1.0, 0.0],
+            ]
+        )
+
+        # Test with 1D embedding
+        embedding_1d = compute_umap_embedding(distance_matrix, n_components=1, random_state=42)
+        assert embedding_1d.shape == (5, 1)
+
+        # Test with 3D embedding
+        embedding_3d = compute_umap_embedding(distance_matrix, n_components=3, random_state=42)
+        assert embedding_3d.shape == (5, 3)
+
+    def test_random_state_gives_reproducible_results(self):
+        """Test that same random_state produces same embedding."""
+        import numpy as np
+
+        from barcart.distance import compute_umap_embedding
+
+        distance_matrix = np.array(
+            [
+                [0.0, 1.0, 2.0, 3.0],
+                [1.0, 0.0, 1.0, 2.0],
+                [2.0, 1.0, 0.0, 1.0],
+                [3.0, 2.0, 1.0, 0.0],
+            ]
+        )
+
+        embedding1 = compute_umap_embedding(distance_matrix, random_state=42)
+        embedding2 = compute_umap_embedding(distance_matrix, random_state=42)
+
+        np.testing.assert_allclose(embedding1, embedding2, rtol=1e-10)
+
+
 class TestReportNeighbors:
     """Test generic report_neighbors function."""
 

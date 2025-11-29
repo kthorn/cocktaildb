@@ -2111,7 +2111,7 @@ input[type="radio"]:focus {
    ========================================================================== */
 
 .modal {
-    display: none;
+    display: flex;
     position: fixed;
     z-index: 2000;
     left: 0;
@@ -2615,6 +2615,11 @@ input[type="radio"]:focus {
     gap: var(--space-sm);
     border-bottom: 2px solid #ddd;
     margin-bottom: var(--space-xl);
+}
+
+/* Mobile view selector - hidden on desktop */
+.analytics-view-selector {
+    display: none;
 }
 
 .tab-content {
@@ -3288,12 +3293,38 @@ input[type="radio"]:focus {
         padding: var(--mobile-padding);  /* 16px minimum for viewport */
     }
 
+    /* Hide desktop tabs on mobile */
     .analytics-tabs {
-        overflow-x: auto;
+        display: none;
     }
 
-    .tab-button {
+    /* Show mobile view selector */
+    .analytics-view-selector {
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+        margin-bottom: var(--space-lg);
+        padding: var(--space-sm) var(--space-md);
+        background-color: var(--bg-light);
+        border-radius: var(--radius-md);
+    }
+
+    .view-selector-label {
+        font-size: var(--text-sm);
+        font-weight: 500;
+        color: var(--text-dark);
         white-space: nowrap;
+    }
+
+    .mobile-view-select {
+        flex: 1;
+        padding: var(--space-sm) var(--space-md);
+        font-size: var(--text-sm);
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius-sm);
+        background-color: white;
+        color: var(--text-dark);
+        min-height: var(--touch-target-min);
     }
 
     .chart-info {

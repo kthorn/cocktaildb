@@ -57,9 +57,15 @@ export function createIngredientTreeChart(container, data, options = {}) {
     // Get colors from CSS variables
     const COLORS = getColors();
 
-    // Configuration constants
-    const FONT_SIZE_PARENT = '8px';
-    const FONT_SIZE_OUTERMOST = '11px';
+    // Detect mobile viewport
+    const isMobile = window.innerWidth < 768;
+
+    // Configuration constants - responsive sizing for mobile
+    const FONT_SIZE_PARENT = isMobile ? '4px' : '8px';
+    const FONT_SIZE_OUTERMOST = isMobile ? '6px' : '11px';
+    const CIRCLE_RADIUS = isMobile ? 2 : 5;
+    const STROKE_WIDTH = isMobile ? 1 : 2;
+    const STROKE_WIDTH_HOVER = isMobile ? 1.5 : 3;
     const MAX_LENGTH_PARENT = 15;
     const MAX_LENGTH_OUTERMOST = Infinity;
     const RING_SPACING = 1.2;
@@ -221,7 +227,7 @@ export function createIngredientTreeChart(container, data, options = {}) {
         node.select('circle')
             .transition()
             .duration(duration)
-            .attr('r', 5);
+            .attr('r', CIRCLE_RADIUS);
 
         node.select('text')
             .text(d => truncateText(d))
@@ -244,7 +250,7 @@ export function createIngredientTreeChart(container, data, options = {}) {
             .transition()
             .delay(duration)
             .duration(duration)
-            .attr('r', 5);
+            .attr('r', CIRCLE_RADIUS);
 
         nodeEnter.select('text')
             .transition()
@@ -350,10 +356,10 @@ export function createIngredientTreeChart(container, data, options = {}) {
         .call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2));
 
     // Add CSS styles
-    addTreeStyles(COLORS);
+    addTreeStyles(COLORS, STROKE_WIDTH, STROKE_WIDTH_HOVER);
 }
 
-function addTreeStyles(COLORS) {
+function addTreeStyles(COLORS, strokeWidth, strokeWidthHover) {
     // Check if styles already exist
     if (document.getElementById('ingredient-tree-styles')) {
         return;
@@ -370,7 +376,7 @@ function addTreeStyles(COLORS) {
         .node.node--leaf circle {
             fill: ${COLORS.leafFill};
             stroke: ${COLORS.stroke};
-            stroke-width: 2px;
+            stroke-width: ${strokeWidth}px;
             cursor: pointer;
             transition: all 0.3s;
         }
@@ -378,14 +384,14 @@ function addTreeStyles(COLORS) {
         .node.node--leaf circle:hover {
             fill: ${COLORS.leafFill};
             stroke: ${COLORS.hoverStroke};
-            stroke-width: 3px;
+            stroke-width: ${strokeWidthHover}px;
         }
 
         /* Internal nodes (have children) - use accent color */
         .node.node--internal circle {
             fill: ${COLORS.internalFill};
             stroke: ${COLORS.stroke};
-            stroke-width: 2px;
+            stroke-width: ${strokeWidth}px;
             cursor: pointer;
             transition: all 0.3s;
         }
@@ -393,7 +399,7 @@ function addTreeStyles(COLORS) {
         .node.node--internal circle:hover {
             fill: ${COLORS.hoverFill};
             stroke: ${COLORS.hoverStroke};
-            stroke-width: 3px;
+            stroke-width: ${strokeWidthHover}px;
         }
 
         .node text {

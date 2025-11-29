@@ -36,6 +36,17 @@
             </button>
         </nav>
 
+        <!-- Mobile view selector (hidden on desktop) -->
+        <div class="analytics-view-selector">
+            <label for="mobile-view-select" class="view-selector-label">View:</label>
+            <select id="mobile-view-select" class="mobile-view-select">
+                <option value="ingredients" selected>Ingredient Usage</option>
+                <option value="ingredient-tree">Ingredient Tree</option>
+                <option value="complexity">Recipe Complexity</option>
+                <option value="cocktail-space">Cocktail Space</option>
+            </select>
+        </div>
+
         <!-- Tab content containers -->
         <div class="analytics-content">
             <!-- Ingredient Usage Tab -->
