@@ -252,6 +252,19 @@ Resources:
         - !Ref BatchVPCEndpointSecurityGroup
       PrivateDnsEnabled: true
 
+  # EC2 VPC Endpoint for instance metadata and IAM credentials (IMDSv2)
+  EC2VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ec2
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref BatchVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
   # EFS File System
   CocktailEFS:
     Type: AWS::EFS::FileSystem

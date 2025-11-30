@@ -28,8 +28,8 @@ manifest_hash = ""
 packagetype = "Zip"
 functions = ["CocktailLambda"]
 
-[function_build_definitions.6b578f65-db57-4596-905d-3e23684c3781]
-codeuri = "/home/kurtt/cocktaildb/api/analytics"
+[function_build_definitions.660496ad-22ab-488c-a753-b0e1de49f4c9]
+codeuri = "/home/kurtt/cocktaildb/api/analytics-trigger"
 runtime = "python3.12"
 architecture = "x86_64"
 handler = "trigger.lambda_handler"
