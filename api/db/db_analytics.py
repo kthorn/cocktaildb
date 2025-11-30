@@ -60,6 +60,7 @@ class AnalyticsQueries:
               i.name as ingredient_name,
               i.path,
               i.parent_id,
+              i.allow_substitution,
               COUNT(DISTINCT ri.recipe_id) as direct_usage,
               (
                 SELECT COUNT(DISTINCT ri2.recipe_id)
@@ -71,7 +72,7 @@ class AnalyticsQueries:
             FROM ingredients i
             LEFT JOIN recipe_ingredients ri ON ri.ingredient_id = i.id
             {where_clause}
-            GROUP BY i.id, i.name, i.path, i.parent_id
+            GROUP BY i.id, i.name, i.path, i.parent_id, i.allow_substitution
             ORDER BY hierarchical_usage DESC
             """
 
@@ -449,9 +450,7 @@ class AnalyticsQueries:
 
             # Step 3: Create rollup mapping and apply to recipes
             logger.info("Creating rollup mapping")
-            # Add allow_substitution column (1 for all - will be filtered by create_rollup_mapping)
-            # In practice, this should come from DB, but for now we assume all leaves are substitutable
-            ingredients_df['allow_substitution'] = 1
+            # Rename ingredient_id to id for rollup function compatibility
             ingredients_df = ingredients_df.rename(columns={'ingredient_id': 'id'})
 
             rollup_map = create_rollup_mapping(ingredients_df, parent_map, allow_substitution_col='allow_substitution')
