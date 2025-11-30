@@ -1322,9 +1322,9 @@ Resources:
         JobRoleArn: !GetAtt BatchInstanceRole.Arn
         ResourceRequirements:
           - Type: VCPU
-            Value: "2"
+            Value: "4"
           - Type: MEMORY
-            Value: "2048"
+            Value: "4096"
         Environment:
           - Name: DB_NAME
             Value: !Ref DatabaseName
