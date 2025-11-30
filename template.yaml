@@ -1314,8 +1314,6 @@ Resources:
       Type: container
       PlatformCapabilities:
         - EC2
-      RetryStrategy:
-        Attempts: 3
       Timeout:
         AttemptDurationSeconds: 3600
       ContainerProperties:
