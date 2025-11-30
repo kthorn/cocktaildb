@@ -1299,6 +1299,68 @@ Resources:
       Roles:
         - !Ref BatchInstanceRole
 
+  # Security group for Batch instances
+  BatchSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Batch compute instances
+      VpcId: !Ref CocktailVPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          DestinationSecurityGroupId: !Ref EFSSecurityGroup
+
+  # Allow Batch instances to access EFS
+  EFSIngressFromBatch:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EFSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      SourceSecurityGroupId: !Ref BatchSecurityGroup
+
+  # Batch Compute Environment - Graviton Spot
+  AnalyticsComputeEnvironment:
+    Type: AWS::Batch::ComputeEnvironment
+    Properties:
+      Type: MANAGED
+      ServiceRole: !GetAtt BatchServiceRole.Arn
+      ComputeResources:
+        Type: SPOT
+        AllocationStrategy: SPOT_PRICE_CAPACITY_OPTIMIZED
+        MinvCpus: 0
+        MaxvCpus: 8
+        InstanceTypes:
+          - c7g.medium
+          - c7g.large
+          - c7g.xlarge
+          - c7g.2xlarge
+        Subnets:
+          - !Ref PrivateSubnet
+        SecurityGroupIds:
+          - !Ref BatchSecurityGroup
+        InstanceRole: !GetAtt BatchInstanceProfile.Arn
+        SpotIamFleetRole: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-ec2-spot-fleet-tagging-role
+        Tags:
+          Name: !Sub ${AWS::StackName}-batch-analytics
+      State: ENABLED
+
+  # Batch Job Queue
+  AnalyticsJobQueue:
+    Type: AWS::Batch::JobQueue
+    Properties:
+      Priority: 1
+      ComputeEnvironmentOrder:
+        - Order: 1
+          ComputeEnvironment: !Ref AnalyticsComputeEnvironment
+      State: ENABLED
+
   # Configure API Gateway Account to use the logging role
   ApiGatewayAccount:
     Type: AWS::ApiGateway::Account
