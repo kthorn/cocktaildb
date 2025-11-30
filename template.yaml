@@ -1351,7 +1351,6 @@ Resources:
           - Name: efs-volume
             EfsVolumeConfiguration:
               FileSystemId: !Ref CocktailEFS
-              RootDirectory: /lambda
               TransitEncryption: ENABLED
               AuthorizationConfig:
                 AccessPointId: !Ref EFSAccessPoint
