@@ -531,7 +531,7 @@ Resources:
           ENVIRONMENT: !Ref Environment
           DB_PATH: !Sub /mnt/efs/${DatabaseName}.db
           ANALYTICS_BUCKET: !Ref AnalyticsBucket
-          ANALYTICS_REFRESH_FUNCTION: !Ref AnalyticsRefreshFunction
+          ANALYTICS_TRIGGER_FUNCTION: !Ref AnalyticsTriggerFunction
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -573,11 +573,11 @@ Resources:
               Resource:
                 - !Sub "arn:aws:s3:::${AnalyticsBucket}"
                 - !Sub "arn:aws:s3:::${AnalyticsBucket}/*"
-            - Sid: AnalyticsRefreshFunctionInvoke
+            - Sid: AnalyticsTriggerFunctionInvoke
               Effect: Allow
               Action:
                 - lambda:InvokeFunction
-              Resource: !GetAtt AnalyticsRefreshFunction.Arn
+              Resource: !GetAtt AnalyticsTriggerFunction.Arn
       Events:
         GetIngredients:
           Type: Api
