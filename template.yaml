@@ -1328,6 +1328,8 @@ Resources:
   # Batch Compute Environment - Graviton Spot
   AnalyticsComputeEnvironment:
     Type: AWS::Batch::ComputeEnvironment
+    DependsOn:
+      - MountTarget
     Properties:
       Type: MANAGED
       ServiceRole: !GetAtt BatchServiceRole.Arn
