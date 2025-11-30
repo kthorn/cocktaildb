@@ -26,13 +26,14 @@ def _get_lambda_client():
 def trigger_analytics_refresh():
     """Trigger async analytics regeneration
 
-    Invokes the analytics refresh Lambda function asynchronously.
+    Invokes the analytics trigger Lambda function asynchronously,
+    which submits an AWS Batch job.
     Failures are logged but don't fail the main operation.
     """
     try:
-        function_name = os.environ.get("ANALYTICS_REFRESH_FUNCTION")
+        function_name = os.environ.get("ANALYTICS_TRIGGER_FUNCTION")
         if not function_name:
-            logger.debug("ANALYTICS_REFRESH_FUNCTION not configured, skipping trigger")
+            logger.debug("ANALYTICS_TRIGGER_FUNCTION not configured, skipping trigger")
             return
 
         lambda_client = _get_lambda_client()
@@ -40,7 +41,7 @@ def trigger_analytics_refresh():
             FunctionName=function_name,
             InvocationType='Event'  # Async - non-blocking
         )
-        logger.info("Analytics regeneration triggered")
+        logger.info("Analytics Batch job trigger invoked")
     except Exception as e:
         logger.warning(f"Failed to trigger analytics regeneration: {str(e)}")
         # Don't fail the main operation if analytics trigger fails
