@@ -66,13 +66,23 @@ def em_fit(
         range(iters), disable=not verbose, desc="EM fit", position=0, leave=False
     )
     for t in outer_bar:
-        distance_matrix, plans = emd_matrix(
-            volume_matrix,
-            previous_cost_matrix,
-            return_plans=True,
-            tqdm_cls=tqdm,
-            tqdm_kwargs={"position": 1, "leave": False},
-        )
+        # Only show progress bars if verbose is True
+        if verbose:
+            distance_matrix, plans = emd_matrix(
+                volume_matrix,
+                previous_cost_matrix,
+                return_plans=True,
+                tqdm_cls=tqdm,
+                tqdm_kwargs={"position": 1, "leave": False},
+            )
+        else:
+            distance_matrix, plans = emd_matrix(
+                volume_matrix,
+                previous_cost_matrix,
+                return_plans=True,
+                tqdm_cls=None,
+                tqdm_kwargs=None,
+            )
         T_sum, n_pairs = expected_ingredient_match_matrix(
             distance_matrix,
             plans,
