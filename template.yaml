@@ -1426,6 +1426,34 @@ Resources:
       LogGroupName: !Sub /aws/batch/${AWS::StackName}-analytics
       RetentionInDays: 14
 
+  # Analytics Trigger Lambda (submits Batch job)
+  AnalyticsTriggerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-analytics-trigger
+      CodeUri: api/analytics/
+      Handler: trigger.lambda_handler
+      Runtime: python3.12
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          BATCH_JOB_QUEUE: !Ref AnalyticsJobQueue
+          BATCH_JOB_DEFINITION: !Ref AnalyticsJobDefinition
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - batch:SubmitJob
+                - batch:DescribeJobs
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: "*"
+
   # Configure API Gateway Account to use the logging role
   ApiGatewayAccount:
     Type: AWS::ApiGateway::Account
