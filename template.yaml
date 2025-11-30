@@ -1316,15 +1316,6 @@ Resources:
         - EC2
       RetryStrategy:
         Attempts: 3
-        EvaluateOnExit:
-          - OnStatusReason: "Host EC2*"
-            Action: RETRY
-          - OnReason: "*spot*"
-            Action: RETRY
-          - OnReason: "*Spot*"
-            Action: RETRY
-          - OnExitCode: "*"
-            Action: EXIT
       Timeout:
         AttemptDurationSeconds: 3600
       ContainerProperties:
