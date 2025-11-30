@@ -28,13 +28,13 @@ manifest_hash = ""
 packagetype = "Zip"
 functions = ["CocktailLambda"]
 
-[function_build_definitions.5f27587e-d752-4a09-b5f8-2edfac3b271f]
-packagetype = "Image"
-functions = ["AnalyticsRefreshFunction"]
-
-[function_build_definitions.5f27587e-d752-4a09-b5f8-2edfac3b271f.metadata]
-DockerTag = "latest"
-DockerContext = "/home/kurtt/cocktaildb"
-Dockerfile = "api/analytics/Dockerfile"
+[function_build_definitions.6b578f65-db57-4596-905d-3e23684c3781]
+codeuri = "/home/kurtt/cocktaildb/api/analytics"
+runtime = "python3.12"
+architecture = "x86_64"
+handler = "trigger.lambda_handler"
+manifest_hash = ""
+packagetype = "Zip"
+functions = ["AnalyticsTriggerFunction"]
 
 [layer_build_definitions]
