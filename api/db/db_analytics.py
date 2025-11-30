@@ -488,6 +488,26 @@ class AnalyticsQueries:
             )
             logger.info(f"Volume matrix shape: {volume_matrix.shape}")
 
+            # Step 6: Run EM fit
+            logger.info("Running EM fit (this may take several minutes)")
+            final_dist, final_cost, log = em_fit(
+                volume_matrix,
+                cost_matrix,
+                len(ingredient_registry),
+                iters=5
+            )
+            logger.info(f"EM fit complete. Max distance: {np.max(final_dist):.4f}")
+
+            # Step 7: Compute UMAP embedding
+            logger.info("Computing UMAP embedding")
+            embedding = compute_umap_embedding(
+                final_dist,
+                n_neighbors=5,
+                min_dist=0.05,
+                random_state=42
+            )
+            logger.info(f"UMAP embedding shape: {embedding.shape}")
+
             return []
 
         except Exception as e:
