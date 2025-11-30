@@ -341,3 +341,63 @@ class AnalyticsQueries:
         except Exception as e:
             logger.error(f"Error getting ingredients for tree: {str(e)}")
             raise
+
+    def get_recipes_for_distance_calc(self) -> "pd.DataFrame":
+        """Get recipe-ingredient data for distance calculations.
+
+        Returns:
+            DataFrame with columns: recipe_id, recipe_name, ingredient_id,
+            ingredient_name, volume_fraction (normalized per recipe), ingredient_path
+        """
+        import pandas as pd
+
+        try:
+            # Query recipe ingredients with volume calculations
+            sql = """
+            SELECT
+                r.id as recipe_id,
+                r.name as recipe_name,
+                i.id as ingredient_id,
+                i.name as ingredient_name,
+                i.path as ingredient_path,
+                ri.amount,
+                ri.unit_id,
+                u.conversion_to_ml,
+                CASE
+                    WHEN u.name = 'to top' THEN 90.0
+                    WHEN u.name = 'to rinse' THEN 5.0
+                    WHEN u.name = 'each' OR u.name = 'Each' THEN 1.0
+                    WHEN u.conversion_to_ml IS NOT NULL AND ri.amount IS NOT NULL
+                        THEN u.conversion_to_ml * ri.amount
+                    WHEN ri.amount IS NOT NULL THEN ri.amount
+                    ELSE 1.0
+                END as volume_ml
+            FROM recipes r
+            JOIN recipe_ingredients ri ON r.id = ri.recipe_id
+            JOIN ingredients i ON ri.ingredient_id = i.id
+            LEFT JOIN units u ON ri.unit_id = u.id
+            ORDER BY r.id, i.id
+            """
+
+            rows = self.db.execute_query(sql)
+
+            if not rows:
+                logger.warning("No recipe data found for distance calculations")
+                return pd.DataFrame()
+
+            df = pd.DataFrame(rows)
+
+            # Normalize volumes per recipe to sum to 1.0 (volume fractions)
+            df['volume_fraction'] = df.groupby('recipe_id')['volume_ml'].transform(
+                lambda x: x / x.sum()
+            )
+
+            # Drop the intermediate volume_ml and unit columns
+            df = df.drop(columns=['amount', 'unit_id', 'conversion_to_ml', 'volume_ml'])
+
+            logger.info(f"Retrieved {len(df)} recipe-ingredient pairs for {df['recipe_id'].nunique()} recipes")
+            return df
+
+        except Exception as e:
+            logger.error(f"Error getting recipes for distance calc: {str(e)}")
+            raise
