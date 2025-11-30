@@ -110,7 +110,8 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          - Effect: "Allow"
+          - Sid: ApplicationBucketAccess
+            Effect: "Allow"
             Principal: "*"
             Action:
               - "s3:GetObject"
@@ -132,6 +133,15 @@ Resources:
                 - IsProdEnvironment
                 - !Sub "arn:aws:s3:::cocktaildbbackups-${AWS::AccountId}-${Environment}/*"
                 - !Ref "AWS::NoValue"
+          # ECR stores image layers in AWS-managed S3 buckets
+          # Required for Fargate to pull container images via VPC endpoint
+          - Sid: ECRLayerAccess
+            Effect: "Allow"
+            Principal: "*"
+            Action:
+              - "s3:GetObject"
+            Resource:
+              - "arn:aws:s3:::prod-*-starport-layer-bucket/*"
   # ------------------------------------
 
   # EFS VPC Endpoint for Lambda-to-EFS API communication
