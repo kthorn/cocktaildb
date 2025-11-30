@@ -82,4 +82,22 @@ class TestCreateRollupMapping:
 class TestApplyRollupToRecipes:
     """Tests for apply_rollup_to_recipes function."""
 
-    pass
+    def test_basic_rollup_application(self):
+        """Test basic rollup application to recipes."""
+        recipes = pd.DataFrame({
+            'recipe_id': [1, 1, 2],
+            'ingredient_id': [10, 20, 10],
+            'volume_fraction': [0.5, 0.5, 1.0]
+        })
+
+        rollup_map = {20: 100}  # Roll 20 -> 100
+
+        result = apply_rollup_to_recipes(recipes, rollup_map)
+
+        # recipe 1 should have ingredients 10 and 100 (rolled from 20)
+        recipe1 = result[result['recipe_id'] == 1].sort_values('ingredient_id')
+        assert len(recipe1) == 2
+        assert recipe1.iloc[0]['ingredient_id'] == 10
+        assert recipe1.iloc[1]['ingredient_id'] == 100
+        assert recipe1.iloc[0]['volume_fraction'] == 0.5
+        assert recipe1.iloc[1]['volume_fraction'] == 0.5

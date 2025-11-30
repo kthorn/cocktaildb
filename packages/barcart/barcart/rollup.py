@@ -74,4 +74,29 @@ def apply_rollup_to_recipes(
     Returns:
         New DataFrame with rolled-up ingredients and aggregated volumes
     """
-    pass
+    # Validate inputs
+    assert ingredient_id_col in recipes.columns, f"recipes must have '{ingredient_id_col}' column"
+    assert volume_col in recipes.columns, f"recipes must have '{volume_col}' column"
+
+    # Create a copy to avoid modifying original
+    recipes_rolled = recipes.copy()
+
+    # Apply rollup mapping (unmapped IDs pass through)
+    recipes_rolled[ingredient_id_col] = recipes_rolled[ingredient_id_col].map(
+        lambda x: rollup_map.get(x, x)
+    )
+
+    # After rollup, we may have duplicate ingredients in the same recipe
+    # Aggregate by summing volumes and keeping first value for other columns
+    agg_dict = {volume_col: 'sum'}
+
+    # Add 'first' aggregation for non-numeric columns
+    for col in recipes_rolled.columns:
+        if col not in ['recipe_id', ingredient_id_col, volume_col]:
+            agg_dict[col] = 'first'
+
+    recipes_rolled = recipes_rolled.groupby(
+        ['recipe_id', ingredient_id_col], as_index=False
+    ).agg(agg_dict)
+
+    return recipes_rolled
