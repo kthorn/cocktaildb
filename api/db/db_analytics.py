@@ -463,14 +463,29 @@ class AnalyticsQueries:
             )
             logger.info(f"Recipes rolled up: {len(recipes_df)} -> {len(recipes_rolled_df)} rows")
 
-            # Step 4: Build ingredient distance matrix
+            # Get unique ingredients after rollup
+            unique_ingredients_after_rollup = set(recipes_rolled_df['ingredient_id'].unique())
+            logger.info(f"Unique ingredients after rollup: {len(unique_ingredients_after_rollup)}")
+
+            # Step 4: Build ingredient distance matrix (filtered to ingredients in rolled recipes)
             logger.info("Building ingredient distance matrix")
-            id_to_name = dict(zip(
-                ingredients_df['id'].astype(str),
-                ingredients_df['ingredient_name']
-            ))
+            # Filter id_to_name to only include ingredients that appear in rolled recipes
+            id_to_name = {
+                str(ing_id): name
+                for ing_id, name in zip(ingredients_df['id'], ingredients_df['ingredient_name'])
+                if ing_id in unique_ingredients_after_rollup
+            }
+
+            # Filter parent_map to only include edges between ingredients in rolled recipes
+            filtered_parent_map = {
+                child_id: (parent_id, cost)
+                for child_id, (parent_id, cost) in parent_map.items()
+                if (child_id == 'root' or
+                    (child_id != 'root' and int(child_id) in unique_ingredients_after_rollup))
+            }
+
             cost_matrix, ingredient_registry = build_ingredient_distance_matrix(
-                parent_map, id_to_name
+                filtered_parent_map, id_to_name
             )
             logger.info(f"Cost matrix shape: {cost_matrix.shape}")
 
