@@ -423,7 +423,16 @@ class AnalyticsQueries:
         try:
             logger.info("Starting EM-based cocktail space computation with rollup")
 
-            # Implementation will go here
+            # Step 1: Load data
+            logger.info("Loading ingredients and recipes data")
+            ingredients_df = self.get_ingredients_for_tree()
+            recipes_df = self.get_recipes_for_distance_calc()
+
+            if ingredients_df.empty or recipes_df.empty:
+                logger.warning("Empty data, returning empty UMAP")
+                return []
+
+            logger.info(f"Loaded {len(ingredients_df)} ingredients and {len(recipes_df)} recipe-ingredient pairs")
 
             return []
 
