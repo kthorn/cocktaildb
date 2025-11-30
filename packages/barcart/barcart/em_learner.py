@@ -1,7 +1,44 @@
+import os
 import numpy as np
 from tqdm.auto import tqdm
 
 from barcart.distance import emd_matrix, expected_ingredient_match_matrix, m_step_blosum
+
+
+def _get_optimal_n_jobs() -> int:
+    """
+    Auto-detect optimal n_jobs for parallel EMD matrix computation.
+
+    Detects available CPUs and reserves 1 for coordination overhead.
+    Works automatically in Lambda based on memory allocation:
+    - 1769 MB → 1 vCPU → returns 1 (sequential)
+    - 3538 MB → 2 vCPUs → returns 1 (sequential)
+    - 5307 MB → 3 vCPUs → returns 2 (parallel)
+    - 10240 MB → 6 vCPUs → returns 5 (parallel)
+
+    Returns:
+        int: Optimal number of parallel jobs (minimum 1)
+    """
+    cpu_count = os.cpu_count()
+    if cpu_count is None or cpu_count <= 1:
+        return 1
+    # Reserve 1 CPU for main thread coordination
+    return max(1, cpu_count - 1)
+
+
+class _DisabledTqdm:
+    """A no-op tqdm replacement that disables progress bars."""
+    def __init__(self, iterable, *args, **kwargs):
+        self.iterable = iterable
+
+    def __iter__(self):
+        return iter(self.iterable)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        pass
 
 
 def em_fit(
@@ -11,6 +48,7 @@ def em_fit(
     iters: int = 100,
     tolerance: float = 1e-3,
     verbose: bool = False,
+    n_jobs: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray, dict]:
     """
     Run EM iterations to learn ingredient cost matrix from recipe data.
@@ -36,6 +74,11 @@ def em_fit(
         Algorithm stops when relative change falls below this value.
     verbose : bool, optional
         If True, print progress information during iterations (default: False).
+    n_jobs : int | None, optional
+        Number of parallel jobs for EMD matrix computation (default: None).
+        If None, auto-detects based on available CPUs (cpu_count - 1).
+        Use 1 for sequential execution, >1 for parallel execution.
+        Auto-detection adapts to Lambda memory allocation.
 
     Returns
     -------
@@ -61,28 +104,30 @@ def em_fit(
     >>> dist_matrix, cost_matrix, log = em_fit(volume_matrix, initial_cost, iters=10)
     >>> print(f"Converged after {len(log['delta'])} iterations")
     """
+    # Auto-detect optimal n_jobs if not specified
+    if n_jobs is None:
+        n_jobs = _get_optimal_n_jobs()
+
+    # Log parallelization configuration for diagnostics
+    import logging
+    logger = logging.getLogger(__name__)
+    cpu_count = os.cpu_count() or 1
+    logger.info(f"EM fit parallelization: detected {cpu_count} CPUs, using n_jobs={n_jobs}")
+
     log = {"delta": []}
     outer_bar = tqdm(
         range(iters), disable=not verbose, desc="EM fit", position=0, leave=False
     )
     for t in outer_bar:
-        # Only show progress bars if verbose is True
-        if verbose:
-            distance_matrix, plans = emd_matrix(
-                volume_matrix,
-                previous_cost_matrix,
-                return_plans=True,
-                tqdm_cls=tqdm,
-                tqdm_kwargs={"position": 1, "leave": False},
-            )
-        else:
-            distance_matrix, plans = emd_matrix(
-                volume_matrix,
-                previous_cost_matrix,
-                return_plans=True,
-                tqdm_cls=None,
-                tqdm_kwargs=None,
-            )
+        # Show only outer loop progress (convergence), not inner loop (recipe pairs)
+        distance_matrix, plans = emd_matrix(
+            volume_matrix,
+            previous_cost_matrix,
+            n_jobs=n_jobs,
+            return_plans=True,
+            tqdm_cls=_DisabledTqdm,
+            tqdm_kwargs=None,
+        )
         T_sum, n_pairs = expected_ingredient_match_matrix(
             distance_matrix,
             plans,

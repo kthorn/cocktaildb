@@ -370,6 +370,7 @@ def compute_emd(
     cost_matrix: np.ndarray,
     return_plan: bool = False,
     support_idx: np.ndarray | None = None,
+    num_threads: int | str = 1,
 ) -> float | tuple[float, list[tuple[int, int, float, float]]]:
     """
     Compute the Earth Mover's Distance (EMD) between two distributions a and b.
@@ -384,6 +385,12 @@ def compute_emd(
         Cost matrix, shape (n, n)
     return_plan : bool, optional
         If True, also return the transport plan as a list of flows, by default False.
+    support_idx : np.ndarray | None, optional
+        Indices of the support of the distributions, shape (n,), by default None.
+    num_threads : int | str, optional
+        Number of threads to use for the computation, by default 1.
+        Note: Multi-threading has significant overhead and is slower than single-threading
+        for typical cocktail recipe problems. Use 1 for best performance.
 
     Returns
     -------
@@ -418,20 +425,25 @@ def compute_emd(
 
     if not return_plan:
         # Use ot.emd2 when only the objective value is needed (faster than full plan)
-        distance = float(ot.emd2(a_sub, b_sub, cost_sub))
+        distance = float(ot.emd2(a_sub, b_sub, cost_sub, numThreads=num_threads))
         return distance
     else:
-        transport_matrix = ot.emd(a_sub, b_sub, cost_sub)
+        transport_matrix = ot.emd(a_sub, b_sub, cost_sub, numThreads=num_threads)
         distance = float(np.sum(transport_matrix * cost_sub))
-        transport_plan: list[tuple[int, int, float, float]] = []
+
+        # Vectorized extraction of sparse transport plan (much faster than Python loop)
         rows, cols = np.nonzero(transport_matrix > 1e-10)
-        for ii, jj in zip(rows, cols, strict=False):
-            flow = float(transport_matrix[ii, jj])
-            flow_cost = float(flow * cost_sub[ii, jj])
-            # Map back to original indices via support_idx
-            transport_plan.append(
-                (int(support_idx[ii]), int(support_idx[jj]), flow, flow_cost)
-            )
+        flows = transport_matrix[rows, cols]
+        flow_costs = flows * cost_sub[rows, cols]
+
+        # Map back to original indices and convert to list of tuples
+        transport_plan = list(zip(
+            support_idx[rows].astype(int).tolist(),
+            support_idx[cols].astype(int).tolist(),
+            flows.astype(float).tolist(),
+            flow_costs.astype(float).tolist()
+        ))
+
         return distance, transport_plan
 
 
@@ -522,6 +534,12 @@ def emd_matrix(
                 emd_matrix[i, j] = distance
                 emd_matrix[j, i] = distance
         return (emd_matrix, plans) if return_plans else emd_matrix
+
+    # Log parallel execution configuration
+    import logging
+    logger = logging.getLogger(__name__)
+    n_pairs = n_recipes * (n_recipes - 1) // 2
+    logger.info(f"Computing EMD matrix: {n_recipes} recipes ({n_pairs} pairs) with n_jobs={n_jobs}")
 
     pairs: list[tuple[int, int]] = [
         (i, j) for i in range(n_recipes) for j in range(i + 1, n_recipes)

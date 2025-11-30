@@ -993,8 +993,8 @@ Resources:
       - MountTarget
     Properties:
       PackageType: Image
-      Timeout: 600
-      MemorySize: 2048
+      Timeout: 900 
+      MemorySize: 2750
       Environment:
         Variables:
           DB_NAME: !Ref DatabaseName
