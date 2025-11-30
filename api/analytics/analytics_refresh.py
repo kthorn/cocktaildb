@@ -97,9 +97,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.info("Generating recipe complexity distribution")
         complexity_stats = analytics_queries.get_recipe_complexity_distribution()
 
-        # Generate cocktail space UMAP
-        logger.info("Generating cocktail space UMAP embedding")
-        cocktail_space = analytics_queries.compute_cocktail_space_umap()
+        # Generate both cocktail space variants for comparison
+        logger.info("Generating Manhattan-based cocktail space")
+        cocktail_space_manhattan = analytics_queries.compute_cocktail_space_umap()
+
+        logger.info("Generating EM-based cocktail space with rollup")
+        cocktail_space_em = analytics_queries.compute_cocktail_space_umap_em()
 
         # Generate ingredient tree
         logger.info("Building ingredient tree with recipe counts")
@@ -145,7 +148,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.info("Storing analytics in S3")
         storage.put_analytics('ingredient-usage', ingredient_stats)
         storage.put_analytics('recipe-complexity', complexity_stats)
-        storage.put_analytics('cocktail-space', cocktail_space)
+        storage.put_analytics('cocktail-space', cocktail_space_manhattan)
+        storage.put_analytics('cocktail-space-em', cocktail_space_em)
         storage.put_analytics('ingredient-tree', enriched_tree)
 
         logger.info("Analytics regeneration completed successfully")
@@ -156,7 +160,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "message": "Analytics regenerated successfully",
                 "ingredient_stats_count": len(ingredient_stats),
                 "complexity_stats_count": len(complexity_stats),
-                "cocktail_space_count": len(cocktail_space),
+                "cocktail_space_count": len(cocktail_space_manhattan),
+                "cocktail_space_em_count": len(cocktail_space_em),
                 "ingredient_tree_nodes": len(recipe_counts) if not ingredients_df.empty else 0
             })
         }
