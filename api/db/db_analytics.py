@@ -467,20 +467,39 @@ class AnalyticsQueries:
             unique_ingredients_after_rollup = set(recipes_rolled_df['ingredient_id'].unique())
             logger.info(f"Unique ingredients after rollup: {len(unique_ingredients_after_rollup)}")
 
-            # Step 4: Build ingredient distance matrix (filtered to ingredients in rolled recipes)
+            # Step 4: Build ingredient distance matrix (filtered to ingredients in rolled recipes + ancestors)
             logger.info("Building ingredient distance matrix")
-            # Filter id_to_name to only include ingredients that appear in rolled recipes
-            # but keep the full parent_map to preserve tree structure
+
+            # Find all ancestors of ingredients in rolled recipes to preserve tree connectivity
+            ingredients_with_ancestors = set(['root'])
+            for ing_id in unique_ingredients_after_rollup:
+                current_id = str(ing_id)
+                # Walk up the tree to root, adding all ancestors
+                while current_id in parent_map and current_id != 'root':
+                    ingredients_with_ancestors.add(current_id)
+                    parent_id, _ = parent_map[current_id]
+                    if parent_id is None or parent_id == 'root':
+                        break
+                    current_id = parent_id
+
+            logger.info(f"Ingredients including ancestors: {len(ingredients_with_ancestors) - 1}")  # -1 for root
+
+            # Filter parent_map to only include these ingredients
+            filtered_parent_map = {
+                child_id: (parent_id, cost)
+                for child_id, (parent_id, cost) in parent_map.items()
+                if child_id in ingredients_with_ancestors
+            }
+
+            # Filter id_to_name to match
             id_to_name = {
                 str(ing_id): name
                 for ing_id, name in zip(ingredients_df['id'], ingredients_df['ingredient_name'])
-                if ing_id in unique_ingredients_after_rollup
+                if str(ing_id) in ingredients_with_ancestors or ing_id in unique_ingredients_after_rollup
             }
 
-            # Use full parent_map to preserve tree structure - build_ingredient_distance_matrix
-            # will only create entries for ingredients in id_to_name
             cost_matrix, ingredient_registry = build_ingredient_distance_matrix(
-                parent_map, id_to_name
+                filtered_parent_map, id_to_name
             )
             logger.info(f"Cost matrix shape: {cost_matrix.shape}")
 
