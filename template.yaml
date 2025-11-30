@@ -1219,6 +1219,86 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
 
+  # --- AWS Batch Resources ---
+
+  # IAM Role for AWS Batch service
+  BatchServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: batch.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBatchServiceRole
+
+  # IAM Role for Batch EC2 instances
+  BatchInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+      Policies:
+        - PolicyName: BatchInstanceEFSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: EFSReadOnlyAccess
+                Effect: Allow
+                Action:
+                  - elasticfilesystem:ClientMount
+                  - elasticfilesystem:DescribeMountTargets
+                Resource: !GetAtt CocktailEFS.Arn
+        - PolicyName: BatchInstanceS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${AnalyticsBucket}"
+                  - !Sub "arn:aws:s3:::${AnalyticsBucket}/*"
+        - PolicyName: BatchInstanceECRAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                Resource: "*"
+        - PolicyName: BatchInstanceLogsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  BatchInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref BatchInstanceRole
+
   # Configure API Gateway Account to use the logging role
   ApiGatewayAccount:
     Type: AWS::ApiGateway::Account
