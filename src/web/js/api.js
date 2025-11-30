@@ -462,6 +462,11 @@ class CocktailAPI {
         return this._request(url, 'GET', null, false);
     }
 
+    async getCocktailSpaceEmAnalytics() {
+        const url = `/analytics/cocktail-space-em`;
+        return this._request(url, 'GET', null, false);
+    }
+
     async getIngredientTreeAnalytics() {
         const url = `/analytics/ingredient-tree`;
         return this._request(url, 'GET', null, false);

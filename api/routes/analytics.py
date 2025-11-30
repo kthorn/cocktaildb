@@ -125,6 +125,33 @@ async def get_cocktail_space_analytics(
         raise DatabaseException("Failed to retrieve cocktail space analytics", detail=str(e))
 
 
+@router.get("/cocktail-space-em")
+async def get_cocktail_space_em_analytics(
+    db: Database = Depends(get_db),
+    user: Optional[UserInfo] = Depends(get_current_user_optional),
+):
+    """Get UMAP embedding of recipe space based on EM-learned distances with ingredient rollup"""
+    try:
+        storage_key = "cocktail-space-em"
+
+        if not storage_manager:
+            raise DatabaseException("Analytics storage not configured")
+
+        stored_data = storage_manager.get_analytics(storage_key)
+        if not stored_data:
+            raise DatabaseException(
+                "Analytics not generated. Please trigger analytics refresh.",
+                detail="cocktail-space-em data not found in storage"
+            )
+
+        return stored_data
+    except DatabaseException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting EM cocktail space analytics: {str(e)}")
+        raise DatabaseException("Failed to retrieve EM cocktail space analytics", detail=str(e))
+
+
 @router.get("/ingredient-tree")
 async def get_ingredient_tree_analytics(
     db: Database = Depends(get_db),

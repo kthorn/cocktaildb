@@ -121,6 +121,9 @@ async function loadTabData(tabName) {
         case 'cocktail-space':
             await loadCocktailSpaceData();
             break;
+        case 'cocktail-space-em':
+            await loadCocktailSpaceEmData();
+            break;
     }
 }
 
@@ -428,6 +431,57 @@ async function loadCocktailSpaceData() {
 
         // Setup retry button
         errorState.querySelector('.retry-btn').onclick = () => loadCocktailSpaceData();
+    }
+}
+
+/**
+ * Load and render EM-based cocktail space analytics
+ */
+async function loadCocktailSpaceEmData() {
+    const chartContainer = document.getElementById('cocktail-space-em-chart');
+    const loadingState = document.getElementById('cocktail-space-em-loading');
+    const errorState = document.getElementById('cocktail-space-em-error');
+
+    chartContainer.innerHTML = '';
+    loadingState.classList.remove('hidden');
+    errorState.classList.add('hidden');
+
+    try {
+        const response = await api.getCocktailSpaceEmAnalytics();
+
+        // Update last updated time (present when served from cache)
+        if (response.metadata?.generated_at) {
+            updateLastUpdatedTime(response.metadata.generated_at);
+        } else {
+            updateLastUpdatedTime(new Date().toISOString());
+        }
+
+        loadingState.classList.add('hidden');
+
+        // Check for empty data
+        if (!response.data || response.data.length === 0) {
+            chartContainer.innerHTML = '<div class="no-data"><p>No cocktail space data available.</p></div>';
+            document.getElementById('cocktail-space-em-count').textContent = '0';
+            return;
+        }
+
+        // Render chart
+        createCocktailSpaceChart(chartContainer, response.data, {
+            onRecipeClick: handleRecipeClick
+        });
+
+        // Update stats
+        document.getElementById('cocktail-space-em-count').textContent = response.data.length;
+
+    } catch (error) {
+        console.error('Error loading EM cocktail space data:', error);
+        loadingState.classList.add('hidden');
+        errorState.classList.remove('hidden');
+        errorState.querySelector('.error-message').textContent =
+            `Failed to load EM cocktail space data: ${error.message}`;
+
+        // Setup retry button
+        errorState.querySelector('.retry-btn').onclick = () => loadCocktailSpaceEmData();
     }
 }
 
