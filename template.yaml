@@ -1363,6 +1363,67 @@ Resources:
           ComputeEnvironment: !Ref AnalyticsComputeEnvironment
       State: ENABLED
 
+  # Batch Job Definition
+  AnalyticsJobDefinition:
+    Type: AWS::Batch::JobDefinition
+    Properties:
+      Type: container
+      PlatformCapabilities:
+        - EC2
+      RetryStrategy:
+        Attempts: 3
+        EvaluateOnExit:
+          - OnStatusReason: "Host EC2*"
+            Action: RETRY
+          - OnReason: "*spot*"
+            Action: RETRY
+          - OnReason: "*Spot*"
+            Action: RETRY
+          - OnExitCode: "*"
+            Action: EXIT
+      Timeout:
+        AttemptDurationSeconds: 3600
+      ContainerProperties:
+        Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${AnalyticsECRRepository}:latest
+        ResourceRequirements:
+          - Type: VCPU
+            Value: "2"
+          - Type: MEMORY
+            Value: "2048"
+        Environment:
+          - Name: DB_NAME
+            Value: !Ref DatabaseName
+          - Name: DB_PATH
+            Value: !Sub /mnt/efs/${DatabaseName}.db
+          - Name: ANALYTICS_BUCKET
+            Value: !Ref AnalyticsBucket
+        MountPoints:
+          - ContainerPath: /mnt/efs
+            ReadOnly: true
+            SourceVolume: efs-volume
+        Volumes:
+          - Name: efs-volume
+            EfsVolumeConfiguration:
+              FileSystemId: !Ref CocktailEFS
+              RootDirectory: /lambda
+              TransitEncryption: ENABLED
+              AuthorizationConfig:
+                AccessPointId: !Ref EFSAccessPoint
+                Iam: ENABLED
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: !Sub /aws/batch/${AWS::StackName}-analytics
+            awslogs-region: !Ref AWS::Region
+            awslogs-stream-prefix: analytics
+
+  # CloudWatch Log Group for Batch jobs
+  BatchLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/batch/${AWS::StackName}-analytics
+      RetentionInDays: 14
+
   # Configure API Gateway Account to use the logging role
   ApiGatewayAccount:
     Type: AWS::ApiGateway::Account
