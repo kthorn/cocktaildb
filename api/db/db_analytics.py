@@ -466,6 +466,28 @@ class AnalyticsQueries:
             )
             logger.info(f"Recipes rolled up: {len(recipes_df)} -> {len(recipes_rolled_df)} rows")
 
+            # Step 4: Build ingredient distance matrix
+            logger.info("Building ingredient distance matrix")
+            id_to_name = dict(zip(
+                ingredients_df['id'].astype(str),
+                ingredients_df['ingredient_name']
+            ))
+            cost_matrix, ingredient_registry = build_ingredient_distance_matrix(
+                parent_map, id_to_name
+            )
+            logger.info(f"Cost matrix shape: {cost_matrix.shape}")
+
+            # Step 5: Build recipe volume matrix with rolled-up ingredients
+            logger.info("Building recipe volume matrix")
+            volume_matrix, recipe_registry = build_recipe_volume_matrix(
+                recipes_rolled_df,
+                ingredient_registry,
+                recipe_id_col='recipe_id',
+                ingredient_id_col='ingredient_id',
+                volume_col='volume_fraction'
+            )
+            logger.info(f"Volume matrix shape: {volume_matrix.shape}")
+
             return []
 
         except Exception as e:
