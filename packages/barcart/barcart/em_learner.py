@@ -10,7 +10,7 @@ def em_fit(
     n_ingredients: int,
     iters: int = 100,
     tolerance: float = 1e-3,
-    verbose: bool = True,
+    verbose: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, dict]:
     """
     Run EM iterations to learn ingredient cost matrix from recipe data.
@@ -35,7 +35,7 @@ def em_fit(
         Convergence threshold for relative change in cost matrix (default: 1e-3).
         Algorithm stops when relative change falls below this value.
     verbose : bool, optional
-        If True, print progress information during iterations (default: True).
+        If True, print progress information during iterations (default: False).
 
     Returns
     -------
