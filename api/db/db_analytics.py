@@ -434,6 +434,38 @@ class AnalyticsQueries:
 
             logger.info(f"Loaded {len(ingredients_df)} ingredients and {len(recipes_df)} recipe-ingredient pairs")
 
+            # Step 2: Build ingredient tree
+            logger.info("Building ingredient tree")
+            tree_dict, parent_map = build_ingredient_tree(
+                ingredients_df,
+                id_col='ingredient_id',
+                name_col='ingredient_name',
+                path_col='ingredient_path',
+                weight_col='substitution_level',
+                root_id='root',
+                root_name='All Ingredients',
+                default_edge_weight=1.0
+            )
+
+            # Step 3: Create rollup mapping and apply to recipes
+            logger.info("Creating rollup mapping")
+            # Add allow_substitution column (1 for all - will be filtered by create_rollup_mapping)
+            # In practice, this should come from DB, but for now we assume all leaves are substitutable
+            ingredients_df['allow_substitution'] = 1
+            ingredients_df = ingredients_df.rename(columns={'ingredient_id': 'id'})
+
+            rollup_map = create_rollup_mapping(ingredients_df, parent_map, allow_substitution_col='allow_substitution')
+            logger.info(f"Created rollup mapping with {len(rollup_map)} substitutable leaves")
+
+            logger.info("Applying rollup to recipes")
+            recipes_rolled_df = apply_rollup_to_recipes(
+                recipes_df,
+                rollup_map,
+                ingredient_id_col='ingredient_id',
+                volume_col='volume_fraction'
+            )
+            logger.info(f"Recipes rolled up: {len(recipes_df)} -> {len(recipes_rolled_df)} rows")
+
             return []
 
         except Exception as e:
