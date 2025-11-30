@@ -101,3 +101,62 @@ class TestApplyRollupToRecipes:
         assert recipe1.iloc[1]['ingredient_id'] == 100
         assert recipe1.iloc[0]['volume_fraction'] == 0.5
         assert recipe1.iloc[1]['volume_fraction'] == 0.5
+
+    def test_rollup_aggregates_volumes(self):
+        """Test that rollup aggregates volumes correctly when multiple ingredients map to same parent."""
+        recipes = pd.DataFrame({
+            'recipe_id': [1, 1, 1],
+            'ingredient_id': [10, 20, 30],  # 20 and 30 both roll up to 100
+            'volume_fraction': [0.5, 0.25, 0.25]
+        })
+
+        rollup_map = {20: 100, 30: 100}  # Both roll up to 100
+
+        result = apply_rollup_to_recipes(recipes, rollup_map)
+
+        # Should have 2 rows: ingredient 10 (0.5) and ingredient 100 (0.25+0.25=0.5)
+        assert len(result) == 2
+
+        ing_100 = result[result['ingredient_id'] == 100]
+        assert len(ing_100) == 1
+        assert ing_100['volume_fraction'].values[0] == 0.5
+
+        ing_10 = result[result['ingredient_id'] == 10]
+        assert len(ing_10) == 1
+        assert ing_10['volume_fraction'].values[0] == 0.5
+
+    def test_unmapped_ingredients_preserved(self):
+        """Ingredients not in rollup_map should pass through unchanged."""
+        recipes = pd.DataFrame({
+            'recipe_id': [1, 1],
+            'ingredient_id': [10, 20],
+            'volume_fraction': [0.6, 0.4]
+        })
+
+        rollup_map = {30: 100}  # Different ingredient
+
+        result = apply_rollup_to_recipes(recipes, rollup_map)
+
+        assert len(result) == 2
+        assert set(result['ingredient_id']) == {10, 20}
+        assert result['volume_fraction'].tolist() == [0.6, 0.4]
+
+    def test_multiple_recipes_handled_correctly(self):
+        """Test that rollup works correctly across multiple recipes."""
+        recipes = pd.DataFrame({
+            'recipe_id': [1, 1, 2, 2],
+            'ingredient_id': [10, 20, 20, 30],
+            'volume_fraction': [0.5, 0.5, 0.7, 0.3]
+        })
+
+        rollup_map = {20: 100}  # Roll 20 -> 100
+
+        result = apply_rollup_to_recipes(recipes, rollup_map)
+
+        recipe1 = result[result['recipe_id'] == 1].sort_values('ingredient_id')
+        assert len(recipe1) == 2
+        assert recipe1['ingredient_id'].tolist() == [10, 100]
+
+        recipe2 = result[result['recipe_id'] == 2].sort_values('ingredient_id')
+        assert len(recipe2) == 2
+        assert recipe2['ingredient_id'].tolist() == [30, 100]
