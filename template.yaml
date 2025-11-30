@@ -185,6 +185,73 @@ Resources:
         - !Ref LambdaSecurityGroup
       PrivateDnsEnabled: true
 
+  # Security Group for Batch-required VPC Endpoints
+  BatchVPCEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Batch VPC Endpoints (ECS, ECR, Logs)
+      VpcId: !Ref CocktailVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref BatchSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-batch-vpc-endpoint-sg
+
+  # ECS VPC Endpoint for Batch compute instances to register with ECS
+  ECSVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecs
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref BatchVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+  # ECR API VPC Endpoint for Docker image metadata
+  ECRAPIVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecr.api
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref BatchVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+  # ECR Docker VPC Endpoint for pulling Docker images
+  ECRDKRVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecr.dkr
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref BatchVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+  # CloudWatch Logs VPC Endpoint for Batch job logging
+  LogsVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.logs
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref BatchVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
   # EFS File System
   CocktailEFS:
     Type: AWS::EFS::FileSystem
@@ -234,6 +301,22 @@ Resources:
     Properties:
       GroupDescription: Security group for EFS
       VpcId: !Ref CocktailVPC
+
+  # Security group for Batch instances
+  BatchSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Batch compute instances
+      VpcId: !Ref CocktailVPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          DestinationSecurityGroupId: !Ref EFSSecurityGroup
 
   # Security Group Rules (separated to avoid circular dependencies)
   LambdaIngressHTTPS:
@@ -1255,22 +1338,6 @@ Resources:
     Properties:
       Roles:
         - !Ref BatchInstanceRole
-
-  # Security group for Batch instances
-  BatchSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for Batch compute instances
-      VpcId: !Ref CocktailVPC
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 2049
-          ToPort: 2049
-          DestinationSecurityGroupId: !Ref EFSSecurityGroup
 
   # Allow Batch instances to access EFS
   EFSIngressFromBatch:
