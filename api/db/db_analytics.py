@@ -508,7 +508,74 @@ class AnalyticsQueries:
             )
             logger.info(f"UMAP embedding shape: {embedding.shape}")
 
-            return []
+            # Step 8: Build result list with UMAP coordinates
+            logger.info("Formatting results with ingredient lists")
+            result = []
+            recipe_ids = []
+
+            for idx in range(len(embedding)):
+                recipe_id = recipe_registry.get_id(index=idx)
+                recipe_name = recipe_registry.get_name(index=idx)
+                recipe_ids.append(int(recipe_id))
+
+                result.append({
+                    'recipe_id': int(recipe_id),
+                    'recipe_name': recipe_name,
+                    'x': float(embedding[idx, 0]),
+                    'y': float(embedding[idx, 1]),
+                    'ingredients': []  # Will populate below
+                })
+
+            # Step 9: Query ingredients for all recipes in one go
+            if recipe_ids:
+                placeholders = ','.join(['?'] * len(recipe_ids))
+                ingredient_query = f"""
+                    SELECT
+                        ri.recipe_id,
+                        i.name as ingredient_name,
+                        CASE
+                            WHEN u.name = 'to top' THEN 90.0
+                            WHEN u.name = 'to rinse' THEN 5.0
+                            WHEN u.name = 'each' OR u.name = 'Each' THEN -1.0
+                            WHEN u.conversion_to_ml IS NOT NULL AND ri.amount IS NOT NULL
+                                THEN u.conversion_to_ml * ri.amount
+                            WHEN ri.amount IS NOT NULL THEN ri.amount
+                            ELSE 0.0
+                        END as volume_ml
+                    FROM recipe_ingredients ri
+                    JOIN ingredients i ON ri.ingredient_id = i.id
+                    LEFT JOIN units u ON ri.unit_id = u.id
+                    WHERE ri.recipe_id IN ({placeholders})
+                    ORDER BY ri.recipe_id
+                """
+
+                ingredient_rows = self.db.execute_query(ingredient_query, tuple(recipe_ids))
+
+                # Group ingredients by recipe and sort by volume
+                recipe_ingredients = {}
+                for row in ingredient_rows:
+                    recipe_id = row['recipe_id']
+                    if recipe_id not in recipe_ingredients:
+                        recipe_ingredients[recipe_id] = []
+
+                    recipe_ingredients[recipe_id].append({
+                        'name': row['ingredient_name'],
+                        'amount_ml': row['volume_ml']
+                    })
+
+                # Sort ingredients by volume and add to results
+                for item in result:
+                    recipe_id = item['recipe_id']
+                    if recipe_id in recipe_ingredients:
+                        sorted_ings = sorted(
+                            recipe_ingredients[recipe_id],
+                            key=lambda x: x['amount_ml'],
+                            reverse=True
+                        )
+                        item['ingredients'] = [ing['name'] for ing in sorted_ings]
+
+            logger.info(f"EM-based UMAP computation complete: {len(result)} recipes")
+            return result
 
         except Exception as e:
             logger.error(f"Error computing EM-based cocktail space: {str(e)}")
