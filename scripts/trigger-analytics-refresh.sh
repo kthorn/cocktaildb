@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # CocktailDB Analytics Refresh Script
-# Manually triggers the analytics refresh Lambda function for a given environment
+# Triggers the analytics Batch job via the trigger Lambda
 
 set -e  # Exit on any error
 
@@ -31,16 +31,16 @@ echo "Triggering analytics refresh for environment: $TARGET_ENV"
 echo "Stack name: $STACK_NAME"
 echo ""
 
-# Get the analytics refresh function ARN from CloudFormation outputs
-echo "Getting Analytics Refresh Function ARN..."
+# Get the analytics trigger function ARN from CloudFormation outputs
+echo "Getting Analytics Trigger Function ARN..."
 FUNCTION_ARN=$(aws cloudformation describe-stacks \
     --stack-name "$STACK_NAME" \
-    --query "Stacks[0].Outputs[?OutputKey=='AnalyticsRefreshFunctionArn'].OutputValue" \
+    --query "Stacks[0].Outputs[?OutputKey=='AnalyticsTriggerFunctionArn'].OutputValue" \
     --output text \
     --region "$REGION")
 
 if [ -z "$FUNCTION_ARN" ] || [ "$FUNCTION_ARN" = "None" ]; then
-    echo "Error: Could not retrieve Analytics Refresh Function ARN from CloudFormation outputs"
+    echo "Error: Could not retrieve Analytics Trigger Function ARN from CloudFormation outputs"
     echo "Please check if the stack '$STACK_NAME' exists and has been deployed successfully"
     exit 1
 fi
@@ -48,8 +48,8 @@ fi
 echo "Found function ARN: $FUNCTION_ARN"
 echo ""
 
-# Invoke the Lambda function
-echo "Invoking analytics refresh function..."
+# Invoke the trigger Lambda function
+echo "Invoking analytics trigger function..."
 RESPONSE=$(aws lambda invoke \
     --function-name "$FUNCTION_ARN" \
     --invocation-type RequestResponse \
@@ -64,9 +64,10 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "Lambda function invoked successfully!"
+echo "Trigger Lambda invoked successfully!"
 echo ""
 echo "Response:"
 echo "$RESPONSE" | tail -n 1 | python3 -m json.tool 2>/dev/null || echo "$RESPONSE"
 echo ""
-echo "Analytics refresh completed successfully!"
+echo "Batch job submitted! Check AWS Batch console for job status."
+echo "Job queue: cocktail-db-${TARGET_ENV}-analytics"
