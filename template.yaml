@@ -986,65 +986,6 @@ Resources:
             ]
           }
 
-  # Lambda Function for Analytics Refresh (Docker Container)
-  AnalyticsRefreshFunction:
-    Type: AWS::Serverless::Function
-    DependsOn:
-      - MountTarget
-    Properties:
-      PackageType: Image
-      Timeout: 900 
-      MemorySize: 2750
-      Environment:
-        Variables:
-          DB_NAME: !Ref DatabaseName
-          DB_PATH: !Sub /mnt/efs/${DatabaseName}.db
-          ANALYTICS_BUCKET: !Ref AnalyticsBucket
-          NUMBA_CACHE_DIR: /tmp
-          NUMBA_DISABLE_JIT: "0"
-          NUMBA_THREADING_LAYER: workqueue
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref LambdaSecurityGroup
-        SubnetIds:
-          - !Ref PrivateSubnet
-      FileSystemConfigs:
-        - Arn: !GetAtt EFSAccessPoint.Arn
-          LocalMountPath: /mnt/efs
-      Policies:
-        - VPCAccessPolicy: {}
-        - Statement:
-            - Sid: AWSLambdaVPCAccessExecutionRole
-              Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-                - ec2:CreateNetworkInterface
-                - ec2:DescribeNetworkInterfaces
-                - ec2:DeleteNetworkInterface
-              Resource: "*"
-            - Sid: AmazonElasticFileSystemClientAccess
-              Effect: Allow
-              Action:
-                - elasticfilesystem:ClientMount
-                - elasticfilesystem:ClientRootAccess
-                - elasticfilesystem:DescribeMountTargets
-              Resource: "*"
-            - Sid: AnalyticsBucketAccess
-              Effect: Allow
-              Action:
-                - s3:GetObject
-                - s3:PutObject
-                - s3:ListBucket
-              Resource:
-                - !Sub "arn:aws:s3:::${AnalyticsBucket}"
-                - !Sub "arn:aws:s3:::${AnalyticsBucket}/*"
-    Metadata:
-      DockerTag: latest
-      DockerContext: .
-      Dockerfile: api/analytics/Dockerfile
-
   # Cognito User Pool for Authentication
   CognitoUserPoolV3:
     Type: AWS::Cognito::UserPool
@@ -1684,7 +1625,15 @@ Outputs:
     Description: S3 bucket for CloudFront access logs
     Value: !Ref CloudFrontLogsBucket
 
-  AnalyticsRefreshFunctionArn:
-    Description: ARN of the Analytics Refresh Lambda function
-    Value: !GetAtt AnalyticsRefreshFunction.Arn
+  AnalyticsTriggerFunctionArn:
+    Description: ARN of the Analytics Trigger Lambda function
+    Value: !GetAtt AnalyticsTriggerFunction.Arn
+
+  AnalyticsJobQueueArn:
+    Description: ARN of the Analytics Batch Job Queue
+    Value: !Ref AnalyticsJobQueue
+
+  AnalyticsJobDefinitionArn:
+    Description: ARN of the Analytics Batch Job Definition
+    Value: !Ref AnalyticsJobDefinition
 
