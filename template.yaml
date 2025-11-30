@@ -973,11 +973,25 @@ Resources:
             "rules": [
               {
                 "rulePriority": 1,
-                "description": "Keep only 3 images",
+                "description": "Expire untagged images immediately",
                 "selection": {
-                  "tagStatus": "any",
+                  "tagStatus": "untagged",
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": 1
+                },
+                "action": {
+                  "type": "expire"
+                }
+              },
+              {
+                "rulePriority": 2,
+                "description": "Keep only the latest tagged image",
+                "selection": {
+                  "tagStatus": "tagged",
+                  "tagPrefixList": ["latest"],
                   "countType": "imageCountMoreThan",
-                  "countNumber": 3
+                  "countNumber": 1
                 },
                 "action": {
                   "type": "expire"

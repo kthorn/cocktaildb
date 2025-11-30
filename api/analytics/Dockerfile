@@ -1,4 +1,4 @@
-FROM public.ecr.aws/docker/library/python:3.12-slim
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -8,11 +8,11 @@ WORKDIR /app
 
 # Layer 1: Install barcart dependencies (heavy, rarely change)
 COPY packages/barcart/requirements.txt /tmp/barcart-requirements.txt
-RUN pip install --no-cache-dir -r /tmp/barcart-requirements.txt
+RUN uv pip install --system --no-cache -r /tmp/barcart-requirements.txt
 
 # Layer 2: Install analytics dependencies (rarely change)
 COPY api/analytics/requirements.txt /tmp/analytics-requirements.txt
-RUN pip install --no-cache-dir -r /tmp/analytics-requirements.txt
+RUN uv pip install --system --no-cache -r /tmp/analytics-requirements.txt
 
 # Layer 3: Copy shared modules (change occasionally)
 COPY api/db/ /app/db/
@@ -21,7 +21,7 @@ COPY api/core/ /app/core/
 
 # Layer 4: Install barcart package code (changes frequently)
 COPY packages/barcart/ /app/packages/barcart/
-RUN pip install --no-deps /app/packages/barcart/
+RUN uv pip install --system --no-deps /app/packages/barcart/
 
 # Layer 5: Copy analytics module (changes frequently)
 COPY api/analytics/ /app/analytics/
