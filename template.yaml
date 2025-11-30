@@ -1002,6 +1002,7 @@ Resources:
           ANALYTICS_BUCKET: !Ref AnalyticsBucket
           NUMBA_CACHE_DIR: /tmp
           NUMBA_DISABLE_JIT: "0"
+          NUMBA_NUM_THREADS: "1"
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
