@@ -213,6 +213,32 @@ Resources:
         - !Ref BatchVPCEndpointSecurityGroup
       PrivateDnsEnabled: true
 
+  # ECS Agent VPC Endpoint for ECS agent communication
+  ECSAgentVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecs-agent
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref BatchVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+  # ECS Telemetry VPC Endpoint for ECS agent telemetry
+  ECSTelemetryVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecs-telemetry
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref BatchVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
   # ECR API VPC Endpoint for Docker image metadata
   ECRAPIVPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -258,6 +284,19 @@ Resources:
     Properties:
       VpcId: !Ref CocktailVPC
       ServiceName: !Sub com.amazonaws.${AWS::Region}.ec2
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref BatchVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+  # STS VPC Endpoint for IAM credential retrieval (AssumeRole)
+  STSVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.sts
       VpcEndpointType: Interface
       SubnetIds:
         - !Ref PrivateSubnet
