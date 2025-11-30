@@ -7,7 +7,7 @@ name = "barcart"
 version = "0.1.0"
 description = "Backend code for cocktail analytics - recipe and ingredient similarities"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
     {name = "Kurt", email = "kurtt@example.com"}
