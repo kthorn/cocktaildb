@@ -6,16 +6,6 @@ from typing import TYPE_CHECKING, Dict, List, Any, Optional, cast
 if TYPE_CHECKING:
     import pandas as pd
 
-from barcart import (
-    build_ingredient_tree,
-    build_ingredient_distance_matrix,
-    build_recipe_volume_matrix,
-    em_fit,
-    compute_umap_embedding,
-    Registry
-)
-from barcart.rollup import create_rollup_mapping, apply_rollup_to_recipes
-
 logger = logging.getLogger(__name__)
 
 
@@ -420,6 +410,14 @@ class AnalyticsQueries:
             List of dicts with {recipe_id, recipe_name, x, y, ingredients: [...]}
         """
         import numpy as np
+        from barcart import (
+            build_ingredient_tree,
+            build_ingredient_distance_matrix,
+            build_recipe_volume_matrix,
+            em_fit,
+            compute_umap_embedding,
+        )
+        from barcart.rollup import create_rollup_mapping, apply_rollup_to_recipes
 
         try:
             logger.info("Starting EM-based cocktail space computation with rollup")
