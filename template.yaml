@@ -1185,7 +1185,9 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: ec2.amazonaws.com
+              Service:
+                - ec2.amazonaws.com
+                - ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
@@ -1328,6 +1330,7 @@ Resources:
       ContainerProperties:
         Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${AnalyticsECRRepository}:latest
         ExecutionRoleArn: !GetAtt BatchInstanceRole.Arn
+        JobRoleArn: !GetAtt BatchInstanceRole.Arn
         ResourceRequirements:
           - Type: VCPU
             Value: "2"
