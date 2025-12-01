@@ -184,3 +184,7 @@ src/web/js/config.js
 
 # AWS SAM build artifacts
 .aws-sam/
+
+# Local test scripts
+test_emd_speedup.py
+test_pot_parallelization.py
