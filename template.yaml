@@ -625,6 +625,9 @@ Resources:
           DB_PATH: !Sub /mnt/efs/${DatabaseName}.db
           ANALYTICS_BUCKET: !Ref AnalyticsBucket
           ANALYTICS_TRIGGER_FUNCTION: !Ref AnalyticsTriggerFunction
+          ANALYTICS_SCHEDULE_NAME: !Sub "${AWS::StackName}-analytics-debounce"
+          ANALYTICS_SCHEDULER_ROLE_ARN: !GetAtt AnalyticsSchedulerRole.Arn
+          ANALYTICS_DEBOUNCE_MINUTES: !If [IsProdEnvironment, "15", "5"]
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
