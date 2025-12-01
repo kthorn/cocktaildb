@@ -671,6 +671,16 @@ Resources:
               Action:
                 - lambda:InvokeFunction
               Resource: !GetAtt AnalyticsTriggerFunction.Arn
+            - Sid: AnalyticsSchedulerAccess
+              Effect: Allow
+              Action:
+                - scheduler:CreateSchedule
+                - scheduler:UpdateSchedule
+              Resource: !Sub "arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/${AWS::StackName}-analytics-debounce"
+            - Sid: PassSchedulerRole
+              Effect: Allow
+              Action: iam:PassRole
+              Resource: !GetAtt AnalyticsSchedulerRole.Arn
       Events:
         GetIngredients:
           Type: Api
