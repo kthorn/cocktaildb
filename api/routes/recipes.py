@@ -34,7 +34,7 @@ from .rating_handlers import (
     create_or_update_rating_handler,
     delete_rating_handler,
 )
-from utils.analytics_helpers import trigger_analytics_refresh
+from utils.analytics_helpers import signal_analytics_run
 
 logger = logging.getLogger(__name__)
 
@@ -280,7 +280,7 @@ async def create_recipe(
         created_recipe = db.create_recipe(recipe_dict)
 
         # Trigger analytics refresh asynchronously
-        trigger_analytics_refresh()
+        signal_analytics_run()
 
         # Get the full recipe data with ingredients
         full_recipe = db.get_recipe(created_recipe["id"], user.user_id)
@@ -350,7 +350,7 @@ async def update_recipe(
         db.update_recipe(recipe_id, update_dict)
 
         # Trigger analytics refresh asynchronously
-        trigger_analytics_refresh()
+        signal_analytics_run()
 
         # Get the full recipe data with ingredients
         full_recipe = db.get_recipe(recipe_id, user.user_id)
@@ -381,7 +381,7 @@ async def delete_recipe(
         db.delete_recipe(recipe_id)
 
         # Trigger analytics refresh asynchronously
-        trigger_analytics_refresh()
+        signal_analytics_run()
 
         return MessageResponse(message=f"Recipe {recipe_id} deleted successfully")
 
@@ -690,7 +690,7 @@ async def bulk_upload_recipes(
 
         # Trigger analytics refresh asynchronously if any recipes were uploaded
         if uploaded_recipes:
-            trigger_analytics_refresh()
+            signal_analytics_run()
 
         return BulkUploadResponse(
             uploaded_count=len(uploaded_recipes),
