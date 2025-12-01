@@ -437,12 +437,14 @@ def compute_emd(
         flow_costs = flows * cost_sub[rows, cols]
 
         # Map back to original indices and convert to list of tuples
-        transport_plan = list(zip(
-            support_idx[rows].astype(int).tolist(),
-            support_idx[cols].astype(int).tolist(),
-            flows.astype(float).tolist(),
-            flow_costs.astype(float).tolist()
-        ))
+        transport_plan = list(
+            zip(
+                support_idx[rows].astype(int).tolist(),
+                support_idx[cols].astype(int).tolist(),
+                flows.astype(float).tolist(),
+                flow_costs.astype(float).tolist(),
+            )
+        )
 
         return distance, transport_plan
 
@@ -537,9 +539,12 @@ def emd_matrix(
 
     # Log parallel execution configuration
     import logging
+
     logger = logging.getLogger(__name__)
     n_pairs = n_recipes * (n_recipes - 1) // 2
-    logger.info(f"Computing EMD matrix: {n_recipes} recipes ({n_pairs} pairs) with n_jobs={n_jobs}")
+    logger.info(
+        f"Computing EMD matrix: {n_recipes} recipes ({n_pairs} pairs) with n_jobs={n_jobs}"
+    )
 
     pairs: list[tuple[int, int]] = [
         (i, j) for i in range(n_recipes) for j in range(i + 1, n_recipes)
@@ -860,8 +865,8 @@ def m_step_blosum(
 def compute_umap_embedding(
     distance_matrix: np.ndarray,
     n_components: int = 2,
-    n_neighbors: int = 5,
-    min_dist: float = 0.05,
+    n_neighbors: int = 15,
+    min_dist: float = 0.01,
     random_state: int | None = None,
 ) -> np.ndarray:
     """
