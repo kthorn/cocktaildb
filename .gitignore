@@ -181,3 +181,6 @@ src/web/js/config.js
 
 # Git worktrees
 .worktrees/
+
+# AWS SAM build artifacts
+.aws-sam/
