@@ -50,6 +50,7 @@ class AnalyticsQueries:
               i.name as ingredient_name,
               i.path,
               i.parent_id,
+              i.allow_substitution,
               COUNT(DISTINCT ri.recipe_id) as direct_usage,
               (
                 SELECT COUNT(DISTINCT ri2.recipe_id)
@@ -61,7 +62,7 @@ class AnalyticsQueries:
             FROM ingredients i
             LEFT JOIN recipe_ingredients ri ON ri.ingredient_id = i.id
             {where_clause}
-            GROUP BY i.id, i.name, i.path, i.parent_id
+            GROUP BY i.id, i.name, i.path, i.parent_id, i.allow_substitution
             ORDER BY hierarchical_usage DESC
             """
 
@@ -340,4 +341,268 @@ class AnalyticsQueries:
 
         except Exception as e:
             logger.error(f"Error getting ingredients for tree: {str(e)}")
+            raise
+
+    def get_recipes_for_distance_calc(self) -> "pd.DataFrame":
+        """Get recipe-ingredient data for distance calculations.
+
+        Returns:
+            DataFrame with columns: recipe_id, recipe_name, ingredient_id,
+            ingredient_name, volume_fraction (normalized per recipe), ingredient_path
+        """
+        import pandas as pd
+
+        try:
+            # Query recipe ingredients with volume calculations
+            sql = """
+            SELECT
+                r.id as recipe_id,
+                r.name as recipe_name,
+                i.id as ingredient_id,
+                i.name as ingredient_name,
+                i.path as ingredient_path,
+                ri.amount,
+                ri.unit_id,
+                u.conversion_to_ml,
+                CASE
+                    WHEN u.name = 'to top' THEN 90.0
+                    WHEN u.name = 'to rinse' THEN 5.0
+                    WHEN u.name = 'each' OR u.name = 'Each' THEN 1.0
+                    WHEN u.conversion_to_ml IS NOT NULL AND ri.amount IS NOT NULL
+                        THEN u.conversion_to_ml * ri.amount
+                    WHEN ri.amount IS NOT NULL THEN ri.amount
+                    ELSE 1.0
+                END as volume_ml
+            FROM recipes r
+            JOIN recipe_ingredients ri ON r.id = ri.recipe_id
+            JOIN ingredients i ON ri.ingredient_id = i.id
+            LEFT JOIN units u ON ri.unit_id = u.id
+            ORDER BY r.id, i.id
+            """
+
+            rows = self.db.execute_query(sql)
+
+            if not rows:
+                logger.warning("No recipe data found for distance calculations")
+                return pd.DataFrame()
+
+            df = pd.DataFrame(rows)
+
+            # Normalize volumes per recipe to sum to 1.0 (volume fractions)
+            df['volume_fraction'] = df.groupby('recipe_id')['volume_ml'].transform(
+                lambda x: x / x.sum()
+            )
+
+            # Drop the intermediate volume_ml and unit columns
+            df = df.drop(columns=['amount', 'unit_id', 'conversion_to_ml', 'volume_ml'])
+
+            logger.info(f"Retrieved {len(df)} recipe-ingredient pairs for {df['recipe_id'].nunique()} recipes")
+            return df
+
+        except Exception as e:
+            logger.error(f"Error getting recipes for distance calc: {str(e)}")
+            raise
+
+    def compute_cocktail_space_umap_em(self) -> list:
+        """Compute UMAP using EM-learned distances with ingredient rollup.
+
+        Returns:
+            List of dicts with {recipe_id, recipe_name, x, y, ingredients: [...]}
+        """
+        import numpy as np
+        from barcart import (
+            build_ingredient_tree,
+            build_ingredient_distance_matrix,
+            build_recipe_volume_matrix,
+            em_fit,
+            compute_umap_embedding,
+        )
+        from barcart.rollup import create_rollup_mapping, apply_rollup_to_recipes
+
+        try:
+            logger.info("Starting EM-based cocktail space computation with rollup")
+
+            # Step 1: Load data
+            logger.info("Loading ingredients and recipes data")
+            ingredients_df = self.get_ingredients_for_tree()
+            recipes_df = self.get_recipes_for_distance_calc()
+
+            if ingredients_df.empty or recipes_df.empty:
+                logger.warning("Empty data, returning empty UMAP")
+                return []
+
+            logger.info(f"Loaded {len(ingredients_df)} ingredients and {len(recipes_df)} recipe-ingredient pairs")
+
+            # Step 2: Build ingredient tree
+            logger.info("Building ingredient tree")
+            tree_dict, parent_map = build_ingredient_tree(
+                ingredients_df,
+                id_col='ingredient_id',
+                name_col='ingredient_name',
+                path_col='ingredient_path',
+                weight_col='substitution_level',
+                root_id='root',
+                root_name='All Ingredients',
+                default_edge_weight=1.0
+            )
+
+            # Step 3: Create rollup mapping and apply to recipes
+            logger.info("Creating rollup mapping")
+            # Rename ingredient_id to id for rollup function compatibility
+            ingredients_df = ingredients_df.rename(columns={'ingredient_id': 'id'})
+
+            rollup_map = create_rollup_mapping(ingredients_df, parent_map, allow_substitution_col='allow_substitution')
+            logger.info(f"Created rollup mapping with {len(rollup_map)} substitutable leaves")
+
+            logger.info("Applying rollup to recipes")
+            recipes_rolled_df = apply_rollup_to_recipes(
+                recipes_df,
+                rollup_map,
+                ingredient_id_col='ingredient_id',
+                volume_col='volume_fraction'
+            )
+            logger.info(f"Recipes rolled up: {len(recipes_df)} -> {len(recipes_rolled_df)} rows")
+
+            # Get unique ingredients after rollup
+            unique_ingredients_after_rollup = set(recipes_rolled_df['ingredient_id'].unique())
+            logger.info(f"Unique ingredients after rollup: {len(unique_ingredients_after_rollup)}")
+
+            # Step 4: Build ingredient distance matrix (filtered to ingredients in rolled recipes + ancestors)
+            logger.info("Building ingredient distance matrix")
+
+            # Find all ancestors of ingredients in rolled recipes to preserve tree connectivity
+            ingredients_with_ancestors = set(['root'])
+            for ing_id in unique_ingredients_after_rollup:
+                current_id = str(ing_id)
+                # Walk up the tree to root, adding all ancestors
+                while current_id in parent_map and current_id != 'root':
+                    ingredients_with_ancestors.add(current_id)
+                    parent_id, _ = parent_map[current_id]
+                    if parent_id is None or parent_id == 'root':
+                        break
+                    current_id = parent_id
+
+            logger.info(f"Ingredients including ancestors: {len(ingredients_with_ancestors) - 1}")  # -1 for root
+
+            # Filter parent_map to only include these ingredients
+            filtered_parent_map = {
+                child_id: (parent_id, cost)
+                for child_id, (parent_id, cost) in parent_map.items()
+                if child_id in ingredients_with_ancestors
+            }
+
+            # Filter id_to_name to match
+            id_to_name = {
+                str(ing_id): name
+                for ing_id, name in zip(ingredients_df['id'], ingredients_df['ingredient_name'])
+                if str(ing_id) in ingredients_with_ancestors or ing_id in unique_ingredients_after_rollup
+            }
+
+            cost_matrix, ingredient_registry = build_ingredient_distance_matrix(
+                filtered_parent_map, id_to_name
+            )
+            logger.info(f"Cost matrix shape: {cost_matrix.shape}")
+
+            # Step 5: Build recipe volume matrix with rolled-up ingredients
+            logger.info("Building recipe volume matrix")
+            volume_matrix, recipe_registry = build_recipe_volume_matrix(
+                recipes_rolled_df,
+                ingredient_registry,
+                recipe_id_col='recipe_id',
+                ingredient_id_col='ingredient_id',
+                volume_col='volume_fraction'
+            )
+            logger.info(f"Volume matrix shape: {volume_matrix.shape}")
+
+            # Step 6: Run EM fit
+            logger.info("Running EM fit (this may take several minutes)")
+            final_dist, final_cost, log = em_fit(
+                volume_matrix,
+                cost_matrix,
+                len(ingredient_registry),
+                iters=5
+            )
+            logger.info(f"EM fit complete. Max distance: {np.max(final_dist):.4f}")
+
+            # Step 7: Compute UMAP embedding
+            logger.info("Computing UMAP embedding")
+            embedding = compute_umap_embedding(
+                final_dist,
+                n_neighbors=5,
+                min_dist=0.05,
+                random_state=42
+            )
+            logger.info(f"UMAP embedding shape: {embedding.shape}")
+
+            # Step 8: Build result list with UMAP coordinates
+            logger.info("Formatting results with ingredient lists")
+            result = []
+            recipe_ids = []
+
+            for idx in range(len(embedding)):
+                recipe_id = recipe_registry.get_id(index=idx)
+                recipe_name = recipe_registry.get_name(index=idx)
+                recipe_ids.append(int(recipe_id))
+
+                result.append({
+                    'recipe_id': int(recipe_id),
+                    'recipe_name': recipe_name,
+                    'x': float(embedding[idx, 0]),
+                    'y': float(embedding[idx, 1]),
+                    'ingredients': []  # Will populate below
+                })
+
+            # Step 9: Query ingredients for all recipes in one go
+            if recipe_ids:
+                placeholders = ','.join(['?'] * len(recipe_ids))
+                ingredient_query = f"""
+                    SELECT
+                        ri.recipe_id,
+                        i.name as ingredient_name,
+                        CASE
+                            WHEN u.name = 'to top' THEN 90.0
+                            WHEN u.name = 'to rinse' THEN 5.0
+                            WHEN u.name = 'each' OR u.name = 'Each' THEN -1.0
+                            WHEN u.conversion_to_ml IS NOT NULL AND ri.amount IS NOT NULL
+                                THEN u.conversion_to_ml * ri.amount
+                            WHEN ri.amount IS NOT NULL THEN ri.amount
+                            ELSE 0.0
+                        END as volume_ml
+                    FROM recipe_ingredients ri
+                    JOIN ingredients i ON ri.ingredient_id = i.id
+                    LEFT JOIN units u ON ri.unit_id = u.id
+                    WHERE ri.recipe_id IN ({placeholders})
+                    ORDER BY ri.recipe_id
+                """
+
+                ingredient_rows = self.db.execute_query(ingredient_query, tuple(recipe_ids))
+
+                # Group ingredients by recipe and sort by volume
+                recipe_ingredients = {}
+                for row in ingredient_rows:
+                    recipe_id = row['recipe_id']
+                    if recipe_id not in recipe_ingredients:
+                        recipe_ingredients[recipe_id] = []
+
+                    recipe_ingredients[recipe_id].append({
+                        'name': row['ingredient_name'],
+                        'amount_ml': row['volume_ml']
+                    })
+
+                # Sort ingredients by volume and add to results
+                for item in result:
+                    recipe_id = item['recipe_id']
+                    if recipe_id in recipe_ingredients:
+                        sorted_ings = sorted(
+                            recipe_ingredients[recipe_id],
+                            key=lambda x: x['amount_ml'],
+                            reverse=True
+                        )
+                        item['ingredients'] = [ing['name'] for ing in sorted_ings]
+
+            logger.info(f"EM-based UMAP computation complete: {len(result)} recipes")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error computing EM-based cocktail space: {str(e)}")
             raise

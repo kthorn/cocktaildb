@@ -32,7 +32,10 @@
                 Recipe Complexity
             </button>
             <button class="tab-button" data-tab="cocktail-space">
-                Cocktail Space
+                Cocktail Space (Manhattan)
+            </button>
+            <button class="tab-button" data-tab="cocktail-space-em">
+                Cocktail Space (EM)
             </button>
         </nav>
 
@@ -43,7 +46,8 @@
                 <option value="ingredients" selected>Ingredient Usage</option>
                 <option value="ingredient-tree">Ingredient Tree</option>
                 <option value="complexity">Recipe Complexity</option>
-                <option value="cocktail-space">Cocktail Space</option>
+                <option value="cocktail-space">Cocktail Space (Manhattan)</option>
+                <option value="cocktail-space-em">Cocktail Space (EM)</option>
             </select>
         </div>
 
@@ -186,9 +190,9 @@
         <!-- Cocktail Space Tab -->
         <div id="tab-cocktail-space" class="tab-content">
             <div class="analytics-card">
-                <h2>Cocktail Space Visualization</h2>
+                <h2>Cocktail Space Visualization (Manhattan Distance)</h2>
                 <p class="card-description">
-                    Interactive map showing recipes positioned by ingredient similarity.
+                    Interactive map showing recipes positioned by ingredient similarity using Manhattan distance.
                     Hover over points to see recipe names. Click to view details.
                 </p>
 
@@ -211,6 +215,40 @@
                     <div class="stat-item">
                         <span class="stat-label">Recipes:</span>
                         <span id="cocktail-space-count" class="stat-value">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cocktail Space EM Tab -->
+        <div id="tab-cocktail-space-em" class="tab-content">
+            <div class="analytics-card">
+                <h2>Cocktail Space Visualization (EM Learner)</h2>
+                <p class="card-description">
+                    Interactive map showing recipes positioned by ingredient similarity using learned distances from the EM algorithm.
+                    Ingredients are rolled up to parent categories for dimensional reduction.
+                    Hover over points to see recipe names. Click to view details.
+                </p>
+
+                <!-- Loading state -->
+                <div id="cocktail-space-em-loading" class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Loading cocktail space...</p>
+                </div>
+
+                <!-- Error state -->
+                <div id="cocktail-space-em-error" class="error-state hidden">
+                    <p class="error-message"></p>
+                    <button class="btn btn-primary retry-btn">Retry</button>
+                </div>
+
+                <!-- Chart container -->
+                <div id="cocktail-space-em-chart" class="chart-container"></div>
+
+                <div class="analytics-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Recipes:</span>
+                        <span id="cocktail-space-em-count" class="stat-value">-</span>
                     </div>
                 </div>
             </div>

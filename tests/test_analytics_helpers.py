@@ -25,7 +25,7 @@ def test_trigger_analytics_refresh_success(mock_boto_client):
     mock_lambda = Mock()
     mock_boto_client.return_value = mock_lambda
 
-    with patch.dict('os.environ', {'ANALYTICS_REFRESH_FUNCTION': 'test-function'}):
+    with patch.dict('os.environ', {'ANALYTICS_TRIGGER_FUNCTION': 'test-function'}):
         trigger_analytics_refresh()
 
         mock_lambda.invoke.assert_called_once()
@@ -53,6 +53,6 @@ def test_trigger_analytics_refresh_failure_handling(mock_boto_client):
     mock_lambda.invoke.side_effect = Exception("Lambda invocation failed")
     mock_boto_client.return_value = mock_lambda
 
-    with patch.dict('os.environ', {'ANALYTICS_REFRESH_FUNCTION': 'test-function'}):
+    with patch.dict('os.environ', {'ANALYTICS_TRIGGER_FUNCTION': 'test-function'}):
         # Should not raise exception
         trigger_analytics_refresh()

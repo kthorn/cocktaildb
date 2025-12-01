@@ -92,6 +92,32 @@ if [ $NO_BUILD -eq 0 ]; then
     fi
 
     echo "Deployment to $TARGET_ENV complete!"
+
+    # Build and push ARM64 Docker image for Analytics Batch job
+    echo "Building ARM64 Docker image for Analytics Batch..."
+    AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+    ECR_REPO="${AWS_ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/cocktail-db-${TARGET_ENV}-analytics"
+
+    # Login to ECR
+    aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
+
+    # Build for ARM64 (Graviton)
+    docker build --platform linux/arm64 -t "${ECR_REPO}:latest" -f api/analytics/Dockerfile .
+
+    if [ $? -ne 0 ]; then
+        echo "Error building Docker image"
+        exit 1
+    fi
+
+    # Push to ECR
+    docker push "${ECR_REPO}:latest"
+
+    if [ $? -ne 0 ]; then
+        echo "Error pushing Docker image to ECR"
+        exit 1
+    fi
+
+    echo "Analytics Docker image pushed successfully!"
 else
     echo "Skipped SAM build and deploy steps for $STACK_NAME"
 fi

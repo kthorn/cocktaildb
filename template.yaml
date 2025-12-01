@@ -110,7 +110,8 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          - Effect: "Allow"
+          - Sid: ApplicationBucketAccess
+            Effect: "Allow"
             Principal: "*"
             Action:
               - "s3:GetObject"
@@ -132,6 +133,15 @@ Resources:
                 - IsProdEnvironment
                 - !Sub "arn:aws:s3:::cocktaildbbackups-${AWS::AccountId}-${Environment}/*"
                 - !Ref "AWS::NoValue"
+          # ECR stores image layers in AWS-managed S3 buckets
+          # Required for Fargate to pull container images via VPC endpoint
+          - Sid: ECRLayerAccess
+            Effect: "Allow"
+            Principal: "*"
+            Action:
+              - "s3:GetObject"
+            Resource:
+              - "arn:aws:s3:::prod-*-starport-layer-bucket/*"
   # ------------------------------------
 
   # EFS VPC Endpoint for Lambda-to-EFS API communication
@@ -185,6 +195,73 @@ Resources:
         - !Ref LambdaSecurityGroup
       PrivateDnsEnabled: true
 
+  # Security Group for Fargate VPC Endpoints
+  BatchVPCEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Fargate VPC Endpoints (ECR, Logs, STS)
+      VpcId: !Ref CocktailVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref BatchSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-fargate-vpc-endpoint-sg
+
+  # ECR API VPC Endpoint for Docker image metadata
+  ECRAPIVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecr.api
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref BatchVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+  # ECR Docker VPC Endpoint for pulling Docker images
+  ECRDKRVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecr.dkr
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref BatchVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+  # CloudWatch Logs VPC Endpoint for Fargate logging
+  LogsVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.logs
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref BatchVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+  # STS VPC Endpoint for Fargate task role credentials
+  STSVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.sts
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref BatchVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
   # EFS File System
   CocktailEFS:
     Type: AWS::EFS::FileSystem
@@ -234,6 +311,22 @@ Resources:
     Properties:
       GroupDescription: Security group for EFS
       VpcId: !Ref CocktailVPC
+
+  # Security group for Fargate tasks
+  BatchSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Fargate tasks
+      VpcId: !Ref CocktailVPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          DestinationSecurityGroupId: !Ref EFSSecurityGroup
 
   # Security Group Rules (separated to avoid circular dependencies)
   LambdaIngressHTTPS:
@@ -531,7 +624,7 @@ Resources:
           ENVIRONMENT: !Ref Environment
           DB_PATH: !Sub /mnt/efs/${DatabaseName}.db
           ANALYTICS_BUCKET: !Ref AnalyticsBucket
-          ANALYTICS_REFRESH_FUNCTION: !Ref AnalyticsRefreshFunction
+          ANALYTICS_TRIGGER_FUNCTION: !Ref AnalyticsTriggerFunction
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -573,11 +666,11 @@ Resources:
               Resource:
                 - !Sub "arn:aws:s3:::${AnalyticsBucket}"
                 - !Sub "arn:aws:s3:::${AnalyticsBucket}/*"
-            - Sid: AnalyticsRefreshFunctionInvoke
+            - Sid: AnalyticsTriggerFunctionInvoke
               Effect: Allow
               Action:
                 - lambda:InvokeFunction
-              Resource: !GetAtt AnalyticsRefreshFunction.Arn
+              Resource: !GetAtt AnalyticsTriggerFunction.Arn
       Events:
         GetIngredients:
           Type: Api
@@ -899,6 +992,12 @@ Resources:
             RestApiId: !Ref CocktailAPI
             Path: /analytics/cocktail-space
             Method: get
+        GetCocktailSpaceEmAnalytics:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /analytics/cocktail-space-em
+            Method: get
         GetIngredientTreeAnalytics:
           Type: Api
           Properties:
@@ -967,11 +1066,25 @@ Resources:
             "rules": [
               {
                 "rulePriority": 1,
-                "description": "Keep only 3 images",
+                "description": "Expire untagged images immediately",
                 "selection": {
-                  "tagStatus": "any",
+                  "tagStatus": "untagged",
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": 1
+                },
+                "action": {
+                  "type": "expire"
+                }
+              },
+              {
+                "rulePriority": 2,
+                "description": "Keep only the latest tagged image",
+                "selection": {
+                  "tagStatus": "tagged",
+                  "tagPrefixList": ["latest"],
                   "countType": "imageCountMoreThan",
-                  "countNumber": 3
+                  "countNumber": 1
                 },
                 "action": {
                   "type": "expire"
@@ -979,64 +1092,6 @@ Resources:
               }
             ]
           }
-
-  # Lambda Function for Analytics Refresh (Docker Container)
-  AnalyticsRefreshFunction:
-    Type: AWS::Serverless::Function
-    DependsOn:
-      - MountTarget
-    Properties:
-      PackageType: Image
-      Timeout: 120
-      MemorySize: 2048
-      Environment:
-        Variables:
-          DB_NAME: !Ref DatabaseName
-          DB_PATH: !Sub /mnt/efs/${DatabaseName}.db
-          ANALYTICS_BUCKET: !Ref AnalyticsBucket
-          NUMBA_CACHE_DIR: /tmp
-          NUMBA_DISABLE_JIT: "0"
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref LambdaSecurityGroup
-        SubnetIds:
-          - !Ref PrivateSubnet
-      FileSystemConfigs:
-        - Arn: !GetAtt EFSAccessPoint.Arn
-          LocalMountPath: /mnt/efs
-      Policies:
-        - VPCAccessPolicy: {}
-        - Statement:
-            - Sid: AWSLambdaVPCAccessExecutionRole
-              Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-                - ec2:CreateNetworkInterface
-                - ec2:DescribeNetworkInterfaces
-                - ec2:DeleteNetworkInterface
-              Resource: "*"
-            - Sid: AmazonElasticFileSystemClientAccess
-              Effect: Allow
-              Action:
-                - elasticfilesystem:ClientMount
-                - elasticfilesystem:ClientRootAccess
-                - elasticfilesystem:DescribeMountTargets
-              Resource: "*"
-            - Sid: AnalyticsBucketAccess
-              Effect: Allow
-              Action:
-                - s3:GetObject
-                - s3:PutObject
-                - s3:ListBucket
-              Resource:
-                - !Sub "arn:aws:s3:::${AnalyticsBucket}"
-                - !Sub "arn:aws:s3:::${AnalyticsBucket}/*"
-    Metadata:
-      DockerTag: latest
-      DockerContext: .
-      Dockerfile: api/analytics/Dockerfile
 
   # Cognito User Pool for Authentication
   CognitoUserPoolV3:
@@ -1211,6 +1266,183 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+
+  # --- AWS Batch Resources ---
+
+  # IAM Role for AWS Batch service
+  BatchServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: batch.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBatchServiceRole
+
+  # IAM Execution Role for Fargate tasks
+  FargateExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: FargateEFSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: EFSReadOnlyAccess
+                Effect: Allow
+                Action:
+                  - elasticfilesystem:ClientMount
+                  - elasticfilesystem:DescribeMountTargets
+                Resource: !GetAtt CocktailEFS.Arn
+        - PolicyName: FargateS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${AnalyticsBucket}"
+                  - !Sub "arn:aws:s3:::${AnalyticsBucket}/*"
+
+  # Allow Fargate tasks to access EFS
+  EFSIngressFromBatch:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EFSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      SourceSecurityGroupId: !Ref BatchSecurityGroup
+
+  # Batch Compute Environment - Fargate Spot
+  AnalyticsComputeEnvironment:
+    Type: AWS::Batch::ComputeEnvironment
+    DependsOn:
+      - MountTarget
+    Properties:
+      Type: MANAGED
+      ServiceRole: !GetAtt BatchServiceRole.Arn
+      ComputeResources:
+        Type: FARGATE_SPOT
+        MaxvCpus: 8
+        Subnets:
+          - !Ref PrivateSubnet
+        SecurityGroupIds:
+          - !Ref BatchSecurityGroup
+      State: ENABLED
+
+  # Batch Job Queue
+  AnalyticsJobQueue:
+    Type: AWS::Batch::JobQueue
+    Properties:
+      Priority: 1
+      ComputeEnvironmentOrder:
+        - Order: 1
+          ComputeEnvironment: !Ref AnalyticsComputeEnvironment
+      State: ENABLED
+
+  # Batch Job Definition - Fargate
+  AnalyticsJobDefinition:
+    Type: AWS::Batch::JobDefinition
+    DependsOn: BatchLogGroup
+    Properties:
+      Type: container
+      PlatformCapabilities:
+        - FARGATE
+      Timeout:
+        AttemptDurationSeconds: 3600
+      ContainerProperties:
+        Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${AnalyticsECRRepository}:latest
+        ExecutionRoleArn: !GetAtt FargateExecutionRole.Arn
+        JobRoleArn: !GetAtt FargateExecutionRole.Arn
+        RuntimePlatform:
+          CpuArchitecture: ARM64
+          OperatingSystemFamily: LINUX
+        NetworkConfiguration:
+          AssignPublicIp: DISABLED
+        ResourceRequirements:
+          - Type: VCPU
+            Value: "4"
+          - Type: MEMORY
+            Value: "8192"
+        FargatePlatformConfiguration:
+          PlatformVersion: LATEST
+        Environment:
+          - Name: DB_NAME
+            Value: !Ref DatabaseName
+          - Name: DB_PATH
+            Value: !Sub /mnt/efs/${DatabaseName}.db
+          - Name: ANALYTICS_BUCKET
+            Value: !Ref AnalyticsBucket
+        MountPoints:
+          - ContainerPath: /mnt/efs
+            ReadOnly: true
+            SourceVolume: efs-volume
+        Volumes:
+          - Name: efs-volume
+            EfsVolumeConfiguration:
+              FileSystemId: !Ref CocktailEFS
+              TransitEncryption: ENABLED
+              AuthorizationConfig:
+                AccessPointId: !Ref EFSAccessPoint
+                Iam: ENABLED
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: !Sub /aws/batch/${AWS::StackName}-analytics
+            awslogs-region: !Ref AWS::Region
+            awslogs-stream-prefix: analytics
+
+  # CloudWatch Log Group for Batch jobs
+  BatchLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/batch/${AWS::StackName}-analytics
+      RetentionInDays: 14
+
+  # Analytics Trigger Lambda (submits Batch job)
+  AnalyticsTriggerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-analytics-trigger
+      CodeUri: api/analytics-trigger/
+      Handler: trigger.lambda_handler
+      Runtime: python3.12
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          BATCH_JOB_QUEUE: !Ref AnalyticsJobQueue
+          BATCH_JOB_DEFINITION: !Ref AnalyticsJobDefinition
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - batch:SubmitJob
+                - batch:DescribeJobs
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: "*"
 
   # Configure API Gateway Account to use the logging role
   ApiGatewayAccount:
@@ -1442,7 +1674,15 @@ Outputs:
     Description: S3 bucket for CloudFront access logs
     Value: !Ref CloudFrontLogsBucket
 
-  AnalyticsRefreshFunctionArn:
-    Description: ARN of the Analytics Refresh Lambda function
-    Value: !GetAtt AnalyticsRefreshFunction.Arn
+  AnalyticsTriggerFunctionArn:
+    Description: ARN of the Analytics Trigger Lambda function
+    Value: !GetAtt AnalyticsTriggerFunction.Arn
+
+  AnalyticsJobQueueArn:
+    Description: ARN of the Analytics Batch Job Queue
+    Value: !Ref AnalyticsJobQueue
+
+  AnalyticsJobDefinitionArn:
+    Description: ARN of the Analytics Batch Job Definition
+    Value: !Ref AnalyticsJobDefinition
 
