@@ -195,6 +195,19 @@ Resources:
         - !Ref LambdaSecurityGroup
       PrivateDnsEnabled: true
 
+  # VPC Endpoint for EventBridge Scheduler (analytics debouncing)
+  SchedulerVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.scheduler
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref LambdaSecurityGroup
+      PrivateDnsEnabled: true
+
   # Security Group for Fargate VPC Endpoints
   BatchVPCEndpointSecurityGroup:
     Type: AWS::EC2::SecurityGroup
