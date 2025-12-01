@@ -12,11 +12,13 @@ from utils.analytics_helpers import trigger_analytics_refresh, signal_analytics_
 
 
 @pytest.fixture(autouse=True)
-def reset_lambda_client():
-    """Reset the module-level Lambda client cache for test isolation"""
+def reset_clients():
+    """Reset the module-level client caches for test isolation"""
     analytics_helpers._lambda_client = None
+    analytics_helpers._scheduler_client = None
     yield
     analytics_helpers._lambda_client = None
+    analytics_helpers._scheduler_client = None
 
 
 @patch('boto3.client')
