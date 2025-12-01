@@ -1444,6 +1444,26 @@ Resources:
                 - logs:PutLogEvents
               Resource: "*"
 
+  # IAM Role for EventBridge Scheduler to invoke analytics trigger
+  AnalyticsSchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeAnalyticsTrigger
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt AnalyticsTriggerFunction.Arn
+
   # Configure API Gateway Account to use the logging role
   ApiGatewayAccount:
     Type: AWS::ApiGateway::Account
