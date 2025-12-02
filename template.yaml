@@ -195,6 +195,19 @@ Resources:
         - !Ref LambdaSecurityGroup
       PrivateDnsEnabled: true
 
+  # VPC Endpoint for EventBridge Scheduler (analytics debouncing)
+  SchedulerVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.scheduler
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref LambdaSecurityGroup
+      PrivateDnsEnabled: true
+
   # Security Group for Fargate VPC Endpoints
   BatchVPCEndpointSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -624,7 +637,10 @@ Resources:
           ENVIRONMENT: !Ref Environment
           DB_PATH: !Sub /mnt/efs/${DatabaseName}.db
           ANALYTICS_BUCKET: !Ref AnalyticsBucket
-          ANALYTICS_TRIGGER_FUNCTION: !Ref AnalyticsTriggerFunction
+          ANALYTICS_TRIGGER_FUNCTION: !GetAtt AnalyticsTriggerFunction.Arn
+          ANALYTICS_SCHEDULE_NAME: !Sub "${AWS::StackName}-analytics-debounce"
+          ANALYTICS_SCHEDULER_ROLE_ARN: !GetAtt AnalyticsSchedulerRole.Arn
+          ANALYTICS_DEBOUNCE_MINUTES: !If [IsProdEnvironment, "15", "5"]
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -671,6 +687,16 @@ Resources:
               Action:
                 - lambda:InvokeFunction
               Resource: !GetAtt AnalyticsTriggerFunction.Arn
+            - Sid: AnalyticsSchedulerAccess
+              Effect: Allow
+              Action:
+                - scheduler:CreateSchedule
+                - scheduler:UpdateSchedule
+              Resource: !Sub "arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/${AWS::StackName}-analytics-debounce"
+            - Sid: PassSchedulerRole
+              Effect: Allow
+              Action: iam:PassRole
+              Resource: !GetAtt AnalyticsSchedulerRole.Arn
       Events:
         GetIngredients:
           Type: Api
@@ -1443,6 +1469,26 @@ Resources:
                 - logs:CreateLogStream
                 - logs:PutLogEvents
               Resource: "*"
+
+  # IAM Role for EventBridge Scheduler to invoke analytics trigger
+  AnalyticsSchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeAnalyticsTrigger
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt AnalyticsTriggerFunction.Arn
 
   # Configure API Gateway Account to use the logging role
   ApiGatewayAccount:

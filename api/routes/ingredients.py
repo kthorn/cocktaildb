@@ -20,7 +20,7 @@ from models.responses import (
     BulkIngredientUploadValidationError,
 )
 from core.exceptions import NotFoundException, DatabaseException, ConflictException
-from utils.analytics_helpers import trigger_analytics_refresh
+from utils.analytics_helpers import signal_analytics_run
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ async def create_ingredient(
         created_ingredient = db.create_ingredient(ingredient_dict)
 
         # Trigger analytics refresh asynchronously
-        trigger_analytics_refresh()
+        signal_analytics_run()
 
         return IngredientResponse(**created_ingredient)
 
@@ -118,7 +118,7 @@ async def update_ingredient(
         updated_ingredient = db.update_ingredient(ingredient_id, update_dict)
 
         # Trigger analytics refresh asynchronously
-        trigger_analytics_refresh()
+        signal_analytics_run()
 
         return IngredientResponse(**updated_ingredient)
 
@@ -147,7 +147,7 @@ async def delete_ingredient(
         db.delete_ingredient(ingredient_id)
 
         # Trigger analytics refresh asynchronously
-        trigger_analytics_refresh()
+        signal_analytics_run()
 
         return MessageResponse(
             message=f"Ingredient {ingredient_id} deleted successfully"
@@ -364,7 +364,7 @@ async def bulk_upload_ingredients(
 
         # Trigger analytics refresh asynchronously if any ingredients were uploaded
         if uploaded_ingredients:
-            trigger_analytics_refresh()
+            signal_analytics_run()
 
         return BulkIngredientUploadResponse(
             uploaded_count=len(uploaded_ingredients),
