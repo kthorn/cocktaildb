@@ -7,6 +7,7 @@ It replaces the previous AWS Lambda handler with a modern FastAPI implementation
 
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -119,10 +120,10 @@ async def root():
 
 
 # Health check endpoint
-@app.get("/health", response_model=MessageResponse)
+@app.get("/health", tags=["health"])
 async def health_check():
-    """Health check endpoint"""
-    return MessageResponse(message="API is healthy")
+    """Health check endpoint for container orchestration."""
+    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 
 # Legacy endpoints removed - now using FastAPI v1 endpoints only
