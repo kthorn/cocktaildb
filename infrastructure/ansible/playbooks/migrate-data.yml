@@ -10,15 +10,28 @@
     db_password: "{{ lookup('env', 'COCKTAILDB_DB_PASSWORD') }}"
     backup_bucket: "{{ lookup('env', 'COCKTAILDB_BACKUP_BUCKET') }}"
     sqlite_path: "{{ lookup('env', 'COCKTAILDB_SQLITE_PATH') | default('', true) }}"
+    local_sqlite: "{{ lookup('env', 'COCKTAILDB_LOCAL_SQLITE') | default('', true) }}"
 
   tasks:
+    - name: Copy local SQLite file to EC2
+      copy:
+        src: "{{ local_sqlite }}"
+        dest: /tmp/local_backup.db
+        mode: '0644'
+      when: local_sqlite != ""
+
+    - name: Set sqlite_path when using local file
+      set_fact:
+        sqlite_path: /tmp/local_backup.db
+      when: local_sqlite != ""
+
     - name: Ensure required variables are set
       fail:
         msg: "{{ item.name }} must be set"
       when: item.value == ""
       loop:
         - { name: "COCKTAILDB_DB_PASSWORD", value: "{{ db_password }}" }
-        - { name: "COCKTAILDB_BACKUP_BUCKET (or COCKTAILDB_SQLITE_PATH)", value: "{{ backup_bucket }}{{ sqlite_path }}" }
+        - { name: "COCKTAILDB_BACKUP_BUCKET, COCKTAILDB_SQLITE_PATH, or COCKTAILDB_LOCAL_SQLITE", value: "{{ backup_bucket }}{{ sqlite_path }}{{ local_sqlite }}" }
 
     - name: Copy migration script
       copy:
@@ -36,6 +49,7 @@
       shell: |
         python3 /tmp/migrate-sqlite-to-postgres.py \
           --s3-bucket "{{ backup_bucket }}" \
+          --schema /tmp/schema.sql \
           --pg-password "{{ db_password }}" \
           --pg-db "{{ db_name }}" \
           --pg-user "{{ db_user }}"
@@ -46,6 +60,7 @@
       shell: |
         python3 /tmp/migrate-sqlite-to-postgres.py \
           --sqlite "{{ sqlite_path }}" \
+          --schema /tmp/schema.sql \
           --pg-password "{{ db_password }}" \
           --pg-db "{{ db_name }}" \
           --pg-user "{{ db_user }}"
@@ -64,3 +79,4 @@
         - /tmp/migrate-sqlite-to-postgres.py
         - /tmp/schema.sql
         - /tmp/cocktaildb_backup.db
+        - /tmp/local_backup.db
