@@ -1,0 +1,90 @@
+# infrastructure/ansible/playbooks/deploy-caddy.yml
+---
+- name: Deploy Caddy configuration
+  hosts: cocktaildb
+  become: yes
+
+  vars:
+    domain_name: "{{ lookup('env', 'COCKTAILDB_DOMAIN') | default('localhost', true) }}"
+    acme_email: "{{ lookup('env', 'ACME_EMAIL') | default('admin@example.com', true) }}"
+    caddy_config_dir: /etc/caddy
+    web_root: /opt/cocktaildb/web
+
+  tasks:
+    - name: Create Caddy log directory
+      file:
+        path: /var/log/caddy
+        state: directory
+        owner: caddy
+        group: caddy
+        mode: '0755'
+
+    - name: Create web root directory
+      file:
+        path: "{{ web_root }}"
+        state: directory
+        owner: cocktaildb
+        group: cocktaildb
+        mode: '0755'
+
+    - name: Create Caddy systemd override directory
+      file:
+        path: /etc/systemd/system/caddy.service.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Deploy Caddyfile
+      template:
+        src: ../files/Caddyfile.j2
+        dest: "{{ caddy_config_dir }}/Caddyfile"
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reload Caddy
+
+    - name: Create Caddy environment file
+      copy:
+        dest: /etc/caddy/caddy.env
+        content: |
+          DOMAIN_NAME={{ domain_name }}
+          ACME_EMAIL={{ acme_email }}
+        owner: root
+        group: root
+        mode: '0600'
+      notify: Reload Caddy
+
+    - name: Configure Caddy systemd override for environment
+      copy:
+        dest: /etc/systemd/system/caddy.service.d/override.conf
+        content: |
+          [Service]
+          EnvironmentFile=/etc/caddy/caddy.env
+        owner: root
+        group: root
+        mode: '0644'
+      notify:
+        - Daemon reload
+        - Restart Caddy
+
+    - name: Ensure Caddy is running
+      systemd:
+        name: caddy
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: Daemon reload
+      systemd:
+        daemon_reload: yes
+
+    - name: Reload Caddy
+      systemd:
+        name: caddy
+        state: reloaded
+
+    - name: Restart Caddy
+      systemd:
+        name: caddy
+        state: restarted
