@@ -158,14 +158,6 @@ def apply_schema(pg_conn, schema_path: str):
 
     cursor.execute(schema_sql)
     pg_conn.commit()
-
-    # Truncate all tables to remove seed data inserted by schema
-    # This ensures we start fresh for migration with no ID conflicts
-    print("  Truncating tables to remove seed data...")
-    for table in tables_reverse:
-        cursor.execute(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE")
-
-    pg_conn.commit()
     print("  Schema applied successfully")
 
 

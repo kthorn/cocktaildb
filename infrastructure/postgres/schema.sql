@@ -178,30 +178,3 @@ CREATE TRIGGER update_ingredients_updated_at
 BEFORE UPDATE ON ingredients
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
-
--- Insert common measurement units
-INSERT INTO units (name, abbreviation, conversion_to_ml) VALUES
-  ('Ounce', 'oz', 29.5735),
-  ('Tablespoon', 'tbsp', 14.7868),
-  ('Teaspoon', 'tsp', 4.92892),
-  ('Barspoon', 'bsp', 2.46446),
-  ('Dash', 'dash', 0.616115),
-  ('Each', 'each', NULL),
-  ('Drop', 'drop', 0.05),
-  ('to top', 'top', NULL),
-  ('to rinse', 'rinse', NULL);
-
--- Insert base ingredients
-INSERT INTO ingredients (name, description, path) VALUES
-  ('Whiskey', 'A spirit distilled from fermented grain mash', '/1/'),
-  ('Rum', 'A spirit distilled from sugarcane byproducts', '/2/'),
-  ('Vodka', 'A spirit distilled from fermented grains or potatoes', '/3/'),
-  ('Gin', 'A spirit distilled from juniper berries', '/4/'),
-  ('Brandy', 'A spirit distilled from wine or fruit', '/5/'),
-  ('Tequila', 'A spirit distilled from agave', '/6/'),
-  ('Juice', '', '/7/');
-
--- Insert common tags
-INSERT INTO tags (name, created_by) VALUES
-  ('Tiki', NULL),
-  ('Classic', NULL);
