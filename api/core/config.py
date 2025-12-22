@@ -7,8 +7,12 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Application settings using Pydantic Settings"""
     
-    # Database settings
-    db_path: str = Field(default="/mnt/efs/cocktaildb.db", description="Path to SQLite database")
+    # Database settings (PostgreSQL)
+    db_host: str = Field(default="localhost", description="PostgreSQL host")
+    db_port: str = Field(default="5432", description="PostgreSQL port")
+    db_name: str = Field(default="cocktaildb", description="PostgreSQL database name")
+    db_user: str = Field(default="cocktaildb", description="PostgreSQL user")
+    db_password: str = Field(default="", description="PostgreSQL password")
     
     # AWS settings
     aws_region: str = Field(default="us-east-1", description="AWS region")

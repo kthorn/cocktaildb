@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting CocktailDB API")
     logger.info(f"Environment: {settings.environment}")
-    logger.info(f"Database path: {settings.db_path}")
+    logger.info(f"Database: {settings.db_host}:{settings.db_port}/{settings.db_name}")
 
     yield
 

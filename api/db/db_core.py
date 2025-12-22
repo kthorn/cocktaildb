@@ -193,8 +193,7 @@ class Database:
                     f"Ingredient parent_id must be an integer or None, got {type(data.get('parent_id')).__name__}"
                 )
 
-            # SQLite doesn't have a direct equivalent to Postgres' add_ingredient function
-            # We'll implement the path generation logic here
+            # Implement the hierarchical path generation logic in Python
             parent_path = None
             if data.get("parent_id"):
                 # Get parent's path
@@ -1552,8 +1551,7 @@ class Database:
                 "INSERT INTO tags (name, created_by) VALUES (:name, NULL)",
                 {"name": name},
             )
-            # SQLite specific way to get last inserted ID if not returned directly
-            # For this structure, we'll re-fetch. A more robust way would depend on DB specifics or ORM.
+            # Re-fetch the tag to get its ID
             tag = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
@@ -2257,7 +2255,7 @@ class Database:
             return {
                 "ingredient_id": ingredient_id,
                 "ingredient_name": ingredient["name"],
-                "added_at": "now",  # SQLite CURRENT_TIMESTAMP
+                "added_at": "now",  # PostgreSQL NOW()
                 "parents_added": len(parent_ingredient_ids),
             }
 
