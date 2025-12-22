@@ -1,0 +1,77 @@
+# infrastructure/caddy/Caddyfile
+# Caddy configuration for CocktailDB
+# Handles HTTPS termination, API proxying, and static file serving
+
+{
+    # Global options
+    email {$ACME_EMAIL:admin@example.com}
+    admin off
+}
+
+# Production: Domain-based routing with automatic HTTPS
+{$DOMAIN_NAME:localhost} {
+    # API proxy - forward /api/* requests to FastAPI
+    handle /api/* {
+        reverse_proxy localhost:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Health check endpoint (direct proxy, no path rewrite)
+    handle /health {
+        reverse_proxy localhost:8000
+    }
+
+    # Static files (frontend)
+    handle {
+        root * /opt/cocktaildb/web
+        file_server
+        try_files {path} /index.html
+    }
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+        format json
+    }
+}
+
+# HTTP fallback for localhost development/testing (no HTTPS)
+:80 {
+    @notLocalhost {
+        not remote_ip 127.0.0.1
+    }
+    # Redirect non-localhost HTTP to HTTPS in production
+    redir @notLocalhost https://{host}{uri} permanent
+
+    # Localhost traffic allowed without HTTPS
+    handle /api/* {
+        reverse_proxy localhost:8000
+    }
+
+    handle /health {
+        reverse_proxy localhost:8000
+    }
+
+    handle {
+        root * /opt/cocktaildb/web
+        file_server
+        try_files {path} /index.html
+    }
+}
