@@ -244,7 +244,7 @@ class AnalyticsQueries:
 
             # Query ingredients for all recipes in one go
             if recipe_ids:
-                placeholders = ",".join(["?"] * len(recipe_ids))
+                placeholders = ",".join(["%s"] * len(recipe_ids))
                 ingredient_query = f"""
                     SELECT
                         ri.recipe_id,
@@ -554,7 +554,7 @@ class AnalyticsQueries:
 
             # Step 9: Query ingredients for all recipes in one go
             if recipe_ids:
-                placeholders = ','.join(['?'] * len(recipe_ids))
+                placeholders = ','.join(['%s'] * len(recipe_ids))
                 ingredient_query = f"""
                     SELECT
                         ri.recipe_id,

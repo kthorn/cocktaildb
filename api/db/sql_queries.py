@@ -17,7 +17,7 @@ INGREDIENT_SUBSTITUTION_MATCH = """
     i_user.id = i_recipe.id
     OR
     -- Recipe allows substitution AND user ingredient can substitute
-    (i_recipe.allow_substitution = 1 AND (
+    (i_recipe.allow_substitution = TRUE AND (
         -- User has ancestor of recipe ingredient (user has "Rum", recipe needs "Wray And Nephew")
         -- BUT: no blocking parents in between (e.g., "Pot Still Unaged Rum" with allow_sub=false)
         (i_recipe.path LIKE i_user.path || '%'
@@ -26,13 +26,13 @@ INGREDIENT_SUBSTITUTION_MATCH = """
              WHERE i_recipe.path LIKE blocking.path || '%'  -- blocking is ancestor of recipe ingredient
              AND blocking.path LIKE i_user.path || '%'      -- blocking is descendant of user ingredient
              AND blocking.id != i_user.id                    -- not the user ingredient itself
-             AND blocking.allow_substitution = 0             -- blocks substitution
+             AND blocking.allow_substitution = FALSE         -- blocks substitution
          ))
         OR
         -- Sibling match: same parent, both allow substitution
         (i_recipe.parent_id = i_user.parent_id
          AND i_recipe.parent_id IS NOT NULL
-         AND i_user.allow_substitution = 1)
+         AND i_user.allow_substitution = TRUE)
         OR
         -- User has parent of recipe ingredient
         (i_user.id = i_recipe.parent_id)
@@ -42,7 +42,7 @@ INGREDIENT_SUBSTITUTION_MATCH = """
             SELECT 1 FROM ingredients anc
             WHERE i_user.path LIKE anc.path || '%'
             AND i_recipe.path LIKE anc.path || '%'
-            AND anc.allow_substitution = 1
+            AND anc.allow_substitution = TRUE
             AND LENGTH(anc.path) - LENGTH(REPLACE(anc.path, '/', '')) <= 6
             -- Ensure no blocking parents between common ancestor and recipe ingredient
             AND NOT EXISTS (
@@ -50,7 +50,7 @@ INGREDIENT_SUBSTITUTION_MATCH = """
                 WHERE i_recipe.path LIKE blocking.path || '%'
                 AND blocking.path LIKE anc.path || '%'
                 AND blocking.id != anc.id
-                AND blocking.allow_substitution = 0
+                AND blocking.allow_substitution = FALSE
             )
         )
     ))
@@ -59,10 +59,10 @@ INGREDIENT_SUBSTITUTION_MATCH = """
 
 get_recipe_by_id_sql = """
     SELECT
-        r.id, r.name, r.instructions, r.description, r.image_url, 
+        r.id, r.name, r.instructions, r.description, r.image_url,
         r.source, r.source_url, r.avg_rating, r.rating_count,
-        GROUP_CONCAT(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
-        GROUP_CONCAT(CASE WHEN t.created_by = :cognito_user_id THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data,
+        STRING_AGG(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
+        STRING_AGG(CASE WHEN t.created_by = :cognito_user_id THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data,
         ur.rating AS user_rating
     FROM
         recipes r
@@ -74,17 +74,17 @@ get_recipe_by_id_sql = """
         ratings ur ON r.id = ur.recipe_id AND ur.cognito_user_id = :cognito_user_id
     WHERE r.id = :recipe_id
     GROUP BY
-        r.id, r.name, r.instructions, r.description, r.image_url, 
+        r.id, r.name, r.instructions, r.description, r.image_url,
         r.source, r.source_url, r.avg_rating, r.rating_count,
         ur.rating;
 """
 
 get_all_recipes_sql = """
     SELECT
-        r.id, r.name, r.instructions, r.description, r.image_url, 
+        r.id, r.name, r.instructions, r.description, r.image_url,
         r.source, r.source_url, r.avg_rating, r.rating_count,
-        GROUP_CONCAT(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
-        GROUP_CONCAT(CASE WHEN t.created_by = :cognito_user_id THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data
+        STRING_AGG(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
+        STRING_AGG(CASE WHEN t.created_by = :cognito_user_id THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data
     FROM
         recipes r
     LEFT JOIN
@@ -92,13 +92,13 @@ get_all_recipes_sql = """
     LEFT JOIN
         tags t ON rt.tag_id = t.id
     GROUP BY
-        r.id, r.name, r.instructions, r.description, r.image_url, 
+        r.id, r.name, r.instructions, r.description, r.image_url,
         r.source, r.source_url, r.avg_rating, r.rating_count;
 """
 
 
 def get_recipe_ingredients_by_recipe_id_sql_factory(recipe_ids: list[int]) -> str:
-    recipe_ids_str = ",".join("?" for _ in recipe_ids)
+    recipe_ids_str = ",".join("%s" for _ in recipe_ids)
     return f"""
         SELECT ri.recipe_id, {INGREDIENT_SELECT_FIELDS}
         FROM recipe_ingredients ri
@@ -124,10 +124,10 @@ get_ingredients_count_sql = """
 get_recipes_paginated_with_ingredients_sql = """
     WITH paginated_recipes AS (
         SELECT
-            r.id, r.name, r.instructions, r.description, r.image_url, 
+            r.id, r.name, r.instructions, r.description, r.image_url,
             r.source, r.source_url, r.avg_rating, r.rating_count,
-            GROUP_CONCAT(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
-            GROUP_CONCAT(CASE WHEN t.created_by = :cognito_user_id THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data,
+            STRING_AGG(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
+            STRING_AGG(CASE WHEN t.created_by = :cognito_user_id THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data,
             ur.rating AS user_rating
         FROM
             recipes r
@@ -138,19 +138,19 @@ get_recipes_paginated_with_ingredients_sql = """
         LEFT JOIN
             ratings ur ON r.id = ur.recipe_id AND ur.cognito_user_id = :cognito_user_id
         GROUP BY
-            r.id, r.name, r.instructions, r.description, r.image_url, 
+            r.id, r.name, r.instructions, r.description, r.image_url,
             r.source, r.source_url, r.avg_rating, r.rating_count,
             ur.rating
         ORDER BY
-            CASE 
+            CASE
                 WHEN :sort_by = 'name' AND :sort_order = 'asc' THEN r.name
                 WHEN :sort_by = 'avg_rating' AND :sort_order = 'asc' THEN CAST(COALESCE(r.avg_rating, 0) AS TEXT)
-                WHEN :sort_by = 'created_at' AND :sort_order = 'asc' THEN r.id
+                WHEN :sort_by = 'created_at' AND :sort_order = 'asc' THEN CAST(r.id AS TEXT)
             END ASC,
-            CASE 
+            CASE
                 WHEN :sort_by = 'name' AND :sort_order = 'desc' THEN r.name
                 WHEN :sort_by = 'avg_rating' AND :sort_order = 'desc' THEN CAST(COALESCE(r.avg_rating, 0) AS TEXT)
-                WHEN :sort_by = 'created_at' AND :sort_order = 'desc' THEN r.id
+                WHEN :sort_by = 'created_at' AND :sort_order = 'desc' THEN CAST(r.id AS TEXT)
             END DESC
         LIMIT :limit OFFSET :offset
     )
@@ -159,7 +159,7 @@ get_recipes_paginated_with_ingredients_sql = """
         pr.source, pr.source_url, pr.avg_rating, pr.rating_count,
         pr.public_tags_data, pr.private_tags_data, pr.user_rating,
         {INGREDIENT_SELECT_FIELDS}
-    FROM 
+    FROM
         paginated_recipes pr
     LEFT JOIN
         recipe_ingredients ri ON pr.id = ri.recipe_id
@@ -194,8 +194,8 @@ def build_search_recipes_paginated_sql(
         SELECT
             r.id, r.name, r.instructions, r.description, r.image_url,
             r.source, r.source_url, r.avg_rating, r.rating_count,
-            GROUP_CONCAT(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
-            GROUP_CONCAT(CASE WHEN t.created_by = :cognito_user_id THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data,
+            STRING_AGG(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
+            STRING_AGG(CASE WHEN t.created_by = :cognito_user_id THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data,
             ur.rating AS user_rating
         FROM
             recipes r
@@ -211,7 +211,7 @@ def build_search_recipes_paginated_sql(
             ingredients i ON ri.ingredient_id = i.id
         WHERE
             (:search_query IS NULL OR
-             LOWER(r.name) LIKE LOWER(:search_query_with_wildcards))
+             r.name ILIKE :search_query_with_wildcards)
         AND
             (:min_rating IS NULL OR COALESCE({rating_field}, 0) >= :min_rating)
         AND
@@ -270,12 +270,12 @@ def build_search_recipes_paginated_sql(
             CASE
                 WHEN :sort_by = 'name' AND :sort_order = 'asc' THEN r.name
                 WHEN :sort_by = 'avg_rating' AND :sort_order = 'asc' THEN CAST(COALESCE(r.avg_rating, 0) AS TEXT)
-                WHEN :sort_by = 'created_at' AND :sort_order = 'asc' THEN r.id
+                WHEN :sort_by = 'created_at' AND :sort_order = 'asc' THEN CAST(r.id AS TEXT)
             END ASC,
             CASE
                 WHEN :sort_by = 'name' AND :sort_order = 'desc' THEN r.name
                 WHEN :sort_by = 'avg_rating' AND :sort_order = 'desc' THEN CAST(COALESCE(r.avg_rating, 0) AS TEXT)
-                WHEN :sort_by = 'created_at' AND :sort_order = 'desc' THEN r.id
+                WHEN :sort_by = 'created_at' AND :sort_order = 'desc' THEN CAST(r.id AS TEXT)
             END DESC
         LIMIT :limit OFFSET :offset
     ),"""
@@ -289,7 +289,7 @@ def build_search_recipes_paginated_sql(
             ri.id as recipe_ingredient_id, ri.amount, ri.ingredient_id, i.name as ingredient_name,
             ri.unit_id, u.name as unit_name, u.abbreviation as unit_abbreviation,
             i.path as ingredient_path, u.conversion_to_ml
-        FROM 
+        FROM
             search_results sr
         LEFT JOIN
             recipe_ingredients ri ON sr.id = ri.recipe_id
@@ -314,12 +314,12 @@ def build_search_recipes_paginated_sql(
             CASE
                 WHEN :sort_by = 'name' AND :sort_order = 'asc' THEN sr.name
                 WHEN :sort_by = 'avg_rating' AND :sort_order = 'asc' THEN CAST(COALESCE(sr.avg_rating, 0) AS TEXT)
-                WHEN :sort_by = 'created_at' AND :sort_order = 'asc' THEN sr.id
+                WHEN :sort_by = 'created_at' AND :sort_order = 'asc' THEN CAST(sr.id AS TEXT)
             END ASC,
             CASE
                 WHEN :sort_by = 'name' AND :sort_order = 'desc' THEN sr.name
                 WHEN :sort_by = 'avg_rating' AND :sort_order = 'desc' THEN CAST(COALESCE(sr.avg_rating, 0) AS TEXT)
-                WHEN :sort_by = 'created_at' AND :sort_order = 'desc' THEN sr.id
+                WHEN :sort_by = 'created_at' AND :sort_order = 'desc' THEN CAST(sr.id AS TEXT)
             END DESC,
             COALESCE(ri.amount * u.conversion_to_ml, 0) DESC,
             ri.id ASC
@@ -368,7 +368,7 @@ def get_ingredient_recommendations_sql() -> str:
             ui.ingredient_id,
             i.path,
             i.parent_id,
-            COALESCE(i.allow_substitution, 0) as user_allow_substitution
+            COALESCE(i.allow_substitution, FALSE) as user_allow_substitution
         FROM user_ingredients ui
         JOIN ingredients i ON ui.ingredient_id = i.id
         WHERE ui.cognito_user_id = :user_id
@@ -381,7 +381,7 @@ def get_ingredient_recommendations_sql() -> str:
             i.name as required_ingredient_name,
             i.path as required_ingredient_path,
             i.parent_id as required_parent_id,
-            COALESCE(i.allow_substitution, 0) as required_allow_substitution
+            COALESCE(i.allow_substitution, FALSE) as required_allow_substitution
         FROM recipe_ingredients ri
         JOIN ingredients i ON ri.ingredient_id = i.id
     ),
@@ -410,7 +410,7 @@ def get_ingredient_recommendations_sql() -> str:
             COUNT(*) - SUM(is_satisfied) as missing_count
         FROM requirement_satisfaction
         GROUP BY recipe_id
-        HAVING missing_count = 1
+        HAVING COUNT(*) - SUM(is_satisfied) = 1
     ),
     -- Find the missing ingredient for each almost-makeable recipe
     missing_ingredients AS (
@@ -427,7 +427,7 @@ def get_ingredient_recommendations_sql() -> str:
         SELECT
             mi.missing_ingredient_id,
             COUNT(*) as recipes_unlocked,
-            GROUP_CONCAT(r.name, '|||') as recipe_names
+            STRING_AGG(r.name, '|||') as recipe_names
         FROM missing_ingredients mi
         JOIN recipes r ON mi.recipe_id = r.id
         GROUP BY mi.missing_ingredient_id

@@ -1,11 +1,11 @@
 import logging
-import sqlite3
-import time
-import functools
 import os
 import re
-import unicodedata
 from typing import Dict, List, Optional, Any, Union, Tuple, cast
+
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from psycopg2 import pool
 
 from .db_utils import extract_all_ingredient_ids, assemble_ingredient_full_names
 from .sql_queries import (
@@ -23,167 +23,115 @@ logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 
-def remove_accents(text: str) -> str:
+def _convert_sqlite_to_pg_params(sql: str) -> str:
+    """Convert SQLite parameters to PostgreSQL format.
+
+    Converts:
+    - Named params: :name -> %(name)s
+    - Positional params: ? -> %s
     """
-    Remove accents from text for accent-insensitive search.
-    Normalizes to NFD (decomposed form) and removes combining characters.
-    """
-    if not text:
-        return text
-    # Normalize to NFD (decomposed form) and remove combining characters
-    return re.sub(r"[\u0300-\u036f]", "", unicodedata.normalize("NFD", text))
-
-
-def retry_on_db_locked(max_retries=3, initial_backoff=0.1):
-    """Decorator to retry operations when database is locked"""
-
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            last_error = None
-            backoff = initial_backoff
-            for attempt in range(max_retries):
-                try:
-                    return func(*args, **kwargs)
-                except sqlite3.OperationalError as e:
-                    if "database is locked" in str(e):
-                        last_error = e
-                        logger.warning(
-                            f"Database locked on attempt {attempt + 1}/{max_retries}. "
-                            f"Retrying in {backoff:.2f}s..."
-                        )
-                        time.sleep(backoff)
-                        backoff *= 2  # Exponential backoff
-                    else:
-                        # Other SQLite operational error, don't retry
-                        raise
-            logger.error(
-                f"Database still locked after {max_retries} attempts: {str(last_error)}"
-            )
-            raise last_error or sqlite3.OperationalError(
-                "Database still locked after multiple attempts"
-            )
-
-        return wrapper
-
-    return decorator
+    # First convert named params
+    sql = re.sub(r':(\w+)', r'%(\1)s', sql)
+    # Then convert positional params
+    sql = sql.replace('?', '%s')
+    return sql
 
 
 class Database:
-    def __init__(self):
-        """Initialize the database connection to SQLite on EFS"""
-        logger.info("Initializing Database class with SQLite on EFS")
-        try:
-            # Read database path from environment variable at runtime, not import time
-            self.db_path = os.environ.get("DB_PATH", "/mnt/efs/cocktaildb.db")
-            logger.info(f"Using database path: {self.db_path}")
-            logger.info(
-                f"DB_PATH environment variable: {os.environ.get('DB_PATH', 'not set')}"
-            )
-            logger.info(f"Database file exists: {os.path.exists(self.db_path)}")
+    # Class-level connection pool (shared across instances)
+    _pool: pool.ThreadedConnectionPool = None
 
-            if os.path.exists(self.db_path):
-                logger.info(
-                    f"Database file size: {os.path.getsize(self.db_path)} bytes"
-                )
-            else:
-                logger.warning(f"Database file does not exist at: {self.db_path}")
+    def __init__(self):
+        """Initialize the database connection to PostgreSQL"""
+        logger.info("Initializing Database class with PostgreSQL")
+        try:
+            # Read connection parameters from environment variables
+            self.conn_params = {
+                'host': os.environ.get('DB_HOST', 'localhost'),
+                'port': os.environ.get('DB_PORT', '5432'),
+                'dbname': os.environ.get('DB_NAME', 'cocktaildb'),
+                'user': os.environ.get('DB_USER', 'cocktaildb'),
+                'password': os.environ.get('DB_PASSWORD', ''),
+            }
+            logger.info(
+                f"PostgreSQL connection: {self.conn_params['host']}:{self.conn_params['port']}/{self.conn_params['dbname']}"
+            )
+
+            # Initialize the connection pool if not already done
+            self._init_pool()
 
             # Test the connection
             self._test_connection()
-            logger.info(
-                f"Database initialization complete using SQLite at {self.db_path}"
-            )
+            logger.info("Database initialization complete using PostgreSQL")
         except Exception as e:
             logger.error(f"Error initializing database: {str(e)}", exc_info=True)
             raise
 
-    def get_db_path(self) -> str:
-        """Get the database file path"""
-        return self.db_path
+    def _init_pool(self):
+        """Initialize the connection pool if not already initialized"""
+        if Database._pool is None:
+            logger.info("Creating new PostgreSQL connection pool")
+            Database._pool = pool.ThreadedConnectionPool(
+                minconn=1,
+                maxconn=10,
+                **self.conn_params
+            )
 
     def _test_connection(self):
         """Test the database connection"""
         logger.info("Testing database connection...")
-        retry_count = 0
-        max_retries = 3
-        last_error = None
-
-        while retry_count < max_retries:
-            try:
-                # Actually open the connection to ensure database exists
-                conn = self._get_connection()
-                try:
-                    conn.execute("SELECT * from ingredients limit 1")
-                    logger.info("Successfully connected to database")
-                    return
-                finally:
-                    conn.close()
-            except Exception as e:
-                last_error = e
-                retry_count += 1
-                logger.warning(
-                    f"Connection attempt {retry_count} failed: {str(e)}. "
-                    f"{'Retrying...' if retry_count < max_retries else 'Max retries reached.'}"
-                )
-                if retry_count < max_retries:
-                    import time
-
-                    time.sleep(2**retry_count)  # 2, 4, 8 seconds
-        logger.error(
-            f"Failed to connect to database after {max_retries} attempts: {str(last_error)}",
-            exc_info=True,
-        )
-        raise last_error or Exception(
-            "Failed to connect to database after multiple attempts"
-        )
-
-    def _get_connection(self):
-        """Get a SQLite connection with proper settings"""
-        # Set longer timeout for waiting on locks (30 seconds)
-        conn = sqlite3.connect(
-            self.db_path,
-            timeout=10.0,  # Wait up to 10 seconds for the lock
-            isolation_level=None,  # Enable autocommit mode, explicit transactions still work
-        )
-        # Enable foreign key constraints (must be done for each connection in SQLite)
-        conn.execute("PRAGMA foreign_keys = ON")
-        # Optimize for concurrent access by multiple lambdas
-        conn.execute("PRAGMA busy_timeout = 10000")  # 10 seconds in milliseconds
-        conn.execute("PRAGMA journal_mode = DELETE")
-        conn.execute("PRAGMA synchronous = FULL")
-        conn.execute("PRAGMA locking_mode = NORMAL")
-        conn.execute("PRAGMA temp_store = MEMORY")
-        conn.execute("PRAGMA cache_size = -10000")
-        conn.row_factory = sqlite3.Row  # Return rows as dictionaries
-
-        # Register custom function for accent-insensitive search
-        conn.create_function("remove_accents", 1, remove_accents)
-
-        return conn
-
-    @retry_on_db_locked()
-    def execute_query(
-        self, sql: str, parameters: Optional[Union[Dict[str, Any], Tuple]] = None
-    ) -> Union[List[Dict[str, Any]], Dict[str, int]]:
-        """Execute a SQL query using SQLite"""
         conn = None
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
+            cursor.execute("SELECT 1")
+            cursor.close()
+            logger.info("Successfully connected to PostgreSQL database")
+        except Exception as e:
+            logger.error(f"Failed to connect to database: {str(e)}", exc_info=True)
+            raise
+        finally:
+            if conn:
+                self._return_connection(conn)
+
+    def _get_connection(self):
+        """Get a connection from the pool"""
+        return Database._pool.getconn()
+
+    def _return_connection(self, conn):
+        """Return a connection to the pool"""
+        if Database._pool and conn:
+            Database._pool.putconn(conn)
+
+    def execute_query(
+        self, sql: str, parameters: Optional[Union[Dict[str, Any], Tuple]] = None
+    ) -> Union[List[Dict[str, Any]], Dict[str, int]]:
+        """Execute a SQL query using PostgreSQL"""
+        conn = None
+        try:
+            # Convert SQLite named params to PostgreSQL format
+            pg_sql = _convert_sqlite_to_pg_params(sql)
+
+            conn = self._get_connection()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+
             if parameters:
-                cursor.execute(sql, parameters)
+                cursor.execute(pg_sql, parameters)
             else:
-                cursor.execute(sql)
+                cursor.execute(pg_sql)
+
             if sql.strip().upper().startswith(("SELECT", "WITH")):
                 # For SELECT queries, return results
                 rows = cursor.fetchall()
                 result = [dict(row) for row in rows]
+                cursor.close()
                 return result
             else:
                 # For non-SELECT queries, commit and return affected rows
                 conn.commit()
-                return {"rowCount": cursor.rowcount}
+                row_count = cursor.rowcount
+                cursor.close()
+                return {"rowCount": row_count}
         except Exception as e:
             if conn:
                 conn.rollback()
@@ -191,25 +139,25 @@ class Database:
             raise
         finally:
             if conn:
-                conn.close()
+                self._return_connection(conn)
 
-    @retry_on_db_locked()
     def execute_transaction(self, queries: List[Dict[str, Any]]) -> None:
         """Execute multiple queries in a transaction"""
         conn = None
         try:
             conn = self._get_connection()
-            conn.execute(
-                "BEGIN IMMEDIATE"
-            )  # Get lock immediately instead of on first write
-            cursor = conn.cursor()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
 
             for query in queries:
                 sql = query.get("sql")
                 params = query.get("parameters", {})
-                if sql is not None:  # Handle case where sql might be None
-                    cursor.execute(sql, params)
+                if sql is not None:
+                    # Convert SQLite named params to PostgreSQL format
+                    pg_sql = _convert_sqlite_to_pg_params(sql)
+                    cursor.execute(pg_sql, params)
+
             conn.commit()
+            cursor.close()
         except Exception as e:
             if conn:
                 conn.rollback()
@@ -217,9 +165,8 @@ class Database:
             raise
         finally:
             if conn:
-                conn.close()
+                self._return_connection(conn)
 
-    @retry_on_db_locked()
     def create_ingredient(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new ingredient"""
         try:
@@ -308,7 +255,7 @@ class Database:
                     ),
                 )
                 return ingredient[0]
-            except sqlite3.IntegrityError as e:
+            except psycopg2.IntegrityError as e:
                 if conn:
                     conn.rollback()
                 error_msg = str(e).lower()
@@ -561,11 +508,11 @@ class Database:
                 ingredient["exact_match"] = True
             if exact_result:
                 return exact_result
-            # Otherwise, fall back to partial match
+            # Otherwise, fall back to partial match (ILIKE for case-insensitive)
             partial_result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE LOWER(name) LIKE LOWER(?) ORDER BY name",
+                    "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE name ILIKE %s ORDER BY name",
                     (f"%{search_term}%",),
                 ),
             )
@@ -588,7 +535,7 @@ class Database:
                 return {}
             # Create case-insensitive lookup for exact matches
             unique_names = list(set(name.lower() for name in ingredient_names))
-            placeholders = ",".join("?" for _ in unique_names)
+            placeholders = ",".join("%s" for _ in unique_names)
 
             exact_results = cast(
                 List[Dict[str, Any]],
@@ -625,7 +572,7 @@ class Database:
                 return {}
             # Create case-insensitive lookup
             unique_names = list(set(name.lower() for name in ingredient_names))
-            placeholders = ",".join("?" for _ in unique_names)
+            placeholders = ",".join("%s" for _ in unique_names)
 
             existing_results = cast(
                 List[Dict[str, Any]],
@@ -773,7 +720,7 @@ class Database:
     def _validate_ingredients_exist(self, ingredient_ids: List[int]) -> None:
         """Validate that all ingredient IDs exist in the database"""
         try:
-            placeholders = ",".join("?" for _ in ingredient_ids)
+            placeholders = ",".join("%s" for _ in ingredient_ids)
             existing_ids_result = self.execute_query(
                 f"SELECT id FROM ingredients WHERE id IN ({placeholders})",
                 tuple(ingredient_ids),
@@ -792,7 +739,6 @@ class Database:
             logger.error(f"Error validating ingredient existence: {str(e)}")
             raise ValueError("Failed to validate ingredient existence")
 
-    @retry_on_db_locked()
     def create_recipe(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new recipe with its ingredients"""
         # Validate ingredients before starting database transaction
@@ -861,7 +807,6 @@ class Database:
             if conn:
                 conn.close()
 
-    @retry_on_db_locked()
     def bulk_create_recipes(self, recipes_data: List[Dict[str, Any]], user_id: str) -> List[Dict[str, Any]]:
         """Create multiple recipes in a single transaction (optimized for bulk uploads)"""
         conn = None
@@ -972,7 +917,7 @@ class Database:
             # 4. Fetch names for all needed ingredients in one query
             ingredient_names_map = {}
             if all_needed_ingredient_ids:
-                placeholders = ",".join("?" for _ in all_needed_ingredient_ids)
+                placeholders = ",".join("%s" for _ in all_needed_ingredient_ids)
                 names_result = cast(
                     List[Dict[str, Any]],
                     self.execute_query(
@@ -1123,7 +1068,7 @@ class Database:
         # Fetch names for all needed ingredients in one query
         ingredient_names = {}
         if all_needed_ids:
-            placeholders = ",".join("?" for _ in all_needed_ids)
+            placeholders = ",".join("%s" for _ in all_needed_ids)
             names_result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
@@ -1217,7 +1162,7 @@ class Database:
                 return {}
             # Create case-insensitive lookup for exact matches by name or abbreviation
             unique_names = list(set(name.lower() for name in unit_names))
-            placeholders = ",".join("?" for _ in unique_names)
+            placeholders = ",".join("%s" for _ in unique_names)
 
             # Query for both name and abbreviation matches
             unit_results = cast(
@@ -1264,7 +1209,7 @@ class Database:
                 return {}
             # Create case-insensitive lookup
             unique_names = list(set(name.lower() for name in recipe_names))
-            placeholders = ",".join("?" for _ in unique_names)
+            placeholders = ",".join("%s" for _ in unique_names)
 
             existing_results = cast(
                 List[Dict[str, Any]],
@@ -1285,7 +1230,6 @@ class Database:
             logger.error(f"Error in batch recipe name check: {str(e)}")
             raise
 
-    @retry_on_db_locked()
     def delete_recipe(self, recipe_id: int) -> bool:
         """Delete a recipe and its ingredients"""
         conn = None
@@ -1319,7 +1263,6 @@ class Database:
             if conn:
                 conn.close()
 
-    @retry_on_db_locked()
     def update_recipe(
         self, recipe_id: int, data: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
@@ -1396,7 +1339,6 @@ class Database:
             if conn:
                 conn.close()
 
-    @retry_on_db_locked()
     def get_recipe_ratings(self, recipe_id: int) -> List[Dict[str, Any]]:
         """Get all ratings for a recipe"""
         try:
@@ -1416,7 +1358,6 @@ class Database:
             logger.error(f"Error getting ratings for recipe {recipe_id}: {str(e)}")
             raise
 
-    @retry_on_db_locked()
     def get_user_rating(self, recipe_id: int, user_id: str) -> Optional[Dict[str, Any]]:
         """Get a specific user's rating for a recipe"""
         try:
@@ -1438,7 +1379,6 @@ class Database:
             )
             raise
 
-    @retry_on_db_locked()
     def set_rating(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Set (add or update) a rating for a recipe"""
         conn = None
@@ -1558,7 +1498,6 @@ class Database:
             if conn:
                 conn.close()
 
-    @retry_on_db_locked()
     def delete_rating(self, recipe_id: int, user_id: str) -> bool:
         """Delete a rating for a recipe by a specific user"""
         conn = None
@@ -1603,7 +1542,6 @@ class Database:
 
     # --- Tag Management ---
 
-    @retry_on_db_locked()
     def create_public_tag(self, name: str) -> Dict[str, Any]:
         """Creates a new public tag. Returns the created tag."""
         if not name:
@@ -1627,10 +1565,10 @@ class Database:
                 logger.error(
                     f"DB: Failed to retrieve public tag '{name}' after creation"
                 )
-                raise sqlite3.DatabaseError("Failed to retrieve tag after creation.")
+                raise psycopg2.DatabaseError("Failed to retrieve tag after creation.")
             logger.info(f"DB: Successfully created public tag: {tag[0]}")
             return tag[0]
-        except sqlite3.IntegrityError:
+        except psycopg2.IntegrityError:
             logger.warning(f"Public tag '{name}' already exists.")
             # If it already exists, fetch and return it
             existing_tag = self.get_public_tag_by_name(name)
@@ -1641,7 +1579,6 @@ class Database:
             logger.error(f"Error creating public tag '{name}': {str(e)}")
             raise
 
-    @retry_on_db_locked()
     def get_public_tag_by_name(self, name: str) -> Optional[Dict[str, Any]]:
         """Gets a public tag by its name."""
         try:
@@ -1657,7 +1594,6 @@ class Database:
             logger.error(f"Error getting public tag by name '{name}': {str(e)}")
             raise
 
-    @retry_on_db_locked()
     def create_private_tag(self, name: str, cognito_user_id: str) -> Dict[str, Any]:
         """Creates a new private tag for a user. Returns the created tag."""
         # Validate inputs
@@ -1688,11 +1624,11 @@ class Database:
                 ),
             )
             if not tag:  # Should not happen
-                raise sqlite3.DatabaseError(
+                raise psycopg2.DatabaseError(
                     "Failed to retrieve private tag after creation."
                 )
             return tag[0]
-        except sqlite3.IntegrityError:
+        except psycopg2.IntegrityError:
             logger.warning(
                 f"Private tag '{name}' for user '{cognito_user_id}' already exists."
             )
@@ -1706,7 +1642,6 @@ class Database:
             )
             raise
 
-    @retry_on_db_locked()
     def get_private_tag_by_name_and_user(
         self, name: str, cognito_user_id: str
     ) -> Optional[Dict[str, Any]]:
@@ -1771,7 +1706,6 @@ class Database:
             )
             raise
 
-    @retry_on_db_locked()
     def add_public_tag_to_recipe(self, recipe_id: int, tag_id: int) -> bool:
         """Associates a public tag with a recipe."""
         try:
@@ -1800,7 +1734,6 @@ class Database:
             )
             raise
 
-    @retry_on_db_locked()
     def add_private_tag_to_recipe(self, recipe_id: int, tag_id: int) -> bool:
         """Associates a private tag with a recipe."""
         try:
@@ -1831,7 +1764,6 @@ class Database:
             )
             raise
 
-    @retry_on_db_locked()
     def remove_public_tag_from_recipe(self, recipe_id: int, tag_id: int) -> bool:
         """Removes the association of a public tag from a recipe."""
         try:
@@ -1846,7 +1778,6 @@ class Database:
             )
             raise
 
-    @retry_on_db_locked()
     def remove_private_tag_from_recipe(
         self, recipe_id: int, tag_id: int, cognito_user_id: str
     ) -> bool:
@@ -1916,7 +1847,6 @@ class Database:
             )
             raise
 
-    @retry_on_db_locked()
     def get_tag(self, tag_id: int) -> Optional[Dict[str, Any]]:
         """Gets a tag by its ID from the unified tags table."""
         try:
@@ -1941,7 +1871,6 @@ class Database:
             logger.error(f"Error getting tag by ID {tag_id}: {str(e)}")
             raise
 
-    @retry_on_db_locked()
     def add_recipe_tag(
         self, recipe_id: int, tag_id: int, is_private: bool, user_id: str
     ) -> bool:
@@ -1957,7 +1886,6 @@ class Database:
             )
             raise
 
-    @retry_on_db_locked()
     def remove_recipe_tag(
         self, recipe_id: int, tag_id: int, is_private: bool, user_id: str
     ) -> bool:
@@ -1973,7 +1901,6 @@ class Database:
             )
             raise
 
-    @retry_on_db_locked()
     def delete_public_tag(self, tag_id: int) -> bool:
         """Delete a public tag completely from the database.
         This will CASCADE delete all recipe_tags associations.
@@ -1997,7 +1924,6 @@ class Database:
             logger.error(f"Error deleting public tag {tag_id}: {str(e)}")
             raise
 
-    @retry_on_db_locked()
     def delete_private_tag(self, tag_id: int, user_id: str) -> bool:
         """Delete a private tag completely from the database.
         This will CASCADE delete all recipe_tags associations.
@@ -2030,7 +1956,6 @@ class Database:
     # --- End Tag Management ---
 
     # --- Pagination Methods ---
-    @retry_on_db_locked()
     def search_recipes_paginated(
         self,
         search_params: Dict[str, Any],
@@ -2234,7 +2159,7 @@ class Database:
             all_needed_ingredient_ids = extract_all_ingredient_ids(all_ingredients)
             ingredient_names_map = {}
             if all_needed_ingredient_ids:
-                placeholders = ",".join("?" for _ in all_needed_ingredient_ids)
+                placeholders = ",".join("%s" for _ in all_needed_ingredient_ids)
                 names_result = cast(
                     List[Dict[str, Any]],
                     self.execute_query(
@@ -2259,7 +2184,6 @@ class Database:
 
     # --- User Ingredient Tracking Methods ---
 
-    @retry_on_db_locked()
     def add_user_ingredient(self, user_id: str, ingredient_id: int) -> Dict[str, Any]:
         """Add an ingredient to a user's inventory, including all parent ingredients"""
         conn = None
@@ -2348,7 +2272,6 @@ class Database:
             if conn:
                 conn.close()
 
-    @retry_on_db_locked()
     def remove_user_ingredient(self, user_id: str, ingredient_id: int) -> bool:
         """Remove an ingredient from a user's inventory, but prevent removing parents if children exist"""
         try:
@@ -2414,7 +2337,6 @@ class Database:
             )
             raise
 
-    @retry_on_db_locked()
     def get_user_ingredients(self, user_id: str) -> List[Dict[str, Any]]:
         """Get all ingredients for a user with full ingredient details"""
         try:
@@ -2437,7 +2359,6 @@ class Database:
             logger.error(f"Error getting ingredients for user {user_id}: {str(e)}")
             raise
 
-    @retry_on_db_locked()
     def add_user_ingredients_bulk(
         self, user_id: str, ingredient_ids: List[int]
     ) -> Dict[str, Any]:
@@ -2517,7 +2438,6 @@ class Database:
             if conn:
                 conn.close()
 
-    @retry_on_db_locked()
     def remove_user_ingredients_bulk(
         self, user_id: str, ingredient_ids: List[int]
     ) -> Dict[str, Any]:
@@ -2728,7 +2648,6 @@ class Database:
             if conn:
                 conn.close()
 
-    @retry_on_db_locked()
     def get_ingredient_recommendations(
         self, user_id: str, limit: int = 20
     ) -> List[Dict[str, Any]]:
@@ -2768,7 +2687,6 @@ class Database:
 
     # --- Count Methods ---
 
-    @retry_on_db_locked()
     def get_recipes_count(self) -> int:
         """Get total count of recipes"""
         try:
@@ -2778,7 +2696,6 @@ class Database:
             logger.error(f"Error getting recipes count: {str(e)}")
             raise
 
-    @retry_on_db_locked()
     def get_ingredients_count(self) -> int:
         """Get total count of ingredients"""
         try:

@@ -6,12 +6,21 @@
 }
 
 {$DOMAIN_NAME:{{ domain_name }}} {
-    handle /api/* {
+    # API proxy - forward /api/v1/* requests to FastAPI, stripping /api/v1 prefix
+    handle /api/v1/* {
+        uri strip_prefix /api/v1
         reverse_proxy localhost:8000 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-For {remote_host}
-            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Legacy /api/* support (without v1) - strip only /api
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy localhost:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
         }
     }
 
@@ -49,7 +58,13 @@
     }
     redir @notLocalhost https://{host}{uri} permanent
 
+    handle /api/v1/* {
+        uri strip_prefix /api/v1
+        reverse_proxy localhost:8000
+    }
+
     handle /api/* {
+        uri strip_prefix /api
         reverse_proxy localhost:8000
     }
 

@@ -80,9 +80,10 @@
         daemon_reload: yes
 
     - name: Reload Caddy
+      # Use restart since admin API is disabled (admin off) in Caddyfile
       systemd:
         name: caddy
-        state: reloaded
+        state: restarted
 
     - name: Restart Caddy
       systemd:

@@ -40,6 +40,28 @@
         sudo -u postgres psql -d {{ db_name }} -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
       changed_when: true
 
+    - name: Configure PostgreSQL to listen on localhost and Docker bridge
+      lineinfile:
+        path: /var/lib/pgsql/data/postgresql.conf
+        regexp: '^#?listen_addresses\s*='
+        line: "listen_addresses = 'localhost,172.17.0.1'"
+        backup: yes
+      notify: Restart PostgreSQL
+
+    - name: Allow Docker network connections in pg_hba.conf (172.17.x.x)
+      lineinfile:
+        path: /var/lib/pgsql/data/pg_hba.conf
+        line: "host    {{ db_name }}      {{ db_user }}      172.17.0.0/16           scram-sha-256"
+        insertafter: "^# IPv4 local connections"
+      notify: Reload PostgreSQL
+
+    - name: Allow Docker network connections in pg_hba.conf (172.18.x.x)
+      lineinfile:
+        path: /var/lib/pgsql/data/pg_hba.conf
+        line: "host    {{ db_name }}      {{ db_user }}      172.18.0.0/16           scram-sha-256"
+        insertafter: "^# IPv4 local connections"
+      notify: Reload PostgreSQL
+
     - name: Display database info
       debug:
         msg: |
@@ -47,3 +69,14 @@
           Database: {{ db_name }}
           User: {{ db_user }}
           Connect with: psql -h localhost -U {{ db_user }} -d {{ db_name }}
+
+  handlers:
+    - name: Restart PostgreSQL
+      service:
+        name: postgresql
+        state: restarted
+
+    - name: Reload PostgreSQL
+      service:
+        name: postgresql
+        state: reloaded

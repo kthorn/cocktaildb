@@ -13,20 +13,8 @@ _DB_INIT_TIME: float = 0
 _DB_CACHE_DURATION = 300  # 5 minutes
 
 
-def get_backend():
-    """Factory function to get appropriate database backend based on DB_TYPE env var."""
-    db_type = os.environ.get('DB_TYPE', 'sqlite').lower()
-
-    if db_type in ('postgres', 'postgresql'):
-        from .postgres_backend import PostgresBackend
-        return PostgresBackend()
-    else:
-        from .sqlite_backend import SQLiteBackend
-        return SQLiteBackend()
-
-
 def get_database() -> Database:
-    """FastAPI dependency for database access with connection pooling"""
+    """FastAPI dependency for database access with connection caching"""
     global _DB_INSTANCE, _DB_INIT_TIME
 
     try:
@@ -44,10 +32,10 @@ def get_database() -> Database:
             return _DB_INSTANCE
 
         # Initialize a new database connection
-        logger.info("Creating new database connection")
-        logger.info(
-            f"DB_PATH environment variable: {os.environ.get('DB_PATH', 'not set')}"
-        )
+        logger.info("Creating new PostgreSQL database connection")
+        db_host = os.environ.get('DB_HOST', 'localhost')
+        db_name = os.environ.get('DB_NAME', 'cocktaildb')
+        logger.info(f"Connecting to PostgreSQL at {db_host}/{db_name}")
 
         _DB_INSTANCE = Database()
         _DB_INIT_TIME = current_time
