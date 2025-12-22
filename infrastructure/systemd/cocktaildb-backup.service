@@ -1,0 +1,27 @@
+# infrastructure/systemd/cocktaildb-backup.service
+[Unit]
+Description=CocktailDB Database Backup
+After=postgresql.service network.target
+Wants=postgresql.service
+
+[Service]
+Type=oneshot
+User=cocktaildb
+Group=cocktaildb
+
+# Load environment variables
+EnvironmentFile=/opt/cocktaildb/.env
+
+# Run backup script
+ExecStart=/opt/cocktaildb/scripts/backup-postgres.sh
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cocktaildb-backup
+
+# Timeout (15 minutes should be plenty for backup)
+TimeoutStartSec=900
+
+# Don't restart on failure
+Restart=no
