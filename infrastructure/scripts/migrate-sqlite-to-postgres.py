@@ -37,6 +37,15 @@ BOOLEAN_COLUMNS = {
     'ingredients': ['allow_substitution'],
 }
 
+# Foreign key relationships to validate (child_table: [(fk_column, parent_table), ...])
+FK_RELATIONSHIPS = {
+    'ingredients': [('parent_id', 'ingredients')],
+    'recipe_ingredients': [('recipe_id', 'recipes'), ('ingredient_id', 'ingredients')],
+    'ratings': [('recipe_id', 'recipes')],
+    'recipe_tags': [('recipe_id', 'recipes'), ('tag_id', 'tags')],
+    'user_ingredients': [('ingredient_id', 'ingredients')],
+}
+
 
 def download_latest_backup(bucket: str, local_path: str) -> str:
     """Download latest backup from S3."""
@@ -53,6 +62,37 @@ def download_latest_backup(bucket: str, local_path: str) -> str:
     print(f"Downloading {key} from s3://{bucket}/")
     s3.download_file(bucket, key, local_path)
     return local_path
+
+
+def filter_orphaned_rows(table: str, columns: list, data: list, valid_ids: dict) -> list:
+    """Filter out rows with FK references to non-existent parent records."""
+    if table not in FK_RELATIONSHIPS:
+        return data
+
+    filtered = []
+    skipped = 0
+
+    for row in data:
+        row_dict = dict(zip(columns, row))
+        valid = True
+
+        for fk_col, parent_table in FK_RELATIONSHIPS[table]:
+            fk_value = row_dict.get(fk_col)
+            # NULL FK values are allowed
+            if fk_value is not None and parent_table in valid_ids:
+                if fk_value not in valid_ids[parent_table]:
+                    valid = False
+                    break
+
+        if valid:
+            filtered.append(row)
+        else:
+            skipped += 1
+
+    if skipped > 0:
+        print(f"  Skipped {skipped} orphaned rows in {table}")
+
+    return filtered
 
 
 def convert_booleans(table: str, columns: list, data: list) -> list:
@@ -169,11 +209,23 @@ def migrate(sqlite_path: str, pg_conn_str: str, schema_path: str = None):
     if schema_path and os.path.exists(schema_path):
         apply_schema(pg_conn, schema_path)
 
+    # Track valid IDs for FK validation
+    valid_ids = {}
+
     # Migrate each table
     for table in TABLES:
         print(f"Migrating {table}...")
         columns, data = get_sqlite_data(sqlite_path, table)
+
+        # Filter out orphaned rows that reference non-existent parents
+        data = filter_orphaned_rows(table, columns, data, valid_ids)
+
         insert_postgres_data(pg_conn, table, columns, data)
+
+        # Track IDs for FK validation of child tables
+        if 'id' in columns:
+            id_idx = columns.index('id')
+            valid_ids[table] = {row[id_idx] for row in data}
 
     pg_conn.close()
     print("\nMigration complete!")
