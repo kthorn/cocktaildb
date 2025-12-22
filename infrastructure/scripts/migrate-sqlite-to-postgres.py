@@ -32,6 +32,11 @@ TABLES = [
     'user_ingredients',
 ]
 
+# Columns that are booleans in PostgreSQL but integers in SQLite
+BOOLEAN_COLUMNS = {
+    'ingredients': ['allow_substitution'],
+}
+
 
 def download_latest_backup(bucket: str, local_path: str) -> str:
     """Download latest backup from S3."""
@@ -48,6 +53,28 @@ def download_latest_backup(bucket: str, local_path: str) -> str:
     print(f"Downloading {key} from s3://{bucket}/")
     s3.download_file(bucket, key, local_path)
     return local_path
+
+
+def convert_booleans(table: str, columns: list, data: list) -> list:
+    """Convert SQLite integer booleans (0/1) to Python booleans for PostgreSQL."""
+    if table not in BOOLEAN_COLUMNS:
+        return data
+
+    bool_cols = BOOLEAN_COLUMNS[table]
+    bool_indices = [i for i, col in enumerate(columns) if col in bool_cols]
+
+    if not bool_indices:
+        return data
+
+    converted = []
+    for row in data:
+        row = list(row)
+        for idx in bool_indices:
+            if row[idx] is not None:
+                row[idx] = bool(row[idx])
+        converted.append(tuple(row))
+
+    return converted
 
 
 def get_sqlite_data(sqlite_path: str, table: str) -> tuple:
@@ -67,6 +94,10 @@ def get_sqlite_data(sqlite_path: str, table: str) -> tuple:
     data = [tuple(row) for row in rows]
 
     conn.close()
+
+    # Convert SQLite integers to PostgreSQL booleans where needed
+    data = convert_booleans(table, columns, data)
+
     return columns, data
 
 
