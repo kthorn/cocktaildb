@@ -132,7 +132,11 @@ def insert_postgres_data(pg_conn, table: str, columns: list, data: list):
         """)
 
     pg_conn.commit()
-    print(f"  Inserted {len(data)} rows into {table}")
+
+    # Verify actual insert count
+    cursor.execute(f"SELECT COUNT(*) FROM {table}")
+    actual_count = cursor.fetchone()[0]
+    print(f"  Inserted {len(data)} rows into {table} (actual count: {actual_count})")
 
 
 def apply_schema(pg_conn, schema_path: str):
@@ -153,6 +157,14 @@ def apply_schema(pg_conn, schema_path: str):
     pg_conn.commit()
 
     cursor.execute(schema_sql)
+    pg_conn.commit()
+
+    # Truncate all tables to remove seed data inserted by schema
+    # This ensures we start fresh for migration with no ID conflicts
+    print("  Truncating tables to remove seed data...")
+    for table in tables_reverse:
+        cursor.execute(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE")
+
     pg_conn.commit()
     print("  Schema applied successfully")
 
