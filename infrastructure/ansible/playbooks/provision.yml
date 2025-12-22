@@ -12,6 +12,7 @@
       - docker
       - postgresql16-server
       - postgresql16
+      - postgresql16-contrib
       - python3
       - python3-pip
       - git
@@ -201,10 +202,12 @@
         enabled: yes
         daemon_reload: yes
 
-    # Install Python packages for ansible postgres module
-    - name: Install psycopg2 for Ansible
+    # Install Python packages
+    - name: Install Python dependencies
       pip:
-        name: psycopg2-binary
+        name:
+          - psycopg2-binary
+          - boto3
         state: present
 
   handlers:
