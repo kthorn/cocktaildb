@@ -1,0 +1,29 @@
+# infrastructure/ansible/group_vars/all.yml
+---
+# Application settings
+app_name: cocktaildb
+app_user: cocktaildb
+app_group: cocktaildb
+app_home: /opt/cocktaildb
+
+# Database settings
+db_name: cocktaildb
+db_user: cocktaildb
+db_password: "{{ lookup('env', 'COCKTAILDB_DB_PASSWORD') }}"
+
+# Docker settings
+docker_compose_version: "2.24.0"
+
+# Caddy settings
+domain_name: "{{ lookup('env', 'COCKTAILDB_DOMAIN') | default('localhost', true) }}"
+
+# S3 settings
+backup_bucket: "{{ lookup('env', 'COCKTAILDB_BACKUP_BUCKET') }}"
+analytics_bucket: "{{ lookup('env', 'COCKTAILDB_ANALYTICS_BUCKET') }}"
+
+# AWS region
+aws_region: "{{ lookup('env', 'AWS_REGION') | default('us-east-1', true) }}"
+
+# Cognito settings (keep for auth)
+user_pool_id: "{{ lookup('env', 'USER_POOL_ID') }}"
+app_client_id: "{{ lookup('env', 'APP_CLIENT_ID') }}"
