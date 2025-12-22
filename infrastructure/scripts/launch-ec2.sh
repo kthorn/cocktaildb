@@ -41,7 +41,7 @@ create_security_group() {
         --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || echo "None")
 
     if [ "$sg_id" = "None" ] || [ -z "$sg_id" ]; then
-        echo "Creating security group: ${SECURITY_GROUP_NAME}"
+        echo "Creating security group: ${SECURITY_GROUP_NAME}" >&2
         sg_id=$(aws ec2 create-security-group \
             --group-name "${SECURITY_GROUP_NAME}" \
             --description "CocktailDB ${ENVIRONMENT} server" \
@@ -55,9 +55,9 @@ create_security_group() {
             --protocol tcp --port 80 --cidr 0.0.0.0/0
         aws ec2 authorize-security-group-ingress --group-id "$sg_id" \
             --protocol tcp --port 443 --cidr 0.0.0.0/0
-        echo "Security group created: $sg_id"
+        echo "Security group created: $sg_id" >&2
     else
-        echo "Using existing security group: $sg_id"
+        echo "Using existing security group: $sg_id" >&2
     fi
 
     echo "$sg_id"
@@ -75,7 +75,7 @@ INSTANCE_ID=$(aws ec2 run-instances \
     --key-name "$KEY_NAME" \
     --security-group-ids "$SG_ID" \
     --associate-public-ip-address \
-    --block-device-mappings '[{"DeviceName":"/dev/xvda","Ebs":{"VolumeSize":20,"VolumeType":"gp3"}}]' \
+    --block-device-mappings '[{"DeviceName":"/dev/xvda","Ebs":{"VolumeSize":30,"VolumeType":"gp3"}}]' \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=cocktaildb-${ENVIRONMENT}},{Key=Environment,Value=${ENVIRONMENT}},{Key=Project,Value=cocktaildb}]" \
     --query 'Instances[0].InstanceId' \
     --output text)
