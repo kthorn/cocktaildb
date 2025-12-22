@@ -13,6 +13,18 @@ _DB_INIT_TIME: float = 0
 _DB_CACHE_DURATION = 300  # 5 minutes
 
 
+def get_backend():
+    """Factory function to get appropriate database backend based on DB_TYPE env var."""
+    db_type = os.environ.get('DB_TYPE', 'sqlite').lower()
+
+    if db_type in ('postgres', 'postgresql'):
+        from .postgres_backend import PostgresBackend
+        return PostgresBackend()
+    else:
+        from .sqlite_backend import SQLiteBackend
+        return SQLiteBackend()
+
+
 def get_database() -> Database:
     """FastAPI dependency for database access with connection pooling"""
     global _DB_INSTANCE, _DB_INIT_TIME
