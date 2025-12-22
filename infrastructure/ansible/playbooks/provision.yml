@@ -18,6 +18,7 @@
       - htop
       - tmux
       - awscli
+      - rsync
 
   tasks:
     - name: Update system packages
@@ -42,6 +43,19 @@
         name: ec2-user
         groups: docker
         append: yes
+
+    # Install Docker Compose v2 plugin
+    - name: Create Docker CLI plugins directory
+      file:
+        path: /usr/local/lib/docker/cli-plugins
+        state: directory
+        mode: '0755'
+
+    - name: Download Docker Compose v2
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-aarch64"
+        dest: /usr/local/lib/docker/cli-plugins/docker-compose
+        mode: '0755'
 
     # Create app user
     - name: Create application user

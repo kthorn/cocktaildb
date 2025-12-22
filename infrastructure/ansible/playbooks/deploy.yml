@@ -4,6 +4,9 @@
   hosts: cocktaildb
   become: yes
 
+  vars_files:
+    - ../group_vars/all.yml
+
   vars:
     app_home: /opt/cocktaildb
     app_user: cocktaildb
@@ -30,7 +33,7 @@
         src: "{{ playbook_dir }}/../../../src/web/"
         dest: "{{ app_home }}/web/"
         delete: yes
-      notify: Reload Caddy
+      notify: Restart Caddy
 
     # Copy docker-compose files
     - name: Copy docker-compose files
@@ -48,7 +51,7 @@
     # Copy deployment scripts
     - name: Copy deployment scripts
       copy:
-        src: "{{ playbook_dir }}/../scripts/"
+        src: "{{ playbook_dir }}/../../scripts/"
         dest: "{{ app_home }}/scripts/"
         owner: "{{ app_user }}"
         group: "{{ app_group }}"
@@ -58,12 +61,22 @@
     # Copy systemd units
     - name: Copy systemd service units
       copy:
-        src: "{{ playbook_dir }}/../systemd/"
+        src: "{{ playbook_dir }}/../../systemd/"
         dest: /etc/systemd/system/
         owner: root
         group: root
         mode: '0644'
       notify: Daemon reload
+
+    # Deploy Caddy configuration
+    - name: Copy Caddyfile
+      copy:
+        src: "{{ playbook_dir }}/../../caddy/Caddyfile"
+        dest: /etc/caddy/Caddyfile
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart Caddy
 
     # Create environment file from template
     - name: Create environment file
@@ -100,7 +113,6 @@
       shell: |
         cd {{ app_home }}
         docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-      become_user: "{{ app_user }}"
 
     # Enable systemd timers
     - name: Enable backup timer
@@ -125,9 +137,8 @@
       shell: |
         cd {{ app_home }}
         docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate
-      become_user: "{{ app_user }}"
 
-    - name: Reload Caddy
+    - name: Restart Caddy
       systemd:
         name: caddy
-        state: reloaded
+        state: restarted
