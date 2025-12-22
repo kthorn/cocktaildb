@@ -1,0 +1,59 @@
+# infrastructure/ansible/playbooks/setup-database.yml
+---
+- name: Setup PostgreSQL database for CocktailDB
+  hosts: cocktaildb
+  become: yes
+  become_user: postgres
+
+  vars:
+    db_name: "{{ lookup('env', 'COCKTAILDB_DB_NAME') | default('cocktaildb', true) }}"
+    db_user: "{{ lookup('env', 'COCKTAILDB_DB_USER') | default('cocktaildb', true) }}"
+    db_password: "{{ lookup('env', 'COCKTAILDB_DB_PASSWORD') }}"
+
+  tasks:
+    - name: Ensure password is provided
+      fail:
+        msg: "COCKTAILDB_DB_PASSWORD environment variable must be set"
+      when: db_password == ""
+
+    - name: Create database user
+      community.postgresql.postgresql_user:
+        name: "{{ db_user }}"
+        password: "{{ db_password }}"
+        state: present
+        login_unix_socket: /var/run/postgresql
+
+    - name: Create database
+      community.postgresql.postgresql_db:
+        name: "{{ db_name }}"
+        owner: "{{ db_user }}"
+        encoding: UTF8
+        lc_collate: en_US.UTF-8
+        lc_ctype: en_US.UTF-8
+        template: template0
+        state: present
+        login_unix_socket: /var/run/postgresql
+
+    - name: Grant all privileges on database
+      community.postgresql.postgresql_privs:
+        db: "{{ db_name }}"
+        role: "{{ db_user }}"
+        privs: ALL
+        type: database
+        state: present
+        login_unix_socket: /var/run/postgresql
+
+    - name: Enable pg_trgm extension for text search
+      community.postgresql.postgresql_ext:
+        name: pg_trgm
+        db: "{{ db_name }}"
+        state: present
+        login_unix_socket: /var/run/postgresql
+
+    - name: Display database info
+      debug:
+        msg: |
+          Database setup complete!
+          Database: {{ db_name }}
+          User: {{ db_user }}
+          Connect with: psql -h localhost -U {{ db_user }} -d {{ db_name }}
