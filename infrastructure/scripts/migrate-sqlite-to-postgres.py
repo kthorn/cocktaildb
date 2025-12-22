@@ -105,13 +105,22 @@ def insert_postgres_data(pg_conn, table: str, columns: list, data: list):
 
 
 def apply_schema(pg_conn, schema_path: str):
-    """Apply PostgreSQL schema from file."""
+    """Apply PostgreSQL schema from file, dropping existing tables first."""
     print(f"Applying schema from {schema_path}")
 
     with open(schema_path, 'r') as f:
         schema_sql = f.read()
 
     cursor = pg_conn.cursor()
+
+    # Drop existing tables in reverse dependency order (children before parents)
+    tables_reverse = list(reversed(TABLES))
+    print(f"  Dropping existing tables: {', '.join(tables_reverse)}")
+    for table in tables_reverse:
+        cursor.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+
+    pg_conn.commit()
+
     cursor.execute(schema_sql)
     pg_conn.commit()
     print("  Schema applied successfully")
