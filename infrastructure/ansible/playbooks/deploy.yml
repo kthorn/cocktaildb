@@ -1,0 +1,133 @@
+# infrastructure/ansible/playbooks/deploy.yml
+---
+- name: Deploy CocktailDB Application
+  hosts: cocktaildb
+  become: yes
+
+  vars:
+    app_home: /opt/cocktaildb
+    app_user: cocktaildb
+    app_group: cocktaildb
+
+  tasks:
+    # Sync API code
+    - name: Sync API code to server
+      synchronize:
+        src: "{{ playbook_dir }}/../../../api/"
+        dest: "{{ app_home }}/api/"
+        delete: yes
+        rsync_opts:
+          - "--exclude=__pycache__"
+          - "--exclude=*.pyc"
+          - "--exclude=.pytest_cache"
+          - "--exclude=tests/"
+          - "--exclude=*.db"
+      notify: Restart API
+
+    # Sync frontend code
+    - name: Sync frontend code to server
+      synchronize:
+        src: "{{ playbook_dir }}/../../../src/web/"
+        dest: "{{ app_home }}/web/"
+        delete: yes
+      notify: Reload Caddy
+
+    # Copy docker-compose files
+    - name: Copy docker-compose files
+      copy:
+        src: "{{ item }}"
+        dest: "{{ app_home }}/"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
+      loop:
+        - "{{ playbook_dir }}/../../../docker-compose.yml"
+        - "{{ playbook_dir }}/../../../docker-compose.prod.yml"
+      notify: Restart API
+
+    # Copy deployment scripts
+    - name: Copy deployment scripts
+      copy:
+        src: "{{ playbook_dir }}/../scripts/"
+        dest: "{{ app_home }}/scripts/"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0755'
+        directory_mode: '0755'
+
+    # Copy systemd units
+    - name: Copy systemd service units
+      copy:
+        src: "{{ playbook_dir }}/../systemd/"
+        dest: /etc/systemd/system/
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Daemon reload
+
+    # Create environment file from template
+    - name: Create environment file
+      template:
+        src: ../files/env.j2
+        dest: "{{ app_home }}/.env"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0600'
+      notify: Restart API
+
+    # Ensure correct ownership
+    - name: Set ownership of app directory
+      file:
+        path: "{{ app_home }}"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        recurse: yes
+
+    # Build Docker image
+    - name: Build Docker image
+      community.docker.docker_image:
+        name: cocktaildb-api
+        tag: latest
+        source: build
+        build:
+          path: "{{ app_home }}/api"
+          dockerfile: Dockerfile.prod
+        force_source: yes
+      notify: Restart API
+
+    # Start API container
+    - name: Start API with Docker Compose
+      shell: |
+        cd {{ app_home }}
+        docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+      become_user: "{{ app_user }}"
+
+    # Enable systemd timers
+    - name: Enable backup timer
+      systemd:
+        name: cocktaildb-backup.timer
+        enabled: yes
+        state: started
+        daemon_reload: yes
+
+    - name: Enable analytics timer
+      systemd:
+        name: cocktaildb-analytics.timer
+        enabled: yes
+        state: started
+
+  handlers:
+    - name: Daemon reload
+      systemd:
+        daemon_reload: yes
+
+    - name: Restart API
+      shell: |
+        cd {{ app_home }}
+        docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate
+      become_user: "{{ app_user }}"
+
+    - name: Reload Caddy
+      systemd:
+        name: caddy
+        state: reloaded
