@@ -4,6 +4,9 @@
   hosts: cocktaildb
   become: yes
 
+  vars_files:
+    - ../group_vars/all.yml
+
   vars:
     packages:
       - docker
@@ -103,18 +106,64 @@
         - "{{ app_home }}/logs"
         - "{{ app_home }}/scripts"
 
-    # Install Caddy
-    - name: Install Caddy repository
-      shell: |
-        dnf install -y 'dnf-command(copr)'
-        dnf copr enable -y @caddy/caddy
-      args:
-        creates: /etc/yum.repos.d/_copr:copr.fedorainfracloud.org:group_caddy:caddy.repo
+    # Install Caddy (direct binary for AL2023)
+    - name: Check if Caddy is installed
+      stat:
+        path: /usr/bin/caddy
+      register: caddy_binary
 
-    - name: Install Caddy
-      dnf:
+    - name: Download Caddy binary
+      get_url:
+        url: "https://caddyserver.com/api/download?os=linux&arch=arm64"
+        dest: /usr/bin/caddy
+        mode: '0755'
+      when: not caddy_binary.stat.exists
+
+    - name: Create caddy user
+      user:
         name: caddy
-        state: present
+        system: yes
+        home: /var/lib/caddy
+        shell: /sbin/nologin
+        create_home: yes
+
+    - name: Create Caddy config directory
+      file:
+        path: /etc/caddy
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Create Caddy systemd service
+      copy:
+        dest: /etc/systemd/system/caddy.service
+        content: |
+          [Unit]
+          Description=Caddy
+          Documentation=https://caddyserver.com/docs/
+          After=network.target network-online.target
+          Requires=network-online.target
+
+          [Service]
+          Type=notify
+          User=caddy
+          Group=caddy
+          ExecStart=/usr/bin/caddy run --environ --config /etc/caddy/Caddyfile
+          ExecReload=/usr/bin/caddy reload --config /etc/caddy/Caddyfile
+          TimeoutStopSec=5s
+          LimitNOFILE=1048576
+          LimitNPROC=512
+          PrivateTmp=true
+          ProtectSystem=full
+          AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+          [Install]
+          WantedBy=multi-user.target
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Daemon reload
 
     - name: Create Caddy log directory
       file:
@@ -132,11 +181,11 @@
         group: root
         mode: '0755'
 
-    - name: Start and enable Caddy
+    - name: Enable Caddy (will start after config deployed)
       systemd:
         name: caddy
-        state: started
         enabled: yes
+        daemon_reload: yes
 
     # Install Python packages for ansible postgres module
     - name: Install psycopg2 for Ansible
@@ -149,3 +198,7 @@
       systemd:
         name: postgresql
         state: restarted
+
+    - name: Daemon reload
+      systemd:
+        daemon_reload: yes
