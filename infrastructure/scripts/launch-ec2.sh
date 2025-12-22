@@ -16,9 +16,22 @@ fi
 
 KEY_NAME="${KEY_NAME:-cocktaildb-ec2}"
 SECURITY_GROUP_NAME="cocktaildb-${ENVIRONMENT}"
+INSTANCE_PROFILE="cocktaildb-${ENVIRONMENT}-ec2-profile"
 
 echo "=== Launching CocktailDB $ENVIRONMENT Instance ==="
 echo "Instance type: $INSTANCE_TYPE"
+
+# Verify IAM instance profile exists (created by CloudFormation)
+verify_instance_profile() {
+    if ! aws iam get-instance-profile --instance-profile-name "$INSTANCE_PROFILE" &>/dev/null; then
+        echo "ERROR: Instance profile '$INSTANCE_PROFILE' not found." >&2
+        echo "Deploy CloudFormation stack first: sam deploy --parameter-overrides Environment=$ENVIRONMENT" >&2
+        exit 1
+    fi
+    echo "Using instance profile: $INSTANCE_PROFILE"
+}
+
+verify_instance_profile
 
 # Get latest Amazon Linux 2023 ARM64 AMI
 get_ami() {
@@ -74,6 +87,7 @@ INSTANCE_ID=$(aws ec2 run-instances \
     --instance-type "$INSTANCE_TYPE" \
     --key-name "$KEY_NAME" \
     --security-group-ids "$SG_ID" \
+    --iam-instance-profile Name="$INSTANCE_PROFILE" \
     --associate-public-ip-address \
     --block-device-mappings '[{"DeviceName":"/dev/xvda","Ebs":{"VolumeSize":30,"VolumeType":"gp3"}}]' \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=cocktaildb-${ENVIRONMENT}},{Key=Environment,Value=${ENVIRONMENT}},{Key=Project,Value=cocktaildb}]" \
@@ -102,7 +116,7 @@ echo "Set environment variable:"
 echo "  export COCKTAILDB_HOST=$PUBLIC_IP"
 echo ""
 echo "SSH access:"
-echo "  ssh -i ~/.ssh/cocktaildb-ec2.pem ec2-user@$PUBLIC_IP"
+echo "  ssh -i ~/.ssh/${KEY_NAME}.pem ec2-user@$PUBLIC_IP"
 echo ""
 echo "To stop instance (save money):"
 echo "  ./infrastructure/scripts/stop-ec2.sh $ENVIRONMENT"

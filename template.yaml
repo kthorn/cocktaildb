@@ -1267,6 +1267,51 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
 
+  # --- EC2 IAM Resources ---
+
+  # IAM Role for EC2 instances (S3 access for backups and analytics)
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub cocktaildb-${Environment}-ec2-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                  - s3:DeleteObject
+                Resource:
+                  - !GetAtt AnalyticsBucket.Arn
+                  - !Sub ${AnalyticsBucket.Arn}/*
+                  - !If
+                    - IsProdEnvironment
+                    - !GetAtt BackupBucket.Arn
+                    - !Ref "AWS::NoValue"
+                  - !If
+                    - IsProdEnvironment
+                    - !Sub ${BackupBucket.Arn}/*
+                    - !Ref "AWS::NoValue"
+
+  # Instance Profile for EC2
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub cocktaildb-${Environment}-ec2-profile
+      Roles:
+        - !Ref EC2Role
+
   # --- AWS Batch Resources ---
 
   # IAM Role for AWS Batch service
@@ -1685,4 +1730,12 @@ Outputs:
   AnalyticsJobDefinitionArn:
     Description: ARN of the Analytics Batch Job Definition
     Value: !Ref AnalyticsJobDefinition
+
+  EC2RoleArn:
+    Description: ARN of the EC2 IAM Role
+    Value: !GetAtt EC2Role.Arn
+
+  EC2InstanceProfileName:
+    Description: Name of the EC2 Instance Profile
+    Value: !Ref EC2InstanceProfile
 
