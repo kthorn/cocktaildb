@@ -78,8 +78,9 @@ def insert_postgres_data(pg_conn, table: str, columns: list, data: list):
 
     cursor = pg_conn.cursor()
 
-    # Disable triggers during import for performance
-    cursor.execute(f"ALTER TABLE {table} DISABLE TRIGGER ALL")
+    # Disable user triggers during import for performance
+    # Use TRIGGER USER (not ALL) to avoid needing superuser privileges
+    cursor.execute(f"ALTER TABLE {table} DISABLE TRIGGER USER")
 
     # Build INSERT statement
     cols_str = ', '.join(columns)
@@ -89,8 +90,8 @@ def insert_postgres_data(pg_conn, table: str, columns: list, data: list):
 
     execute_values(cursor, insert_sql, data, page_size=1000)
 
-    # Re-enable triggers
-    cursor.execute(f"ALTER TABLE {table} ENABLE TRIGGER ALL")
+    # Re-enable user triggers
+    cursor.execute(f"ALTER TABLE {table} ENABLE TRIGGER USER")
 
     # Reset sequence to max id + 1
     if 'id' in columns:
