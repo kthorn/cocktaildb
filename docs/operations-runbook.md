@@ -12,18 +12,56 @@ Quick reference for CocktailDB infrastructure operations (EC2, CloudFormation, P
 
 # Environment-specific config is in inventory files:
 # - infrastructure/ansible/inventory/dev.yml
-# - infrastructure/ansible/inventory/prod.yml (create for prod)
+# - infrastructure/ansible/inventory/prod.yml
 
 # Only COCKTAILDB_DB_PASSWORD needs to be passed at runtime
 ```
+
+**Important: Database Password Restrictions**
+
+The database password (`COCKTAILDB_DB_PASSWORD`) must **not contain `$` characters**. Docker Compose interprets `$` as variable expansion in .env files, which corrupts the password. Use only alphanumeric characters and these safe special characters: `@`, `!`, `#`, `%`, `^`, `&`, `*`, `-`, `_`, `+`, `=`.
 
 ---
 
 ## 1. Initial Setup (New Environment)
 
-### Step 1: Deploy CloudFormation Stack
+### CloudFormation Stack Architecture
 
-Creates S3 buckets, Cognito, IAM resources, and DNS records:
+CocktailDB uses two CloudFormation stacks:
+
+1. **EC2 Stack** (`cocktaildb-{env}-ec2`): EC2-specific resources
+   - IAM Role and Instance Profile (for S3 access)
+   - Elastic IP (for stable DNS)
+
+2. **Main Stack** (`cocktail-db-{env}`): Shared AWS resources
+   - S3: AnalyticsBucket, BackupBucket (prod only)
+   - Cognito: User pool, client, domain, groups
+   - DNS: A record pointing to Elastic IP (prod only)
+
+### Step 1a: Deploy EC2 IAM Stack
+
+Creates IAM role, instance profile, and Elastic IP:
+
+```bash
+# Dev or Prod environment
+aws cloudformation deploy \
+  --template-file infrastructure/cloudformation/ec2-iam.yaml \
+  --stack-name cocktaildb-dev-ec2 \
+  --parameter-overrides Environment=dev \
+  --capabilities CAPABILITY_NAMED_IAM
+
+# Get the Elastic IP for use in main stack
+aws cloudformation describe-stacks --stack-name cocktaildb-dev-ec2 \
+  --query 'Stacks[0].Outputs[?OutputKey==`ElasticIP`].OutputValue' --output text
+```
+
+**What gets created:**
+- IAM: EC2Role, EC2InstanceProfile (for S3 access)
+- EC2: Elastic IP address
+
+### Step 1b: Deploy Main CloudFormation Stack
+
+Creates S3 buckets, Cognito, and DNS records:
 
 ```bash
 # Dev environment
@@ -34,22 +72,24 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_NAMED_IAM
 
 # Prod environment (requires additional parameters)
+ELASTIC_IP=$(aws cloudformation describe-stacks --stack-name cocktaildb-prod-ec2 \
+  --query 'Stacks[0].Outputs[?OutputKey==`ElasticIP`].OutputValue' --output text)
+
 aws cloudformation deploy \
   --template-file template.yaml \
   --stack-name cocktaildb-prod \
   --parameter-overrides \
     Environment=prod \
-    HostedZoneId=<your-hosted-zone-id> \
-    EC2ElasticIP=<your-elastic-ip> \
-    AuthCertificateArn=<your-cert-arn> \
+    HostedZoneId=Z098387725SH34NHYBQWI \
+    EC2ElasticIP=$ELASTIC_IP \
+    AuthCertificateArn=arn:aws:acm:us-east-1:732940910135:certificate/ef4e8b26-0806-4d73-80a1-682201322d1f \
   --capabilities CAPABILITY_NAMED_IAM
 ```
 
 **What gets created:**
 - S3: AnalyticsBucket, BackupBucket (prod only)
 - Cognito: User pool, client, domain, groups
-- IAM: EC2Role, EC2InstanceProfile
-- DNS: A record pointing to EC2 (prod only)
+- DNS: A record pointing to Elastic IP (prod only)
 
 ### Step 2: Launch EC2 Instance
 
