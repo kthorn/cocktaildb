@@ -53,22 +53,18 @@
       lineinfile:
         path: /var/lib/pgsql/data/postgresql.conf
         regexp: '^#?listen_addresses\s*='
-        line: "listen_addresses = 'localhost,172.17.0.1'"
+        # Include both 172.17.0.1 (default Docker bridge) and 172.28.0.1 (pinned network gateway)
+        line: "listen_addresses = 'localhost,172.17.0.1,172.28.0.1'"
         backup: yes
       notify: Restart PostgreSQL
 
-    - name: Allow Docker network connections in pg_hba.conf (172.17.x.x)
+    - name: Allow Docker network connections in pg_hba.conf (pinned subnet 172.28.x.x)
+      # Note: docker-compose.yml pins network to 172.28.0.0/16 for predictable pg_hba.conf entries
       lineinfile:
         path: /var/lib/pgsql/data/pg_hba.conf
-        line: "host    {{ db_name }}      {{ db_user }}      172.17.0.0/16           scram-sha-256"
-        insertafter: "^# IPv4 local connections"
-      notify: Reload PostgreSQL
-
-    - name: Allow Docker network connections in pg_hba.conf (172.18.x.x)
-      lineinfile:
-        path: /var/lib/pgsql/data/pg_hba.conf
-        line: "host    {{ db_name }}      {{ db_user }}      172.18.0.0/16           scram-sha-256"
-        insertafter: "^# IPv4 local connections"
+        line: "host    {{ db_name }}      {{ db_user }}      172.28.0.0/16           scram-sha-256"
+        # Use insertafter: EOF to reliably append since pg_hba.conf comment patterns vary across distros
+        insertafter: EOF
       notify: Reload PostgreSQL
 
     - name: Display database info

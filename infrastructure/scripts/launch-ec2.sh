@@ -61,13 +61,13 @@ create_security_group() {
             --vpc-id "${vpc_id}" \
             --query 'GroupId' --output text)
 
-        # Add inbound rules
+        # Add inbound rules (redirect output to stderr to not pollute function return)
         aws ec2 authorize-security-group-ingress --group-id "$sg_id" \
-            --protocol tcp --port 22 --cidr 0.0.0.0/0
+            --protocol tcp --port 22 --cidr 0.0.0.0/0 >&2
         aws ec2 authorize-security-group-ingress --group-id "$sg_id" \
-            --protocol tcp --port 80 --cidr 0.0.0.0/0
+            --protocol tcp --port 80 --cidr 0.0.0.0/0 >&2
         aws ec2 authorize-security-group-ingress --group-id "$sg_id" \
-            --protocol tcp --port 443 --cidr 0.0.0.0/0
+            --protocol tcp --port 443 --cidr 0.0.0.0/0 >&2
         echo "Security group created: $sg_id" >&2
     else
         echo "Using existing security group: $sg_id" >&2

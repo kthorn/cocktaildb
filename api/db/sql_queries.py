@@ -12,6 +12,7 @@ INGREDIENT_SELECT_FIELDS = """
 # Variables that must be available in context:
 #   - i_user.id, i_user.path, i_user.allow_substitution (user's ingredient)
 #   - i_recipe.id, i_recipe.path, i_recipe.parent_id, i_recipe.allow_substitution (recipe's ingredient)
+# Uses STARTS_WITH() instead of LIKE with % wildcard to avoid psycopg2 parameter format conflicts
 INGREDIENT_SUBSTITUTION_MATCH = """
     -- Direct match
     i_user.id = i_recipe.id
@@ -20,13 +21,13 @@ INGREDIENT_SUBSTITUTION_MATCH = """
     (i_recipe.allow_substitution = TRUE AND (
         -- User has ancestor of recipe ingredient (user has "Rum", recipe needs "Wray And Nephew")
         -- BUT: no blocking parents in between (e.g., "Pot Still Unaged Rum" with allow_sub=false)
-        (i_recipe.path LIKE i_user.path || '%'
+        (STARTS_WITH(i_recipe.path, i_user.path)
          AND NOT EXISTS (
              SELECT 1 FROM ingredients blocking
-             WHERE i_recipe.path LIKE blocking.path || '%'  -- blocking is ancestor of recipe ingredient
-             AND blocking.path LIKE i_user.path || '%'      -- blocking is descendant of user ingredient
-             AND blocking.id != i_user.id                    -- not the user ingredient itself
-             AND blocking.allow_substitution = FALSE         -- blocks substitution
+             WHERE STARTS_WITH(i_recipe.path, blocking.path)  -- blocking is ancestor of recipe ingredient
+             AND STARTS_WITH(blocking.path, i_user.path)      -- blocking is descendant of user ingredient
+             AND blocking.id != i_user.id                     -- not the user ingredient itself
+             AND blocking.allow_substitution = FALSE          -- blocks substitution
          ))
         OR
         -- Sibling match: same parent, both allow substitution
@@ -40,15 +41,15 @@ INGREDIENT_SUBSTITUTION_MATCH = """
         -- Recursive: user has common ancestor with recipe ingredient
         EXISTS (
             SELECT 1 FROM ingredients anc
-            WHERE i_user.path LIKE anc.path || '%'
-            AND i_recipe.path LIKE anc.path || '%'
+            WHERE STARTS_WITH(i_user.path, anc.path)
+            AND STARTS_WITH(i_recipe.path, anc.path)
             AND anc.allow_substitution = TRUE
             AND LENGTH(anc.path) - LENGTH(REPLACE(anc.path, '/', '')) <= 6
             -- Ensure no blocking parents between common ancestor and recipe ingredient
             AND NOT EXISTS (
                 SELECT 1 FROM ingredients blocking
-                WHERE i_recipe.path LIKE blocking.path || '%'
-                AND blocking.path LIKE anc.path || '%'
+                WHERE STARTS_WITH(i_recipe.path, blocking.path)
+                AND STARTS_WITH(blocking.path, anc.path)
                 AND blocking.id != anc.id
                 AND blocking.allow_substitution = FALSE
             )

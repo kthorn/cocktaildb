@@ -87,6 +87,29 @@
         mode: '0644'
       notify: Restart Caddy
 
+    # Configure Caddy environment variables (domain, ACME email)
+    - name: Create Caddy systemd override directory
+      file:
+        path: /etc/systemd/system/caddy.service.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Configure Caddy environment variables
+      copy:
+        dest: /etc/systemd/system/caddy.service.d/override.conf
+        content: |
+          [Service]
+          Environment=DOMAIN_NAME={{ domain_name }}
+          Environment=ACME_EMAIL=admin@{{ domain_name }}
+        owner: root
+        group: root
+        mode: '0644'
+      notify:
+        - Daemon reload
+        - Restart Caddy
+
     # Create environment file from template
     - name: Create environment file
       template:

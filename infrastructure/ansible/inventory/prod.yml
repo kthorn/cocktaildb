@@ -1,0 +1,34 @@
+# infrastructure/ansible/inventory/prod.yml
+# Production environment inventory
+all:
+  hosts:
+    cocktaildb:
+      ansible_host: 54.208.125.45
+      ansible_user: ec2-user
+      ansible_ssh_private_key_file: ~/.ssh/cocktaildb-ec2.pem
+      ansible_python_interpreter: /usr/bin/python3
+
+      # Application settings
+      app_name: cocktaildb
+      app_user: cocktaildb
+      app_group: cocktaildb
+      app_home: /opt/cocktaildb
+
+      # Database settings
+      db_name: cocktaildb
+      db_user: cocktaildb
+      db_password: "{{ lookup('env', 'COCKTAILDB_DB_PASSWORD') }}"
+
+      # Prod-specific configuration
+      domain_name: mixology.tools
+      app_env: prod
+      aws_region: us-east-1
+
+      # Cognito (from existing prod stack)
+      user_pool_id: us-east-1_ECF4xd8J6
+      app_client_id: 50rcs7t960nm1p0q4n9t56503e
+      cognito_domain: "https://auth.mixology.tools"
+
+      # S3 buckets
+      analytics_bucket: cocktailanalytics-732940910135-prod
+      backup_bucket: cocktaildbbackups-732940910135-prod
