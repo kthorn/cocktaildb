@@ -16,12 +16,21 @@
       when: db_password == ""
 
     - name: Create database user
+      # Use heredoc with quoted delimiter to prevent shell variable expansion in password
       shell: |
-        sudo -u postgres psql -c "CREATE USER {{ db_user }} WITH PASSWORD '{{ db_password }}';" || \
-        sudo -u postgres psql -c "ALTER USER {{ db_user }} WITH PASSWORD '{{ db_password }}';"
+        sudo -u postgres psql << 'EOSQL'
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '{{ db_user }}') THEN
+            CREATE USER {{ db_user }} WITH PASSWORD '{{ db_password }}';
+          ELSE
+            ALTER USER {{ db_user }} WITH PASSWORD '{{ db_password }}';
+          END IF;
+        END
+        $$;
+        EOSQL
       register: create_user
-      changed_when: "'CREATE ROLE' in create_user.stdout or 'ALTER ROLE' in create_user.stdout"
-      failed_when: false
+      changed_when: true
 
     - name: Create database
       shell: |
