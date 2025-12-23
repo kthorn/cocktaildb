@@ -9,21 +9,19 @@ app_home: /opt/cocktaildb
 # Database settings
 db_name: cocktaildb
 db_user: cocktaildb
-db_password: "{{ lookup('env', 'COCKTAILDB_DB_PASSWORD') }}"
+db_password: "{{ lookup('env', 'COCKTAILDB_DB_PASSWORD') | default('changeme', true) }}"
 
 # Docker settings
 docker_compose_version: "2.24.0"
 
-# Caddy settings
-domain_name: "{{ lookup('env', 'COCKTAILDB_DOMAIN') | default('localhost', true) }}"
-
-# S3 settings
-backup_bucket: "{{ lookup('env', 'COCKTAILDB_BACKUP_BUCKET') }}"
-analytics_bucket: "{{ lookup('env', 'COCKTAILDB_ANALYTICS_BUCKET') }}"
-
 # AWS region
-aws_region: "{{ lookup('env', 'AWS_REGION') | default('us-east-1', true) }}"
+aws_region: us-east-1
 
-# Cognito settings (keep for auth)
-user_pool_id: "{{ lookup('env', 'USER_POOL_ID') }}"
-app_client_id: "{{ lookup('env', 'APP_CLIENT_ID') }}"
+# The following are typically set in inventory files (dev.yml, prod.yml):
+# - domain_name
+# - app_env
+# - user_pool_id
+# - app_client_id
+# - cognito_domain
+# - analytics_bucket
+# - backup_bucket

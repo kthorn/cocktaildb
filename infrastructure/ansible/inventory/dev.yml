@@ -1,0 +1,33 @@
+# infrastructure/ansible/inventory/dev.yml
+# Dev environment inventory
+all:
+  hosts:
+    cocktaildb:
+      ansible_host: dev.mixology.tools
+      ansible_user: ec2-user
+      ansible_python_interpreter: /usr/bin/python3
+
+      # Application settings
+      app_name: cocktaildb
+      app_user: cocktaildb
+      app_group: cocktaildb
+      app_home: /opt/cocktaildb
+
+      # Database settings
+      db_name: cocktaildb
+      db_user: cocktaildb
+      db_password: "{{ lookup('env', 'COCKTAILDB_DB_PASSWORD') | default('changeme', true) }}"
+
+      # Dev-specific configuration
+      domain_name: dev.mixology.tools
+      app_env: dev
+      aws_region: us-east-1
+
+      # Cognito
+      user_pool_id: us-east-1_inBg61nTH
+      app_client_id: b8un2vqbdkmogqrpf43bek6at
+      cognito_domain: "https://cocktaildbauth-dev-732940910135-v3.auth.us-east-1.amazoncognito.com"
+
+      # S3 buckets
+      analytics_bucket: cocktaildb-dev-analyticsbucket-tydlnoijqkpw
+      backup_bucket: ""

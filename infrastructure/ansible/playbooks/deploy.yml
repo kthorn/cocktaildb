@@ -4,9 +4,6 @@
   hosts: cocktaildb
   become: yes
 
-  vars_files:
-    - ../group_vars/all.yml
-
   vars:
     app_home: /opt/cocktaildb
     app_user: cocktaildb
@@ -33,6 +30,18 @@
         src: "{{ playbook_dir }}/../../../src/web/"
         dest: "{{ app_home }}/web/"
         delete: yes
+        rsync_opts:
+          - "--exclude=config.js"
+      notify: Restart Caddy
+
+    # Generate config.js from template (environment-specific)
+    - name: Generate frontend config.js
+      template:
+        src: ../files/config.js.j2
+        dest: "{{ app_home }}/web/js/config.js"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
       notify: Restart Caddy
 
     # Copy docker-compose files
