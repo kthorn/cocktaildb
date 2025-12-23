@@ -46,24 +46,30 @@
         mode: '0644'
 
     - name: Run migration from S3 backup
+      # Use environment variable for password to avoid shell escaping issues
       shell: |
         python3 /tmp/migrate-sqlite-to-postgres.py \
           --s3-bucket "{{ backup_bucket }}" \
           --schema /tmp/schema.sql \
-          --pg-password "{{ db_password }}" \
+          --pg-password "$PGPASSWORD" \
           --pg-db "{{ db_name }}" \
           --pg-user "{{ db_user }}"
+      environment:
+        PGPASSWORD: "{{ db_password }}"
       when: backup_bucket != "" and sqlite_path == ""
       register: migration_result
 
     - name: Run migration from local SQLite file
+      # Use environment variable for password to avoid shell escaping issues
       shell: |
         python3 /tmp/migrate-sqlite-to-postgres.py \
           --sqlite "{{ sqlite_path }}" \
           --schema /tmp/schema.sql \
-          --pg-password "{{ db_password }}" \
+          --pg-password "$PGPASSWORD" \
           --pg-db "{{ db_name }}" \
           --pg-user "{{ db_user }}"
+      environment:
+        PGPASSWORD: "{{ db_password }}"
       when: sqlite_path != ""
       register: migration_result_local
 
