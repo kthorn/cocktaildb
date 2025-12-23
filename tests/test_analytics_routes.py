@@ -8,9 +8,6 @@ AnalyticsStorage. To re-enable these tests, you would need to either:
 1. Mock the AnalyticsStorage class to return test data
 2. Set up a test S3 bucket or use moto to mock S3
 3. Update the analytics routes to have a fallback for test environments
-
-For now, the analytics refresh Lambda tests (test_analytics_refresh.py) provide
-coverage for the analytics generation logic using mocks.
 """
 import pytest
 import sys
