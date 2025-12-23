@@ -26,6 +26,9 @@ let isSearching = false;
 let allSearchResults = [];
 let isInfiniteScrollEnabled = false;
 let scrollThreshold = 200; // pixels from bottom to trigger load
+let currentSearchCursor = null;
+let nextSearchCursor = null;
+let useCursorPagination = true;
 
 // Rating filter state
 let starRatingFilterComponent = null;
@@ -110,6 +113,9 @@ document.addEventListener('DOMContentLoaded', () => {
         currentSearchPage = 1;
         totalSearchPages = 1;
         allSearchResults = [];
+        currentSearchCursor = null;
+        nextSearchCursor = null;
+        useCursorPagination = true;
         
         // Disable infinite scroll and remove loading indicator
         disableInfiniteScroll();
@@ -165,11 +171,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const searchQuery = buildSearchQuery();
             console.log('Built search query:', searchQuery);
             
-            if (reset) {
-                // Reset pagination state for new search
-                currentSearchQuery = searchQuery;
-                currentSearchPage = 1;
-                allSearchResults = [];
+        if (reset) {
+            // Reset pagination state for new search
+            currentSearchQuery = searchQuery;
+            currentSearchPage = 1;
+            allSearchResults = [];
+            currentSearchCursor = null;
+            nextSearchCursor = null;
                 
                 // Show loading and hide results
                 loadingPlaceholder.classList.remove('hidden');
@@ -184,7 +192,14 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Call the API to search recipes with pagination and sorting
             console.log('Calling searchRecipes with sort params:', { sortBy: currentSortBy, sortOrder: currentSortOrder });
-            const result = await api.searchRecipes(searchQuery, currentSearchPage, searchResultsPerPage, currentSortBy, currentSortOrder);
+            const result = await api.searchRecipes(
+                searchQuery,
+                currentSearchPage,
+                searchResultsPerPage,
+                currentSortBy,
+                currentSortOrder,
+                currentSearchCursor
+            );
             console.log('API result:', result);
             
             // Hide loading placeholder
@@ -200,6 +215,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Update pagination state
                 totalSearchPages = result.pagination.has_next ? currentSearchPage + 1 : currentSearchPage;
+                nextSearchCursor = result.pagination.next_cursor || null;
+                useCursorPagination = nextSearchCursor !== null;
                 
                 // Display results
                 if (reset) {
@@ -224,7 +241,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     emptyResults.querySelector('p').textContent = 'No recipes found matching your criteria.';
                 }
                 
-                console.log(`Search page ${currentSearchPage} loaded (${result.recipes.length} recipes), has_next: ${result.pagination.has_next}`);
+                console.log(
+                    `Search page ${currentSearchPage} loaded (${result.recipes.length} recipes), has_next: ${result.pagination.has_next}`
+                );
                 console.log('Pagination info:', result.pagination);
             } else if (reset) {
                 // Show no results message
@@ -318,16 +337,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load more search results (next page) for infinite scroll
     async function loadMoreSearchResults() {
         if (isSearching) return;
-        
+
+        if (useCursorPagination && !nextSearchCursor) {
+            disableInfiniteScroll();
+            return;
+        }
+
         // Show loading indicator
         const loadingIndicator = document.getElementById('infinite-scroll-loading');
         if (loadingIndicator) {
             loadingIndicator.classList.remove('hidden');
         }
-        
+
         currentSearchPage++;
+        currentSearchCursor = useCursorPagination ? nextSearchCursor : null;
         await performSearch(false); // Don't reset, append to existing
-        
+
         // Hide loading indicator after loading
         if (loadingIndicator) {
             loadingIndicator.classList.add('hidden');

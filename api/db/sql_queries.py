@@ -331,6 +331,134 @@ def build_search_recipes_paginated_sql(
     return base_sql.format(substitution_match=INGREDIENT_SUBSTITUTION_MATCH)
 
 
+def build_search_recipes_keyset_sql(
+    must_conditions: List[str],
+    must_not_conditions: List[str],
+    tag_conditions: List[str] = None,
+    sort_by: str = "name",
+    sort_order: str = "asc",
+    inventory_filter: bool = False,
+    rating_type: str = "average",
+) -> str:
+    """Build the paginated search SQL using keyset (cursor) pagination."""
+    rating_field = "r.avg_rating" if rating_type == "average" else "ur.rating"
+
+    sort_expr_map = {
+        "name": "r.name",
+        "avg_rating": "COALESCE(r.avg_rating, 0)",
+        "created_at": "r.created_at",
+    }
+    sort_expr = sort_expr_map.get(sort_by, "r.name")
+    sort_direction = "DESC" if sort_order == "desc" else "ASC"
+    cursor_operator = "<" if sort_order == "desc" else ">"
+
+    base_sql = f"""
+    WITH search_results AS (
+        SELECT
+            r.id, r.name, r.instructions, r.description, r.image_url,
+            r.source, r.source_url, r.avg_rating, r.rating_count,
+            r.created_at,
+            STRING_AGG(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
+            STRING_AGG(CASE WHEN t.created_by = :cognito_user_id THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data,
+            ur.rating AS user_rating,
+            {sort_expr} AS sort_value
+        FROM
+            recipes r
+        LEFT JOIN
+            recipe_tags rt ON r.id = rt.recipe_id
+        LEFT JOIN
+            tags t ON rt.tag_id = t.id
+        LEFT JOIN
+            ratings ur ON r.id = ur.recipe_id AND ur.cognito_user_id = :cognito_user_id
+        LEFT JOIN
+            recipe_ingredients ri ON r.id = ri.recipe_id
+        LEFT JOIN
+            ingredients i ON ri.ingredient_id = i.id
+        WHERE
+            (:search_query IS NULL OR
+             r.name ILIKE :search_query_with_wildcards)
+        AND
+            (:min_rating IS NULL OR COALESCE({rating_field}, 0) >= :min_rating)
+        AND
+            (:max_rating IS NULL OR COALESCE({rating_field}, 0) <= :max_rating)
+        AND
+            (
+                :cursor_sort IS NULL
+                OR ({sort_expr} {cursor_operator} :cursor_sort)
+                OR ({sort_expr} = :cursor_sort AND r.id {cursor_operator} :cursor_id)
+            )"""
+
+    for condition in must_conditions:
+        base_sql += f" AND r.id IN (SELECT DISTINCT ri2.recipe_id FROM recipe_ingredients ri2 JOIN ingredients i2 ON ri2.ingredient_id = i2.id WHERE {condition})"
+
+    for condition in must_not_conditions:
+        base_sql += f" AND r.id NOT IN (SELECT DISTINCT ri2.recipe_id FROM recipe_ingredients ri2 JOIN ingredients i2 ON ri2.ingredient_id = i2.id WHERE {condition})"
+
+    if tag_conditions is None:
+        tag_conditions = []
+    for condition in tag_conditions:
+        base_sql += f" AND r.id IN (SELECT DISTINCT rt3.recipe_id FROM recipe_tags rt3 JOIN tags t3 ON rt3.tag_id = t3.id WHERE {condition})"
+
+    if inventory_filter:
+        base_sql += """ AND r.id IN (
+            SELECT r_inv.id 
+            FROM recipes r_inv
+            WHERE r_inv.id = r.id
+            AND NOT EXISTS (
+                SELECT 1 FROM recipe_ingredients ri_missing
+                LEFT JOIN ingredients i_recipe ON ri_missing.ingredient_id = i_recipe.id
+                WHERE ri_missing.recipe_id = r_inv.id
+                AND NOT EXISTS (
+                    SELECT 1 FROM user_ingredients ui_check
+                    LEFT JOIN ingredients i_user ON ui_check.ingredient_id = i_user.id
+                    WHERE ui_check.cognito_user_id = :cognito_user_id
+                    AND (
+                        {substitution_match}
+                    )
+                )
+            )
+        )"""
+
+    base_sql += f"""
+        GROUP BY
+            r.id, r.name, r.instructions, r.description, r.image_url,
+            r.source, r.source_url, r.avg_rating, r.rating_count,
+            r.created_at,
+            ur.rating
+        ORDER BY
+            sort_value {sort_direction},
+            r.id {sort_direction}
+        LIMIT :limit_plus_one
+    ),
+    paginated_with_ingredients AS (
+        SELECT
+            sr.id, sr.name, sr.instructions, sr.description, sr.image_url,
+            sr.source, sr.source_url, sr.avg_rating, sr.rating_count,
+            sr.public_tags_data, sr.private_tags_data, sr.user_rating,
+            sr.sort_value,
+            ri.id as recipe_ingredient_id, ri.amount, ri.ingredient_id, i.name as ingredient_name,
+            ri.unit_id, u.name as unit_name, u.abbreviation as unit_abbreviation,
+            i.path as ingredient_path, u.conversion_to_ml
+        FROM
+            search_results sr
+        LEFT JOIN
+            recipe_ingredients ri ON sr.id = ri.recipe_id
+        LEFT JOIN
+            ingredients i ON ri.ingredient_id = i.id
+        LEFT JOIN
+            units u ON ri.unit_id = u.id
+        ORDER BY
+            sr.sort_value {sort_direction},
+            sr.id {sort_direction},
+            COALESCE(ri.amount * u.conversion_to_ml, 0) DESC,
+            ri.id ASC
+    )
+    SELECT * FROM paginated_with_ingredients
+    """
+
+    return base_sql.format(substitution_match=INGREDIENT_SUBSTITUTION_MATCH)
+
+
 # Ingredient Recommendations Query
 # This query finds ingredients the user doesn't have that would unlock the most "almost makeable" recipes
 # (recipes where user has all but one ingredient), respecting allow_substitution rules.

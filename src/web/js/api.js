@@ -158,7 +158,7 @@ class CocktailAPI {
     }
 
     // Search recipes with various criteria
-    async searchRecipes(searchQuery, page = 1, limit = 20, sortBy = 'name', sortOrder = 'asc') {
+    async searchRecipes(searchQuery, page = 1, limit = 20, sortBy = 'name', sortOrder = 'asc', cursor = null) {
         // Build query string from the search parameters
         const queryParams = new URLSearchParams();
         
@@ -170,6 +170,10 @@ class CocktailAPI {
         queryParams.append('sort_by', sortBy);
         queryParams.append('sort_order', sortOrder);
         console.log('Adding sort parameters to API call:', { sort_by: sortBy, sort_order: sortOrder });
+
+        if (cursor) {
+            queryParams.append('cursor', cursor);
+        }
         
         // Add search filters to query params
         if (searchQuery.name) {
@@ -243,7 +247,8 @@ class CocktailAPI {
                     page: data.pagination.page || page,
                     limit: data.pagination.limit || limit,
                     total: data.pagination.total_count || data.recipes.length,
-                    has_next: data.pagination.has_next || false
+                    has_next: data.pagination.has_next || false,
+                    next_cursor: data.pagination.next_cursor || null
                 }
             };
         }

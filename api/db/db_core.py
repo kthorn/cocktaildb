@@ -1,6 +1,9 @@
+import base64
+import json
 import logging
 import os
 import re
+from datetime import datetime
 from typing import Dict, List, Optional, Any, Union, Tuple, cast
 
 import psycopg2
@@ -16,7 +19,7 @@ from .sql_queries import (
     get_ingredients_count_sql,
     INGREDIENT_SELECT_FIELDS,
 )
-from core.exceptions import ConflictException
+from core.exceptions import ConflictException, ValidationException
 
 # Configure logging
 logger = logging.getLogger()
@@ -1963,11 +1966,14 @@ class Database:
         sort_order: str = "asc",
         user_id: Optional[str] = None,
         rating_type: str = "average",
-    ) -> List[Dict[str, Any]]:
+        cursor: Optional[str] = None,
+        return_pagination: bool = False,
+    ) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
         """Search recipes with pagination"""
         try:
             from .sql_queries import (
                 build_search_recipes_paginated_sql,
+                build_search_recipes_keyset_sql,
             )
 
             # Build query parameters
@@ -1985,6 +1991,17 @@ class Database:
                 "sort_order": sort_order,
                 "cognito_user_id": user_id,
             }
+            use_keyset = sort_by != "random" and return_pagination
+            cursor_payload = None
+            if use_keyset and cursor:
+                cursor_payload = self._decode_search_cursor(cursor, sort_by, sort_order)
+                query_params["cursor_sort"] = cursor_payload["sort_value"]
+                query_params["cursor_id"] = cursor_payload["id"]
+            else:
+                query_params["cursor_sort"] = None
+                query_params["cursor_id"] = None
+            if use_keyset:
+                query_params["limit_plus_one"] = limit + 1
             # Handle ingredient filtering by converting names to IDs and paths
             must_ingredient_conditions = []
             must_not_ingredient_conditions = []
@@ -2071,15 +2088,26 @@ class Database:
             inventory_filter = search_params.get("inventory", False)
 
             # Build dynamic SQL query
-            paginated_sql = build_search_recipes_paginated_sql(
-                must_ingredient_conditions,
-                must_not_ingredient_conditions,
-                tag_conditions,
-                sort_by,
-                sort_order,
-                inventory_filter,
-                rating_type,
-            )
+            if use_keyset:
+                paginated_sql = build_search_recipes_keyset_sql(
+                    must_ingredient_conditions,
+                    must_not_ingredient_conditions,
+                    tag_conditions,
+                    sort_by,
+                    sort_order,
+                    inventory_filter,
+                    rating_type,
+                )
+            else:
+                paginated_sql = build_search_recipes_paginated_sql(
+                    must_ingredient_conditions,
+                    must_not_ingredient_conditions,
+                    tag_conditions,
+                    sort_by,
+                    sort_order,
+                    inventory_filter,
+                    rating_type,
+                )
             # Get paginated results
             rows = cast(
                 List[Dict[str, Any]], self.execute_query(paginated_sql, query_params)
@@ -2109,6 +2137,8 @@ class Database:
                         "ingredients": [],
                         "tags": [],
                     }
+                    if use_keyset:
+                        recipes[recipe_id]["_sort_value"] = row.get("sort_value")
 
                     # Parse tags from GROUP_CONCAT format
                     if row.get("public_tags_data"):
@@ -2172,11 +2202,82 @@ class Database:
 
             result = list(recipes.values())
             logger.info(f"Found {len(result)} recipes from search")
-            return result
+
+            if not return_pagination:
+                for recipe in result:
+                    recipe.pop("_sort_value", None)
+                return result
+
+            has_next = False
+            next_cursor = None
+            if use_keyset:
+                if len(result) > limit:
+                    has_next = True
+                    result = result[:limit]
+                if has_next and result:
+                    last_recipe = result[-1]
+                    sort_value = last_recipe.get("_sort_value")
+                    next_cursor = self._encode_search_cursor(
+                        sort_by, sort_order, sort_value, last_recipe["id"]
+                    )
+                for recipe in result:
+                    recipe.pop("_sort_value", None)
+            else:
+                has_next = len(result) == limit
+                for recipe in result:
+                    recipe.pop("_sort_value", None)
+
+            return {
+                "recipes": result,
+                "has_next": has_next,
+                "next_cursor": next_cursor,
+            }
 
         except Exception as e:
             logger.error(f"Error searching recipes with pagination: {str(e)}")
             raise
+
+    def _encode_search_cursor(
+        self, sort_by: str, sort_order: str, sort_value: Any, recipe_id: int
+    ) -> str:
+        if isinstance(sort_value, datetime):
+            sort_value = sort_value.isoformat()
+        payload = {
+            "sort_by": sort_by,
+            "sort_order": sort_order,
+            "sort_value": sort_value,
+            "id": recipe_id,
+        }
+        encoded = base64.urlsafe_b64encode(
+            json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        ).decode("ascii")
+        return encoded
+
+    def _decode_search_cursor(
+        self, cursor: str, sort_by: str, sort_order: str
+    ) -> Dict[str, Any]:
+        try:
+            padding = "=" * (-len(cursor) % 4)
+            decoded = base64.urlsafe_b64decode(cursor + padding).decode("utf-8")
+            payload = json.loads(decoded)
+        except (ValueError, json.JSONDecodeError) as exc:
+            raise ValidationException("Invalid cursor value") from exc
+
+        if payload.get("sort_by") != sort_by or payload.get("sort_order") != sort_order:
+            raise ValidationException("Cursor does not match current sort parameters")
+
+        sort_value = payload.get("sort_value")
+        if sort_by == "created_at" and isinstance(sort_value, str):
+            try:
+                sort_value = datetime.fromisoformat(sort_value)
+            except ValueError as exc:
+                raise ValidationException("Invalid cursor timestamp") from exc
+
+        cursor_id = payload.get("id")
+        if cursor_id is None:
+            raise ValidationException("Cursor is missing required fields")
+
+        return {"sort_value": sort_value, "id": cursor_id}
 
     # --- End Pagination Methods ---
 

@@ -34,7 +34,6 @@ from .rating_handlers import (
     create_or_update_rating_handler,
     delete_rating_handler,
 )
-from utils.analytics_helpers import trigger_analytics_refresh
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +70,7 @@ async def search_recipes(
         "name", description="Sort field: name, created_at, avg_rating, random"
     ),
     sort_order: str = Query("asc", description="Sort order: asc, desc"),
+    cursor: Optional[str] = Query(None, description="Cursor for pagination"),
     min_rating: Optional[float] = Query(
         None, description="Minimum rating (type depends on rating_type)", ge=0, le=5
     ),
@@ -162,7 +162,7 @@ async def search_recipes(
             logger.info(f"Search query 'q' parameter: '{search_params['q']}'")
 
         # Get paginated search results
-        recipes_data = db.search_recipes_paginated(
+        search_result = db.search_recipes_paginated(
             search_params=search_params,
             limit=limit,
             offset=offset,
@@ -170,19 +170,23 @@ async def search_recipes(
             sort_order=sort_order,
             user_id=user_id,
             rating_type=rating_type,
+            cursor=cursor,
+            return_pagination=True,
         )
 
+        recipes_data = search_result["recipes"]
         logger.info(f"Database returned {len(recipes_data)} recipes")
 
         # Build pagination metadata
-        has_next = len(recipes_data) == limit
+        has_next = search_result["has_next"]
         total_count = len(recipes_data)  # Show at least the returned count
         pagination = PaginationMetadata(
             page=page,
             limit=limit,
             total_count=total_count,
             has_next=has_next,
-            has_previous=page > 1,
+            has_previous=page > 1 or cursor is not None,
+            next_cursor=search_result["next_cursor"],
         )
 
         # Convert to response models
@@ -206,6 +210,7 @@ async def search_recipes_authenticated(
         "name", description="Sort field: name, created_at, avg_rating, random"
     ),
     sort_order: str = Query("asc", description="Sort order: asc, desc"),
+    cursor: Optional[str] = Query(None, description="Cursor for pagination"),
     min_rating: Optional[float] = Query(
         None, description="Minimum rating (type depends on rating_type)", ge=0, le=5
     ),
@@ -235,6 +240,7 @@ async def search_recipes_authenticated(
         limit=limit,
         sort_by=sort_by,
         sort_order=sort_order,
+        cursor=cursor,
         min_rating=min_rating,
         max_rating=max_rating,
         rating_type=rating_type,
@@ -278,9 +284,6 @@ async def create_recipe(
                 )
 
         created_recipe = db.create_recipe(recipe_dict)
-
-        # Trigger analytics refresh asynchronously
-        trigger_analytics_refresh()
 
         # Get the full recipe data with ingredients
         full_recipe = db.get_recipe(created_recipe["id"], user.user_id)
@@ -349,9 +352,6 @@ async def update_recipe(
 
         db.update_recipe(recipe_id, update_dict)
 
-        # Trigger analytics refresh asynchronously
-        trigger_analytics_refresh()
-
         # Get the full recipe data with ingredients
         full_recipe = db.get_recipe(recipe_id, user.user_id)
         return RecipeResponse(**full_recipe)
@@ -379,9 +379,6 @@ async def delete_recipe(
             raise NotFoundException(f"Recipe with ID {recipe_id} not found")
 
         db.delete_recipe(recipe_id)
-
-        # Trigger analytics refresh asynchronously
-        trigger_analytics_refresh()
 
         return MessageResponse(message=f"Recipe {recipe_id} deleted successfully")
 
@@ -687,10 +684,6 @@ async def bulk_upload_recipes(
         )
         logger.info(f"Creation phase took {creation_duration:.3f}s")
         logger.info(f"Total bulk upload took {total_duration:.3f}s")
-
-        # Trigger analytics refresh asynchronously if any recipes were uploaded
-        if uploaded_recipes:
-            trigger_analytics_refresh()
 
         return BulkUploadResponse(
             uploaded_count=len(uploaded_recipes),
