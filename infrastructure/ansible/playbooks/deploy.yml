@@ -77,6 +77,14 @@
         mode: '0644'
       notify: Daemon reload
 
+    - name: Copy analytics debounce script
+      copy:
+        src: "{{ playbook_dir }}/../../scripts/analytics-debounce-check.sh"
+        dest: /usr/local/bin/analytics-debounce-check.sh
+        owner: root
+        group: root
+        mode: '0755'
+
     # Deploy Caddy configuration
     - name: Copy Caddyfile
       copy:
@@ -157,6 +165,12 @@
     - name: Enable analytics timer
       systemd:
         name: cocktaildb-analytics.timer
+        enabled: no
+        state: stopped
+
+    - name: Enable analytics debounce timer
+      systemd:
+        name: cocktaildb-analytics-debounce.timer
         enabled: yes
         state: started
 

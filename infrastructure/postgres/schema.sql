@@ -88,6 +88,16 @@ CREATE TABLE user_ingredients (
   UNIQUE(cognito_user_id, ingredient_id)
 );
 
+CREATE TABLE analytics_refresh_state (
+  id INTEGER PRIMARY KEY,
+  dirty_at TIMESTAMP,
+  last_run_at TIMESTAMP
+);
+
+INSERT INTO analytics_refresh_state (id, dirty_at, last_run_at)
+VALUES (1, NULL, NULL)
+ON CONFLICT (id) DO NOTHING;
+
 -- Create indexes for better performance
 CREATE INDEX idx_ingredients_parent_id ON ingredients(parent_id);
 CREATE INDEX idx_ingredients_path ON ingredients(path);
@@ -146,7 +156,54 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Function to mark analytics refresh state as dirty
+CREATE OR REPLACE FUNCTION mark_analytics_dirty()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE analytics_refresh_state
+  SET dirty_at = CURRENT_TIMESTAMP
+  WHERE id = 1;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Create Triggers
+
+-- Analytics refresh triggers
+CREATE TRIGGER analytics_recipes_dirty
+AFTER INSERT OR UPDATE OR DELETE ON recipes
+FOR EACH STATEMENT
+EXECUTE FUNCTION mark_analytics_dirty();
+
+CREATE TRIGGER analytics_ingredients_dirty
+AFTER INSERT OR UPDATE OR DELETE ON ingredients
+FOR EACH STATEMENT
+EXECUTE FUNCTION mark_analytics_dirty();
+
+CREATE TRIGGER analytics_recipe_ingredients_dirty
+AFTER INSERT OR UPDATE OR DELETE ON recipe_ingredients
+FOR EACH STATEMENT
+EXECUTE FUNCTION mark_analytics_dirty();
+
+CREATE TRIGGER analytics_units_dirty
+AFTER INSERT OR UPDATE OR DELETE ON units
+FOR EACH STATEMENT
+EXECUTE FUNCTION mark_analytics_dirty();
+
+CREATE TRIGGER analytics_ratings_dirty
+AFTER INSERT OR UPDATE OR DELETE ON ratings
+FOR EACH STATEMENT
+EXECUTE FUNCTION mark_analytics_dirty();
+
+CREATE TRIGGER analytics_tags_dirty
+AFTER INSERT OR UPDATE OR DELETE ON tags
+FOR EACH STATEMENT
+EXECUTE FUNCTION mark_analytics_dirty();
+
+CREATE TRIGGER analytics_recipe_tags_dirty
+AFTER INSERT OR UPDATE OR DELETE ON recipe_tags
+FOR EACH STATEMENT
+EXECUTE FUNCTION mark_analytics_dirty();
 
 -- Trigger to update average rating when a new rating is added
 CREATE TRIGGER update_avg_rating_insert
