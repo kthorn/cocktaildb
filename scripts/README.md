@@ -1,26 +1,26 @@
 # Deployment Scripts
 
-This directory contains scripts for deploying the Cocktail Database application.
+This directory contains scripts for configuring and deploying CocktailDB.
 
 ## Files
 
-- `deploy.bat` - Main deployment script for Windows
-- `generate_config.py` - Python script for generating config.js from CloudFormation outputs
+- `deploy-ec2.sh` - EC2 deployment wrapper (Ansible-based)
+- `generate_config.py` - Generates `src/web/js/config.js` from CloudFormation outputs
 - `requirements.txt` - Python dependencies for the generate_config.py script
 
 ## Usage
 
-### Deploy Script
+### Deploy Script (EC2)
 
 ```bash
 # Deploy to dev environment
-scripts/deploy.bat dev
+./scripts/deploy-ec2.sh dev
 
 # Deploy to prod environment
-scripts/deploy.bat prod
+./scripts/deploy-ec2.sh prod
 
-# Deploy without rebuilding (useful for testing)
-scripts/deploy.bat dev --no-build
+# Provision + deploy
+./scripts/deploy-ec2.sh --provision
 ```
 
 ### Config Generation Script

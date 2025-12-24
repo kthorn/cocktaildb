@@ -1,6 +1,6 @@
 # CocktailDB
 
-A serverless cocktail database application with SQLite on AWS Lambda.
+A cocktail database application hosted on EC2 with FastAPI and PostgreSQL.
 
 ## Monorepo Structure
 
@@ -8,43 +8,23 @@ This repository contains multiple packages:
 
 - **`packages/barcart/`** - Cocktail analytics algorithms (recipe similarity, ingredient distance metrics)
   - Install: `pip install -e packages/barcart`
-  - Used by analytics Lambda and local analysis scripts
+  - Used by analytics jobs and local analysis scripts
   - Independent package with own tests and documentation
 
 See individual package READMEs for details.
 
-## Database Architecture
-
-This project uses a SQLite database stored on an Amazon EFS volume that is mounted to Lambda functions. The database is automatically created and initialized during stack deployment.
-
-### Database Initialization Process
-
-1. During deployment, the CloudFormation stack creates an EFS file system that will store the SQLite database
-2. The `SchemaDeployFunction` Lambda:
-   - Writes the schema.sql file to the EFS volume
-   - Creates a new SQLite database on the EFS volume
-   - Runs the SQL statements to initialize the database schema
-3. The `DBInitLambda` function is provided as a utility to manually reinitialize the database if needed
-
-### Database Access
-
-The main `CocktailLambda` function handles API requests and interacts with the SQLite database on the EFS volume.
-
-
 ## Architecture
 
 This project uses the following AWS services:
-- Amazon Aurora PostgreSQL (Serverless v2) for the database
-- AWS Lambda for serverless backend logic
-- Amazon API Gateway for REST API
-- Amazon S3 for static website hosting and image storage
-- Amazon CloudFront for content delivery
-- AWS Secrets Manager for database credentials
+- Amazon EC2 for the FastAPI backend
+- PostgreSQL for the database
+- Amazon Cognito for authentication
+- Amazon S3 for analytics and backup storage
+- AWS IAM for instance roles and access control
 
 ## Prerequisites
 
 - AWS CLI installed and configured with appropriate credentials
-- AWS SAM CLI installed (https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
 - Python 3.9 or later
 - boto3 Python package (`pip install boto3`)
 

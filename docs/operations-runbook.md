@@ -271,7 +271,7 @@ ssh ec2-user@$COCKTAILDB_HOST "sudo -u postgres psql cocktaildb -c 'SELECT COUNT
 ### Trigger Analytics Refresh
 
 ```bash
-./scripts/trigger-analytics-refresh.sh dev
+./infrastructure/scripts/trigger-analytics.sh dev
 # or manually on EC2:
 ssh ec2-user@$COCKTAILDB_HOST "/opt/cocktaildb/scripts/trigger-analytics.sh"
 ```

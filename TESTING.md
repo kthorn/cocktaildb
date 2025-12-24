@@ -119,7 +119,7 @@ aws s3 cp s3://$BACKUP_BUCKET/backup-YYYY-MM-DD_HH-MM-SS.db tests/fixtures/test_
 
 ```bash
 # Apply schema to create empty test database
-./scripts/apply-migration.sh -f schema-deploy/schema.sql -e test --force-init
+./infrastructure/scripts/run-migrations.sh -f schema-deploy/schema.sql -e test --force-init
 
 # Copy schema-only database to fixtures
 cp /path/to/test/cocktaildb.db tests/fixtures/test_cocktaildb.db

@@ -9,12 +9,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Scripts
 
-- **Unix migration script**: `./scripts/apply-migration.sh -f path/to/migration.sql -e dev`
-- **Unix force reinit**: `./scripts/apply-migration.sh -f schema.sql -e dev --force-init`
+- **Unix migration script**: `./infrastructure/scripts/run-migrations.sh -f path/to/migration.sql -e dev`
+- **Unix force reinit**: `./infrastructure/scripts/run-migrations.sh -f schema.sql -e dev --force-init`
   ⚠️ **Warning:** This operation will delete and recreate the existing database. All current data will be lost!
 
 ### Analytics Operations
-- **Trigger analytics refresh**: `./scripts/trigger-analytics-refresh.sh [dev|prod]`
+- **Trigger analytics refresh**: `./infrastructure/scripts/trigger-analytics.sh [dev|prod]`
 - **View analytics**: GET `/api/v1/analytics/ingredient-usage` and `/api/v1/analytics/recipe-complexity`
 - Analytics automatically refresh after recipe/ingredient mutations
 
@@ -148,7 +148,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Endpoints**:
   - GET `/api/v1/analytics/ingredient-usage?level={N}&parent_id={id}` - hierarchical ingredient usage stats
   - GET `/api/v1/analytics/recipe-complexity` - recipe complexity distribution
-- **Manual Refresh**: `./scripts/trigger-analytics-refresh.sh [dev|prod]`
+- **Manual Refresh**: `./infrastructure/scripts/trigger-analytics.sh [dev|prod]`
 - **Caching Strategy**: S3-first retrieval with graceful fallback to on-the-fly computation
 
 ## Database Schema Patterns
