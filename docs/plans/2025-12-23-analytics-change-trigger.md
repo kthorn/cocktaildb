@@ -99,7 +99,7 @@ DB mutation (recipes/ingredients/recipe_ingredients/units/ratings/tags/recipe_ta
    - If migrations are applied manually today, document the exact command(s)
      to run against the live Postgres instance.
    - Replace the old Lambda-based migration runner with a server-based runner:
-     - Add a CLI script (e.g., `scripts/run-migrations.sh`) that executes
+     - Add a CLI script (e.g., `infrastructure/scripts/run-migrations.sh`) that executes
        pending SQL files in `migrations/` using `psql` and a tracked
        `schema_migrations` table.
      - Wire the runner into the EC2 deployment workflow (Ansible task) so

@@ -176,6 +176,24 @@ aws ec2-instance-connect send-ssh-public-key --instance-id $INSTANCE_ID --instan
 ssh -i ~/.ssh/id_ed25519 ec2-user@dev.mixology.tools
 ```
 
+### Run Database Migrations
+
+Run the deploy playbook first so `/opt/cocktaildb` ownership and scripts are set:
+
+```bash
+COCKTAILDB_DB_PASSWORD="<your-password>" ansible-playbook -i inventory/dev.yml playbooks/deploy.yml
+```
+
+Then run migrations from your local machine:
+
+```bash
+COCKTAILDB_SSH_KEY=~/.ssh/cocktaildb-ec2.pem scripts/run-remote-migrations.sh dev
+```
+
+By default, the script uploads the most recent local migration from `migrations/`.
+To target a specific file, set `COCKTAILDB_MIGRATION_FILE=/path/to/migration.sql`.
+The upload happens via `/tmp` and then moves into `/opt/cocktaildb/migrations` with sudo.
+
 ### View Logs
 
 After SSH key is pushed (see SSH Access above):
