@@ -1,6 +1,6 @@
 import datetime
 import os
-import sqlite3
+import subprocess
 
 from db.database import get_database
 from db.db_core import Database
@@ -40,39 +40,59 @@ async def download_database(
     db: Database = Depends(get_database),
 ):
     """
-    Download a backup copy of the SQLite database.
-    Uses SQLite's backup API for a consistent snapshot.
+    Download a backup copy of the PostgreSQL database.
+    Uses pg_dump for a consistent snapshot.
     Requires authentication.
     """
     try:
-        # Create a temporary file for the backup
         # Generate backup filename
         timestamp = datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y-%m-%d_%H-%M-%S"
         )
-        backup_filename = f"backup-{timestamp}.db"
-        temp_backup_path = f"/tmp/{backup_filename}"  # Use Lambda's /tmp space
+        backup_filename = f"backup-{timestamp}.sql"
+        temp_backup_path = f"/tmp/{backup_filename}"
 
         try:
-            source_db_path = db.db_path
-            source_conn = sqlite3.connect(f"file:{source_db_path}?mode=ro", uri=True)
-            backup_conn = sqlite3.connect(temp_backup_path)
+            # Get connection parameters from database instance
+            conn_params = db.conn_params
 
-            try:
-                # Perform the backup using SQLite's backup API
-                source_conn.backup(backup_conn)
+            # Set PGPASSWORD environment variable for pg_dump
+            env = os.environ.copy()
+            env['PGPASSWORD'] = conn_params.get('password', '')
 
-            finally:
-                source_conn.close()
-                backup_conn.close()
+            # Run pg_dump to create backup
+            result = subprocess.run(
+                [
+                    'pg_dump',
+                    '-h', conn_params.get('host', 'localhost'),
+                    '-p', str(conn_params.get('port', '5432')),
+                    '-U', conn_params.get('user', 'cocktaildb'),
+                    '-d', conn_params.get('dbname', 'cocktaildb'),
+                    '-f', temp_backup_path,
+                    '--no-owner',
+                    '--no-acl',
+                ],
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=300,  # 5 minute timeout
+            )
+
+            if result.returncode != 0:
+                raise Exception(f"pg_dump failed: {result.stderr}")
 
             # Return the file as a download with automatic cleanup after sending
             return CleanupFileResponse(
                 path=temp_backup_path,
-                media_type="application/octet-stream",
+                media_type="application/sql",
                 filename=backup_filename,
                 cleanup_path=temp_backup_path,
             )
+
+        except subprocess.TimeoutExpired:
+            if os.path.exists(temp_backup_path):
+                os.unlink(temp_backup_path)
+            raise Exception("Database backup timed out")
 
         except Exception:
             # Clean up temp file only if backup failed

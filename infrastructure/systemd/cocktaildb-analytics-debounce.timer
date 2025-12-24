@@ -1,0 +1,9 @@
+[Unit]
+Description=Run CocktailDB Analytics Debounce Check Every Minute
+
+[Timer]
+OnUnitActiveSec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target

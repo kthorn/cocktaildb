@@ -56,7 +56,7 @@ class AnalyticsQueries:
                 SELECT COUNT(DISTINCT ri2.recipe_id)
                 FROM recipe_ingredients ri2
                 INNER JOIN ingredients i2 ON ri2.ingredient_id = i2.id
-                WHERE i2.path LIKE i.path || '%'
+                WHERE STARTS_WITH(i2.path, i.path)
               ) as hierarchical_usage,
               EXISTS(SELECT 1 FROM ingredients WHERE parent_id = i.id) as has_children
             FROM ingredients i
@@ -244,7 +244,7 @@ class AnalyticsQueries:
 
             # Query ingredients for all recipes in one go
             if recipe_ids:
-                placeholders = ",".join(["?"] * len(recipe_ids))
+                placeholders = ",".join(["%s"] * len(recipe_ids))
                 ingredient_query = f"""
                     SELECT
                         ri.recipe_id,
@@ -554,7 +554,7 @@ class AnalyticsQueries:
 
             # Step 9: Query ingredients for all recipes in one go
             if recipe_ids:
-                placeholders = ','.join(['?'] * len(recipe_ids))
+                placeholders = ','.join(['%s'] * len(recipe_ids))
                 ingredient_query = f"""
                     SELECT
                         ri.recipe_id,

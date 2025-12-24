@@ -1,0 +1,14 @@
+# infrastructure/systemd/cocktaildb-analytics.timer
+[Unit]
+Description=Run CocktailDB Analytics Refresh Daily
+
+[Timer]
+# Run at 4 AM UTC daily
+OnCalendar=*-*-* 04:00:00
+# Also run on boot if last run was missed
+Persistent=true
+# Randomize start time by up to 30 minutes to avoid thundering herd
+RandomizedDelaySec=1800
+
+[Install]
+WantedBy=timers.target

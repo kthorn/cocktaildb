@@ -1,0 +1,17 @@
+# docker-compose.prod.yml
+# Production overrides for CocktailDB
+
+services:
+  api:
+    image: cocktaildb-api:latest
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M

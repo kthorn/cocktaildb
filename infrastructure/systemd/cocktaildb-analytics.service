@@ -1,0 +1,28 @@
+# infrastructure/systemd/cocktaildb-analytics.service
+[Unit]
+Description=CocktailDB Analytics Refresh
+After=network.target postgresql.service docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+User=cocktaildb
+Group=cocktaildb
+WorkingDirectory=/opt/cocktaildb
+
+# Load environment variables
+EnvironmentFile=/opt/cocktaildb/.env
+
+# Run analytics refresh in Docker container
+ExecStart=/usr/bin/docker compose run --rm api python -m analytics.analytics_refresh
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cocktaildb-analytics
+
+# Timeout (1 hour max for complex analytics)
+TimeoutStartSec=3600
+
+# Don't restart on failure (it's a one-shot job)
+Restart=no

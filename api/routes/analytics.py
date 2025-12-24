@@ -51,7 +51,8 @@ async def get_ingredient_usage_analytics(
         # For hierarchical drill-down, compute on-the-fly
         else:
             analytics_queries = AnalyticsQueries(db)
-            result = analytics_queries.get_ingredient_usage_stats(level=level, parent_id=parent_id)
+            # Note: level filtering happens at API level, function only supports parent_id
+            result = analytics_queries.get_ingredient_usage_stats(parent_id=parent_id)
 
             # Return in same format as cached data
             return {

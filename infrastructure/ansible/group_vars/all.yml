@@ -1,0 +1,27 @@
+# infrastructure/ansible/group_vars/all.yml
+---
+# Application settings
+app_name: cocktaildb
+app_user: cocktaildb
+app_group: cocktaildb
+app_home: /opt/cocktaildb
+
+# Database settings
+db_name: cocktaildb
+db_user: cocktaildb
+db_password: "{{ lookup('env', 'COCKTAILDB_DB_PASSWORD') | default('changeme', true) }}"
+
+# Docker settings
+docker_compose_version: "2.24.0"
+
+# AWS region
+aws_region: us-east-1
+
+# The following are typically set in inventory files (dev.yml, prod.yml):
+# - domain_name
+# - app_env
+# - user_pool_id
+# - app_client_id
+# - cognito_domain
+# - analytics_bucket
+# - backup_bucket

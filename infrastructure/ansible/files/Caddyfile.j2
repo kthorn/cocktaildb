@@ -1,0 +1,80 @@
+# Caddyfile.j2 - Caddy configuration template for CocktailDB
+
+{
+    email {$ACME_EMAIL:{{ acme_email }}}
+    admin off
+}
+
+{$DOMAIN_NAME:{{ domain_name }}} {
+    # API proxy - forward /api/v1/* requests to FastAPI, stripping /api/v1 prefix
+    handle /api/v1/* {
+        uri strip_prefix /api/v1
+        reverse_proxy localhost:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    # Legacy /api/* support (without v1) - strip only /api
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy localhost:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    handle /health {
+        reverse_proxy localhost:8000
+    }
+
+    handle {
+        root * {{ web_root }}
+        file_server
+        try_files {path} /index.html
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+        format json
+    }
+}
+
+:80 {
+    @notLocalhost {
+        not remote_ip 127.0.0.1
+    }
+    redir @notLocalhost https://{host}{uri} permanent
+
+    handle /api/v1/* {
+        uri strip_prefix /api/v1
+        reverse_proxy localhost:8000
+    }
+
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy localhost:8000
+    }
+
+    handle /health {
+        reverse_proxy localhost:8000
+    }
+
+    handle {
+        root * {{ web_root }}
+        file_server
+        try_files {path} /index.html
+    }
+}

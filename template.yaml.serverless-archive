@@ -1,0 +1,1741 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Cocktail Database Infrastructure (Supports Dev/Prod Environments)
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: The deployment environment (dev or prod).
+  DatabaseName:
+    Type: String
+    Default: "cocktaildb-dev"
+  CognitoAdvancedSecurity:
+    Type: String
+    Default: "OFF" # Consider making this conditional: "ENFORCED" for prod, "OFF" for dev
+  UserPoolName:
+    Type: String
+    Default: "CocktailDB-UserPool-dev"
+  DomainName:
+    Type: String
+    Default: mixology.tools
+    Description: Custom domain name for production (e.g., mixology.tools). Not used for dev.
+  HostedZoneId:
+    Type: String
+    Description: ID of the existing Route 53 hosted zone for your production domain (without /hostedzone/ prefix). Required if Environment is prod.
+  AuthSubdomain:
+    Type: String
+    Default: auth
+    Description: Subdomain for Cognito authentication (e.g., 'auth' creates auth.mixology.tools)
+  AuthCertificateArn:
+    Type: String
+    Default: ""
+    Description: ARN of the ACM certificate for the auth subdomain (must be in us-east-1). Required if Environment is prod.
+  GoogleClientId:
+    Type: String
+    Default: ""
+    Description: Google OAuth Client ID for social login (optional)
+  GoogleClientSecret:
+    Type: String
+    Default: ""
+    Description: Google OAuth Client Secret for social login (optional)
+    NoEcho: true
+  AmazonClientId:
+    Type: String
+    Default: ""
+    Description: Amazon Client ID for Login with Amazon (optional)
+  AmazonClientSecret:
+    Type: String
+    Default: ""
+    Description: Amazon Client Secret for Login with Amazon (optional)
+    NoEcho: true
+
+Globals:
+  Function:
+    Timeout: 65
+    MemorySize: 1536
+
+Conditions:
+  IsProdEnvironment: !Equals [!Ref Environment, "prod"]
+  HasGoogleOAuth: !Not [!Equals [!Ref GoogleClientId, ""]]
+  HasAmazonOAuth: !Not [!Equals [!Ref AmazonClientId, ""]]
+  HasAuthCertificate: !Not [!Equals [!Ref AuthCertificateArn, ""]]
+
+Resources:
+  # VPC and Network Configuration
+  CocktailVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-vpc
+
+  # Private subnet in AZ-0 for Lambda functions and EFS mount target
+  # This ensures AZ-affinity: Lambda functions and EFS mount target are in the same AZ
+  # preventing cross-AZ latency and potential ENOENT errors
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CocktailVPC
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      CidrBlock: 10.0.1.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-private-subnet-1
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref CocktailVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-private-route-table
+
+  # --- Add S3 Gateway VPC Endpoint ---
+  S3VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3 # S3 service endpoint
+      RouteTableIds:
+        - !Ref PrivateRouteTable
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ApplicationBucketAccess
+            Effect: "Allow"
+            Principal: "*"
+            Action:
+              - "s3:GetObject"
+              - "s3:PutObject"
+              - "s3:ListBucket"
+              - "s3:DeleteObject"
+            Resource:
+              - !Sub "arn:aws:s3:::cocktailwebsite-${AWS::AccountId}-${Environment}"
+              - !Sub "arn:aws:s3:::cocktailwebsite-${AWS::AccountId}-${Environment}/*"
+              - !Sub "arn:aws:s3:::cocktailanalytics-${AWS::AccountId}-${Environment}"
+              - !Sub "arn:aws:s3:::cocktailanalytics-${AWS::AccountId}-${Environment}/*"
+              - !Sub "arn:aws:s3:::cocktailcflogs-${AWS::AccountId}-${Environment}"
+              - !Sub "arn:aws:s3:::cocktailcflogs-${AWS::AccountId}-${Environment}/*"
+              - !If
+                - IsProdEnvironment
+                - !Sub "arn:aws:s3:::cocktaildbbackups-${AWS::AccountId}-${Environment}"
+                - !Ref "AWS::NoValue"
+              - !If
+                - IsProdEnvironment
+                - !Sub "arn:aws:s3:::cocktaildbbackups-${AWS::AccountId}-${Environment}/*"
+                - !Ref "AWS::NoValue"
+          # ECR stores image layers in AWS-managed S3 buckets
+          # Required for Fargate to pull container images via VPC endpoint
+          - Sid: ECRLayerAccess
+            Effect: "Allow"
+            Principal: "*"
+            Action:
+              - "s3:GetObject"
+            Resource:
+              - "arn:aws:s3:::prod-*-starport-layer-bucket/*"
+  # ------------------------------------
+
+  # EFS VPC Endpoint for Lambda-to-EFS API communication
+  EFSVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.elasticfilesystem
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref EFSVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: "*"
+            Action:
+              - "elasticfilesystem:ClientMount"
+              - "elasticfilesystem:ClientWrite"
+              - "elasticfilesystem:ClientRootAccess"
+              - "elasticfilesystem:DescribeMountTargets"
+            Resource: "*"
+
+  # Security Group for EFS VPC Endpoint
+  EFSVPCEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EFS VPC Endpoint
+      VpcId: !Ref CocktailVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+
+  # Lambda VPC Endpoint for Lambda-to-Lambda API communication
+  # This allows Lambdas in the VPC to invoke other Lambda functions
+  # without requiring a NAT Gateway (saves ~$32/month)
+  LambdaVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.lambda
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref LambdaSecurityGroup
+      PrivateDnsEnabled: true
+
+  # Security Group for Fargate VPC Endpoints
+  BatchVPCEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Fargate VPC Endpoints (ECR, Logs, STS)
+      VpcId: !Ref CocktailVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref BatchSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-fargate-vpc-endpoint-sg
+
+  # ECR API VPC Endpoint for Docker image metadata
+  ECRAPIVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecr.api
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref BatchVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+  # ECR Docker VPC Endpoint for pulling Docker images
+  ECRDKRVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecr.dkr
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref BatchVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+  # CloudWatch Logs VPC Endpoint for Fargate logging
+  LogsVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.logs
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref BatchVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+  # STS VPC Endpoint for Fargate task role credentials
+  STSVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CocktailVPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.sts
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref BatchVPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+  # EFS File System
+  CocktailEFS:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      PerformanceMode: generalPurpose
+      Encrypted: true # Consider making this conditional if dev doesn't need encryption
+      LifecyclePolicies:
+        - TransitionToIA: AFTER_7_DAYS
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-efs
+
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+
+
+  # Security Groups for Lambda and EFS
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda functions
+      VpcId: !Ref CocktailVPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          DestinationSecurityGroupId: !Ref EFSSecurityGroup
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 10.0.0.2/32
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 10.0.0.2/32
+
+  EFSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EFS
+      VpcId: !Ref CocktailVPC
+
+  # Security group for Fargate tasks
+  BatchSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Fargate tasks
+      VpcId: !Ref CocktailVPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          DestinationSecurityGroupId: !Ref EFSSecurityGroup
+
+  # Security Group Rules (separated to avoid circular dependencies)
+  LambdaIngressHTTPS:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref LambdaSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: !GetAtt CocktailVPC.CidrBlock
+
+  EFSIngressFromLambda:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EFSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      SourceSecurityGroupId: !Ref LambdaSecurityGroup
+
+  # EFS Mount Target in private subnet for security and AZ-affinity
+  # Single mount target ensures Lambda functions access EFS from the same AZ
+  # avoiding cross-AZ latency and potential ENOENT errors
+  MountTarget:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref CocktailEFS
+      SubnetId: !Ref PrivateSubnet
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+
+  # EFS Access Point
+  EFSAccessPoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref CocktailEFS
+      PosixUser:
+        Uid: "1000"
+        Gid: "1000"
+      RootDirectory:
+        Path: "/lambda"
+        CreationInfo:
+          OwnerUid: "1000"
+          OwnerGid: "1000"
+          Permissions: "0755"
+
+  # S3 bucket for database backups (prod only)
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    Condition: IsProdEnvironment
+    Properties:
+      BucketName: !Sub "cocktaildbbackups-${AWS::AccountId}-${Environment}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+      LifecycleConfiguration: 
+        Rules:
+          - Id: ExpireOldBackups
+            Status: Enabled
+            ExpirationInDays: 30
+
+  # S3 bucket for pre-generated analytics
+  AnalyticsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "cocktailanalytics-${AWS::AccountId}-${Environment}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldAnalytics
+            Status: Enabled
+            ExpirationInDays: 7
+
+  # S3 bucket for CloudFront access logs
+  CloudFrontLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "cocktailcflogs-${AWS::AccountId}-${Environment}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldLogs
+            Status: Enabled
+            ExpirationInDays: 90  # Keep logs for 90 days
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA  # Move to cheaper storage after 30 days
+
+  # S3 bucket for website hosting
+  WebsiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "cocktailwebsite-${AWS::AccountId}-${Environment}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+              - HEAD
+            AllowedOrigins:
+              - '*'
+            MaxAge: 3600
+
+  # SSL Certificate for CloudFront
+  CloudFrontCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: IsProdEnvironment
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+      # Certificate must be in us-east-1 for CloudFront
+
+  # SSL Certificate for Cognito Auth Subdomain (must be in us-east-1)
+  AuthCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: IsProdEnvironment
+    Properties:
+      DomainName: !Sub "${AuthSubdomain}.${DomainName}"
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Sub "${AuthSubdomain}.${DomainName}"
+          HostedZoneId: !Ref HostedZoneId
+      # Certificate must be in us-east-1 for Cognito custom domains
+
+  # Route 53 Record Set for CloudFront
+  DomainRecordSet:
+    Type: AWS::Route53::RecordSet
+    Condition: IsProdEnvironment
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2 # CloudFront hosted zone ID (static value)
+        EvaluateTargetHealth: false
+
+  # Route 53 Record Set for Auth Subdomain
+  AuthDomainRecordSet:
+    Type: AWS::Route53::RecordSet
+    Condition: IsProdEnvironment
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub "${AuthSubdomain}.${DomainName}"
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CognitoDomainV3.CloudFrontDistribution
+        HostedZoneId: Z2FDTNDATAQYW2 # CloudFront hosted zone ID (static value for Cognito)
+        EvaluateTargetHealth: false
+
+  # CloudFront Origin Access Control
+  CloudFrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub ${AWS::StackName}-oac-${AWS::Region}
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # CloudFront Distribution
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        Aliases: !If [IsProdEnvironment, [!Ref DomainName], !Ref "AWS::NoValue"]
+        ViewerCertificate: !If
+          - IsProdEnvironment
+          - AcmCertificateArn: !Ref CloudFrontCertificate
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true # Use default CF cert for dev
+        Logging:
+          Bucket: !GetAtt CloudFrontLogsBucket.DomainName
+          IncludeCookies: false
+          Prefix: !Sub "cloudfront-logs/${Environment}/"
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt WebsiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt CloudFrontOAC.Id
+            S3OriginConfig: {}
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
+          OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf # Managed-CORS-S3Origin
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 404
+            ResponsePagePath: /error.html
+          - ErrorCode: 404
+            ResponseCode: 404
+            ResponsePagePath: /error.html
+
+  # Bucket policy to allow CloudFront access using custom resource to avoid circular dependency
+  WebsiteBucketPolicyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.11
+      Handler: index.handler
+      InlineCode: |
+        import boto3
+        import cfnresponse
+        import json
+
+        def handler(event, context):
+            try:
+                if event['RequestType'] in ['Create', 'Update']:
+                    bucket_name = event['ResourceProperties']['BucketName']
+                    distribution_id = event['ResourceProperties']['DistributionId']
+                    account_id = event['ResourceProperties']['AccountId']
+
+                    policy = {
+                        'Version': '2012-10-17',
+                        'Statement': [{
+                            'Effect': 'Allow',
+                            'Principal': {'Service': 'cloudfront.amazonaws.com'},
+                            'Action': 's3:GetObject',
+                            'Resource': f'arn:aws:s3:::{bucket_name}/*',
+                            'Condition': {
+                                'StringEquals': {
+                                    'AWS:SourceArn': f'arn:aws:cloudfront::{account_id}:distribution/{distribution_id}'
+                                }
+                            }
+                        }]
+                    }
+
+                    s3 = boto3.client('s3')
+                    s3.put_bucket_policy(
+                        Bucket=bucket_name,
+                        Policy=json.dumps(policy)
+                    )
+
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+            except Exception as e:
+                print(f"Error: {str(e)}")
+                cfnresponse.send(event, context, cfnresponse.FAILED, {})
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutBucketPolicy
+              Resource: !Sub arn:aws:s3:::${WebsiteBucket}
+
+  # Bucket policy custom resource
+  BucketPolicyResource:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt WebsiteBucketPolicyFunction.Arn
+      BucketName: !Ref WebsiteBucket
+      DistributionId: !Ref CloudFrontDistribution
+      AccountId: !Ref AWS::AccountId
+
+  # Lambda for API Backend
+  CocktailLambda:
+    Type: AWS::Serverless::Function
+    DependsOn:
+      - MountTarget
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-api-handler
+      CodeUri: api/
+      Handler: main.handler
+      Runtime: python3.12
+      Timeout: 60
+      Environment:
+        Variables:
+          DB_NAME: !Ref DatabaseName
+          USER_POOL_ID: !Ref CognitoUserPoolV3
+          APP_CLIENT_ID: !Ref CognitoUserPoolV3Client
+          ENVIRONMENT: !Ref Environment
+          DB_PATH: !Sub /mnt/efs/${DatabaseName}.db
+          ANALYTICS_BUCKET: !Ref AnalyticsBucket
+          ANALYTICS_TRIGGER_FUNCTION: !Ref AnalyticsTriggerFunction
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet
+      FileSystemConfigs:
+        - Arn: !GetAtt EFSAccessPoint.Arn
+          LocalMountPath: /mnt/efs
+      Policies:
+        - VPCAccessPolicy: {}
+        - Statement:
+            - Sid: AWSLambdaVPCAccessExecutionRole
+              Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - ec2:CreateNetworkInterface
+                - ec2:DescribeNetworkInterfaces
+                - ec2:DeleteNetworkInterface
+                - ec2:DescribeVpcEndpoints
+                - ec2:DescribeSecurityGroups
+                - ec2:DescribeSubnets
+              Resource: "*"
+            - Sid: AmazonElasticFileSystemClientFullAccess
+              Effect: Allow
+              Action:
+                - elasticfilesystem:ClientMount
+                - elasticfilesystem:ClientWrite
+                - elasticfilesystem:ClientRootAccess
+                - elasticfilesystem:DescribeMountTargets
+              Resource: "*"
+            - Sid: AnalyticsBucketAccess
+              Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+                - s3:ListBucket
+              Resource:
+                - !Sub "arn:aws:s3:::${AnalyticsBucket}"
+                - !Sub "arn:aws:s3:::${AnalyticsBucket}/*"
+            - Sid: AnalyticsTriggerFunctionInvoke
+              Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: !GetAtt AnalyticsTriggerFunction.Arn
+      Events:
+        GetIngredients:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ingredients
+            Method: get
+        PostIngredient:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ingredients
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+        PutIngredient:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ingredients/{ingredientId}
+            Method: put
+            Auth:
+              Authorizer: CognitoAuthorizer
+        DeleteIngredient:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ingredients/{ingredientId}
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
+        GetIngredientItem:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ingredients/{ingredientId}
+            Method: get
+        BulkUploadIngredients:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ingredients/bulk
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+        SearchRecipes:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/search
+            Method: get
+        SearchRecipesAuthenticated:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/search/authenticated
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+        PostRecipe:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+        BulkUploadRecipes:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/bulk
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+        PutRecipe:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}
+            Method: put
+            Auth:
+              Authorizer: CognitoAuthorizer
+        DeleteRecipe:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
+        GetUnits:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /units
+            Method: get
+        PostUnit:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /units
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+        PutUnit:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /units/{unitId}
+            Method: put
+            Auth:
+              Authorizer: CognitoAuthorizer
+        DeleteUnit:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /units/{unitId}
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
+        # Auth test endpoint
+        GetAuth:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /auth
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+        GetRecipeItem:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}
+            Method: get
+        # Rating endpoints
+        GetRatings:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ratings/{recipeId}
+            Method: get
+        PostRating:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /ratings/{recipeId}
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+        # --- START Tag Endpoints ---
+        GetPublicTags:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /tags/public
+            Method: get
+        PostPublicTag:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /tags/public
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+        GetPrivateTags:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /tags/private
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+        PostPrivateTag:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /tags/private
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+        DeletePublicTag:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /tags/public/{tagId}
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
+        DeletePrivateTag:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /tags/private/{tagId}
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
+        SearchTags:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /tags/search
+            Method: get
+
+        PostRecipePublicTag:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}/public_tags
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+        DeleteRecipePublicTag:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}/public_tags/{tagId}
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
+            
+        PostRecipePrivateTag:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}/private_tags
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+        DeleteRecipePrivateTag:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /recipes/{recipeId}/private_tags/{tagId}
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
+        # --- END Tag Endpoints ---
+        
+        # --- User Ingredients Endpoints ---
+        GetUserIngredients:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /user-ingredients
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+        PostUserIngredient:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /user-ingredients
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+        DeleteUserIngredient:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /user-ingredients/{ingredientId}
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
+        BulkAddUserIngredients:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /user-ingredients/bulk
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+        BulkDeleteUserIngredients:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /user-ingredients/bulk
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
+        GetUserIngredientRecommendations:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /user-ingredients/recommendations
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+        # --- END User Ingredients Endpoints ---
+
+        # --- Stats Endpoints ---
+        GetStats:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /stats
+            Method: get
+        # --- END Stats Endpoints ---
+
+        # --- Analytics Endpoints ---
+        GetIngredientUsageAnalytics:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /analytics/ingredient-usage
+            Method: get
+        GetRecipeComplexityAnalytics:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /analytics/recipe-complexity
+            Method: get
+        GetCocktailSpaceAnalytics:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /analytics/cocktail-space
+            Method: get
+        GetCocktailSpaceEmAnalytics:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /analytics/cocktail-space-em
+            Method: get
+        GetIngredientTreeAnalytics:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /analytics/ingredient-tree
+            Method: get
+        # --- END Analytics Endpoints ---
+
+        # --- Admin Endpoints ---
+        GetAdminDatabaseDownload:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /admin/database/download
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+        # FastAPI Built-in Endpoints
+        GetOpenApiJson:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CocktailAPI
+            Path: /openapi.json
+            Method: get
+
+  # Custom resource to create sqlite db on EFS
+  SchemaDeployFunction:
+    Type: AWS::Serverless::Function
+    DependsOn:
+      - MountTarget
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-schema-deploy
+      CodeUri: schema-deploy/
+      Handler: deploy.lambda_handler
+      Runtime: python3.12
+      Timeout: 60
+      Environment:
+        Variables:
+          DB_NAME: !Ref DatabaseName
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet
+      FileSystemConfigs:
+        - Arn: !GetAtt EFSAccessPoint.Arn
+          LocalMountPath: /mnt/efs
+      Policies:
+        - VPCAccessPolicy: {}
+        - Statement:
+            - Effect: Allow
+              Action:
+                - elasticfilesystem:ClientMount
+                - elasticfilesystem:ClientWrite
+                - elasticfilesystem:ClientRootAccess
+              Resource: !GetAtt CocktailEFS.Arn
+
+  # ECR Repository for Analytics Lambda Docker Image
+  AnalyticsECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${AWS::StackName}-analytics
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Expire untagged images immediately",
+                "selection": {
+                  "tagStatus": "untagged",
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": 1
+                },
+                "action": {
+                  "type": "expire"
+                }
+              },
+              {
+                "rulePriority": 2,
+                "description": "Keep only the latest tagged image",
+                "selection": {
+                  "tagStatus": "tagged",
+                  "tagPrefixList": ["latest"],
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 1
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+
+  # Cognito User Pool for Authentication
+  CognitoUserPoolV3:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Ref UserPoolName # This now uses the environment-specific default
+      AliasAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      MfaConfiguration: "OFF"
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: false
+          RequireNumbers: false
+          RequireSymbols: false
+          RequireUppercase: false
+      UserPoolAddOns:
+        AdvancedSecurityMode: !Ref CognitoAdvancedSecurity # Use parameter
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+        - Name: preferred_username
+          AttributeDataType: String
+          Required: false
+          Mutable: false
+
+  # Cognito User Pool Client
+  CognitoUserPoolV3Client:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref CognitoUserPoolV3
+      ClientName: !Sub cocktaildb-client-${Environment}
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_PASSWORD_AUTH
+      PreventUserExistenceErrors: ENABLED
+      SupportedIdentityProviders:
+        - COGNITO
+      # Token validity configuration - controls session duration
+      AccessTokenValidity: 4  # 4 hours
+      IdTokenValidity: 4      # 4 hours
+      RefreshTokenValidity: 30 # 30 days (default)
+      TokenValidityUnits:
+        AccessToken: hours
+        IdToken: hours
+        RefreshToken: days
+      CallbackURLs: !If
+        - IsProdEnvironment
+        - - !Sub "https://${DomainName}/callback.html"
+          - !Sub "https://${DomainName}/login.html" # Assuming a login redirect page
+        - - !Sub "https://${CloudFrontDistribution.DomainName}/callback.html"
+          - !Sub "https://${CloudFrontDistribution.DomainName}/login.html"
+      LogoutURLs: !If
+        - IsProdEnvironment
+        - - !Sub "https://${DomainName}/logout.html"
+        - - !Sub "https://${CloudFrontDistribution.DomainName}/logout.html"
+      AllowedOAuthFlows:
+        - code
+        - implicit
+      AllowedOAuthScopes:
+        - phone
+        - email
+        - openid
+        - profile
+      AllowedOAuthFlowsUserPoolClient: true
+      WriteAttributes:
+        - email
+      ReadAttributes:
+        - email
+
+  # Cognito User Pool Groups
+  CognitoAdminGroupV3:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      UserPoolId: !Ref CognitoUserPoolV3
+      GroupName: admin
+      Description: System administrators with full access
+      Precedence: 1
+
+  CognitoEditorGroupV3:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      UserPoolId: !Ref CognitoUserPoolV3
+      GroupName: editor
+      Description: Content editors - can create, edit, and delete recipes and ingredients
+      Precedence: 2
+
+  # Cognito Domain for Hosted UI
+  CognitoDomainV3:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !If
+        - IsProdEnvironment
+        - !Sub "${AuthSubdomain}.${DomainName}"
+        - !Sub "cocktaildbauth-${Environment}-${AWS::AccountId}-v3" # Globally unique domain for dev
+      UserPoolId: !Ref CognitoUserPoolV3
+      CustomDomainConfig: !If
+        - IsProdEnvironment
+        - CertificateArn: !Ref AuthCertificateArn
+        - !Ref "AWS::NoValue"
+
+  # UI Customization for Cognito Hosted UI
+  CognitoUICustomizationV3:
+    Type: AWS::Cognito::UserPoolUICustomizationAttachment
+    DependsOn: CognitoDomainV3
+    Properties:
+      UserPoolId: !Ref CognitoUserPoolV3
+      ClientId: !Ref CognitoUserPoolV3Client
+      CSS: |
+        .background-customizable { background-color: #f5f5f5 !important; }
+        .banner-customizable { background-color: #2c3e50 !important; padding: 1.5rem 2rem !important; }
+        .logo-customizable { display: none !important; }
+        .textDescription-customizable { color: white !important; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; font-size: 1.4rem !important; font-weight: 600 !important; }
+        .inputField-customizable { width: 100% !important; padding: 0.75rem !important; border: 1px solid #ddd !important; border-radius: 4px !important; font-size: 1rem !important; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; background-color: #fff !important; color: #333 !important; }
+        .inputField-customizable:focus { border-color: #A61816 !important; box-shadow: 0 0 0 2px rgba(166, 24, 22, 0.1) !important; outline: none !important; }
+        .label-customizable { color: #333 !important; font-weight: bold !important; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; margin-bottom: 0.5rem !important; display: block !important; }
+        .submitButton-customizable { background-color: #A61816 !important; border-color: #A61816 !important; color: white !important; padding: 0.75rem 1.5rem !important; border-radius: 4px !important; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; font-size: 1rem !important; font-weight: 500 !important; border: none !important; width: 100% !important; }
+        .redirect-customizable { color: #A61816 !important; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; }
+
+  # OAuth Identity Providers
+  GoogleIdentityProviderV3:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Condition: HasGoogleOAuth
+    Properties:
+      UserPoolId: !Ref CognitoUserPoolV3
+      ProviderName: "Google"
+      ProviderType: "Google"
+      ProviderDetails:
+        client_id: !Ref GoogleClientId
+        client_secret: !Ref GoogleClientSecret
+        authorize_scopes: "profile email openid"
+      AttributeMapping:
+        email: "email"
+        name: "name"
+        username: "sub"
+
+
+  AmazonIdentityProviderV3:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Condition: HasAmazonOAuth
+    Properties:
+      UserPoolId: !Ref CognitoUserPoolV3
+      ProviderName: "LoginWithAmazon"
+      ProviderType: "LoginWithAmazon"
+      ProviderDetails:
+        client_id: !Ref AmazonClientId
+        client_secret: !Ref AmazonClientSecret
+        authorize_scopes: "profile"
+      AttributeMapping:
+        email: "email"
+        name: "name"
+        username: "user_id"
+
+  # IAM Role for API Gateway CloudWatch Logging
+  ApiGatewayCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+
+  # --- EC2 IAM Resources ---
+
+  # IAM Role for EC2 instances (S3 access for backups and analytics)
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub cocktaildb-${Environment}-ec2-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                  - s3:DeleteObject
+                Resource:
+                  - !GetAtt AnalyticsBucket.Arn
+                  - !Sub ${AnalyticsBucket.Arn}/*
+                  - !If
+                    - IsProdEnvironment
+                    - !GetAtt BackupBucket.Arn
+                    - !Ref "AWS::NoValue"
+                  - !If
+                    - IsProdEnvironment
+                    - !Sub ${BackupBucket.Arn}/*
+                    - !Ref "AWS::NoValue"
+
+  # Instance Profile for EC2
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub cocktaildb-${Environment}-ec2-profile
+      Roles:
+        - !Ref EC2Role
+
+  # --- AWS Batch Resources ---
+
+  # IAM Role for AWS Batch service
+  BatchServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: batch.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBatchServiceRole
+
+  # IAM Execution Role for Fargate tasks
+  FargateExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: FargateEFSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: EFSReadOnlyAccess
+                Effect: Allow
+                Action:
+                  - elasticfilesystem:ClientMount
+                  - elasticfilesystem:DescribeMountTargets
+                Resource: !GetAtt CocktailEFS.Arn
+        - PolicyName: FargateS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${AnalyticsBucket}"
+                  - !Sub "arn:aws:s3:::${AnalyticsBucket}/*"
+
+  # Allow Fargate tasks to access EFS
+  EFSIngressFromBatch:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EFSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      SourceSecurityGroupId: !Ref BatchSecurityGroup
+
+  # Batch Compute Environment - Fargate Spot
+  AnalyticsComputeEnvironment:
+    Type: AWS::Batch::ComputeEnvironment
+    DependsOn:
+      - MountTarget
+    Properties:
+      Type: MANAGED
+      ServiceRole: !GetAtt BatchServiceRole.Arn
+      ComputeResources:
+        Type: FARGATE_SPOT
+        MaxvCpus: 8
+        Subnets:
+          - !Ref PrivateSubnet
+        SecurityGroupIds:
+          - !Ref BatchSecurityGroup
+      State: ENABLED
+
+  # Batch Job Queue
+  AnalyticsJobQueue:
+    Type: AWS::Batch::JobQueue
+    Properties:
+      Priority: 1
+      ComputeEnvironmentOrder:
+        - Order: 1
+          ComputeEnvironment: !Ref AnalyticsComputeEnvironment
+      State: ENABLED
+
+  # Batch Job Definition - Fargate
+  AnalyticsJobDefinition:
+    Type: AWS::Batch::JobDefinition
+    DependsOn: BatchLogGroup
+    Properties:
+      Type: container
+      PlatformCapabilities:
+        - FARGATE
+      Timeout:
+        AttemptDurationSeconds: 3600
+      ContainerProperties:
+        Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${AnalyticsECRRepository}:latest
+        ExecutionRoleArn: !GetAtt FargateExecutionRole.Arn
+        JobRoleArn: !GetAtt FargateExecutionRole.Arn
+        RuntimePlatform:
+          CpuArchitecture: ARM64
+          OperatingSystemFamily: LINUX
+        NetworkConfiguration:
+          AssignPublicIp: DISABLED
+        ResourceRequirements:
+          - Type: VCPU
+            Value: "4"
+          - Type: MEMORY
+            Value: "8192"
+        FargatePlatformConfiguration:
+          PlatformVersion: LATEST
+        Environment:
+          - Name: DB_NAME
+            Value: !Ref DatabaseName
+          - Name: DB_PATH
+            Value: !Sub /mnt/efs/${DatabaseName}.db
+          - Name: ANALYTICS_BUCKET
+            Value: !Ref AnalyticsBucket
+        MountPoints:
+          - ContainerPath: /mnt/efs
+            ReadOnly: true
+            SourceVolume: efs-volume
+        Volumes:
+          - Name: efs-volume
+            EfsVolumeConfiguration:
+              FileSystemId: !Ref CocktailEFS
+              TransitEncryption: ENABLED
+              AuthorizationConfig:
+                AccessPointId: !Ref EFSAccessPoint
+                Iam: ENABLED
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: !Sub /aws/batch/${AWS::StackName}-analytics
+            awslogs-region: !Ref AWS::Region
+            awslogs-stream-prefix: analytics
+
+  # CloudWatch Log Group for Batch jobs
+  BatchLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/batch/${AWS::StackName}-analytics
+      RetentionInDays: 14
+
+  # Analytics Trigger Lambda (submits Batch job)
+  AnalyticsTriggerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-analytics-trigger
+      CodeUri: api/analytics-trigger/
+      Handler: trigger.lambda_handler
+      Runtime: python3.12
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          BATCH_JOB_QUEUE: !Ref AnalyticsJobQueue
+          BATCH_JOB_DEFINITION: !Ref AnalyticsJobDefinition
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - batch:SubmitJob
+                - batch:DescribeJobs
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: "*"
+
+  # Configure API Gateway Account to use the logging role
+  ApiGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
+
+  # API Gateway for backend endpoints - Create API after Lambda functions
+  CocktailAPI:
+    Type: AWS::Serverless::Api
+    DependsOn: # Ensure the account role is configured before the API/Stage is created
+      - ApiGatewayAccount
+    Properties:
+      Name: !Sub ${AWS::StackName}-api
+      StageName: api
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Access-Control-Allow-Headers,Access-Control-Allow-Origin,Access-Control-Allow-Methods'"
+        AllowOrigin: "'*'" # Allow all origins
+      Auth:
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt CognitoUserPoolV3.Arn
+        AddDefaultAuthorizerToCorsPreflight: false
+      # --- Add MethodSettings for Stage Logging ---
+      MethodSettings:
+        - ResourcePath: '/*' # Apply to all paths
+          HttpMethod: '*'    # Apply to all methods
+          LoggingLevel: INFO # Options: OFF, ERROR, INFO
+          DataTraceEnabled: true # Log full request/response data
+          MetricsEnabled: true # Enable CloudWatch Metrics
+      # ------------------------------------------
+
+  # Lambda Function for Nightly DB Backup (prod only)
+  BackupLambda:
+    Type: AWS::Serverless::Function
+    Condition: IsProdEnvironment
+    DependsOn:
+      - MountTarget
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-db-backup-handler
+      CodeUri: backup-lambda/
+      Handler: backup.lambda_handler
+      Runtime: python3.12
+      Timeout: 300 # 5 minutes, adjust if needed for large DBs
+      Environment:
+        Variables:
+          DB_PATH: !Sub /mnt/efs/${DatabaseName}.db
+          BACKUP_BUCKET: !Ref BackupBucket
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet
+      FileSystemConfigs:
+        - Arn: !GetAtt EFSAccessPoint.Arn
+          LocalMountPath: /mnt/efs
+      Policies:
+        - VPCAccessPolicy: {}
+        - Statement:
+            - Sid: AWSLambdaVPCAccessExecutionRole
+              Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - ec2:CreateNetworkInterface
+                - ec2:DescribeNetworkInterfaces
+                - ec2:DeleteNetworkInterface
+              Resource: "*"
+            - Sid: AmazonElasticFileSystemClientAccess
+              Effect: Allow
+              Action:
+                - elasticfilesystem:ClientMount
+                - elasticfilesystem:ClientRead
+                - elasticfilesystem:DescribeMountTargets
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:ListBucket
+                - s3:DeleteObject
+              Resource:
+                - !Sub arn:aws:s3:::${BackupBucket}
+                - !Sub arn:aws:s3:::${BackupBucket}/*
+
+  # EventBridge Rule to trigger backup nightly (prod only)
+  BackupSchedule:
+    Type: AWS::Events::Rule
+    Condition: IsProdEnvironment
+    Properties:
+      Name: !Sub ${AWS::StackName}-DailyDbBackupRule
+      Description: Trigger nightly database backup
+      ScheduleExpression: "cron(0 8 * * ? *)" # Every day at 8:00 AM UTC = midnight pacific
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt BackupLambda.Arn
+          Id: "BackupLambdaTarget"
+
+  # Permission for EventBridge to invoke the Backup Lambda (prod only)
+  BackupLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Condition: IsProdEnvironment
+    Properties:
+      FunctionName: !GetAtt BackupLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt BackupSchedule.Arn
+
+  VpcFlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/vpc/flowlogs/${AWS::StackName}"
+      RetentionInDays: 7         # keep 7 days; adjust as needed
+
+  VpcFlowLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AllowCWLogs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt VpcFlowLogGroup.Arn
+
+  CocktailVpcFlowLogs:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceType: VPC
+      ResourceId:  !Ref CocktailVPC       # the VPC in your template
+      TrafficType: ALL                    # ACCEPT | REJECT | ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName:  !Ref VpcFlowLogGroup
+      DeliverLogsPermissionArn: !GetAtt VpcFlowLogsRole.Arn
+      MaxAggregationInterval: 60          # 1 min granularity
+
+Outputs:
+  VpcId:
+    Description: ID of the VPC
+    Value: !Ref CocktailVPC
+
+  PrivateSubnetId:
+    Description: ID of Private Subnet
+    Value: !Ref PrivateSubnet
+
+  EFSFileSystemId:
+    Description: ID of the EFS file system
+    Value: !Ref CocktailEFS
+
+  EFSMountPath:
+    Description: Mount path for EFS in Lambda
+    Value: /mnt/efs
+
+  WebsiteURL:
+    Description: S3 Website URL (direct, for reference)
+    Value: !Sub "https://${WebsiteBucket.DomainName}" # This gives the S3 regional domain, not the CF one
+
+  WebsiteBucketName:
+    Description: Name of the S3 bucket used for website hosting
+    Value: !Ref WebsiteBucket
+
+  CloudFrontURL:
+    Description: CloudFront Distribution URL (use this for dev, or as base for prod CNAME)
+    Value: !Sub https://${CloudFrontDistribution.DomainName}
+
+  CloudFrontDistribution:
+    Description: CloudFront Distribution ID
+    Value: !Ref CloudFrontDistribution
+
+  ApiEndpoint:
+    Description: API Gateway Endpoint URL
+    Value: !Sub https://${CocktailAPI}.execute-api.${AWS::Region}.amazonaws.com/api
+
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref CognitoUserPoolV3
+    
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref CognitoUserPoolV3Client
+    
+  CognitoDomainURLV3:
+    Description: Cognito Domain URL for hosted UI
+    Value: !If
+      - IsProdEnvironment
+      - !Sub "https://${AuthSubdomain}.${DomainName}"
+      - !Sub "https://${CognitoDomainV3}.auth.${AWS::Region}.amazoncognito.com"
+
+  CustomDomainURL:
+    Description: Website URL with custom domain (production only)
+    Value: !If [IsProdEnvironment, !Sub "https://${DomainName}", "N/A (dev environment)"]
+
+  CertificateARN:
+    Description: ACM Certificate ARN (production only)
+    Value: !If [IsProdEnvironment, !Ref CloudFrontCertificate, "N/A (dev environment)"]
+
+  AuthCertificateARN:
+    Description: Auth subdomain ACM Certificate ARN (production only)
+    Value: !If [IsProdEnvironment, !Ref AuthCertificate, "N/A (dev environment)"]
+
+  BackupBucketName:
+    Description: S3 bucket for database backups (prod only)
+    Value: !If [IsProdEnvironment, !Ref BackupBucket, "N/A (dev environment)"]
+
+  AdminGroupName:
+    Description: Name of the admin group in Cognito User Pool
+    Value: !Ref CognitoAdminGroupV3
+
+  EditorGroupName:
+    Description: Name of the editor group in Cognito User Pool
+    Value: !Ref CognitoEditorGroupV3
+
+  AnalyticsBucketName:
+    Description: S3 bucket for pre-generated analytics
+    Value: !Ref AnalyticsBucket
+
+  CloudFrontLogsBucketName:
+    Description: S3 bucket for CloudFront access logs
+    Value: !Ref CloudFrontLogsBucket
+
+  AnalyticsTriggerFunctionArn:
+    Description: ARN of the Analytics Trigger Lambda function
+    Value: !GetAtt AnalyticsTriggerFunction.Arn
+
+  AnalyticsJobQueueArn:
+    Description: ARN of the Analytics Batch Job Queue
+    Value: !Ref AnalyticsJobQueue
+
+  AnalyticsJobDefinitionArn:
+    Description: ARN of the Analytics Batch Job Definition
+    Value: !Ref AnalyticsJobDefinition
+
+  EC2RoleArn:
+    Description: ARN of the EC2 IAM Role
+    Value: !GetAtt EC2Role.Arn
+
+  EC2InstanceProfileName:
+    Description: Name of the EC2 Instance Profile
+    Value: !Ref EC2InstanceProfile
+

@@ -1,0 +1,87 @@
+# infrastructure/ansible/playbooks/setup-database.yml
+---
+- name: Setup PostgreSQL database for CocktailDB
+  hosts: cocktaildb
+  become: yes
+
+  vars:
+    db_name: "{{ lookup('env', 'COCKTAILDB_DB_NAME') | default('cocktaildb', true) }}"
+    db_user: "{{ lookup('env', 'COCKTAILDB_DB_USER') | default('cocktaildb', true) }}"
+    db_password: "{{ lookup('env', 'COCKTAILDB_DB_PASSWORD') }}"
+
+  tasks:
+    - name: Ensure password is provided
+      fail:
+        msg: "COCKTAILDB_DB_PASSWORD environment variable must be set"
+      when: db_password == ""
+
+    - name: Create database user
+      # Use heredoc with quoted delimiter to prevent shell variable expansion in password
+      shell: |
+        sudo -u postgres psql << 'EOSQL'
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '{{ db_user }}') THEN
+            CREATE USER {{ db_user }} WITH PASSWORD '{{ db_password }}';
+          ELSE
+            ALTER USER {{ db_user }} WITH PASSWORD '{{ db_password }}';
+          END IF;
+        END
+        $$;
+        EOSQL
+      register: create_user
+      changed_when: true
+
+    - name: Create database
+      shell: |
+        sudo -u postgres psql -c "CREATE DATABASE {{ db_name }} OWNER {{ db_user }} ENCODING 'UTF8' LC_COLLATE 'en_US.UTF-8' LC_CTYPE 'en_US.UTF-8' TEMPLATE template0;"
+      register: create_db
+      changed_when: "'CREATE DATABASE' in create_db.stdout"
+      failed_when: "'already exists' not in create_db.stderr and create_db.rc != 0"
+
+    - name: Grant all privileges on database
+      shell: |
+        sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE {{ db_name }} TO {{ db_user }};"
+      changed_when: true
+
+    - name: Enable pg_trgm extension for text search
+      shell: |
+        sudo -u postgres psql -d {{ db_name }} -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+      changed_when: true
+
+    - name: Configure PostgreSQL to listen on localhost and Docker bridge
+      lineinfile:
+        path: /var/lib/pgsql/data/postgresql.conf
+        regexp: '^#?listen_addresses\s*='
+        # Include both 172.17.0.1 (default Docker bridge) and 172.28.0.1 (pinned network gateway)
+        line: "listen_addresses = 'localhost,172.17.0.1,172.28.0.1'"
+        backup: yes
+      notify: Restart PostgreSQL
+
+    - name: Allow Docker network connections in pg_hba.conf (pinned subnet 172.28.x.x)
+      # Note: docker-compose.yml pins network to 172.28.0.0/16 for predictable pg_hba.conf entries
+      lineinfile:
+        path: /var/lib/pgsql/data/pg_hba.conf
+        line: "host    {{ db_name }}      {{ db_user }}      172.28.0.0/16           scram-sha-256"
+        # Use insertafter: EOF to reliably append since pg_hba.conf comment patterns vary across distros
+        insertafter: EOF
+      notify: Reload PostgreSQL
+
+    - name: Display database info
+      debug:
+        msg: |
+          Database setup complete!
+          Database: {{ db_name }}
+          User: {{ db_user }}
+          Connect with: psql -h localhost -U {{ db_user }} -d {{ db_name }}
+
+  handlers:
+    - name: Restart PostgreSQL
+      service:
+        name: postgresql
+        state: restarted
+
+    - name: Reload PostgreSQL
+      service:
+        name: postgresql
+        state: reloaded

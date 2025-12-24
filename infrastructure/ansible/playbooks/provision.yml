@@ -1,0 +1,221 @@
+# infrastructure/ansible/playbooks/provision.yml
+---
+- name: Provision CocktailDB server
+  hosts: cocktaildb
+  become: yes
+
+  vars_files:
+    - ../group_vars/all.yml
+
+  vars:
+    packages:
+      - docker
+      - postgresql16-server
+      - postgresql16
+      - postgresql16-contrib
+      - python3
+      - python3-pip
+      - git
+      - htop
+      - tmux
+      - awscli
+      - rsync
+
+  tasks:
+    - name: Update system packages
+      dnf:
+        name: "*"
+        state: latest
+
+    - name: Install required packages
+      dnf:
+        name: "{{ packages }}"
+        state: present
+
+    # Docker setup
+    - name: Start and enable Docker
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add ec2-user to docker group
+      user:
+        name: ec2-user
+        groups: docker
+        append: yes
+
+    # Install Docker Compose v2 plugin
+    - name: Create Docker CLI plugins directory
+      file:
+        path: /usr/local/lib/docker/cli-plugins
+        state: directory
+        mode: '0755'
+
+    - name: Download Docker Compose v2
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-aarch64"
+        dest: /usr/local/lib/docker/cli-plugins/docker-compose
+        mode: '0755'
+
+    # Create app user
+    - name: Create application user
+      user:
+        name: "{{ app_user }}"
+        system: yes
+        home: "{{ app_home }}"
+        shell: /bin/bash
+        create_home: yes
+
+    - name: Add app user to docker group
+      user:
+        name: "{{ app_user }}"
+        groups: docker
+        append: yes
+
+    # PostgreSQL setup
+    - name: Initialize PostgreSQL database
+      command: postgresql-setup --initdb
+      args:
+        creates: /var/lib/pgsql/data/PG_VERSION
+
+    - name: Configure PostgreSQL to listen on localhost only
+      lineinfile:
+        path: /var/lib/pgsql/data/postgresql.conf
+        regexp: "^#?listen_addresses"
+        line: "listen_addresses = '127.0.0.1'"
+      notify: Restart PostgreSQL
+
+    - name: Configure PostgreSQL authentication
+      copy:
+        dest: /var/lib/pgsql/data/pg_hba.conf
+        content: |
+          # TYPE  DATABASE        USER            ADDRESS                 METHOD
+          local   all             postgres                                peer
+          local   all             all                                     md5
+          host    all             all             127.0.0.1/32            md5
+        owner: postgres
+        group: postgres
+        mode: '0600'
+      notify: Restart PostgreSQL
+
+    - name: Start and enable PostgreSQL
+      systemd:
+        name: postgresql
+        state: started
+        enabled: yes
+
+    # Create application directories
+    - name: Create application directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0755'
+      loop:
+        - "{{ app_home }}"
+        - "{{ app_home }}/api"
+        - "{{ app_home }}/web"
+        - "{{ app_home }}/backups"
+        - "{{ app_home }}/logs"
+        - "{{ app_home }}/scripts"
+
+    # Install Caddy (direct binary for AL2023)
+    - name: Check if Caddy is installed
+      stat:
+        path: /usr/bin/caddy
+      register: caddy_binary
+
+    - name: Download Caddy binary
+      get_url:
+        url: "https://caddyserver.com/api/download?os=linux&arch=arm64"
+        dest: /usr/bin/caddy
+        mode: '0755'
+      when: not caddy_binary.stat.exists
+
+    - name: Create caddy user
+      user:
+        name: caddy
+        system: yes
+        home: /var/lib/caddy
+        shell: /sbin/nologin
+        create_home: yes
+
+    - name: Create Caddy config directory
+      file:
+        path: /etc/caddy
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Create Caddy systemd service
+      copy:
+        dest: /etc/systemd/system/caddy.service
+        content: |
+          [Unit]
+          Description=Caddy
+          Documentation=https://caddyserver.com/docs/
+          After=network.target network-online.target
+          Requires=network-online.target
+
+          [Service]
+          Type=notify
+          User=caddy
+          Group=caddy
+          ExecStart=/usr/bin/caddy run --environ --config /etc/caddy/Caddyfile
+          ExecReload=/usr/bin/caddy reload --config /etc/caddy/Caddyfile
+          TimeoutStopSec=5s
+          LimitNOFILE=1048576
+          LimitNPROC=512
+          PrivateTmp=true
+          ProtectSystem=full
+          AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+          [Install]
+          WantedBy=multi-user.target
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Daemon reload
+
+    - name: Create Caddy log directory
+      file:
+        path: /var/log/caddy
+        state: directory
+        owner: caddy
+        group: caddy
+        mode: '0755'
+
+    - name: Create Caddy systemd override directory
+      file:
+        path: /etc/systemd/system/caddy.service.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Enable Caddy (will start after config deployed)
+      systemd:
+        name: caddy
+        enabled: yes
+        daemon_reload: yes
+
+    # Install Python packages
+    - name: Install Python dependencies
+      pip:
+        name:
+          - psycopg2-binary
+          - boto3
+        state: present
+
+  handlers:
+    - name: Restart PostgreSQL
+      systemd:
+        name: postgresql
+        state: restarted
+
+    - name: Daemon reload
+      systemd:
+        daemon_reload: yes

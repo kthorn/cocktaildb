@@ -1,6 +1,6 @@
 # Cocktail DB API
 
-A FastAPI application for managing cocktail recipes and ingredients, deployable to AWS Lambda.
+A FastAPI application for managing cocktail recipes and ingredients, deployed on EC2.
 
 ## Installation
 
@@ -45,38 +45,9 @@ When running locally, you can access:
 - `GET /units` - Get all units
 - `GET /units?type={type}` - Get units filtered by type
 
-## AWS Lambda Deployment
+## Deployment
 
-The application uses Mangum to adapt FastAPI for AWS Lambda. The `handler` function in `main.py` is the Lambda entry point.
-
-### Deployment Steps
-
-1. Package your application and dependencies
-2. Create a Lambda function with Python 3.9+ runtime
-3. Set the handler to `main.handler`
-4. Configure API Gateway to route requests to your Lambda function
-
-### Example serverless.yml (for Serverless Framework)
-
-```yaml
-service: cocktaildb-api
-
-provider:
-  name: aws
-  runtime: python3.9
-  region: us-east-1
-
-functions:
-  api:
-    handler: main.handler
-    events:
-      - http:
-          path: /{proxy+}
-          method: ANY
-      - http:
-          path: /
-          method: ANY
-```
+The API runs on EC2 with `uvicorn` and is typically reverse-proxied by Caddy. See `scripts/deploy-ec2.sh` and `infrastructure/ansible/` for deployment workflows.
 
 ## Development
 

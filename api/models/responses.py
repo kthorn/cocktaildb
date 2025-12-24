@@ -201,6 +201,9 @@ class PaginationMetadata(BaseModel):
     total_count: int = Field(..., description="Total number of items", ge=0)
     has_next: bool = Field(..., description="Whether there is a next page")
     has_previous: bool = Field(..., description="Whether there is a previous page")
+    next_cursor: Optional[str] = Field(
+        None, description="Opaque cursor for the next page (cursor-based pagination)"
+    )
 
     class Config:
         from_attributes = True

@@ -175,7 +175,6 @@ cython_debug/
 
 *.txt
 *.json
-*.md
 src/web/js/config.js
 *.db
 
@@ -188,3 +187,6 @@ src/web/js/config.js
 # Local test scripts
 test_emd_speedup.py
 test_pot_parallelization.py
+
+# Personal notes
+NOTES

@@ -1,0 +1,14 @@
+# infrastructure/systemd/cocktaildb-backup.timer
+[Unit]
+Description=Run CocktailDB Backup Daily
+
+[Timer]
+# Run at 8 AM UTC daily (matches old Lambda schedule)
+OnCalendar=*-*-* 08:00:00
+# Run on boot if last run was missed
+Persistent=true
+# Randomize start by up to 10 minutes
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

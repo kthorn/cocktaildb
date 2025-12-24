@@ -119,7 +119,7 @@ aws s3 cp s3://$BACKUP_BUCKET/backup-YYYY-MM-DD_HH-MM-SS.db tests/fixtures/test_
 
 ```bash
 # Apply schema to create empty test database
-./scripts/apply-migration.sh -f schema-deploy/schema.sql -e test --force-init
+./infrastructure/scripts/run-migrations.sh -f schema-deploy/schema.sql -e test --force-init
 
 # Copy schema-only database to fixtures
 cp /path/to/test/cocktaildb.db tests/fixtures/test_cocktaildb.db
@@ -297,8 +297,8 @@ AttributeError: module does not have the attribute 'verify_token'
 **Solution**: Update test to use correct FastAPI authentication function
 
 ```python
-# Correct: Mock the actual dependency function
-mock_auth = mocker.patch('api.dependencies.auth.get_user_from_lambda_event')
+# Correct: Mock the JWT validation function
+mock_auth = mocker.patch('api.dependencies.auth.get_user_from_jwt')
 ```
 
 #### 4. Pydantic Warnings

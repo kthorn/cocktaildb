@@ -1,0 +1,46 @@
+# docker-compose.yml
+# Base Docker Compose configuration for CocktailDB
+
+# Pin network to specific subnet to ensure predictable pg_hba.conf entries
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.prod
+    environment:
+      # Database configuration
+      - DB_TYPE=postgres
+      - DB_HOST=host.docker.internal
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-cocktaildb}
+      - DB_USER=${DB_USER:-cocktaildb}
+      - DB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD is required}
+      # AWS configuration
+      - ANALYTICS_BUCKET=${ANALYTICS_BUCKET}
+      - BACKUP_BUCKET=${BACKUP_BUCKET}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      # Cognito (auth)
+      - USER_POOL_ID=${USER_POOL_ID}
+      - APP_CLIENT_ID=${APP_CLIENT_ID}
+      # Application
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

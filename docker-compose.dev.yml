@@ -1,0 +1,16 @@
+# docker-compose.dev.yml
+# Development overrides for local testing
+
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.prod
+    environment:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+    ports:
+      - "8000:8000"  # Expose to all interfaces for local dev
+    volumes:
+      # Mount code for hot-reload (optional - remove for production-like testing)
+      # - ./api:/app:ro

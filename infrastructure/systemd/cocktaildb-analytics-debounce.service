@@ -1,0 +1,14 @@
+[Unit]
+Description=CocktailDB Analytics Debounce Check
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+User=cocktaildb
+Group=cocktaildb
+EnvironmentFile=/opt/cocktaildb/.env
+Environment=ANALYTICS_DEBOUNCE_MINUTES=15
+ExecStart=/usr/local/bin/analytics-debounce-check.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cocktaildb-analytics-debounce
