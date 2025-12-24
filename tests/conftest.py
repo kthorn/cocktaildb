@@ -26,18 +26,18 @@ def clear_database_cache():
     import sys
 
     # Clear before test - simple and minimal
-    if "api.core.database" in sys.modules:
-        api_core_database = sys.modules["api.core.database"]
-        api_core_database._DB_INSTANCE = None
-        api_core_database._DB_INIT_TIME = 0
+    if "api.db.database" in sys.modules:
+        api_db_database = sys.modules["api.db.database"]
+        api_db_database._DB_INSTANCE = None
+        api_db_database._DB_INIT_TIME = 0
 
     yield
 
     # Basic cleanup after test
-    if "api.core.database" in sys.modules:
-        api_core_database = sys.modules["api.core.database"]
-        api_core_database._DB_INSTANCE = None
-        api_core_database._DB_INIT_TIME = 0
+    if "api.db.database" in sys.modules:
+        api_db_database = sys.modules["api.db.database"]
+        api_db_database._DB_INSTANCE = None
+        api_db_database._DB_INIT_TIME = 0
 
 
 @pytest.fixture(scope="session")

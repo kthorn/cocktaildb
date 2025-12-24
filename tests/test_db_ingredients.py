@@ -9,7 +9,7 @@ import sqlite3
 import os
 from unittest.mock import patch
 
-from api.core.database import get_database
+from api.db.database import get_database
 
 
 class TestIngredientCRUD:

@@ -7,7 +7,7 @@ from .db_core import Database
 
 logger = logging.getLogger(__name__)
 
-# Global database connection cache for Lambda environments
+# Global database connection cache
 _DB_INSTANCE: Optional[Database] = None
 _DB_INIT_TIME: float = 0
 _DB_CACHE_DURATION = 300  # 5 minutes
