@@ -117,6 +117,12 @@ DB mutation (recipes/ingredients/recipe_ingredients/units/ratings/tags/recipe_ta
 - Manual: make multiple edits within 15 minutes, confirm only one analytics run.
 - Manual: verify no analytics runs occur without DB changes.
 
+## Ops Verification
+- `SELECT * FROM analytics_refresh_state;` after a write
+- `systemctl status cocktaildb-analytics-debounce.timer`
+- `journalctl -u cocktaildb-analytics-debounce.service -n 50 --no-pager`
+- Manual edit burst -> verify single analytics run
+
 ## Risks / Mitigations
 - **Missed triggers:** DB-level triggers ensure any writer (API or script)
   marks analytics dirty.
