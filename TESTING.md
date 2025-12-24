@@ -297,8 +297,8 @@ AttributeError: module does not have the attribute 'verify_token'
 **Solution**: Update test to use correct FastAPI authentication function
 
 ```python
-# Correct: Mock the actual dependency function
-mock_auth = mocker.patch('api.dependencies.auth.get_user_from_lambda_event')
+# Correct: Mock the JWT validation function
+mock_auth = mocker.patch('api.dependencies.auth.get_user_from_jwt')
 ```
 
 #### 4. Pydantic Warnings

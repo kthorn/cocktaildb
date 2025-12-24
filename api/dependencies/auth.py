@@ -19,7 +19,7 @@ JWKS_CACHE_DURATION = 3600  # 1 hour
 
 
 class UserInfo:
-    """User information extracted from JWT or API Gateway Cognito Authorizer"""
+    """User information extracted from Cognito JWT token"""
 
     def __init__(self, user_id: str, username: Optional[str] = None,
                  email: Optional[str] = None, groups: Optional[list] = None,
@@ -157,63 +157,15 @@ def get_user_from_jwt(request: Request, credentials: Optional[HTTPAuthorizationC
     )
 
 
-def get_user_from_lambda_event(request: Request) -> Optional[UserInfo]:
-    """Extract user information from Lambda event context (API Gateway Cognito Authorizer)"""
-    try:
-        from main import _current_lambda_event
-        event = _current_lambda_event
-
-        if not event:
-            return None
-
-        authorizer_context = event.get("requestContext", {}).get("authorizer", {})
-        claims = authorizer_context.get("claims")
-
-        if not claims:
-            return None
-
-        logger.info(f"Found authorizer claims: {list(claims.keys())}")
-
-        user_id = claims.get("sub")
-        if not user_id:
-            logger.warning("No 'sub' claim found in authorizer context")
-            return None
-
-        username = claims.get("username") or claims.get("cognito:username")
-        email = claims.get("email")
-        groups_str = claims.get("cognito:groups", "")
-        groups = groups_str.split(",") if groups_str else []
-
-        return UserInfo(
-            user_id=user_id,
-            username=username,
-            email=email,
-            groups=groups,
-            claims=claims
-        )
-
-    except Exception as e:
-        logger.debug(f"Lambda event extraction failed (expected on EC2): {str(e)}")
-        return None
-
-
 async def get_current_user_optional(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ) -> Optional[UserInfo]:
     """Get current user information if available (optional authentication)
 
-    Supports both:
-    - EC2: Direct JWT validation from Authorization header
-    - Lambda: API Gateway Cognito Authorizer context
+    Validates JWT from Authorization header.
     """
-    # Try JWT validation first (EC2 mode)
-    user = get_user_from_jwt(request, credentials)
-    if user:
-        return user
-
-    # Fall back to Lambda event context (serverless mode)
-    return get_user_from_lambda_event(request)
+    return get_user_from_jwt(request, credentials)
 
 
 async def get_current_user(

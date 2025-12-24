@@ -22,7 +22,7 @@ class TestComplexIngredientCRUD:
     ):
         """Test complete CRUD workflow with ingredient hierarchy"""
         # Mock authentication using pytest-mock
-        mock_auth = mocker.patch("api.dependencies.auth.get_user_from_lambda_event")
+        mock_auth = mocker.patch("api.dependencies.auth.get_user_from_jwt")
         from api.dependencies.auth import UserInfo
 
         client, app = test_client_with_data
@@ -176,7 +176,7 @@ class TestConcurrencyAndLocking:
 
     def test_concurrent_recipe_updates(self, test_client_with_data, mock_user, mocker):
         """Test handling of concurrent recipe updates"""
-        mock_auth = mocker.patch("api.dependencies.auth.get_user_from_lambda_event")
+        mock_auth = mocker.patch("api.dependencies.auth.get_user_from_jwt")
         from api.dependencies.auth import UserInfo
 
         client, app = test_client_with_data
