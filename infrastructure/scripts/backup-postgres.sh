@@ -13,9 +13,13 @@ set -euo pipefail
 DB_NAME="${DB_NAME:-cocktaildb}"
 DB_USER="${DB_USER:-cocktaildb}"
 DB_HOST="${DB_HOST:-localhost}"
+DB_PASSWORD="${DB_PASSWORD:-}"
 BACKUP_BUCKET="${BACKUP_BUCKET:-}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/cocktaildb/backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-30}"
+
+# Export password for pg_dump (PostgreSQL uses PGPASSWORD env var)
+export PGPASSWORD="$DB_PASSWORD"
 
 # Parse arguments
 DRY_RUN=false
