@@ -2,23 +2,20 @@
 FastAPI application for CocktailDB API
 
 This is the main FastAPI application that handles all cocktail database operations.
-It replaces the previous AWS Lambda handler with a modern FastAPI implementation.
+Deployed on EC2 with Caddy reverse proxy.
 """
 
 import logging
+import sys
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
-from mangum import Mangum
 
-# Handle both Lambda and local execution environments
-import sys
-import os
-
-# Add current directory to Python path for Lambda
+# Add current directory to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.config import settings
@@ -43,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 
 class CORSHeaderMiddleware(BaseHTTPMiddleware):
-    """Add CORS headers to all responses from Lambda"""
+    """Add CORS headers to all responses"""
 
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
@@ -52,7 +49,7 @@ class CORSHeaderMiddleware(BaseHTTPMiddleware):
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = (
-            "Content-Type,Authorization,Accept,X-Amz-Date,X-Api-Key,X-Amz-Security-Token"
+            "Content-Type,Authorization,Accept"
         )
 
         return response
@@ -83,7 +80,7 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# Add CORS middleware for Lambda responses (API Gateway handles OPTIONS)
+# Add CORS middleware
 app.add_middleware(CORSHeaderMiddleware)
 
 # Add exception handlers
@@ -92,7 +89,7 @@ app.add_exception_handler(Exception, general_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(StarletteHTTPException, starlette_http_exception_handler)
 
-# Add routers at root level (API Gateway handles /api prefix)
+# Add routers (Caddy handles /api prefix via reverse proxy)
 app.include_router(ingredients.router)
 app.include_router(recipes.router)
 app.include_router(ratings.router)
@@ -104,10 +101,6 @@ app.include_router(admin.router)
 app.include_router(user_ingredients.router)
 app.include_router(stats.router)
 app.include_router(analytics.router)
-
-# OPTIONS handlers are explicitly defined in template.yaml as mock integrations
-# This prevents CORS preflight requests from hitting Cognito authorization
-# and ensures proper CORS headers are returned for all endpoints
 
 
 # Root endpoint
@@ -124,35 +117,6 @@ async def root():
 async def health_check():
     """Health check endpoint for container orchestration."""
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
-
-
-# Legacy endpoints removed - now using FastAPI v1 endpoints only
-
-
-# Create the Lambda handler for AWS deployment with custom scope
-def lambda_handler(event, context):
-    """Lambda handler that injects event into request scope"""
-    # Create Mangum handler
-    mangum_handler = Mangum(app, lifespan="off")
-
-    # Store event in a way that can be accessed by dependencies
-    import contextvars
-
-    _lambda_event = contextvars.ContextVar("lambda_event")
-    _lambda_event.set(event)
-
-    # Store event globally for access in dependencies
-    global _current_lambda_event
-    _current_lambda_event = event
-
-    return mangum_handler(event, context)
-
-
-# Global variable to store current Lambda event
-_current_lambda_event = None
-
-# For backward compatibility, also export as handler
-handler = lambda_handler
 
 
 # For local development
