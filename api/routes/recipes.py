@@ -416,8 +416,15 @@ async def bulk_upload_recipes(
         validation_start = time.time()
         logger.info("Starting validation phase with batch operations")
 
-        # Collect all unique names for batch validation
+        # Collect all unique names/ids for batch validation
         all_recipe_names = [recipe.name for recipe in bulk_data.recipes]
+        normalized_recipe_names = [name.lower().strip() for name in all_recipe_names]
+        recipe_name_counts = {}
+        for name in normalized_recipe_names:
+            recipe_name_counts[name] = recipe_name_counts.get(name, 0) + 1
+        duplicate_payload_names = {
+            name for name, count in recipe_name_counts.items() if count > 1
+        }
         all_ingredient_names = list(
             set(
                 ingredient.ingredient_name
@@ -433,9 +440,17 @@ async def bulk_upload_recipes(
                 if ingredient.unit_name is not None
             )
         )
+        all_unit_ids = sorted(
+            {
+                ingredient.unit_id
+                for recipe in bulk_data.recipes
+                for ingredient in recipe.ingredients
+                if ingredient.unit_id is not None
+            }
+        )
 
         logger.info(
-            f"Batch validation: {len(all_recipe_names)} recipes, {len(all_ingredient_names)} unique ingredients, {len(all_unit_names)} unique units"
+            f"Batch validation: {len(all_recipe_names)} recipes, {len(all_ingredient_names)} unique ingredients, {len(all_unit_names)} unique units, {len(all_unit_ids)} legacy unit ids"
         )
 
         # Batch validate recipe names
@@ -466,13 +481,34 @@ async def bulk_upload_recipes(
         batch_validation_duration = time.time() - batch_validation_start
         logger.info(f"Batch validation completed in {batch_validation_duration:.3f}s")
 
+        valid_unit_ids = set()
+        if all_unit_ids:
+            unit_placeholders = ",".join("%s" for _ in all_unit_ids)
+            unit_id_rows = db.execute_query(
+                f"SELECT id FROM units WHERE id IN ({unit_placeholders})",
+                tuple(all_unit_ids),
+            )
+            valid_unit_ids = {row["id"] for row in unit_id_rows}
+
         # Now validate each recipe using the batch results
         individual_validation_start = time.time()
 
         for idx, recipe_data in enumerate(bulk_data.recipes):
             try:
                 recipe_validation_start = time.time()
-                logger.info(f"Validating recipe {idx}: {recipe_data.name}")
+                logger.debug(f"Validating recipe {idx}: {recipe_data.name}")
+
+                if recipe_data.name and recipe_data.name.lower().strip() in duplicate_payload_names:
+                    validation_errors.append(
+                        BulkUploadValidationError(
+                            recipe_index=idx,
+                            recipe_name=recipe_data.name,
+                            error_type="duplicate_name",
+                            error_message=f"Duplicate recipe name in upload: '{recipe_data.name}'",
+                        )
+                    )
+                    failed_recipe_indices.add(idx)
+                    continue
 
                 # Check if recipe name already exists (using batch results)
                 if duplicate_names.get(recipe_data.name, False):
@@ -514,11 +550,7 @@ async def bulk_upload_recipes(
                             failed_recipe_indices.add(idx)
                     elif ingredient.unit_id is not None:
                         # Legacy unit ID validation (still needs individual query)
-                        unit_exists = db.execute_query(
-                            "SELECT id FROM units WHERE id = ?",
-                            (ingredient.unit_id,),
-                        )
-                        if not unit_exists:
+                        if ingredient.unit_id not in valid_unit_ids:
                             validation_errors.append(
                                 BulkUploadValidationError(
                                     recipe_index=idx,
@@ -554,7 +586,7 @@ async def bulk_upload_recipes(
                     continue
 
                 recipe_validation_duration = time.time() - recipe_validation_start
-                logger.info(
+                logger.debug(
                     f"Recipe {idx} validation took {recipe_validation_duration:.3f}s"
                 )
 
@@ -675,6 +707,7 @@ async def bulk_upload_recipes(
                     error_message=f"Bulk creation failed: {str(e)}",
                 )
             )
+            failed_recipe_indices = set(range(len(bulk_data.recipes)))
 
         creation_duration = time.time() - creation_start
         total_duration = time.time() - start_time

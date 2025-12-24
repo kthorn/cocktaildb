@@ -257,7 +257,7 @@ class BulkRecipeUpload(BaseModel):
     """Request model for bulk recipe upload"""
 
     recipes: List[BulkRecipeCreate] = Field(
-        ..., description="List of recipes to upload", min_length=1
+        ..., description="List of recipes to upload", min_length=1, max_length=100
     )
 
 

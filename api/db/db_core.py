@@ -816,8 +816,8 @@ class Database:
 
         try:
             conn = self._get_connection()
-            conn.execute("BEGIN IMMEDIATE")
             cursor = conn.cursor()
+            cursor.execute("BEGIN")
 
             for data in recipes_data:
                 # Validate ingredients before inserting
@@ -828,7 +828,8 @@ class Database:
                 cursor.execute(
                     """
                     INSERT INTO recipes (name, instructions, description, image_url, source, source_url, created_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
                     """,
                     (
                         data["name"] if data["name"] else None,
@@ -837,13 +838,16 @@ class Database:
                         data.get("image_url"),
                         data.get("source"),
                         data.get("source_url"),
-                        user_id
-                    )
+                        user_id,
+                    ),
                 )
 
-                recipe_id = cursor.lastrowid
-                if recipe_id is None:
-                    raise ValueError(f"Failed to get recipe ID after inserting '{data['name']}'")
+                recipe_row = cursor.fetchone()
+                if not recipe_row or recipe_row[0] is None:
+                    raise ValueError(
+                        f"Failed to get recipe ID after inserting '{data['name']}'"
+                    )
+                recipe_id = recipe_row[0]
 
                 # Batch insert ingredients using executemany
                 if "ingredients" in data and data["ingredients"]:
@@ -859,7 +863,7 @@ class Database:
                     cursor.executemany(
                         """
                         INSERT INTO recipe_ingredients (recipe_id, ingredient_id, unit_id, amount)
-                        VALUES (?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s)
                         """,
                         ingredient_rows
                     )
