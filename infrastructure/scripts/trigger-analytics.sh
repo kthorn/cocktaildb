@@ -18,6 +18,7 @@ usage() {
     echo "Options:"
     echo "  (no args)   Run analytics refresh in foreground"
     echo "  --bg        Run via systemd timer (background)"
+    echo "  --progress  Run in foreground with EM progress output"
     echo "  --status    Show status of last analytics run"
     echo "  --help      Show this help message"
 }
@@ -56,6 +57,9 @@ show_status() {
 
 # Parse arguments
 case "${1:-}" in
+    --progress)
+        EM_PROGRESS=1 run_foreground
+        ;;
     --bg)
         run_background
         ;;

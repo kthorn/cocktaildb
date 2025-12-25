@@ -14,7 +14,7 @@ APP_HOME="${APP_HOME:-/opt/cocktaildb}"
 REMOTE_SCRIPT="${APP_HOME}/scripts/trigger-analytics.sh"
 
 usage() {
-    echo "Usage: $0 [host] [--bg|--status|--help]"
+    echo "Usage: $0 [host] [--bg|--status|--progress|--help]"
     echo ""
     echo "Environment:"
     echo "  SSH_HOST   Remote host (if not passed as [host])"
@@ -28,8 +28,15 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     exit 0
 fi
 
-HOST="${1:-${SSH_HOST:-mixology.tools}}"
-ACTION="${2:-}"
+HOST=""
+ACTION=""
+if [[ "${1:-}" == --* ]]; then
+    HOST="${SSH_HOST:-mixology.tools}"
+    ACTION="${1:-}"
+else
+    HOST="${1:-${SSH_HOST:-mixology.tools}}"
+    ACTION="${2:-}"
+fi
 SSH_USER="${SSH_USER:-ec2-user}"
 SSH_KEY="${SSH_KEY:-}"
 
@@ -50,6 +57,9 @@ case "${ACTION}" in
         else
             REMOTE_CMD="sudo -n -u cocktaildb ${REMOTE_SCRIPT}"
         fi
+        ;;
+    --progress)
+        REMOTE_CMD="EM_PROGRESS=1 sudo -n -u cocktaildb ${REMOTE_SCRIPT}"
         ;;
     --help|-h)
         REMOTE_CMD="sudo -n ${REMOTE_SCRIPT} --help"

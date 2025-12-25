@@ -118,6 +118,10 @@ def em_fit(
     if n_jobs is None:
         n_jobs = _get_optimal_n_jobs()
 
+    progress_enabled = os.environ.get("EM_PROGRESS", "").lower() in {"1", "true", "yes"}
+    if progress_enabled:
+        verbose = True
+
     from scipy import sparse as sp
 
     if sp.issparse(volume_matrix):
@@ -145,7 +149,7 @@ def em_fit(
             previous_cost_matrix,
             n_jobs=n_jobs,
             return_plans=True,
-            tqdm_cls=_DisabledTqdm,
+            tqdm_cls=tqdm if progress_enabled else _DisabledTqdm,
             tqdm_kwargs=None,
         )
         logger.info(
