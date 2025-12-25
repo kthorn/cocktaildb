@@ -221,7 +221,8 @@ class Database:
                 cursor.execute(
                     """
                     INSERT INTO ingredients (name, description, parent_id, allow_substitution)
-                    VALUES (:name, :description, :parent_id, :allow_substitution)
+                    VALUES (%(name)s, %(description)s, %(parent_id)s, %(allow_substitution)s)
+                    RETURNING id
                     """,
                     {
                         "name": data.get("name"),
@@ -230,7 +231,8 @@ class Database:
                         "allow_substitution": data.get("allow_substitution", False),
                     },
                 )
-                new_id = cursor.lastrowid
+                result = cursor.fetchone()
+                new_id = result[0] if result else None
                 if new_id is None:
                     raise ValueError("Failed to get ingredient ID after insertion")
 
@@ -242,7 +244,7 @@ class Database:
 
                 # Update the path
                 cursor.execute(
-                    "UPDATE ingredients SET path = :path WHERE id = :id",
+                    "UPDATE ingredients SET path = %(path)s WHERE id = %(id)s",
                     {"path": path, "id": new_id},
                 )
 
@@ -750,14 +752,14 @@ class Database:
         conn = None
         try:
             conn = self._get_connection()
-            conn.execute("BEGIN IMMEDIATE")  # Get lock immediately
             cursor = conn.cursor()
 
             # Create the recipe
             cursor.execute(
                 """
                 INSERT INTO recipes (name, instructions, description, image_url, source, source_url)
-                VALUES (:name, :instructions, :description, :image_url, :source, :source_url)
+                VALUES (%(name)s, %(instructions)s, %(description)s, %(image_url)s, %(source)s, %(source_url)s)
+                RETURNING id
                 """,
                 {
                     "name": data["name"] if data["name"] else None,
@@ -770,7 +772,8 @@ class Database:
             )
 
             # Get the recipe ID
-            recipe_id = cursor.lastrowid
+            result = cursor.fetchone()
+            recipe_id = result[0] if result else None
             if recipe_id is None:
                 raise ValueError("Failed to get recipe ID after insertion")
 
@@ -780,7 +783,7 @@ class Database:
                     cursor.execute(
                         """
                         INSERT INTO recipe_ingredients (recipe_id, ingredient_id, unit_id, amount)
-                        VALUES (:recipe_id, :ingredient_id, :unit_id, :amount)
+                        VALUES (%(recipe_id)s, %(ingredient_id)s, %(unit_id)s, %(amount)s)
                         """,
                         {
                             "recipe_id": recipe_id,
@@ -792,7 +795,8 @@ class Database:
 
             # Commit the transaction
             conn.commit()
-            conn.close()
+            cursor.close()
+            self._return_connection(conn)
             conn = None
 
             # Return the created recipe
@@ -803,11 +807,12 @@ class Database:
         except Exception as e:
             if conn:
                 conn.rollback()
+                self._return_connection(conn)
             logger.error(f"Error creating recipe: {str(e)}")
             raise
         finally:
             if conn:
-                conn.close()
+                self._return_connection(conn)
 
     def bulk_create_recipes(self, recipes_data: List[Dict[str, Any]], user_id: str) -> List[Dict[str, Any]]:
         """Create multiple recipes in a single transaction (optimized for bulk uploads)"""

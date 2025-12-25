@@ -1,48 +1,258 @@
 """
 PyTest configuration and shared fixtures for CocktailDB API tests
+Uses PostgreSQL via testcontainers for realistic database testing
 """
 
+import gzip
 import os
 import shutil
-import sqlite3
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict
 
+import psycopg2
+from psycopg2.extras import RealDictCursor
 import pytest
 from fastapi.testclient import TestClient
+from testcontainers.postgres import PostgresContainer
 
-# Add project root to Python path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+# Add project root and api directory to Python path for imports
+project_root = os.path.join(os.path.dirname(__file__), "..")
+sys.path.insert(0, project_root)
+sys.path.insert(0, os.path.join(project_root, "api"))
 
 # Test configuration
-TEST_DB_PATH = "tests/fixtures/test_cocktaildb.db"
-TEMP_DB_DIR = "tests/temp_dbs"
+POSTGRES_IMAGE = "postgres:15"
+TEST_DB_NAME = "cocktaildb_test"
+TEST_DB_USER = "test_user"
+TEST_DB_PASSWORD = "test_password"
+
+# Path to production backup for integration tests
+PROD_BACKUP_PATH = Path("/home/kurtt/cocktaildb/backup-2025-12-25_08-08-15.sql.gz")
+
+
+def _reset_database_singleton():
+    """Reset the database singleton to force new connection"""
+    from api.db.db_core import Database
+    from api.db import database as db_module
+
+    # Clear the singleton instance
+    db_module._DB_INSTANCE = None
+
+    # Clear the connection pool
+    if Database._pool is not None:
+        try:
+            Database._pool.closeall()
+        except Exception:
+            pass
+        Database._pool = None
 
 
 @pytest.fixture(scope="function", autouse=True)
 def clear_database_cache():
     """Clear the global database cache between tests"""
-    import sys
-
-    # Clear before test - simple and minimal
-    if "api.db.database" in sys.modules:
-        api_db_database = sys.modules["api.db.database"]
-        api_db_database._DB_INSTANCE = None
-
+    _reset_database_singleton()
     yield
+    _reset_database_singleton()
 
-    # Basic cleanup after test
-    if "api.db.database" in sys.modules:
-        api_db_database = sys.modules["api.db.database"]
-        api_db_database._DB_INSTANCE = None
+
+@pytest.fixture(scope="session")
+def postgres_container():
+    """Session-scoped PostgreSQL container - shared across all tests"""
+    with PostgresContainer(
+        image=POSTGRES_IMAGE,
+        username=TEST_DB_USER,
+        password=TEST_DB_PASSWORD,
+        dbname=TEST_DB_NAME,
+    ) as container:
+        # Wait for container to be ready
+        container.get_connection_url()
+        yield container
+
+
+@pytest.fixture(scope="session")
+def postgres_connection_params(postgres_container):
+    """Get connection parameters for the test PostgreSQL container"""
+    return {
+        "host": postgres_container.get_container_host_ip(),
+        "port": postgres_container.get_exposed_port(5432),
+        "dbname": TEST_DB_NAME,
+        "user": TEST_DB_USER,
+        "password": TEST_DB_PASSWORD,
+    }
+
+
+@pytest.fixture(scope="session")
+def schema_sql():
+    """Load the PostgreSQL schema SQL"""
+    schema_path = Path(__file__).parent.parent / "infrastructure" / "postgres" / "schema.sql"
+    if not schema_path.exists():
+        pytest.fail(f"Schema file not found at {schema_path}")
+    return schema_path.read_text()
+
+
+@pytest.fixture(scope="function")
+def pg_db_with_schema(postgres_container, postgres_connection_params, schema_sql):
+    """PostgreSQL database with schema initialized - fresh for each test"""
+    conn = psycopg2.connect(**postgres_connection_params)
+    conn.autocommit = True
+    cursor = conn.cursor()
+
+    # Drop and recreate all tables for a clean state
+    cursor.execute("""
+        DO $$ DECLARE
+            r RECORD;
+        BEGIN
+            -- Drop extensions first (they own functions that can't be dropped)
+            DROP EXTENSION IF EXISTS pg_trgm CASCADE;
+
+            -- Drop all tables
+            FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+                EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
+            END LOOP;
+            -- Drop all functions
+            FOR r IN (SELECT proname, oidvectortypes(proargtypes) as args
+                      FROM pg_proc INNER JOIN pg_namespace ns ON (pg_proc.pronamespace = ns.oid)
+                      WHERE ns.nspname = 'public' AND proname NOT LIKE 'pg_%') LOOP
+                EXECUTE 'DROP FUNCTION IF EXISTS ' || quote_ident(r.proname) || '(' || r.args || ') CASCADE';
+            END LOOP;
+        END $$;
+    """)
+
+    # Apply schema
+    cursor.execute(schema_sql)
+    cursor.close()
+    conn.close()
+
+    yield postgres_connection_params
+
+    # Cleanup is handled by dropping tables in next test
+
+
+@pytest.fixture(scope="function")
+def pg_db_with_data(pg_db_with_schema):
+    """PostgreSQL database with schema and test data"""
+    conn = psycopg2.connect(**pg_db_with_schema)
+    conn.autocommit = True
+    cursor = conn.cursor()
+
+    # Populate test data
+    _populate_test_data_pg(cursor)
+
+    cursor.close()
+    conn.close()
+
+    yield pg_db_with_schema
+
+
+@pytest.fixture(scope="session")
+def pg_db_with_prod_data(postgres_container, postgres_connection_params):
+    """PostgreSQL database loaded with production backup - session scoped for efficiency"""
+    if not PROD_BACKUP_PATH.exists():
+        pytest.skip(f"Production backup not found at {PROD_BACKUP_PATH}")
+
+    conn = psycopg2.connect(**postgres_connection_params)
+    conn.autocommit = True
+    cursor = conn.cursor()
+
+    # Drop and recreate database for clean state
+    cursor.execute("""
+        DO $$ DECLARE
+            r RECORD;
+        BEGIN
+            FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+                EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
+            END LOOP;
+        END $$;
+    """)
+    cursor.close()
+    conn.close()
+
+    # Load production backup using psql
+    host = postgres_connection_params["host"]
+    port = postgres_connection_params["port"]
+
+    # Decompress and pipe to psql
+    with gzip.open(PROD_BACKUP_PATH, 'rt') as f:
+        sql_content = f.read()
+
+    conn = psycopg2.connect(**postgres_connection_params)
+    conn.autocommit = True
+    cursor = conn.cursor()
+
+    # Execute the SQL (may need to split on certain commands)
+    try:
+        cursor.execute(sql_content)
+    except Exception as e:
+        # Some statements may fail, log and continue
+        print(f"Warning loading backup: {e}")
+
+    cursor.close()
+    conn.close()
+
+    yield postgres_connection_params
+
+
+@pytest.fixture(scope="function")
+def set_pg_env(pg_db_with_schema, monkeypatch):
+    """Set environment variables for PostgreSQL connection"""
+    monkeypatch.setenv("DB_HOST", pg_db_with_schema["host"])
+    monkeypatch.setenv("DB_PORT", str(pg_db_with_schema["port"]))
+    monkeypatch.setenv("DB_NAME", pg_db_with_schema["dbname"])
+    monkeypatch.setenv("DB_USER", pg_db_with_schema["user"])
+    monkeypatch.setenv("DB_PASSWORD", pg_db_with_schema["password"])
+    monkeypatch.setenv("ENVIRONMENT", "test")
+
+    yield pg_db_with_schema
+
+
+@pytest.fixture(scope="function")
+def set_pg_env_with_data(pg_db_with_data, monkeypatch):
+    """Set environment variables for PostgreSQL with test data"""
+    monkeypatch.setenv("DB_HOST", pg_db_with_data["host"])
+    monkeypatch.setenv("DB_PORT", str(pg_db_with_data["port"]))
+    monkeypatch.setenv("DB_NAME", pg_db_with_data["dbname"])
+    monkeypatch.setenv("DB_USER", pg_db_with_data["user"])
+    monkeypatch.setenv("DB_PASSWORD", pg_db_with_data["password"])
+    monkeypatch.setenv("ENVIRONMENT", "test")
+
+    yield pg_db_with_data
+
+
+# ============================================================================
+# Legacy fixture aliases for backward compatibility
+# These map old SQLite-based fixtures to new PostgreSQL-based ones
+# ============================================================================
+
+@pytest.fixture(scope="function")
+def memory_db_with_schema(pg_db_with_schema, monkeypatch):
+    """COMPATIBILITY: Maps to pg_db_with_schema"""
+    monkeypatch.setenv("DB_HOST", pg_db_with_schema["host"])
+    monkeypatch.setenv("DB_PORT", str(pg_db_with_schema["port"]))
+    monkeypatch.setenv("DB_NAME", pg_db_with_schema["dbname"])
+    monkeypatch.setenv("DB_USER", pg_db_with_schema["user"])
+    monkeypatch.setenv("DB_PASSWORD", pg_db_with_schema["password"])
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    return pg_db_with_schema
+
+
+@pytest.fixture(scope="function")
+def test_db_with_data(pg_db_with_data, monkeypatch):
+    """COMPATIBILITY: Maps to pg_db_with_data"""
+    monkeypatch.setenv("DB_HOST", pg_db_with_data["host"])
+    monkeypatch.setenv("DB_PORT", str(pg_db_with_data["port"]))
+    monkeypatch.setenv("DB_NAME", pg_db_with_data["dbname"])
+    monkeypatch.setenv("DB_USER", pg_db_with_data["user"])
+    monkeypatch.setenv("DB_PASSWORD", pg_db_with_data["password"])
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    return pg_db_with_data
 
 
 @pytest.fixture(scope="session")
 def test_settings():
     """Test settings configuration"""
     return {
-        "db_path": ":memory:",
         "environment": "test",
         "debug": True,
         "log_level": "DEBUG",
@@ -54,105 +264,6 @@ def test_settings():
         "api_description": "Test API for CocktailDB",
         "api_version": "1.0.0-test",
     }
-
-
-@pytest.fixture(scope="session")
-def production_db_path():
-    """Path to production database copy for read-only tests"""
-    db_path = Path(TEST_DB_PATH)
-    if not db_path.exists():
-        pytest.skip(
-            f"Production test database not found at {TEST_DB_PATH}. "
-            f"Run: ./scripts/restore-backup.sh --target dev --source prod"
-        )
-    return str(db_path)
-
-
-# @pytest.fixture(scope="function")
-# def temp_db_from_production(production_db_path, tmp_path):
-#     """DEPRECATED: Create a temporary copy of production database for isolated tests using pytest's tmp_path"""
-#     # Use pytest's native temporary directory
-#     temp_db = tmp_path / "test_cocktaildb.db"
-#     shutil.copy2(production_db_path, temp_db)
-#     return str(temp_db)
-
-
-@pytest.fixture(scope="function")
-def memory_db():
-    """In-memory SQLite database for unit tests"""
-    return ":memory:"
-
-
-@pytest.fixture(scope="function")
-def memory_db_with_schema():
-    """In-memory SQLite database with schema initialized for unit tests"""
-    import sqlite3
-    import tempfile
-    from pathlib import Path
-
-    # Create a temporary file-based database so we can initialize it
-    temp_fd, temp_path = tempfile.mkstemp(suffix=".db")
-    os.close(temp_fd)
-
-    try:
-        # Initialize schema
-        schema_path = Path(__file__).parent.parent / "schema-deploy" / "schema.sql"
-        if schema_path.exists():
-            conn = sqlite3.connect(temp_path)
-            with open(schema_path, "r") as f:
-                schema_sql = f.read()
-            conn.executescript(schema_sql)
-            # Use DELETE journal mode for tests to avoid locking issues
-            conn.execute("PRAGMA journal_mode=DELETE")
-            conn.close()
-
-        yield temp_path
-    finally:
-        # Simple cleanup
-        if os.path.exists(temp_path):
-            try:
-                os.unlink(temp_path)
-            except OSError:
-                # If we can't delete it immediately, that's okay
-                pass
-
-
-@pytest.fixture(scope="function")
-def test_db_with_data():
-    """Test database with schema and predictable test data for integration tests"""
-    import sqlite3
-    import tempfile
-    from pathlib import Path
-
-    # Create a temporary file-based database so we can initialize it
-    temp_fd, temp_path = tempfile.mkstemp(suffix=".db")
-    os.close(temp_fd)
-
-    try:
-        # Initialize schema
-        schema_path = Path(__file__).parent.parent / "schema-deploy" / "schema.sql"
-        if schema_path.exists():
-            conn = sqlite3.connect(temp_path)
-            with open(schema_path, "r") as f:
-                schema_sql = f.read()
-            conn.executescript(schema_sql)
-
-            # Add predictable test data
-            _populate_test_data(conn)
-
-            # Use DELETE journal mode for tests to avoid locking issues
-            conn.execute("PRAGMA journal_mode=DELETE")
-            conn.close()
-
-        yield temp_path
-    finally:
-        # Simple cleanup
-        if os.path.exists(temp_path):
-            try:
-                os.unlink(temp_path)
-            except OSError:
-                # If we can't delete it immediately, that's okay
-                pass
 
 
 @pytest.fixture(scope="function")
@@ -192,12 +303,8 @@ def mock_admin_user():
 
 
 @pytest.fixture(scope="function")
-def test_client_memory_with_app(test_settings, memory_db_with_schema, monkeypatch):
-    """Test client with in-memory database with schema - returns both client and app"""
-    # Use monkeypatch to set environment variables for settings
-    monkeypatch.setenv("DB_PATH", memory_db_with_schema)
-    monkeypatch.setenv("ENVIRONMENT", "test")
-
+def test_client_memory_with_app(test_settings, memory_db_with_schema):
+    """Test client with PostgreSQL database with schema - returns both client and app"""
     # Import and create app after environment is configured
     from api.main import app
 
@@ -211,32 +318,14 @@ def test_client_memory_with_app(test_settings, memory_db_with_schema, monkeypatc
 
 @pytest.fixture(scope="function")
 def test_client_memory(test_client_memory_with_app):
-    """Test client with in-memory database with schema - returns only client for simple tests"""
+    """Test client with database with schema - returns only client for simple tests"""
     client, app = test_client_memory_with_app
     yield client
 
 
 @pytest.fixture(scope="function")
-def test_client_memory_no_schema(test_settings, memory_db, monkeypatch):
-    """Test client with in-memory database without schema (for testing connection failures)"""
-    # Use monkeypatch to set environment variables for settings
-    monkeypatch.setenv("DB_PATH", memory_db)
-    monkeypatch.setenv("ENVIRONMENT", "test")
-
-    # Import and create app after environment is configured
-    from api.main import app
-
-    client = TestClient(app)
-    yield client
-
-
-@pytest.fixture(scope="function")
-def test_client_with_data(test_settings, test_db_with_data, monkeypatch):
+def test_client_with_data(test_settings, test_db_with_data):
     """Test client with fresh database and predictable test data for integration tests"""
-    # Use monkeypatch to set environment variables
-    monkeypatch.setenv("DB_PATH", test_db_with_data)
-    monkeypatch.setenv("ENVIRONMENT", "test")
-
     # Import and create app after environment is configured
     from api.main import app
 
@@ -249,24 +338,19 @@ def test_client_with_data(test_settings, test_db_with_data, monkeypatch):
 
 
 @pytest.fixture(scope="function")
-def db_with_test_data(test_db_with_data):
+def db_with_test_data(pg_db_with_data):
     """Direct database connection to test database with predictable data"""
-    import sqlite3
-
-    conn = sqlite3.connect(test_db_with_data)
-    conn.row_factory = sqlite3.Row  # Enable dict-like access
+    conn = psycopg2.connect(**pg_db_with_data)
+    conn.autocommit = False
     yield conn
+    conn.rollback()
     conn.close()
 
 
 @pytest.fixture(scope="function")
-def db_instance(memory_db_with_schema, monkeypatch):
+def db_instance(memory_db_with_schema):
     """Database instance with environment properly configured"""
     from api.db.db_core import Database
-
-    # Set environment variable for Database class
-    monkeypatch.setenv("DB_PATH", memory_db_with_schema)
-    monkeypatch.setenv("ENVIRONMENT", "test")
 
     # Create and return Database instance
     db = Database()
@@ -274,13 +358,9 @@ def db_instance(memory_db_with_schema, monkeypatch):
 
 
 @pytest.fixture(scope="function")
-def db_instance_with_data(test_db_with_data, monkeypatch):
+def db_instance_with_data(test_db_with_data):
     """Database instance with environment properly configured and test data"""
     from api.db.db_core import Database
-
-    # Set environment variable for Database class
-    monkeypatch.setenv("DB_PATH", test_db_with_data)
-    monkeypatch.setenv("ENVIRONMENT", "test")
 
     # Create and return Database instance
     db = Database()
@@ -311,7 +391,7 @@ def authenticated_client(test_client_memory_with_app, mock_user):
 
     yield client
 
-    # Clean up the override (test_client_memory_with_app will also clean up)
+    # Clean up the override
     if require_authentication in app.dependency_overrides:
         del app.dependency_overrides[require_authentication]
 
@@ -335,7 +415,7 @@ def editor_client(test_client_memory_with_app, mock_editor_user):
     # Override both dependencies
     def override_require_authentication():
         return user_info
-    
+
     def override_require_editor_access():
         return user_info
 
@@ -344,7 +424,7 @@ def editor_client(test_client_memory_with_app, mock_editor_user):
 
     yield client
 
-    # Clean up the overrides (test_client_memory_with_app will also clean up)
+    # Clean up the overrides
     if require_authentication in app.dependency_overrides:
         del app.dependency_overrides[require_authentication]
     if require_editor_access in app.dependency_overrides:
@@ -370,7 +450,7 @@ def admin_client(test_client_memory_with_app, mock_admin_user):
     # Override both dependencies
     def override_require_authentication():
         return user_info
-    
+
     def override_require_editor_access():
         return user_info
 
@@ -379,20 +459,11 @@ def admin_client(test_client_memory_with_app, mock_admin_user):
 
     yield client
 
-    # Clean up the overrides (test_client_memory_with_app will also clean up)
+    # Clean up the overrides
     if require_authentication in app.dependency_overrides:
         del app.dependency_overrides[require_authentication]
     if require_editor_access in app.dependency_overrides:
         del app.dependency_overrides[require_editor_access]
-
-
-# @pytest.fixture(scope="function")
-# def db_connection(temp_db_from_production):
-#     """DEPRECATED: Direct database connection for test data inspection"""
-#     conn = sqlite3.connect(temp_db_from_production)
-#     conn.row_factory = sqlite3.Row  # Enable dict-like access
-#     yield conn
-#     conn.close()
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -400,13 +471,7 @@ def setup_test_environment():
     """Setup test environment (runs once per session)"""
     # Create directories
     Path("tests/fixtures").mkdir(parents=True, exist_ok=True)
-    Path(TEMP_DB_DIR).mkdir(parents=True, exist_ok=True)
-
     yield
-
-    # Cleanup temp databases
-    if Path(TEMP_DB_DIR).exists():
-        shutil.rmtree(TEMP_DB_DIR, ignore_errors=True)
 
 
 @pytest.fixture(scope="function")
@@ -437,7 +502,10 @@ def sample_recipe_data():
     }
 
 
+# ============================================================================
 # Utility functions for tests
+# ============================================================================
+
 def assert_valid_response_structure(response_data: Dict[str, Any], expected_keys: list):
     """Assert that response has expected structure"""
     assert isinstance(response_data, dict)
@@ -604,80 +672,36 @@ def assert_tag_structure(tag: Dict[str, Any]):
         required_fields = ["id", "name"]
         for field in required_fields:
             assert field in tag, f"Tag must include '{field}' field"
-    # If tag is just a string, that's also acceptable in some contexts
 
 
-def create_test_recipe_with_rating(
-    db_connection, user_id: str, recipe_name: str, rating: int
-):
-    """Helper function to create a test recipe with a user rating"""
-    # Create recipe
-    cursor = db_connection.execute(
-        "INSERT INTO recipes (name, instructions, created_by) VALUES (?, ?, ?) RETURNING id",
-        (recipe_name, "Test instructions for " + recipe_name, user_id),
-    )
-    recipe_id = cursor.fetchone()["id"]
+def _populate_test_data_pg(cursor):
+    """Populate test database with predictable test data for integration tests (PostgreSQL)"""
 
-    # Create rating
-    db_connection.execute(
-        "INSERT INTO ratings (recipe_id, user_id, rating) VALUES (?, ?, ?)",
-        (recipe_id, user_id, rating),
-    )
+    # Add units first (they are required by recipe_ingredients)
+    cursor.execute("""
+        INSERT INTO units (name, abbreviation, conversion_to_ml) VALUES
+        ('ounce', 'oz', 29.5735),
+        ('milliliter', 'ml', 1.0),
+        ('teaspoon', 'tsp', 4.92892),
+        ('tablespoon', 'tbsp', 14.7868),
+        ('dash', 'dash', 0.9)
+        ON CONFLICT (name) DO NOTHING
+    """)
 
-    db_connection.commit()
-    return recipe_id
+    # Add base ingredients
+    cursor.execute("""
+        INSERT INTO ingredients (name, description, parent_id, path) VALUES
+        ('Whiskey', 'Distilled grain spirit', NULL, '/1/'),
+        ('Rum', 'Distilled sugarcane spirit', NULL, '/2/'),
+        ('Vodka', 'Neutral grain spirit', NULL, '/3/'),
+        ('Gin', 'Juniper-flavored spirit', NULL, '/4/'),
+        ('Tequila', 'Agave-based spirit', NULL, '/5/'),
+        ('Brandy', 'Distilled wine', NULL, '/6/'),
+        ('Citrus', 'Citrus fruits and juices', NULL, '/7/')
+        ON CONFLICT (name) DO NOTHING
+    """)
 
-
-def create_test_recipe_with_tags(
-    db_connection,
-    user_id: str,
-    recipe_name: str,
-    public_tags: list = None,
-    private_tags: list = None,
-):
-    """Helper function to create a test recipe with public and private tags"""
-    # Create recipe
-    cursor = db_connection.execute(
-        "INSERT INTO recipes (name, instructions, created_by) VALUES (?, ?, ?) RETURNING id",
-        (recipe_name, "Test instructions for " + recipe_name, user_id),
-    )
-    recipe_id = cursor.fetchone()["id"]
-
-    # Create and associate public tags
-    if public_tags:
-        for tag_name in public_tags:
-            cursor = db_connection.execute(
-                "INSERT INTO tags (name, is_public, created_by) VALUES (?, ?, ?) RETURNING id",
-                (tag_name, 1, user_id),
-            )
-            tag_id = cursor.fetchone()["id"]
-            db_connection.execute(
-                "INSERT INTO recipe_tags (recipe_id, tag_id) VALUES (?, ?)",
-                (recipe_id, tag_id),
-            )
-
-    # Create and associate private tags
-    if private_tags:
-        for tag_name in private_tags:
-            cursor = db_connection.execute(
-                "INSERT INTO tags (name, is_public, created_by) VALUES (?, ?, ?) RETURNING id",
-                (tag_name, 0, user_id),
-            )
-            tag_id = cursor.fetchone()["id"]
-            db_connection.execute(
-                "INSERT INTO recipe_tags (recipe_id, tag_id) VALUES (?, ?)",
-                (recipe_id, tag_id),
-            )
-
-    db_connection.commit()
-    return recipe_id
-
-
-def _populate_test_data(conn):
-    """Populate test database with predictable test data for integration tests"""
-    cursor = conn.cursor()
-
-    # Add additional ingredients beyond what's already in schema.sql
+    # Add child ingredients
     cursor.execute("""
         INSERT INTO ingredients (name, description, parent_id, path) VALUES
         ('Bourbon', 'American whiskey made from corn', 1, '/1/8/'),
@@ -686,6 +710,7 @@ def _populate_test_data(conn):
         ('Lime Juice', 'Fresh citrus juice', 7, '/7/11/'),
         ('Simple Syrup', 'Sugar and water syrup', NULL, '/12/'),
         ('Angostura Bitters', 'Aromatic bitters', NULL, '/13/')
+        ON CONFLICT (name) DO NOTHING
     """)
 
     # Add test recipes with predictable content
@@ -695,23 +720,66 @@ def _populate_test_data(conn):
         ('Test Whiskey Sour', 'Shake whiskey, lemon juice, and simple syrup with ice', 'Tart whiskey cocktail', 'Test Source', 4.0, 1),
         ('Test Daiquiri', 'Shake rum, lime juice, and simple syrup with ice', 'Classic rum cocktail', 'Test Source', 0, 0),
         ('Test Gin Martini', 'Stir gin and vermouth with ice, strain', 'Classic gin cocktail', 'Test Source', 5.0, 1)
+        ON CONFLICT (name) DO NOTHING
     """)
 
-    # Add recipe ingredients
-    cursor.execute("""
-        INSERT INTO recipe_ingredients (recipe_id, ingredient_id, unit_id, amount) VALUES
-        (1, 8, 1, 2.0),     -- Old Fashioned: 2 oz Bourbon
-        (1, 13, 5, 2),      -- Old Fashioned: 2 dashes Angostura Bitters
-        (1, 12, 3, 0.25),   -- Old Fashioned: 1/4 tsp Simple Syrup
-        (2, 8, 1, 2.0),     -- Whiskey Sour: 2 oz Bourbon
-        (2, 10, 1, 0.75),   -- Whiskey Sour: 0.75 oz Lemon Juice
-        (2, 12, 1, 0.5),    -- Whiskey Sour: 0.5 oz Simple Syrup
-        (3, 2, 1, 2.0),     -- Daiquiri: 2 oz Rum
-        (3, 11, 1, 0.75),   -- Daiquiri: 0.75 oz Lime Juice
-        (3, 12, 1, 0.5),    -- Daiquiri: 0.5 oz Simple Syrup
-        (4, 4, 1, 2.5),     -- Gin Martini: 2.5 oz Gin
-        (4, 1, 1, 0.5)      -- Gin Martini: 0.5 oz Vermouth (using Whiskey as placeholder)
-    """)
+    # Get ingredient IDs for recipe_ingredients
+    cursor.execute("SELECT id, name FROM ingredients")
+    ingredients = {row[1]: row[0] for row in cursor.fetchall()}
+
+    cursor.execute("SELECT id, name FROM units")
+    units = {row[1]: row[0] for row in cursor.fetchall()}
+
+    cursor.execute("SELECT id, name FROM recipes")
+    recipes = {row[1]: row[0] for row in cursor.fetchall()}
+
+    # Add recipe ingredients using dynamic IDs
+    if ingredients and units and recipes:
+        bourbon_id = ingredients.get('Bourbon', 8)
+        lemon_id = ingredients.get('Lemon Juice', 10)
+        lime_id = ingredients.get('Lime Juice', 11)
+        syrup_id = ingredients.get('Simple Syrup', 12)
+        bitters_id = ingredients.get('Angostura Bitters', 13)
+        rum_id = ingredients.get('Rum', 2)
+        gin_id = ingredients.get('Gin', 4)
+        whiskey_id = ingredients.get('Whiskey', 1)
+
+        oz_id = units.get('ounce', 1)
+        dash_id = units.get('dash', 5)
+        tsp_id = units.get('teaspoon', 3)
+
+        old_fashioned_id = recipes.get('Test Old Fashioned', 1)
+        whiskey_sour_id = recipes.get('Test Whiskey Sour', 2)
+        daiquiri_id = recipes.get('Test Daiquiri', 3)
+        martini_id = recipes.get('Test Gin Martini', 4)
+
+        cursor.execute("""
+            INSERT INTO recipe_ingredients (recipe_id, ingredient_id, unit_id, amount) VALUES
+            (%s, %s, %s, 2.0),
+            (%s, %s, %s, 2),
+            (%s, %s, %s, 0.25),
+            (%s, %s, %s, 2.0),
+            (%s, %s, %s, 0.75),
+            (%s, %s, %s, 0.5),
+            (%s, %s, %s, 2.0),
+            (%s, %s, %s, 0.75),
+            (%s, %s, %s, 0.5),
+            (%s, %s, %s, 2.5),
+            (%s, %s, %s, 0.5)
+            ON CONFLICT DO NOTHING
+        """, (
+            old_fashioned_id, bourbon_id, oz_id,  # Old Fashioned: Bourbon
+            old_fashioned_id, bitters_id, dash_id,  # Old Fashioned: Bitters
+            old_fashioned_id, syrup_id, tsp_id,  # Old Fashioned: Syrup
+            whiskey_sour_id, bourbon_id, oz_id,  # Whiskey Sour: Bourbon
+            whiskey_sour_id, lemon_id, oz_id,  # Whiskey Sour: Lemon
+            whiskey_sour_id, syrup_id, oz_id,  # Whiskey Sour: Syrup
+            daiquiri_id, rum_id, oz_id,  # Daiquiri: Rum
+            daiquiri_id, lime_id, oz_id,  # Daiquiri: Lime
+            daiquiri_id, syrup_id, oz_id,  # Daiquiri: Syrup
+            martini_id, gin_id, oz_id,  # Martini: Gin
+            martini_id, whiskey_id, oz_id,  # Martini: Vermouth placeholder
+        ))
 
     # Add test ratings
     cursor.execute("""
@@ -720,24 +788,28 @@ def _populate_test_data(conn):
         ('test-user-2', 'testuser2', 1, 5),
         ('test-user-1', 'testuser1', 2, 4),
         ('test-user-1', 'testuser1', 4, 5)
+        ON CONFLICT DO NOTHING
     """)
 
-    # Add test tags (Note: Tiki=1, Classic=2 already exist from schema)
+    # Add test tags
     cursor.execute("""
         INSERT INTO tags (name, created_by) VALUES
+        ('Tiki', NULL),
+        ('Classic', NULL),
         ('Whiskey', NULL),
         ('Citrus', NULL),
         ('Sweet', NULL),
         ('Stirred', NULL),
         ('Shaken', NULL),
         ('My Favorite', 'test-user-1')
+        ON CONFLICT DO NOTHING
     """)
 
-    # Add recipe-tag associations (adjusting for existing tags: Tiki=1, Classic=2)
+    # Add recipe-tag associations
     cursor.execute("""
         INSERT INTO recipe_tags (recipe_id, tag_id) VALUES
         (1, 2),  -- Old Fashioned: Classic
-        (1, 3),  -- Old Fashioned: Whiskey  
+        (1, 3),  -- Old Fashioned: Whiskey
         (1, 5),  -- Old Fashioned: Sweet
         (1, 6),  -- Old Fashioned: Stirred
         (2, 3),  -- Whiskey Sour: Whiskey
@@ -749,6 +821,5 @@ def _populate_test_data(conn):
         (4, 2),  -- Gin Martini: Classic
         (4, 6),  -- Gin Martini: Stirred
         (1, 8)   -- Old Fashioned: My Favorite (private tag)
+        ON CONFLICT DO NOTHING
     """)
-
-    conn.commit()

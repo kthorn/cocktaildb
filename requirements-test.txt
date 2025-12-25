@@ -1,0 +1,18 @@
+# Testing dependencies
+# Install with: pip install -r requirements-test.txt
+#
+# This file extends the main requirements.txt with test-specific dependencies
+
+-r requirements.txt
+
+# Test frameworks (some already in requirements.txt, listed here for clarity)
+pytest>=7.4.3
+pytest-asyncio>=0.21.1
+pytest-mock>=3.14.1
+pytest-cov>=4.1.0
+
+# PostgreSQL testing with Docker containers
+testcontainers>=4.0.0
+
+# PostgreSQL driver (should already be installed via psycopg2)
+psycopg2-binary>=2.9.0
