@@ -29,9 +29,7 @@ run_foreground() {
 
     cd "$APP_HOME"
 
-    # Run via docker compose with memory limit to prevent OOM
-    # 2GB limit with 3GB swap ensures analytics can't crash the system
-    docker compose run --rm --memory=2g --memory-swap=3g api python -m analytics.analytics_refresh
+    docker compose run --rm api python -m analytics.analytics_refresh
 
     echo ""
     echo "=== Analytics Refresh Complete ==="
