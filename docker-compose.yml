@@ -37,6 +37,8 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - /var/lib/cocktaildb/analytics:/var/lib/cocktaildb/analytics
+    mem_limit: 3g
+    memswap_limit: 4g
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
