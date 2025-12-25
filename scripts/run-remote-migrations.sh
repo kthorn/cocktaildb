@@ -4,7 +4,7 @@ set -euo pipefail
 TARGET_ENV="dev"
 APP_DIR="/opt/cocktaildb"
 HOST=""
-SSH_KEY="${COCKTAILDB_SSH_KEY:-}"
+SSH_KEY="${SSH_KEY:-}"
 MIGRATION_FILE="${COCKTAILDB_MIGRATION_FILE:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -16,7 +16,7 @@ Usage: $0 [dev|prod]
 Runs /opt/cocktaildb/scripts/run-migrations.sh over SSH.
 Note: run the Ansible deploy first so /opt/cocktaildb ownership and scripts are set.
 Optional env:
-  COCKTAILDB_SSH_KEY=/path/to/key.pem
+  SSH_KEY=/path/to/key.pem
   COCKTAILDB_MIGRATION_FILE=/absolute/or/relative/path/to/migration.sql
 EOT
 }

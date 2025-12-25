@@ -390,7 +390,7 @@ set -euo pipefail
 TARGET_ENV="dev"
 APP_DIR="/opt/cocktaildb"
 HOST=""
-SSH_KEY="${COCKTAILDB_SSH_KEY:-}"
+SSH_KEY="${SSH_KEY:-}"
 
 show_help() {
   cat << EOT
@@ -399,7 +399,7 @@ Usage: $0 [dev|prod]
 Runs /opt/cocktaildb/scripts/run-migrations.sh over SSH.
 Note: run the Ansible deploy first so /opt/cocktaildb ownership and scripts are set.
 Optional env:
-  COCKTAILDB_SSH_KEY=/path/to/key.pem
+  SSH_KEY=/path/to/key.pem
 EOT
 }
 
@@ -462,7 +462,7 @@ git commit -m "docs: add analytics trigger ops verification"
 
 - Run the Ansible deploy first so `/opt/cocktaildb` ownership and scripts are set.
 - Run `scripts/run-remote-migrations.sh dev` and confirm migrations apply on dev.
-- If SSH requires a specific key, use `COCKTAILDB_SSH_KEY=~/.ssh/cocktaildb-ec2.pem scripts/run-remote-migrations.sh dev`.
+- If SSH requires a specific key, use `SSH_KEY=~/.ssh/cocktaildb-ec2.pem scripts/run-remote-migrations.sh dev`.
 - Update a recipe and verify `analytics_refresh_state.dirty_at` updates.
 - Make multiple edits inside 15 minutes and confirm analytics runs once after inactivity.
 - Confirm daily `cocktaildb-analytics.timer` is disabled and debounce timer is active.

@@ -1,8 +1,8 @@
-"""S3 storage manager for pre-generated analytics data"""
+"""Local storage manager for pre-generated analytics data"""
 
 import json
-import boto3
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, Dict, Any
 import logging
 
@@ -10,33 +10,31 @@ logger = logging.getLogger(__name__)
 
 
 class AnalyticsStorage:
-    """S3 storage manager for pre-generated analytics data"""
+    """Local filesystem storage for pre-generated analytics data"""
 
-    def __init__(self, bucket_name: str):
-        self.bucket_name = bucket_name
-        self.s3_client = boto3.client('s3')
+    def __init__(self, storage_path: str):
+        self.storage_path = Path(storage_path)
         self.storage_version = "v1"
+        version_path = self.storage_path / self.storage_version
+        version_path.mkdir(parents=True, exist_ok=True)
 
-    def _get_storage_key(self, analytics_type: str) -> str:
-        """Generate S3 key for analytics type"""
-        return f"analytics/{self.storage_version}/{analytics_type}.json"
+    def _get_file_path(self, analytics_type: str) -> Path:
+        """Generate file path for analytics type"""
+        return self.storage_path / self.storage_version / f"{analytics_type}.json"
 
     def get_analytics(self, analytics_type: str) -> Optional[Dict[Any, Any]]:
         """Retrieve pre-generated analytics data from storage"""
         try:
-            key = self._get_storage_key(analytics_type)
-            response = self.s3_client.get_object(
-                Bucket=self.bucket_name,
-                Key=key
-            )
+            file_path = self._get_file_path(analytics_type)
+            if not file_path.exists():
+                logger.info(f"No analytics data found for {analytics_type}")
+                return None
 
-            data = json.loads(response['Body'].read().decode('utf-8'))
+            with open(file_path, "r", encoding="utf-8") as file_handle:
+                data = json.load(file_handle)
             logger.info(f"Retrieved analytics data for {analytics_type}")
             return data
 
-        except self.s3_client.exceptions.NoSuchKey:
-            logger.info(f"No analytics data found for {analytics_type}")
-            return None
         except Exception as e:
             logger.error(f"Error retrieving analytics data for {analytics_type}: {str(e)}")
             return None
@@ -44,9 +42,7 @@ class AnalyticsStorage:
     def put_analytics(self, analytics_type: str, data: Dict[Any, Any]) -> bool:
         """Store pre-generated analytics data in storage"""
         try:
-            key = self._get_storage_key(analytics_type)
-
-            # Add metadata
+            file_path = self._get_file_path(analytics_type)
             storage_data = {
                 "data": data,
                 "metadata": {
@@ -56,12 +52,8 @@ class AnalyticsStorage:
                 }
             }
 
-            self.s3_client.put_object(
-                Bucket=self.bucket_name,
-                Key=key,
-                Body=json.dumps(storage_data),
-                ContentType='application/json'
-            )
+            with open(file_path, "w", encoding="utf-8") as file_handle:
+                json.dump(storage_data, file_handle)
 
             logger.info(f"Successfully stored analytics data for {analytics_type}")
             return True
