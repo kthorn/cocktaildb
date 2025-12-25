@@ -196,7 +196,7 @@ def build_search_recipes_paginated_sql(
             r.id, r.name, r.instructions, r.description, r.image_url,
             r.source, r.source_url, r.avg_rating, r.rating_count,
             STRING_AGG(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
-            STRING_AGG(CASE WHEN t.created_by = :cognito_user_id THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data,
+            STRING_AGG(CASE WHEN t.created_by = %(cognito_user_id)s THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data,
             ur.rating AS user_rating
         FROM
             recipes r
@@ -205,18 +205,18 @@ def build_search_recipes_paginated_sql(
         LEFT JOIN
             tags t ON rt.tag_id = t.id
         LEFT JOIN
-            ratings ur ON r.id = ur.recipe_id AND ur.cognito_user_id = :cognito_user_id
+            ratings ur ON r.id = ur.recipe_id AND ur.cognito_user_id = %(cognito_user_id)s
         LEFT JOIN
             recipe_ingredients ri ON r.id = ri.recipe_id
         LEFT JOIN
             ingredients i ON ri.ingredient_id = i.id
         WHERE
-            (:search_query IS NULL OR
-             r.name ILIKE :search_query_with_wildcards)
+            (%(search_query)s IS NULL OR
+             r.name ILIKE %(search_query_with_wildcards)s)
         AND
-            (:min_rating IS NULL OR COALESCE({rating_field}, 0) >= :min_rating)
+            (%(min_rating)s IS NULL OR COALESCE({rating_field}, 0) >= %(min_rating)s)
         AND
-            (:max_rating IS NULL OR COALESCE({rating_field}, 0) <= :max_rating)"""
+            (%(max_rating)s IS NULL OR COALESCE({rating_field}, 0) <= %(max_rating)s)"""
 
     # Add MUST ingredient filtering - recipe must contain ALL of the specified ingredients
     for condition in must_conditions:
@@ -235,7 +235,7 @@ def build_search_recipes_paginated_sql(
     # Add inventory filtering - recipe can be made with user's inventory (substitution-aware)
     if inventory_filter:
         base_sql += """ AND r.id IN (
-            SELECT r_inv.id 
+            SELECT r_inv.id
             FROM recipes r_inv
             WHERE r_inv.id = r.id
             AND NOT EXISTS (
@@ -245,7 +245,7 @@ def build_search_recipes_paginated_sql(
                 AND NOT EXISTS (
                     SELECT 1 FROM user_ingredients ui_check
                     LEFT JOIN ingredients i_user ON ui_check.ingredient_id = i_user.id
-                    WHERE ui_check.cognito_user_id = :cognito_user_id
+                    WHERE ui_check.cognito_user_id = %(cognito_user_id)s
                     AND (
                         {substitution_match}
                     )
@@ -263,22 +263,22 @@ def build_search_recipes_paginated_sql(
     if sort_by == 'random':
         base_sql += """
         ORDER BY RANDOM()
-        LIMIT :limit OFFSET :offset
+        LIMIT %(limit)s OFFSET %(offset)s
     ),"""
     else:
         base_sql += """
         ORDER BY
             CASE
-                WHEN :sort_by = 'name' AND :sort_order = 'asc' THEN r.name
-                WHEN :sort_by = 'avg_rating' AND :sort_order = 'asc' THEN CAST(COALESCE(r.avg_rating, 0) AS TEXT)
-                WHEN :sort_by = 'created_at' AND :sort_order = 'asc' THEN CAST(r.id AS TEXT)
+                WHEN %(sort_by)s = 'name' AND %(sort_order)s = 'asc' THEN r.name
+                WHEN %(sort_by)s = 'avg_rating' AND %(sort_order)s = 'asc' THEN CAST(COALESCE(r.avg_rating, 0) AS TEXT)
+                WHEN %(sort_by)s = 'created_at' AND %(sort_order)s = 'asc' THEN CAST(r.id AS TEXT)
             END ASC,
             CASE
-                WHEN :sort_by = 'name' AND :sort_order = 'desc' THEN r.name
-                WHEN :sort_by = 'avg_rating' AND :sort_order = 'desc' THEN CAST(COALESCE(r.avg_rating, 0) AS TEXT)
-                WHEN :sort_by = 'created_at' AND :sort_order = 'desc' THEN CAST(r.id AS TEXT)
+                WHEN %(sort_by)s = 'name' AND %(sort_order)s = 'desc' THEN r.name
+                WHEN %(sort_by)s = 'avg_rating' AND %(sort_order)s = 'desc' THEN CAST(COALESCE(r.avg_rating, 0) AS TEXT)
+                WHEN %(sort_by)s = 'created_at' AND %(sort_order)s = 'desc' THEN CAST(r.id AS TEXT)
             END DESC
-        LIMIT :limit OFFSET :offset
+        LIMIT %(limit)s OFFSET %(offset)s
     ),"""
 
     base_sql += """
@@ -313,14 +313,14 @@ def build_search_recipes_paginated_sql(
         base_sql += """
         ORDER BY
             CASE
-                WHEN :sort_by = 'name' AND :sort_order = 'asc' THEN sr.name
-                WHEN :sort_by = 'avg_rating' AND :sort_order = 'asc' THEN CAST(COALESCE(sr.avg_rating, 0) AS TEXT)
-                WHEN :sort_by = 'created_at' AND :sort_order = 'asc' THEN CAST(sr.id AS TEXT)
+                WHEN %(sort_by)s = 'name' AND %(sort_order)s = 'asc' THEN sr.name
+                WHEN %(sort_by)s = 'avg_rating' AND %(sort_order)s = 'asc' THEN CAST(COALESCE(sr.avg_rating, 0) AS TEXT)
+                WHEN %(sort_by)s = 'created_at' AND %(sort_order)s = 'asc' THEN CAST(sr.id AS TEXT)
             END ASC,
             CASE
-                WHEN :sort_by = 'name' AND :sort_order = 'desc' THEN sr.name
-                WHEN :sort_by = 'avg_rating' AND :sort_order = 'desc' THEN CAST(COALESCE(sr.avg_rating, 0) AS TEXT)
-                WHEN :sort_by = 'created_at' AND :sort_order = 'desc' THEN CAST(sr.id AS TEXT)
+                WHEN %(sort_by)s = 'name' AND %(sort_order)s = 'desc' THEN sr.name
+                WHEN %(sort_by)s = 'avg_rating' AND %(sort_order)s = 'desc' THEN CAST(COALESCE(sr.avg_rating, 0) AS TEXT)
+                WHEN %(sort_by)s = 'created_at' AND %(sort_order)s = 'desc' THEN CAST(sr.id AS TEXT)
             END DESC,
             COALESCE(ri.amount * u.conversion_to_ml, 0) DESC,
             ri.id ASC
