@@ -500,7 +500,7 @@ def get_ingredient_recommendations_sql() -> str:
             COALESCE(i.allow_substitution, FALSE) as user_allow_substitution
         FROM user_ingredients ui
         JOIN ingredients i ON ui.ingredient_id = i.id
-        WHERE ui.cognito_user_id = :user_id
+        WHERE ui.cognito_user_id = %(user_id)s
     ),
     -- For each recipe, find all required ingredients
     recipe_requirements AS (
@@ -561,7 +561,7 @@ def get_ingredient_recommendations_sql() -> str:
         JOIN recipes r ON mi.recipe_id = r.id
         GROUP BY mi.missing_ingredient_id
         ORDER BY recipes_unlocked DESC
-        LIMIT :limit
+        LIMIT %(limit)s
     )
     -- Get full ingredient details for the recommendations
     SELECT
