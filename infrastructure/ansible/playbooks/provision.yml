@@ -95,7 +95,10 @@
           local   all             all                                     md5
           host    all             all             127.0.0.1/32            md5
           # Allow Docker containers to connect
+          # 172.17.0.0/16 = default docker bridge
+          # 172.28.0.0/16 = cocktaildb custom network (from docker-compose.yml)
           host    all             all             172.17.0.0/16           md5
+          host    all             all             172.28.0.0/16           md5
         owner: postgres
         group: postgres
         mode: '0600'
