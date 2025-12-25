@@ -85,24 +85,6 @@ Resources:
         - Key: Purpose
           Value: database-backups
 
-  # S3 bucket for pre-generated analytics
-  AnalyticsBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      # Let CloudFormation generate unique name to avoid conflicts
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: ExpireOldAnalytics
-            Status: Enabled
-            ExpirationInDays: 7
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Purpose
-          Value: analytics-cache
-
   # =============================================================================
   # IAM - EC2 Role and Instance Profile
   # =============================================================================
@@ -112,7 +94,7 @@ Resources:
   #
   # For dev, we create the IAM resources here since there's no separate EC2 stack.
 
-  # IAM Role for EC2 instances (S3 access for backups and analytics) - dev only
+  # IAM Role for EC2 instances - dev only
   EC2Role:
     Type: AWS::IAM::Role
     Condition: IsDevEnvironment
@@ -125,20 +107,6 @@ Resources:
             Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
-      Policies:
-        - PolicyName: S3Access
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                  - s3:ListBucket
-                  - s3:DeleteObject
-                Resource:
-                  - !GetAtt AnalyticsBucket.Arn
-                  - !Sub ${AnalyticsBucket.Arn}/*
 
   # Instance Profile for EC2 - dev only
   EC2InstanceProfile:
@@ -354,10 +322,6 @@ Resources:
 
 Outputs:
   # S3 Buckets
-  AnalyticsBucketName:
-    Description: S3 bucket for pre-generated analytics
-    Value: !Ref AnalyticsBucket
-
   BackupBucketName:
     Description: S3 bucket for database backups (prod only)
     Value: !If [IsProdEnvironment, !Ref BackupBucket, "N/A (dev environment)"]

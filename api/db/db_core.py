@@ -221,20 +221,20 @@ class Database:
                 cursor.execute(
                     """
                     INSERT INTO ingredients (name, description, parent_id, allow_substitution)
-                    VALUES (%(name)s, %(description)s, %(parent_id)s, %(allow_substitution)s)
+                    VALUES (%s, %s, %s, %s)
                     RETURNING id
                     """,
-                    {
-                        "name": data.get("name"),
-                        "description": data.get("description"),
-                        "parent_id": data.get("parent_id"),
-                        "allow_substitution": data.get("allow_substitution", False),
-                    },
+                    (
+                        data.get("name"),
+                        data.get("description"),
+                        data.get("parent_id"),
+                        data.get("allow_substitution", False),
+                    ),
                 )
-                result = cursor.fetchone()
-                new_id = result[0] if result else None
-                if new_id is None:
+                new_row = cursor.fetchone()
+                if not new_row or new_row[0] is None:
                     raise ValueError("Failed to get ingredient ID after insertion")
+                new_id = new_row[0]
 
                 # Generate the path
                 if parent_path:
@@ -244,8 +244,8 @@ class Database:
 
                 # Update the path
                 cursor.execute(
-                    "UPDATE ingredients SET path = %(path)s WHERE id = %(id)s",
-                    {"path": path, "id": new_id},
+                    "UPDATE ingredients SET path = %s WHERE id = %s",
+                    (path, new_id),
                 )
 
                 conn.commit()
@@ -753,29 +753,30 @@ class Database:
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
+            cursor.execute("BEGIN")
 
             # Create the recipe
             cursor.execute(
                 """
                 INSERT INTO recipes (name, instructions, description, image_url, source, source_url)
-                VALUES (%(name)s, %(instructions)s, %(description)s, %(image_url)s, %(source)s, %(source_url)s)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
-                {
-                    "name": data["name"] if data["name"] else None,
-                    "instructions": data.get("instructions"),
-                    "description": data.get("description"),
-                    "image_url": data.get("image_url"),
-                    "source": data.get("source"),
-                    "source_url": data.get("source_url"),
-                },
+                (
+                    data["name"] if data["name"] else None,
+                    data.get("instructions"),
+                    data.get("description"),
+                    data.get("image_url"),
+                    data.get("source"),
+                    data.get("source_url"),
+                ),
             )
 
             # Get the recipe ID
-            result = cursor.fetchone()
-            recipe_id = result[0] if result else None
-            if recipe_id is None:
+            recipe_row = cursor.fetchone()
+            if not recipe_row or recipe_row[0] is None:
                 raise ValueError("Failed to get recipe ID after insertion")
+            recipe_id = recipe_row[0]
 
             # Add recipe ingredients
             if "ingredients" in data:
@@ -783,14 +784,14 @@ class Database:
                     cursor.execute(
                         """
                         INSERT INTO recipe_ingredients (recipe_id, ingredient_id, unit_id, amount)
-                        VALUES (%(recipe_id)s, %(ingredient_id)s, %(unit_id)s, %(amount)s)
+                        VALUES (%s, %s, %s, %s)
                         """,
-                        {
-                            "recipe_id": recipe_id,
-                            "ingredient_id": ingredient["ingredient_id"],
-                            "unit_id": ingredient.get("unit_id"),
-                            "amount": ingredient.get("amount"),
-                        },
+                        (
+                            recipe_id,
+                            ingredient["ingredient_id"],
+                            ingredient.get("unit_id"),
+                            ingredient.get("amount"),
+                        ),
                     )
 
             # Commit the transaction
@@ -821,8 +822,8 @@ class Database:
 
         try:
             conn = self._get_connection()
-            conn.execute("BEGIN IMMEDIATE")
             cursor = conn.cursor()
+            cursor.execute("BEGIN")
 
             for data in recipes_data:
                 # Validate ingredients before inserting
@@ -833,7 +834,8 @@ class Database:
                 cursor.execute(
                     """
                     INSERT INTO recipes (name, instructions, description, image_url, source, source_url, created_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
                     """,
                     (
                         data["name"] if data["name"] else None,
@@ -842,13 +844,16 @@ class Database:
                         data.get("image_url"),
                         data.get("source"),
                         data.get("source_url"),
-                        user_id
-                    )
+                        user_id,
+                    ),
                 )
 
-                recipe_id = cursor.lastrowid
-                if recipe_id is None:
-                    raise ValueError(f"Failed to get recipe ID after inserting '{data['name']}'")
+                recipe_row = cursor.fetchone()
+                if not recipe_row or recipe_row[0] is None:
+                    raise ValueError(
+                        f"Failed to get recipe ID after inserting '{data['name']}'"
+                    )
+                recipe_id = recipe_row[0]
 
                 # Batch insert ingredients using executemany
                 if "ingredients" in data and data["ingredients"]:
@@ -864,7 +869,7 @@ class Database:
                     cursor.executemany(
                         """
                         INSERT INTO recipe_ingredients (recipe_id, ingredient_id, unit_id, amount)
-                        VALUES (?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s)
                         """,
                         ingredient_rows
                     )
@@ -1242,8 +1247,8 @@ class Database:
         conn = None
         try:
             conn = self._get_connection()
-            conn.execute("BEGIN IMMEDIATE")  # Get lock immediately
             cursor = conn.cursor()
+            cursor.execute("BEGIN")
 
             # Check if recipe exists
             recipe = cast(
@@ -1257,7 +1262,7 @@ class Database:
 
             # Note: We don't need to explicitly delete recipe_ingredients, ratings, or tags
             # because the ON DELETE CASCADE constraint will handle this automatically
-            cursor.execute("DELETE FROM recipes WHERE id = :id", {"id": recipe_id})
+            cursor.execute("DELETE FROM recipes WHERE id = %s", (recipe_id,))
 
             conn.commit()
             return True
@@ -1283,36 +1288,36 @@ class Database:
             if not existing:
                 return None
             conn = self._get_connection()
-            conn.execute("BEGIN IMMEDIATE")
             cursor = conn.cursor()
+            cursor.execute("BEGIN")
             cursor.execute(
                 """
                 UPDATE recipes
-                SET name = COALESCE(:name, name),
-                    instructions = COALESCE(:instructions, instructions),
-                    description = COALESCE(:description, description),
-                    image_url = COALESCE(:image_url, image_url),
-                    source = COALESCE(:source, source),
-                    source_url = COALESCE(:source_url, source_url)
-                WHERE id = :id
+                SET name = COALESCE(%s, name),
+                    instructions = COALESCE(%s, instructions),
+                    description = COALESCE(%s, description),
+                    image_url = COALESCE(%s, image_url),
+                    source = COALESCE(%s, source),
+                    source_url = COALESCE(%s, source_url)
+                WHERE id = %s
                 """,
-                {
-                    "id": recipe_id,
-                    "name": data.get("name"),
-                    "instructions": data.get("instructions"),
-                    "description": data.get("description"),
-                    "image_url": data.get("image_url"),
-                    "source": data.get("source"),
-                    "source_url": data.get("source_url"),
-                },
+                (
+                    data.get("name"),
+                    data.get("instructions"),
+                    data.get("description"),
+                    data.get("image_url"),
+                    data.get("source"),
+                    data.get("source_url"),
+                    recipe_id,
+                ),
             )
 
             # Update ingredients if provided
             if "ingredients" in data:
                 # Delete existing ingredients for this recipe
                 cursor.execute(
-                    "DELETE FROM recipe_ingredients WHERE recipe_id = :recipe_id",
-                    {"recipe_id": recipe_id},
+                    "DELETE FROM recipe_ingredients WHERE recipe_id = %s",
+                    (recipe_id,),
                 )
 
                 # Insert new ingredients
@@ -1320,14 +1325,14 @@ class Database:
                     cursor.execute(
                         """
                         INSERT INTO recipe_ingredients (recipe_id, ingredient_id, unit_id, amount)
-                        VALUES (:recipe_id, :ingredient_id, :unit_id, :amount)
+                        VALUES (%s, %s, %s, %s)
                         """,
-                        {
-                            "recipe_id": recipe_id,
-                            "ingredient_id": ingredient["ingredient_id"],
-                            "unit_id": ingredient.get("unit_id"),
-                            "amount": ingredient.get("amount"),
-                        },
+                        (
+                            recipe_id,
+                            ingredient["ingredient_id"],
+                            ingredient.get("unit_id"),
+                            ingredient.get("amount"),
+                        ),
                     )
 
             conn.commit()
@@ -1426,8 +1431,8 @@ class Database:
             )
 
             conn = self._get_connection()
-            conn.execute("BEGIN IMMEDIATE")
             cursor = conn.cursor()
+            cursor.execute("BEGIN")
 
             rating_id = None
             if existing_rating:
@@ -1436,32 +1441,34 @@ class Database:
                 cursor.execute(
                     """
                     UPDATE ratings
-                    SET rating = :rating
-                    WHERE cognito_user_id = :user_id AND recipe_id = :recipe_id
+                    SET rating = %s
+                    WHERE cognito_user_id = %s AND recipe_id = %s
                     """,
-                    {
-                        "user_id": data["cognito_user_id"],
-                        "recipe_id": data["recipe_id"],
-                        "rating": data["rating"],
-                    },
+                    (
+                        data["rating"],
+                        data["cognito_user_id"],
+                        data["recipe_id"],
+                    ),
                 )
             else:
                 # Insert new rating
                 cursor.execute(
                     """
                     INSERT INTO ratings (cognito_user_id, cognito_username, recipe_id, rating)
-                    VALUES (:cognito_user_id, :cognito_username, :recipe_id, :rating)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id
                     """,
-                    {
-                        "cognito_user_id": data["cognito_user_id"],
-                        "cognito_username": data["cognito_username"],
-                        "recipe_id": data["recipe_id"],
-                        "rating": data["rating"],
-                    },
+                    (
+                        data["cognito_user_id"],
+                        data["cognito_username"],
+                        data["recipe_id"],
+                        data["rating"],
+                    ),
                 )
-                rating_id = cursor.lastrowid
-                if rating_id is None:
+                rating_row = cursor.fetchone()
+                if not rating_row or rating_row[0] is None:
                     raise ValueError("Failed to get rating ID after insertion")
+                rating_id = rating_row[0]
 
             conn.commit()
             conn.close()
@@ -1524,16 +1531,16 @@ class Database:
                 raise ValueError("Rating not found for this user and recipe")
 
             conn = self._get_connection()
-            conn.execute("BEGIN IMMEDIATE")
             cursor = conn.cursor()
+            cursor.execute("BEGIN")
 
             # Delete the rating
             cursor.execute(
                 """
                 DELETE FROM ratings
-                WHERE cognito_user_id = :user_id AND recipe_id = :recipe_id
+                WHERE cognito_user_id = %s AND recipe_id = %s
                 """,
-                {"user_id": user_id, "recipe_id": recipe_id},
+                (user_id, recipe_id),
             )
 
             conn.commit()
@@ -2326,15 +2333,19 @@ class Database:
 
             # Start a transaction to add all ingredients
             conn = self._get_connection()
-            conn.execute("BEGIN IMMEDIATE")
             cursor = conn.cursor()
+            cursor.execute("BEGIN")
 
             # Add all parent ingredients first (if they don't already exist)
             for parent_id in parent_ingredient_ids:
                 try:
                     # Use INSERT OR IGNORE to add parent ingredient only if it doesn't exist
                     cursor.execute(
-                        "INSERT OR IGNORE INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
+                        """
+                        INSERT INTO user_ingredients (cognito_user_id, ingredient_id)
+                        VALUES (%s, %s)
+                        ON CONFLICT (cognito_user_id, ingredient_id) DO NOTHING
+                        """,
                         (user_id, parent_id),
                     )
                     if cursor.rowcount > 0:
@@ -2349,7 +2360,7 @@ class Database:
 
             # Add the main ingredient
             cursor.execute(
-                "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
+                "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
                 (user_id, ingredient_id),
             )
 
@@ -2478,8 +2489,8 @@ class Database:
                 }
 
             conn = self._get_connection()
-            conn.execute("BEGIN IMMEDIATE")
             cursor = conn.cursor()
+            cursor.execute("BEGIN")
 
             added_count = 0
             already_exists_count = 0
@@ -2504,10 +2515,11 @@ class Database:
                         continue
 
                     # Check if user already has this ingredient
-                    existing = cursor.execute(
-                        "SELECT id FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
+                    cursor.execute(
+                        "SELECT id FROM user_ingredients WHERE cognito_user_id = %s AND ingredient_id = %s",
                         (user_id, ingredient_id),
-                    ).fetchone()
+                    )
+                    existing = cursor.fetchone()
 
                     if existing:
                         already_exists_count += 1
@@ -2515,7 +2527,7 @@ class Database:
 
                     # Add the ingredient
                     cursor.execute(
-                        "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
+                        "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
                         (user_id, ingredient_id),
                     )
                     added_count += 1
@@ -2559,8 +2571,8 @@ class Database:
             )
 
             conn = self._get_connection()
-            conn.execute("BEGIN IMMEDIATE")
             cursor = conn.cursor()
+            cursor.execute("BEGIN")
 
             removed_count = 0
             not_found_count = 0
@@ -2574,10 +2586,11 @@ class Database:
             for ingredient_id in ingredient_ids:
                 try:
                     # Check if user has this ingredient
-                    existing = cursor.execute(
-                        "SELECT id FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
+                    cursor.execute(
+                        "SELECT id FROM user_ingredients WHERE cognito_user_id = %s AND ingredient_id = %s",
                         (user_id, ingredient_id),
-                    ).fetchone()
+                    )
+                    existing = cursor.fetchone()
 
                     if not existing:
                         logger.debug(
@@ -2587,10 +2600,11 @@ class Database:
                         continue
 
                     # Get the ingredient details
-                    ingredient = cursor.execute(
-                        "SELECT id, name, path FROM ingredients WHERE id = ?",
+                    cursor.execute(
+                        "SELECT id, name, path FROM ingredients WHERE id = %s",
                         (ingredient_id,),
-                    ).fetchone()
+                    )
+                    ingredient = cursor.fetchone()
 
                     if not ingredient:
                         logger.warning(
@@ -2639,17 +2653,18 @@ class Database:
                     # Check if this ingredient has any child ingredients in the user's inventory
                     if ingredient_path:
                         # Look for child ingredients in user's inventory
-                        child_ingredients = cursor.execute(
+                        cursor.execute(
                             """
                             SELECT ui.ingredient_id, i.name, i.path
                             FROM user_ingredients ui
                             JOIN ingredients i ON ui.ingredient_id = i.id
-                            WHERE ui.cognito_user_id = ? 
-                            AND i.path LIKE ?
-                            AND i.id != ?
+                            WHERE ui.cognito_user_id = %s 
+                            AND i.path LIKE %s
+                            AND i.id != %s
                             """,
                             (user_id, f"{ingredient_path}%", ingredient_id),
-                        ).fetchall()
+                        )
+                        child_ingredients = cursor.fetchall()
 
                         if child_ingredients:
                             # Check if any child ingredients are NOT being removed
@@ -2707,10 +2722,11 @@ class Database:
                     ingredient_name = ingredient["name"]
 
                     # Check if user still has this ingredient (re-check in case something changed)
-                    existing = cursor.execute(
-                        "SELECT id FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
+                    cursor.execute(
+                        "SELECT id FROM user_ingredients WHERE cognito_user_id = %s AND ingredient_id = %s",
                         (user_id, ingredient_id),
-                    ).fetchone()
+                    )
+                    existing = cursor.fetchone()
 
                     if not existing:
                         logger.debug(
@@ -2720,7 +2736,7 @@ class Database:
 
                     # Remove the ingredient
                     cursor.execute(
-                        "DELETE FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
+                        "DELETE FROM user_ingredients WHERE cognito_user_id = %s AND ingredient_id = %s",
                         (user_id, ingredient_id),
                     )
                     removed_count += 1

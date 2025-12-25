@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 # Initialize storage manager
-ANALYTICS_BUCKET = os.environ.get("ANALYTICS_BUCKET", "")
-storage_manager = AnalyticsStorage(ANALYTICS_BUCKET) if ANALYTICS_BUCKET else None
+ANALYTICS_PATH = os.environ.get("ANALYTICS_PATH", "")
+storage_manager = AnalyticsStorage(ANALYTICS_PATH) if ANALYTICS_PATH else None
 
 
 @router.get("/ingredient-usage")

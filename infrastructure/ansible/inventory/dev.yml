@@ -28,6 +28,6 @@ all:
       app_client_id: b8un2vqbdkmogqrpf43bek6at
       cognito_domain: "https://cocktaildbauth-dev-732940910135-v3.auth.us-east-1.amazoncognito.com"
 
-      # S3 buckets
-      analytics_bucket: cocktaildb-dev-analyticsbucket-tydlnoijqkpw
+      # Storage paths
+      analytics_path: /var/lib/cocktaildb/analytics
       backup_bucket: ""

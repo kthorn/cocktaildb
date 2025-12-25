@@ -187,7 +187,7 @@ COCKTAILDB_DB_PASSWORD="<your-password>" ansible-playbook -i inventory/dev.yml p
 Then run migrations from your local machine:
 
 ```bash
-COCKTAILDB_SSH_KEY=~/.ssh/cocktaildb-ec2.pem scripts/run-remote-migrations.sh dev
+SSH_KEY=~/.ssh/cocktaildb-ec2.pem scripts/run-remote-migrations.sh dev
 ```
 
 By default, the script uploads the most recent local migration from `migrations/`.

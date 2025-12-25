@@ -12,8 +12,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy and install dependencies
-COPY requirements.txt requirements-prod.txt ./
-RUN pip install --no-cache-dir -r requirements.txt -r requirements-prod.txt
+COPY api/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install barcart package for analytics
+COPY packages/barcart /app/packages/barcart
+RUN pip install --no-cache-dir /app/packages/barcart
 
 # Production stage
 FROM python:3.12-slim-bookworm
@@ -32,7 +36,7 @@ COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
-COPY --chown=appuser:appuser . .
+COPY --chown=appuser:appuser api/ .
 
 USER appuser
 

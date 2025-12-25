@@ -1,36 +1,35 @@
 # Analytics Backend Infrastructure
 
 ## Overview
-This document specifies the backend infrastructure for cocktail database analytics, including FastAPI endpoints, database queries for hierarchical ingredient usage, S3 storage for pre-generated analytics, and Lambda functions to regenerate analytics on database changes.
+This document specifies the backend infrastructure for cocktail database analytics, including FastAPI endpoints, database queries for hierarchical ingredient usage, local filesystem storage for pre-generated analytics, and the EC2-based analytics refresh workflow.
 
 ## Objectives
 - Provide efficient API endpoints for retrieving pre-computed analytics
 - Implement database queries that leverage hierarchical ingredient structure
-- Store pre-generated analytics results in S3 as static files
+- Store pre-generated analytics results on local disk as static files
 - Automatically regenerate analytics when database changes occur
 - Support versioning for analytics data
 
 ## Architecture Philosophy
 
-**Static Pre-Generated Analytics:** Analytics data is stored as static JSON files in S3 that are regenerated asynchronously after every database mutation. There is no cache expiration or TTL - files are always assumed to be current. This provides:
+**Static Pre-Generated Analytics:** Analytics data is stored as static JSON files on disk (configured via `ANALYTICS_PATH`) and regenerated asynchronously after database mutations. There is no cache expiration or TTL - files are always assumed to be current. This provides:
 - Eventual consistency (slightly stale data for a few seconds is acceptable)
-- Predictable performance (always reading static files from S3)
+- Predictable performance (always reading static files from disk)
 
-**Storage Strategy:** Only root-level views (no filters) are pre-generated and stored in S3. Filtered views (specific `level` or `parent_id`) are computed on-the-fly from the database. This trade-off is appropriate given:
+**Storage Strategy:** Only root-level views (no filters) are pre-generated and stored on disk. Filtered views (specific `level` or `parent_id`) are computed on-the-fly from the database. This trade-off is appropriate given:
 - Small dataset size (< 500 ingredients in current data)
 - Existing database indexes on `parent_id` and `path` fields
 - Fast query performance (< 100ms for filtered views)
 - Infrequent drill-down access patterns (most users view root-level analytics)
-- API already has fallback logic to compute on-the-fly when storage is missing
+- Root-level analytics require pre-generation; filtered views are computed on-the-fly
 
 ## Architecture
 
 ### Components
 1. **FastAPI Analytics Routes** (`api/routes/analytics.py`)
 2. **Analytics Database Queries** (`api/db/db_analytics.py` - `AnalyticsQueries` class)
-3. **S3 Analytics Storage** (`api/utils/analytics_storage.py` - `AnalyticsStorage` class)
-4. **Analytics Generation Lambda** (`api/analytics_refresh.py`)
-5. **SAM Template Updates** (S3 bucket, Lambda function, permissions)
+3. **Local Analytics Storage** (`api/utils/analytics_cache.py` - `AnalyticsStorage` class)
+4. **Analytics Refresh Job** (`infrastructure/systemd/cocktaildb-analytics.service` + `infrastructure/scripts/trigger-analytics.sh`)
 
 ## Technical Specifications
 
@@ -70,7 +69,7 @@ Returns ingredient usage statistics across all recipes, with hierarchical aggreg
 - `direct_usage`: Recipes that use this exact ingredient
 - `hierarchical_usage`: Recipes that use this ingredient OR any child ingredients
 - Aggregation follows the path hierarchy (e.g., `/1/23/45/` aggregates to `/1/23/` and `/1/`)
-- Data is served from pre-generated S3 files; if missing, computed on-the-fly
+- Root-level data is served from pre-generated local files; filtered views are computed on-the-fly
 
 #### GET `/api/v1/analytics/recipe-complexity`
 Returns distribution of recipes by ingredient count.
@@ -192,47 +191,46 @@ class AnalyticsQueries:
 - Uses the existing `execute_query()` method from `Database` class
 - Easy to test independently and extend with new analytics queries
 
-### 3. S3 Analytics Storage Manager
+### 3. Local Analytics Storage Manager
 
-The `api/utils/analytics_storage.py` file contains the `AnalyticsStorage` class:
+The `api/utils/analytics_cache.py` file contains the `AnalyticsStorage` class:
 
 ```python
 import json
-import boto3
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, Dict, Any
 import logging
 
 logger = logging.getLogger(__name__)
 
+
 class AnalyticsStorage:
-    """S3 storage manager for pre-generated analytics data"""
+    """Local filesystem storage for pre-generated analytics data"""
 
-    def __init__(self, bucket_name: str):
-        self.bucket_name = bucket_name
-        self.s3_client = boto3.client('s3')
+    def __init__(self, storage_path: str):
+        self.storage_path = Path(storage_path)
         self.storage_version = "v1"
+        version_path = self.storage_path / self.storage_version
+        version_path.mkdir(parents=True, exist_ok=True)
 
-    def _get_storage_key(self, analytics_type: str) -> str:
-        """Generate S3 key for analytics type"""
-        return f"analytics/{self.storage_version}/{analytics_type}.json"
+    def _get_file_path(self, analytics_type: str) -> Path:
+        """Generate file path for analytics type"""
+        return self.storage_path / self.storage_version / f"{analytics_type}.json"
 
     def get_analytics(self, analytics_type: str) -> Optional[Dict[Any, Any]]:
         """Retrieve pre-generated analytics data from storage"""
         try:
-            key = self._get_storage_key(analytics_type)
-            response = self.s3_client.get_object(
-                Bucket=self.bucket_name,
-                Key=key
-            )
+            file_path = self._get_file_path(analytics_type)
+            if not file_path.exists():
+                logger.info(f"No analytics data found for {analytics_type}")
+                return None
 
-            data = json.loads(response['Body'].read().decode('utf-8'))
+            with open(file_path, "r", encoding="utf-8") as file_handle:
+                data = json.load(file_handle)
             logger.info(f"Retrieved analytics data for {analytics_type}")
             return data
 
-        except self.s3_client.exceptions.NoSuchKey:
-            logger.info(f"No analytics data found for {analytics_type}")
-            return None
         except Exception as e:
             logger.error(f"Error retrieving analytics data for {analytics_type}: {str(e)}")
             return None
@@ -240,9 +238,7 @@ class AnalyticsStorage:
     def put_analytics(self, analytics_type: str, data: Dict[Any, Any]) -> bool:
         """Store pre-generated analytics data in storage"""
         try:
-            key = self._get_storage_key(analytics_type)
-
-            # Add metadata
+            file_path = self._get_file_path(analytics_type)
             storage_data = {
                 "data": data,
                 "metadata": {
@@ -252,12 +248,8 @@ class AnalyticsStorage:
                 }
             }
 
-            self.s3_client.put_object(
-                Bucket=self.bucket_name,
-                Key=key,
-                Body=json.dumps(storage_data),
-                ContentType='application/json'
-            )
+            with open(file_path, "w", encoding="utf-8") as file_handle:
+                json.dump(storage_data, file_handle)
 
             logger.info(f"Successfully stored analytics data for {analytics_type}")
             return True
@@ -269,7 +261,7 @@ class AnalyticsStorage:
 
 **Key Design Decisions:**
 - No cache expiration or TTL checking - files are always assumed to be current
-- Simpler API: just `get_analytics()` and `put_analytics()`
+- Storage path is configured via `ANALYTICS_PATH` and versioned under `v1/`
 
 ### 4. Analytics Routes Implementation
 
@@ -296,8 +288,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 # Initialize storage manager
-ANALYTICS_BUCKET = os.environ.get("ANALYTICS_BUCKET", "")
-storage_manager = AnalyticsStorage(ANALYTICS_BUCKET) if ANALYTICS_BUCKET else None
+ANALYTICS_PATH = os.environ.get("ANALYTICS_PATH", "")
+storage_manager = AnalyticsStorage(ANALYTICS_PATH) if ANALYTICS_PATH else None
 
 
 @router.get("/ingredient-usage")
@@ -309,23 +301,31 @@ async def get_ingredient_usage_analytics(
 ):
     """Get ingredient usage statistics with hierarchical aggregation"""
     try:
-        storage_key = f"ingredient-usage-{level}-{parent_id}"
+        # Root-level data is pre-generated and cached on disk
+        if level is None and parent_id is None:
+            if not storage_manager:
+                raise DatabaseException("Analytics storage not configured")
 
-        # Try to get from storage
-        if storage_manager:
-            stored_data = storage_manager.get_analytics(storage_key)
-            if stored_data:
-                return stored_data
+            stored_data = storage_manager.get_analytics("ingredient-usage")
+            if not stored_data:
+                raise DatabaseException(
+                    "Analytics not generated. Please trigger analytics refresh.",
+                    detail="ingredient-usage data not found in storage"
+                )
 
-        # If no pre-generated data exists, compute on-the-fly
-        logger.info(f"No pre-generated data, computing stats (level={level}, parent_id={parent_id})")
+            return stored_data
+
+        # Filtered views are computed on-the-fly
         analytics = AnalyticsQueries(db)
-        stats = analytics.get_ingredient_usage_stats(level=level, parent_id=parent_id)
-        total_recipes = db.execute_query("SELECT COUNT(*) as count FROM recipes")[0]["count"]
+        stats = analytics.get_ingredient_usage_stats(parent_id=parent_id)
 
         return {
             "data": stats,
-            "metadata": {"total_recipes": total_recipes}
+            "metadata": {
+                "computed_on_the_fly": True,
+                "level": level,
+                "parent_id": parent_id
+            }
         }
 
     except Exception as e:
@@ -342,18 +342,17 @@ async def get_recipe_complexity_analytics(
     try:
         storage_key = "recipe-complexity"
 
-        # Try to get from storage
-        if storage_manager:
-            stored_data = storage_manager.get_analytics(storage_key)
-            if stored_data:
-                return stored_data
+        if not storage_manager:
+            raise DatabaseException("Analytics storage not configured")
 
-        # If no pre-generated data exists, compute on-the-fly
-        logger.info("No pre-generated data, computing recipe complexity")
-        analytics = AnalyticsQueries(db)
-        distribution = analytics.get_recipe_complexity_distribution()
+        stored_data = storage_manager.get_analytics(storage_key)
+        if not stored_data:
+            raise DatabaseException(
+                "Analytics not generated. Please trigger analytics refresh.",
+                detail=f"{storage_key} data not found in storage"
+            )
 
-        return {"data": distribution, "metadata": {}}
+        return stored_data
 
     except Exception as e:
         logger.error(f"Error getting recipe complexity analytics: {str(e)}")
@@ -363,168 +362,19 @@ async def get_recipe_complexity_analytics(
 **Key Design Notes:**
 - Imports `AnalyticsQueries` from `db.db_analytics` module
 - Creates `AnalyticsQueries` instance with `Database` dependency
-- Computes on-the-fly as fallback when storage is missing
+- Uses `AnalyticsStorage` for local filesystem operations
+- Root-level analytics require pre-generation; ingredient usage drill-down is computed on-the-fly
 
-### 5. Helper Function for Triggering Analytics Regeneration
+### 5. Analytics Refresh Workflow (EC2)
 
-Add to `api/utils/analytics_helpers.py` (called from recipes.py, ingredients.py after mutations):
+Analytics data is generated out-of-band on EC2 and written to `ANALYTICS_PATH`. Refresh is managed by systemd and helper scripts:
 
-```python
-def trigger_analytics_refresh():
-    """Trigger async analytics regeneration"""
-    try:
-        if os.environ.get("ANALYTICS_REFRESH_FUNCTION"):
-            import boto3
-            lambda_client = boto3.client('lambda')
-            lambda_client.invoke(
-                FunctionName=os.environ.get("ANALYTICS_REFRESH_FUNCTION"),
-                InvocationType='Event'  # Async - non-blocking
-            )
-            logger.info("Analytics regeneration triggered")
-    except Exception as e:
-        logger.warning(f"Failed to trigger analytics regeneration: {str(e)}")
-        # Don't fail the main operation if analytics trigger fails
-```
+- `infrastructure/systemd/cocktaildb-analytics.service` runs the refresh job in the API container
+- `infrastructure/systemd/cocktaildb-analytics.timer` schedules periodic refreshes
+- `infrastructure/systemd/cocktaildb-analytics-debounce.timer` and `infrastructure/scripts/analytics-debounce-check.sh` debounce frequent changes
+- Manual trigger: `infrastructure/scripts/trigger-analytics.sh`
 
-**Called after all database mutations:**
-- `create_recipe()`, `update_recipe()`, `delete_recipe()`
-- `create_ingredient()`, `update_ingredient()`, `delete_ingredient()`
-- `bulk_upload_recipes()`, `bulk_upload_ingredients()`
-
-**Behavior:** Async invocation means the API returns immediately without waiting for analytics regeneration to complete. This provides eventual consistency - analytics may be slightly stale (a few seconds) until regeneration completes.
-
-### 6. SAM Template Updates
-
-Add to `template.yaml`:
-
-```yaml
-  # S3 Bucket for Analytics Storage
-  AnalyticsStorageBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "${AWS::StackName}-analytics-storage"
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-
-  # Lambda function to regenerate analytics
-  AnalyticsRefreshFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub "${AWS::StackName}-analytics-refresh"
-      CodeUri: api/
-      Handler: analytics_refresh.lambda_handler
-      Runtime: python3.11
-      Timeout: 300
-      MemorySize: 512
-      Environment:
-        Variables:
-          DB_PATH: !Ref DatabasePath
-          ANALYTICS_BUCKET: !Ref AnalyticsStorageBucket
-      FileSystemConfigs:
-        - Arn: !GetAtt AccessPoint.Arn
-          LocalMountPath: /mnt/efs
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref LambdaSecurityGroup
-        SubnetIds: !Ref PrivateSubnetIds
-      Policies:
-        - S3CrudPolicy:
-            BucketName: !Ref AnalyticsStorageBucket
-        - Statement:
-            - Effect: Allow
-              Action:
-                - elasticfilesystem:ClientMount
-                - elasticfilesystem:ClientWrite
-              Resource: !GetAtt FileSystem.Arn
-
-  # Update ApiFunction to include analytics bucket access
-  ApiFunction:
-    Properties:
-      Environment:
-        Variables:
-          ANALYTICS_BUCKET: !Ref AnalyticsStorageBucket
-          ANALYTICS_REFRESH_FUNCTION: !Ref AnalyticsRefreshFunction
-      Policies:
-        - S3ReadPolicy:
-            BucketName: !Ref AnalyticsStorageBucket
-        - Statement:
-            - Effect: Allow
-              Action:
-                - lambda:InvokeFunction
-              Resource: !GetAtt AnalyticsRefreshFunction.Arn
-```
-
-### 7. Analytics Generation Lambda Function
-
-The `api/analytics_refresh.py` Lambda function generates all analytics data:
-
-```python
-"""Lambda function to generate pre-computed analytics data"""
-
-import json
-import logging
-import os
-from db.database import get_database
-from db.db_analytics import AnalyticsQueries
-from utils.analytics_cache import AnalyticsStorage
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
-
-def lambda_handler(event, context):
-    """Generate all pre-computed analytics data files"""
-    try:
-        logger.info("Starting analytics data generation")
-
-        # Initialize
-        db = get_database()
-        analytics = AnalyticsQueries(db)
-        storage_manager = AnalyticsStorage(os.environ.get("ANALYTICS_BUCKET"))
-
-        # Generate ingredient usage stats (ROOT LEVEL ONLY)
-        # Note: Filtered views (level/parent_id) are computed on-the-fly by the API
-        logger.info("Generating root-level ingredient usage stats")
-        stats = analytics.get_ingredient_usage_stats()  # No parameters = root level
-        total_recipes = db.execute_query("SELECT COUNT(*) as count FROM recipes")[0]["count"]
-        storage_manager.put_analytics("ingredient-usage-None-None", {
-            "data": stats,
-            "total_recipes": total_recipes
-        })
-
-        # Generate recipe complexity distribution
-        logger.info("Generating recipe complexity distribution")
-        complexity = analytics.get_recipe_complexity_distribution()
-        storage_manager.put_analytics("recipe-complexity", {
-            "data": complexity
-        })
-
-        # Add more analytics types here as needed
-
-        logger.info("Analytics data generation completed successfully")
-        return {
-            "statusCode": 200,
-            "body": json.dumps({"message": "Analytics generation completed"})
-        }
-
-    except Exception as e:
-        logger.error(f"Error generating analytics data: {str(e)}", exc_info=True)
-        return {
-            "statusCode": 500,
-            "body": json.dumps({"error": str(e)})
-        }
-```
-
-**Key Design Notes:**
-- Imports `AnalyticsQueries` from `db.db_analytics` module
-- Creates `AnalyticsQueries` instance with `Database` dependency
-- Uses `AnalyticsStorage` for S3 operations
-- Only generates root-level views (no filter parameters)
-- Wraps data with metadata (`total_recipes` for ingredient-usage)
-- Filtered views are computed on-the-fly by the API endpoints
+**Output:** JSON files under `${ANALYTICS_PATH}/v1/` (for example, `ingredient-usage.json`, `recipe-complexity.json`).
 
 ## Testing Approach
 
@@ -545,38 +395,26 @@ def lambda_handler(event, context):
 
 ## Dependencies
 
-- `boto3` (AWS SDK for Python) - already in requirements
-- No new Python packages required
+- No new Python packages required for local analytics storage
 
 ## Environment Variables
 
-- `ANALYTICS_BUCKET`: S3 bucket name for analytics storage
-- `ANALYTICS_REFRESH_FUNCTION`: Lambda function name for analytics regeneration
+- `ANALYTICS_PATH`: Filesystem path for analytics storage (for example, `/var/lib/cocktaildb/analytics`)
 
 ## Initialization
 
-### Manual Analytics Generation Script
+### Manual Analytics Generation
 
-Add to `scripts/trigger-analytics-refresh.sh`:
+Use the EC2 helper script to run the refresh job:
 
 ```bash
-#!/bin/bash
-# Script to manually trigger analytics regeneration
-# Usage: ./scripts/trigger-analytics-refresh.sh [dev|prod]
+./infrastructure/scripts/trigger-analytics.sh
+```
 
-ENVIRONMENT=${1:-dev}
-STACK_NAME="cocktail-db-${ENVIRONMENT}"
-FUNCTION_NAME="${STACK_NAME}-analytics-refresh"
+To run in the background via systemd:
 
-echo "Triggering analytics refresh for ${ENVIRONMENT} environment..."
-aws lambda invoke \
-  --function-name "${FUNCTION_NAME}" \
-  --invocation-type Event \
-  --region us-east-1 \
-  /dev/stdout
-
-echo "Analytics refresh triggered successfully"
-echo "Check CloudWatch logs for progress: /aws/lambda/${FUNCTION_NAME}"
+```bash
+./infrastructure/scripts/trigger-analytics.sh --bg
 ```
 
 **When to use:**
@@ -591,22 +429,21 @@ Consider adding to `scripts/deploy.bat` or `scripts/deploy.sh` after successful 
 # Optional: Trigger initial analytics generation
 if [ "$SKIP_ANALYTICS_INIT" != "true" ]; then
   echo "Triggering initial analytics generation..."
-  ./scripts/trigger-analytics-refresh.sh $ENVIRONMENT
+  ./infrastructure/scripts/trigger-analytics.sh
 fi
 ```
 
 ## Considerations
 
-1. **Eventual Consistency**: Analytics are regenerated asynchronously, so data may be slightly stale (a few seconds) after DB mutations
-2. **Storage Updates**: Automatically triggered by DB changes via Lambda invocation
-3. **Selective Pre-generation**: Only root-level views are pre-generated in S3. Filtered views (specific `level` or `parent_id`) are computed on-the-fly, leveraging database indexes for acceptable performance (<100ms)
+1. **Eventual Consistency**: Analytics are regenerated asynchronously, so data may be slightly stale after DB mutations
+2. **Storage Updates**: Refresh is driven by the EC2 systemd job and debounce checks
+3. **Selective Pre-generation**: Only root-level views are pre-generated on disk; filtered views are computed on-the-fly
 4. **Hierarchy Performance**: Path-based queries with LIKE use existing indexes on `parent_id` and `path` fields
-5. **Lambda Timeout**: 5-minute timeout for analytics regeneration should be sufficient for root-level views
-6. **Storage Persistence**: Analytics files persist indefinitely in S3 (no lifecycle expiration)
-7. **Error Handling**: Analytics regeneration failures should not block API operations (async invocation)
-8. **No Manual Refresh**: Analytics regeneration is fully automatic after initialization - no user-facing API endpoint needed
-9. **Initial Generation**: Use `scripts/trigger-analytics-refresh.sh` for first-time setup or manual regeneration
-10. **Scalability**: If dataset grows beyond ~1000 ingredients or filtered queries become slow, consider pre-generating additional combinations
+5. **Refresh Duration**: Long-running analytics refresh is handled by the systemd service timeout (currently 1 hour)
+6. **Storage Persistence**: Analytics files persist on disk until regenerated or cleaned up
+7. **Error Handling**: Analytics refresh failures should not block API operations
+8. **Manual Refresh**: Use `infrastructure/scripts/trigger-analytics.sh` for first-time setup or manual regeneration
+9. **Scalability**: If dataset grows beyond ~1000 ingredients or filtered queries become slow, consider pre-generating additional combinations
 
 ## Future Enhancements
 

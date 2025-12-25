@@ -29,7 +29,6 @@ run_foreground() {
 
     cd "$APP_HOME"
 
-    # Run via docker compose
     docker compose run --rm api python -m analytics.analytics_refresh
 
     echo ""

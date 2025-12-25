@@ -14,7 +14,9 @@ WorkingDirectory=/opt/cocktaildb
 EnvironmentFile=/opt/cocktaildb/.env
 
 # Run analytics refresh in Docker container
-ExecStart=/usr/bin/docker compose run --rm api python -m analytics.analytics_refresh
+# Memory limit (2GB) prevents OOM from killing system services (sshd, postgres)
+# The 2GB swap file provides additional buffer if needed
+ExecStart=/usr/bin/docker compose run --rm --memory=2g --memory-swap=3g api python -m analytics.analytics_refresh
 
 # Logging
 StandardOutput=journal

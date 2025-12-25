@@ -272,6 +272,8 @@ def build_recipe_volume_matrix(
     ingredient_id_col: str = "ingredient_id",
     volume_col: str = "volume_fraction",
     volume_error_tolerance: float = 1e-6,
+    sparse: bool = False,
+    dtype: np.dtype | type = float,
 ) -> tuple[np.ndarray, "Registry"]:
     """
     Construct a matrix of recipe ingredient volume fractions and recipe registry.
@@ -344,16 +346,42 @@ def build_recipe_volume_matrix(
     recipe_registry = Registry(recipes)
 
     # Build volume matrix
-    volume_matrix = np.zeros((len(recipe_registry), len(ingredient_registry)))
-    for _, row in recipes_df.iterrows():
-        recipe_index = recipe_id_to_index[str(row[recipe_id_col])]
-        ingredient_index = ingredient_registry.get_index(id=str(row[ingredient_id_col]))
-        volume_matrix[recipe_index, ingredient_index] = float(row[volume_col])
+    if sparse:
+        from scipy import sparse as sp
+
+        row_idx = []
+        col_idx = []
+        data = []
+        for _, row in recipes_df.iterrows():
+            row_idx.append(recipe_id_to_index[str(row[recipe_id_col])])
+            col_idx.append(
+                ingredient_registry.get_index(id=str(row[ingredient_id_col]))
+            )
+            data.append(float(row[volume_col]))
+        volume_matrix = sp.coo_matrix(
+            (data, (row_idx, col_idx)),
+            shape=(len(recipe_registry), len(ingredient_registry)),
+            dtype=dtype,
+        ).tocsr()
+        volume_matrix.sum_duplicates()
+    else:
+        volume_matrix = np.zeros(
+            (len(recipe_registry), len(ingredient_registry)), dtype=dtype
+        )
+        for _, row in recipes_df.iterrows():
+            recipe_index = recipe_id_to_index[str(row[recipe_id_col])]
+            ingredient_index = ingredient_registry.get_index(
+                id=str(row[ingredient_id_col])
+            )
+            volume_matrix[recipe_index, ingredient_index] = float(row[volume_col])
 
     # Check that all rows of volume_matrix sum to 1 within numerical error
     row_sums = volume_matrix.sum(axis=1)
+    row_sums = np.asarray(row_sums).ravel()
     if not np.allclose(row_sums, 1.0, atol=volume_error_tolerance):
-        bad_rows = np.where(~np.isclose(row_sums, 1.0, atol=volume_error_tolerance))[0]
+        bad_rows = np.where(
+            ~np.isclose(row_sums, 1.0, atol=volume_error_tolerance)
+        )[0]
         bad_recipe_ids = [str(recipe_ids[i]) for i in bad_rows]
         raise ValueError(
             f"Not all rows of volume_matrix sum to 1. "
@@ -404,8 +432,11 @@ def compute_emd(
             - amount: mass transported (typically between 0 and 1)
             - cost: amount * per-unit cost for this flow
     """
-    n_ingredients = a.shape[0]
-    if len(b) != n_ingredients:
+    from scipy import sparse as sp
+
+    n_ingredients = a.shape[1] if sp.issparse(a) else a.shape[0]
+    b_len = b.shape[1] if sp.issparse(b) else len(b)
+    if b_len != n_ingredients:
         raise ValueError(f"b must have {n_ingredients} ingredients")
     if cost_matrix.shape[0] != n_ingredients or cost_matrix.shape[1] != n_ingredients:
         raise ValueError(
@@ -414,13 +445,24 @@ def compute_emd(
 
     # Reduce to the union of supports to dramatically shrink problem size
     if support_idx is None:
-        support_idx = np.nonzero((a > 0) | (b > 0))[0]
+        if sp.issparse(a) or sp.issparse(b):
+            a_idx = a.indices if sp.issparse(a) else np.nonzero(a > 0)[0]
+            b_idx = b.indices if sp.issparse(b) else np.nonzero(b > 0)[0]
+            support_idx = np.union1d(a_idx, b_idx)
+        else:
+            support_idx = np.nonzero((a > 0) | (b > 0))[0]
 
     if support_idx.size == 0:
         return 0.0 if not return_plan else (0.0, [])
 
-    a_sub = a[support_idx]
-    b_sub = b[support_idx]
+    if sp.issparse(a):
+        a_sub = a[:, support_idx].toarray().ravel()
+    else:
+        a_sub = a[support_idx]
+    if sp.issparse(b):
+        b_sub = b[:, support_idx].toarray().ravel()
+    else:
+        b_sub = b[support_idx]
     cost_sub = cost_matrix[np.ix_(support_idx, support_idx)]
 
     if not return_plan:
@@ -465,13 +507,19 @@ def emd_matrix(
     sparse transport plan as a list of (from_idx, to_idx, amount, cost) in global
     ingredient indices.
     """
+    from scipy import sparse as sp
+
     n_recipes = volume_matrix.shape[0]
-    emd_matrix = np.zeros((n_recipes, n_recipes))
+    emd_dtype = cost_matrix.dtype
+    emd_matrix = np.zeros((n_recipes, n_recipes), dtype=emd_dtype)
+
+    is_sparse = sp.issparse(volume_matrix)
 
     # Precompute supports for each recipe to avoid repeated nonzero scans
-    supports: list[np.ndarray] = [
-        np.nonzero(volume_matrix[i] > 0)[0] for i in range(n_recipes)
-    ]
+    if is_sparse:
+        supports = [volume_matrix.getrow(i).indices for i in range(n_recipes)]
+    else:
+        supports = [np.nonzero(volume_matrix[i] > 0)[0] for i in range(n_recipes)]
 
     if n_jobs == 1:
         plans = {} if return_plans else None
@@ -482,10 +530,12 @@ def emd_matrix(
         for i in _tqdm(range(n_recipes), **_tk):
             for j in range(i + 1, n_recipes):
                 union_idx = np.union1d(supports[i], supports[j])
+                row_i = volume_matrix.getrow(i) if is_sparse else volume_matrix[i]
+                row_j = volume_matrix.getrow(j) if is_sparse else volume_matrix[j]
                 if return_plans:
                     distance, plan = compute_emd(
-                        volume_matrix[i],
-                        volume_matrix[j],
+                        row_i,
+                        row_j,
                         cost_matrix,
                         return_plan=True,
                         support_idx=union_idx,
@@ -493,14 +543,14 @@ def emd_matrix(
                     plans[(i, j)] = plan
                 else:
                     distance = compute_emd(
-                        volume_matrix[i],
-                        volume_matrix[j],
+                        row_i,
+                        row_j,
                         cost_matrix,
                         return_plan=False,
                         support_idx=union_idx,
                     )
-                emd_matrix[i, j] = distance
-                emd_matrix[j, i] = distance
+                emd_matrix[i, j] = emd_dtype.type(distance)
+                emd_matrix[j, i] = emd_dtype.type(distance)
         return (emd_matrix, plans) if return_plans else emd_matrix
 
     # Parallel path (shared memory threads to avoid copying large matrices)
@@ -516,10 +566,12 @@ def emd_matrix(
         for i in _tqdm(range(n_recipes), **_tk):
             for j in range(i + 1, n_recipes):
                 union_idx = np.union1d(supports[i], supports[j])
+                row_i = volume_matrix.getrow(i) if is_sparse else volume_matrix[i]
+                row_j = volume_matrix.getrow(j) if is_sparse else volume_matrix[j]
                 if return_plans:
                     distance, plan = compute_emd(
-                        volume_matrix[i],
-                        volume_matrix[j],
+                        row_i,
+                        row_j,
                         cost_matrix,
                         return_plan=True,
                         support_idx=union_idx,
@@ -527,14 +579,14 @@ def emd_matrix(
                     plans[(i, j)] = plan
                 else:
                     distance = compute_emd(
-                        volume_matrix[i],
-                        volume_matrix[j],
+                        row_i,
+                        row_j,
                         cost_matrix,
                         return_plan=False,
                         support_idx=union_idx,
                     )
-                emd_matrix[i, j] = distance
-                emd_matrix[j, i] = distance
+                emd_matrix[i, j] = emd_dtype.type(distance)
+                emd_matrix[j, i] = emd_dtype.type(distance)
         return (emd_matrix, plans) if return_plans else emd_matrix
 
     # Log parallel execution configuration
@@ -552,10 +604,12 @@ def emd_matrix(
 
     def _pair_distance_or_plan(i: int, j: int):
         union_idx = np.union1d(supports[i], supports[j])
+        row_i = volume_matrix.getrow(i) if is_sparse else volume_matrix[i]
+        row_j = volume_matrix.getrow(j) if is_sparse else volume_matrix[j]
         if return_plans:
             d, plan = compute_emd(
-                volume_matrix[i],
-                volume_matrix[j],
+                row_i,
+                row_j,
                 cost_matrix,
                 return_plan=True,
                 support_idx=union_idx,
@@ -563,8 +617,8 @@ def emd_matrix(
             return i, j, float(d), plan
         else:
             d = compute_emd(
-                volume_matrix[i],
-                volume_matrix[j],
+                row_i,
+                row_j,
                 cost_matrix,
                 return_plan=False,
                 support_idx=union_idx,
@@ -581,8 +635,8 @@ def emd_matrix(
             plans[(i, j)] = plan
         else:
             i, j, d = item
-        emd_matrix[i, j] = d
-        emd_matrix[j, i] = d
+        emd_matrix[i, j] = emd_dtype.type(d)
+        emd_matrix[j, i] = emd_dtype.type(d)
     return (emd_matrix, plans) if return_plans else emd_matrix
 
 
@@ -781,7 +835,7 @@ def expected_ingredient_match_matrix(
     n_recipes = distance_matrix.shape[0]
     nn_idx, nn_dist = knn_matrix(distance_matrix, max(1, min(k, n_recipes - 1)))
 
-    T_sum = np.zeros((n_ingredients, n_ingredients), dtype=float)
+    T_sum = np.zeros((n_ingredients, n_ingredients), dtype=distance_matrix.dtype)
     for r in range(n_recipes):
         d = nn_dist[r]
         # Boltzmann weights per row, stabilized by subtracting min

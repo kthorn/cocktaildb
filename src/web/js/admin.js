@@ -7,6 +7,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupAdminPage();
 });
 
+const MAX_UPLOAD_MB = 5;
+const MAX_RECIPES = 100;
+const MAX_INGREDIENTS = 200;
+
 function setupAdminPage() {
     const downloadTemplateBtn = document.getElementById('download-template-btn');
     const fileInput = document.getElementById('recipe-file-input');
@@ -22,11 +26,13 @@ function setupAdminPage() {
     }
     
     if (fileInput) {
-        fileInput.addEventListener('change', handleFileSelection);
+        fileInput.addEventListener('change', (event) => {
+            handleFileSelection(event, getRecipeUploadConfig());
+        });
     }
     
     if (uploadBtn) {
-        uploadBtn.addEventListener('click', handleBulkUpload);
+        uploadBtn.addEventListener('click', () => handleBulkUpload(getRecipeUploadConfig()));
     }
     
     // Ingredient upload event listeners
@@ -35,11 +41,13 @@ function setupAdminPage() {
     }
     
     if (ingredientFileInput) {
-        ingredientFileInput.addEventListener('change', handleIngredientFileSelection);
+        ingredientFileInput.addEventListener('change', (event) => {
+            handleFileSelection(event, getIngredientUploadConfig());
+        });
     }
     
     if (uploadIngredientsBtn) {
-        uploadIngredientsBtn.addEventListener('click', handleBulkIngredientUpload);
+        uploadIngredientsBtn.addEventListener('click', () => handleBulkUpload(getIngredientUploadConfig()));
     }
     
     // Tag management elements
@@ -95,8 +103,12 @@ function showMessage(message, type = 'info') {
     messageDiv.textContent = message;
     
     // Insert at top of main section
-    const mainSection = document.querySelector('main section');
-    mainSection.insertBefore(messageDiv, mainSection.firstChild);
+    const mainSection = document.querySelector('main section') || document.body;
+    if (mainSection.firstChild) {
+        mainSection.insertBefore(messageDiv, mainSection.firstChild);
+    } else {
+        mainSection.appendChild(messageDiv);
+    }
     
     // Remove message after 5 seconds
     setTimeout(() => {
@@ -171,13 +183,54 @@ function downloadTemplate() {
     showMessage('Template downloaded successfully!', 'success');
 }
 
-function handleFileSelection(event) {
+function getRecipeUploadConfig() {
+    return {
+        fileInputId: 'recipe-file-input',
+        uploadBtnId: 'upload-recipes-btn',
+        progressId: 'upload-progress',
+        resultsId: 'upload-results',
+        maxItems: MAX_RECIPES,
+        itemsKey: 'recipes',
+        itemLabel: 'recipe',
+        apiCall: (payload) => api.bulkUploadRecipes(payload),
+        validateStructure: validateJsonStructure,
+        successKey: 'uploaded_recipes',
+        buildSuccessText: (recipe) => recipe.name,
+        buildErrorText: (error) => (
+            `${error.recipe_name} (Recipe ${error.recipe_index + 1}): ${error.error_message}`
+        )
+    };
+}
+
+function getIngredientUploadConfig() {
+    return {
+        fileInputId: 'ingredient-file-input',
+        uploadBtnId: 'upload-ingredients-btn',
+        progressId: 'ingredient-upload-progress',
+        resultsId: 'ingredient-upload-results',
+        maxItems: MAX_INGREDIENTS,
+        itemsKey: 'ingredients',
+        itemLabel: 'ingredient',
+        apiCall: (payload) => api.bulkUploadIngredients(payload),
+        validateStructure: validateIngredientJsonStructure,
+        successKey: 'uploaded_ingredients',
+        buildSuccessText: (ingredient) => (
+            `${ingredient.name}${ingredient.description ? ` - ${ingredient.description}` : ''}`
+        ),
+        buildErrorText: (error) => (
+            `${error.ingredient_name} (Ingredient ${error.ingredient_index + 1}): ${error.error_message}`
+        )
+    };
+}
+
+function handleFileSelection(event, config) {
     const file = event.target.files[0];
-    const uploadBtn = document.getElementById('upload-recipes-btn');
+    const uploadBtn = document.getElementById(config.uploadBtnId);
     
     if (file) {
         // Validate file type
-        if (!file.type.includes('json')) {
+        const isJson = file.type.includes('json') || file.name.toLowerCase().endsWith('.json');
+        if (!isJson) {
             showMessage('Please select a JSON file', 'error');
             event.target.value = '';
             uploadBtn.disabled = true;
@@ -185,8 +238,8 @@ function handleFileSelection(event) {
         }
         
         // Validate file size (limit to 5MB)
-        if (file.size > 5 * 1024 * 1024) {
-            showMessage('File too large. Please select a file smaller than 5MB', 'error');
+        if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
+            showMessage(`File too large. Please select a file smaller than ${MAX_UPLOAD_MB}MB`, 'error');
             event.target.value = '';
             uploadBtn.disabled = true;
             return;
@@ -198,8 +251,12 @@ function handleFileSelection(event) {
     }
 }
 
-async function handleBulkUpload() {
-    const fileInput = document.getElementById('recipe-file-input');
+async function handleBulkUpload(config) {
+    const fileInput = document.getElementById(config.fileInputId);
+    if (!fileInput) {
+        showMessage('Upload input not found.', 'error');
+        return;
+    }
     const file = fileInput.files[0];
 
     if (!file) {
@@ -210,92 +267,51 @@ async function handleBulkUpload() {
     try {
         // Read and parse the JSON file
         const fileText = await readFile(file);
-        let recipesData;
+        let uploadData;
 
         try {
-            recipesData = JSON.parse(fileText);
+            uploadData = JSON.parse(fileText);
         } catch (error) {
             showMessage('Invalid JSON file. Please check the file format.', 'error');
             return;
         }
 
         // Validate JSON structure
-        if (!validateJsonStructure(recipesData)) {
+        if (!config.validateStructure(uploadData)) {
             return; // Error message already shown in validation
         }
 
-        const recipes = recipesData.recipes;
-        const BATCH_SIZE = 25; // Process 25 recipes per batch to stay under 29s API Gateway timeout
-
-        // Show progress
-        showUploadProgress(true, `Uploading ${recipes.length} recipes in batches...`);
-
-        // Batch upload to avoid API Gateway timeout
-        const allResults = {
-            uploaded_count: 0,
-            failed_count: 0,
-            validation_errors: [],
-            uploaded_recipes: []
-        };
-
-        for (let i = 0; i < recipes.length; i += BATCH_SIZE) {
-            const batch = recipes.slice(i, i + BATCH_SIZE);
-            const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-            const totalBatches = Math.ceil(recipes.length / BATCH_SIZE);
-
-            // Update progress message
-            showUploadProgress(true, `Uploading batch ${batchNum}/${totalBatches} (${i + batch.length}/${recipes.length} recipes)...`);
-
-            try {
-                // Upload this batch
-                const result = await api.bulkUploadRecipes({ recipes: batch });
-
-                // Aggregate results
-                allResults.uploaded_count += result.uploaded_count;
-                allResults.failed_count += result.failed_count;
-
-                if (result.validation_errors) {
-                    // Adjust recipe indices for overall result
-                    const adjustedErrors = result.validation_errors.map(err => ({
-                        ...err,
-                        recipe_index: err.recipe_index + i
-                    }));
-                    allResults.validation_errors.push(...adjustedErrors);
-                }
-
-                if (result.uploaded_recipes) {
-                    allResults.uploaded_recipes.push(...result.uploaded_recipes);
-                }
-
-            } catch (error) {
-                console.error(`Error uploading batch ${batchNum}:`, error);
-                // Track batch failure
-                allResults.failed_count += batch.length;
-                for (let j = 0; j < batch.length; j++) {
-                    allResults.validation_errors.push({
-                        recipe_index: i + j,
-                        recipe_name: batch[j].name,
-                        error_type: 'upload_error',
-                        error_message: `Batch upload failed: ${error.message}`
-                    });
-                }
-            }
+        const items = uploadData[config.itemsKey];
+        if (items.length > config.maxItems) {
+            showMessage(
+                `Upload limit is ${config.maxItems} ${pluralize(config.maxItems, config.itemLabel)} per file.`,
+                'error'
+            );
+            return;
         }
 
-        // Hide progress
-        showUploadProgress(false);
+        // Show progress
+        showUploadProgress(true, `Uploading ${items.length} ${pluralize(items.length, config.itemLabel)}...`, config);
 
-        // Display aggregated results
-        displayUploadResults(allResults);
+        const result = await config.apiCall({ [config.itemsKey]: items });
+
+        // Hide progress
+        showUploadProgress(false, '', config);
+
+        // Display results
+        displayUploadResults(result, config);
 
         // Clear file input
         fileInput.value = '';
-        document.getElementById('upload-recipes-btn').disabled = true;
+        const uploadBtn = document.getElementById(config.uploadBtnId);
+        if (uploadBtn) {
+            uploadBtn.disabled = true;
+        }
 
     } catch (error) {
-        showUploadProgress(false);
-        console.error('Error uploading recipes:', error);
-        showMessage(`Error uploading recipes: ${error.message}`, 'error');
+        showUploadProgress(false, '', config);
+        console.error(`Error uploading ${config.itemLabel}s:`, error);
+        showMessage(`Error uploading ${config.itemLabel}s: ${error.message}`, 'error');
     }
 }
 
@@ -365,11 +381,21 @@ function validateJsonStructure(data) {
         }
 
         // Check for duplicate ingredients in this recipe
-        const ingredientNames = recipe.ingredients.map(ing => ing.ingredient_name.toLowerCase().trim());
-        const duplicates = ingredientNames.filter((name, index) => ingredientNames.indexOf(name) !== index);
-        if (duplicates.length > 0) {
-            const uniqueDuplicates = [...new Set(duplicates)];
-            showMessage(`Recipe "${recipe.name}" has duplicate ingredients: ${uniqueDuplicates.join(', ')}`, 'error');
+        const seenIngredients = new Set();
+        const duplicates = new Set();
+        recipe.ingredients.forEach((ing) => {
+            const normalized = ing.ingredient_name.toLowerCase().trim();
+            if (seenIngredients.has(normalized)) {
+                duplicates.add(normalized);
+            } else {
+                seenIngredients.add(normalized);
+            }
+        });
+        if (duplicates.size > 0) {
+            showMessage(
+                `Recipe "${recipe.name}" has duplicate ingredients: ${Array.from(duplicates).join(', ')}`,
+                'error'
+            );
             return false;
         }
     }
@@ -377,77 +403,128 @@ function validateJsonStructure(data) {
     return true;
 }
 
-function showUploadProgress(show, message = 'Uploading recipes...') {
-    const progressDiv = document.getElementById('upload-progress');
-    const progressText = progressDiv.querySelector('p');
-    const uploadBtn = document.getElementById('upload-recipes-btn');
+function showUploadProgress(show, message, config) {
+    const progressDiv = document.getElementById(config.progressId);
+    const progressText = progressDiv ? progressDiv.querySelector('p') : null;
+    const uploadBtn = document.getElementById(config.uploadBtnId);
 
     if (show) {
-        progressDiv.style.display = 'block';
-        uploadBtn.disabled = true;
-        uploadBtn.textContent = 'Uploading...';
+        if (progressDiv) {
+            progressDiv.style.display = 'block';
+        }
+        if (uploadBtn) {
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = 'Uploading...';
+        }
         if (progressText) {
             progressText.textContent = message;
         }
     } else {
-        progressDiv.style.display = 'none';
-        uploadBtn.disabled = false;
-        uploadBtn.textContent = 'Upload Recipes';
+        if (progressDiv) {
+            progressDiv.style.display = 'none';
+        }
+        if (uploadBtn) {
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = config.itemLabel === 'recipe' ? 'Upload Recipes' : 'Upload Ingredients';
+        }
     }
 }
 
-function displayUploadResults(result) {
-    const resultsDiv = document.getElementById('upload-results');
-    
-    let html = '<div class="upload-results">';
-    
-    // Summary
-    html += '<h4>Upload Results</h4>';
-    html += `<p><strong>Successfully uploaded:</strong> ${result.uploaded_count} recipes</p>`;
-    
-    if (result.failed_count > 0) {
-        html += `<p><strong>Failed:</strong> ${result.failed_count} recipes</p>`;
+function displayUploadResults(result, config) {
+    const resultsDiv = document.getElementById(config.resultsId);
+    if (!resultsDiv) {
+        return;
     }
-    
-    // Show successful recipes
-    if (result.uploaded_recipes && result.uploaded_recipes.length > 0) {
-        html += '<div class="success-results" style="margin-top: var(--space-md);">';
-        html += '<h5 style="color: var(--success-color, #28a745);">Successfully Uploaded:</h5>';
-        html += '<ul>';
-        result.uploaded_recipes.forEach(recipe => {
-            html += `<li>${recipe.name}</li>`;
+
+    resultsDiv.innerHTML = '';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'upload-results';
+
+    const heading = document.createElement('h4');
+    heading.textContent = 'Upload Results';
+    wrapper.appendChild(heading);
+
+    const uploadedCount = result.uploaded_count || 0;
+    const failedCount = result.failed_count || 0;
+
+    const successSummary = document.createElement('p');
+    const successLabel = document.createElement('strong');
+    successLabel.textContent = 'Successfully uploaded:';
+    successSummary.appendChild(successLabel);
+    successSummary.append(
+        ` ${uploadedCount} ${pluralize(uploadedCount, config.itemLabel)}`
+    );
+    wrapper.appendChild(successSummary);
+
+    if (failedCount > 0) {
+        const failedSummary = document.createElement('p');
+        const failedLabel = document.createElement('strong');
+        failedLabel.textContent = 'Failed:';
+        failedSummary.appendChild(failedLabel);
+        failedSummary.append(` ${failedCount} ${pluralize(failedCount, config.itemLabel)}`);
+        wrapper.appendChild(failedSummary);
+    }
+
+    const successes = result[config.successKey] || [];
+    if (successes.length > 0) {
+        const successBlock = document.createElement('div');
+        successBlock.className = 'success-results';
+        successBlock.style.marginTop = 'var(--space-md)';
+
+        const successTitle = document.createElement('h5');
+        successTitle.style.color = 'var(--success-color, #28a745)';
+        successTitle.textContent = 'Successfully Uploaded:';
+        successBlock.appendChild(successTitle);
+
+        const successList = document.createElement('ul');
+        successes.forEach((item) => {
+            const listItem = document.createElement('li');
+            listItem.textContent = config.buildSuccessText(item);
+            successList.appendChild(listItem);
         });
-        html += '</ul>';
-        html += '</div>';
+        successBlock.appendChild(successList);
+        wrapper.appendChild(successBlock);
     }
-    
-    // Show validation errors
-    if (result.validation_errors && result.validation_errors.length > 0) {
-        html += '<div class="error-results" style="margin-top: var(--space-md);">';
-        html += '<h5 style="color: var(--error-color, #dc3545);">Validation Errors:</h5>';
-        html += '<ul>';
-        result.validation_errors.forEach(error => {
-            html += `<li><strong>${error.recipe_name}</strong> (Recipe ${error.recipe_index + 1}): ${error.error_message}</li>`;
+
+    const validationErrors = result.validation_errors || [];
+    if (validationErrors.length > 0) {
+        const errorBlock = document.createElement('div');
+        errorBlock.className = 'error-results';
+        errorBlock.style.marginTop = 'var(--space-md)';
+
+        const errorTitle = document.createElement('h5');
+        errorTitle.style.color = 'var(--error-color, #dc3545)';
+        errorTitle.textContent = 'Validation Errors:';
+        errorBlock.appendChild(errorTitle);
+
+        const errorList = document.createElement('ul');
+        validationErrors.forEach((error) => {
+            const listItem = document.createElement('li');
+            listItem.textContent = config.buildErrorText(error);
+            errorList.appendChild(listItem);
         });
-        html += '</ul>';
-        html += '</div>';
+        errorBlock.appendChild(errorList);
+        wrapper.appendChild(errorBlock);
     }
-    
-    html += '</div>';
-    
-    resultsDiv.innerHTML = html;
-    
+
+    resultsDiv.appendChild(wrapper);
+
     // Show appropriate message
-    if (result.uploaded_count > 0) {
-        showMessage(`Successfully uploaded ${result.uploaded_count} recipes!`, 'success');
+    if (uploadedCount > 0) {
+        showMessage(
+            `Successfully uploaded ${uploadedCount} ${pluralize(uploadedCount, config.itemLabel)}!`,
+            'success'
+        );
     }
-    
-    if (result.failed_count > 0) {
-        showMessage(`${result.failed_count} recipes failed validation. See details below.`, 'error');
+
+    if (failedCount > 0) {
+        showMessage(
+            `${failedCount} ${pluralize(failedCount, config.itemLabel)} failed validation. See details below.`,
+            'error'
+        );
     }
 }
 
-// Bulk ingredient upload functionality
 function downloadIngredientTemplate() {
     const template = {
         ingredients: [
@@ -484,134 +561,6 @@ function downloadIngredientTemplate() {
     window.URL.revokeObjectURL(url);
     
     showMessage('Ingredient template downloaded successfully!', 'success');
-}
-
-function handleIngredientFileSelection(event) {
-    const file = event.target.files[0];
-    const uploadBtn = document.getElementById('upload-ingredients-btn');
-    
-    if (file) {
-        // Validate file type
-        if (!file.type.includes('json')) {
-            showMessage('Please select a JSON file', 'error');
-            event.target.value = '';
-            uploadBtn.disabled = true;
-            return;
-        }
-        
-        // Validate file size (limit to 5MB)
-        if (file.size > 5 * 1024 * 1024) {
-            showMessage('File too large. Please select a file smaller than 5MB', 'error');
-            event.target.value = '';
-            uploadBtn.disabled = true;
-            return;
-        }
-        
-        uploadBtn.disabled = false;
-    } else {
-        uploadBtn.disabled = true;
-    }
-}
-
-async function handleBulkIngredientUpload() {
-    const fileInput = document.getElementById('ingredient-file-input');
-    const file = fileInput.files[0];
-
-    if (!file) {
-        showMessage('Please select a file first', 'error');
-        return;
-    }
-
-    try {
-        // Read and parse the JSON file
-        const fileText = await readFile(file);
-        let ingredientsData;
-
-        try {
-            ingredientsData = JSON.parse(fileText);
-        } catch (error) {
-            showMessage('Invalid JSON file. Please check the file format.', 'error');
-            return;
-        }
-
-        // Validate JSON structure
-        if (!validateIngredientJsonStructure(ingredientsData)) {
-            return; // Error message already shown in validation
-        }
-
-        const ingredients = ingredientsData.ingredients;
-        const BATCH_SIZE = 50; // Ingredients are simpler, can use larger batches
-
-        // Show progress
-        showIngredientUploadProgress(true, `Uploading ${ingredients.length} ingredients in batches...`);
-
-        // Batch upload to avoid API Gateway timeout
-        const allResults = {
-            uploaded_count: 0,
-            failed_count: 0,
-            validation_errors: [],
-            uploaded_ingredients: []
-        };
-
-        for (let i = 0; i < ingredients.length; i += BATCH_SIZE) {
-            const batch = ingredients.slice(i, i + BATCH_SIZE);
-            const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-            const totalBatches = Math.ceil(ingredients.length / BATCH_SIZE);
-
-            // Update progress message
-            showIngredientUploadProgress(true, `Uploading batch ${batchNum}/${totalBatches} (${i + batch.length}/${ingredients.length} ingredients)...`);
-
-            try {
-                // Upload this batch
-                const result = await api.bulkUploadIngredients({ ingredients: batch });
-
-                // Aggregate results
-                allResults.uploaded_count += result.uploaded_count;
-                allResults.failed_count += result.failed_count;
-
-                if (result.validation_errors) {
-                    // Adjust ingredient indices for overall result
-                    const adjustedErrors = result.validation_errors.map(err => ({
-                        ...err,
-                        ingredient_index: err.ingredient_index + i
-                    }));
-                    allResults.validation_errors.push(...adjustedErrors);
-                }
-
-                if (result.uploaded_ingredients) {
-                    allResults.uploaded_ingredients.push(...result.uploaded_ingredients);
-                }
-
-            } catch (error) {
-                console.error(`Error uploading batch ${batchNum}:`, error);
-                // Track batch failure
-                allResults.failed_count += batch.length;
-                for (let j = 0; j < batch.length; j++) {
-                    allResults.validation_errors.push({
-                        ingredient_index: i + j,
-                        ingredient_name: batch[j].name,
-                        error_type: 'upload_error',
-                        error_message: `Batch upload failed: ${error.message}`
-                    });
-                }
-            }
-        }
-
-        // Hide progress
-        showIngredientUploadProgress(false);
-
-        // Display aggregated results
-        displayIngredientUploadResults(allResults);
-
-        // Clear file input
-        fileInput.value = '';
-        document.getElementById('upload-ingredients-btn').disabled = true;
-
-    } catch (error) {
-        showIngredientUploadProgress(false);
-        console.error('Error uploading ingredients:', error);
-        showMessage(`Error uploading ingredients: ${error.message}`, 'error');
-    }
 }
 
 function validateIngredientJsonStructure(data) {
@@ -657,74 +606,8 @@ function validateIngredientJsonStructure(data) {
     return true;
 }
 
-function showIngredientUploadProgress(show, message = 'Uploading ingredients...') {
-    const progressDiv = document.getElementById('ingredient-upload-progress');
-    const progressText = progressDiv.querySelector('p');
-    const uploadBtn = document.getElementById('upload-ingredients-btn');
-
-    if (show) {
-        progressDiv.style.display = 'block';
-        uploadBtn.disabled = true;
-        uploadBtn.textContent = 'Uploading...';
-        if (progressText) {
-            progressText.textContent = message;
-        }
-    } else {
-        progressDiv.style.display = 'none';
-        uploadBtn.disabled = false;
-        uploadBtn.textContent = 'Upload Ingredients';
-    }
-}
-
-function displayIngredientUploadResults(result) {
-    const resultsDiv = document.getElementById('ingredient-upload-results');
-    
-    let html = '<div class="upload-results">';
-    
-    // Summary
-    html += '<h4>Upload Results</h4>';
-    html += `<p><strong>Successfully uploaded:</strong> ${result.uploaded_count} ingredients</p>`;
-    
-    if (result.failed_count > 0) {
-        html += `<p><strong>Failed:</strong> ${result.failed_count} ingredients</p>`;
-    }
-    
-    // Show successful ingredients
-    if (result.uploaded_ingredients && result.uploaded_ingredients.length > 0) {
-        html += '<div class="success-results" style="margin-top: var(--space-md);">';
-        html += '<h5 style="color: var(--success-color, #28a745);">Successfully Uploaded:</h5>';
-        html += '<ul>';
-        result.uploaded_ingredients.forEach(ingredient => {
-            html += `<li>${ingredient.name}${ingredient.description ? ` - ${ingredient.description}` : ''}</li>`;
-        });
-        html += '</ul>';
-        html += '</div>';
-    }
-    
-    // Show validation errors
-    if (result.validation_errors && result.validation_errors.length > 0) {
-        html += '<div class="error-results" style="margin-top: var(--space-md);">';
-        html += '<h5 style="color: var(--error-color, #dc3545);">Validation Errors:</h5>';
-        html += '<ul>';
-        result.validation_errors.forEach(error => {
-            html += `<li><strong>${error.ingredient_name}</strong> (Ingredient ${error.ingredient_index + 1}): ${error.error_message}</li>`;
-        });
-        html += '</ul>';
-        html += '</div>';
-    }
-    
-    html += '</div>';
-    
-    resultsDiv.innerHTML = html;
-    
-    // Show appropriate message
-    if (result.uploaded_count > 0) {
-        showMessage(`Successfully uploaded ${result.uploaded_count} ingredients!`, 'success');
-    }
-    
-    if (result.failed_count > 0) {
-        showMessage(`${result.failed_count} ingredients failed validation. See details below.`, 'error');
-    }
+function pluralize(count, singular) {
+    return count === 1 ? singular : `${singular}s`;
 }
 
 // Public tag management functionality

@@ -200,6 +200,7 @@ class AnalyticsQueries:
             {recipe_id, recipe_name, x, y, ingredients: [sorted ingredient names]}
         """
         import numpy as np
+        from scipy import sparse as sp
         from sklearn.metrics import pairwise_distances
         from barcart import compute_umap_embedding
 
@@ -410,6 +411,7 @@ class AnalyticsQueries:
             List of dicts with {recipe_id, recipe_name, x, y, ingredients: [...]}
         """
         import numpy as np
+        from scipy import sparse as sp
         from barcart import (
             build_ingredient_tree,
             build_ingredient_distance_matrix,
@@ -501,7 +503,9 @@ class AnalyticsQueries:
             cost_matrix, ingredient_registry = build_ingredient_distance_matrix(
                 filtered_parent_map, id_to_name
             )
+            cost_matrix = cost_matrix.astype(np.float32, copy=False)
             logger.info(f"Cost matrix shape: {cost_matrix.shape}")
+            logger.info("Cost matrix dtype: %s", cost_matrix.dtype)
 
             # Step 5: Build recipe volume matrix with rolled-up ingredients
             logger.info("Building recipe volume matrix")
@@ -510,9 +514,16 @@ class AnalyticsQueries:
                 ingredient_registry,
                 recipe_id_col='recipe_id',
                 ingredient_id_col='ingredient_id',
-                volume_col='volume_fraction'
+                volume_col='volume_fraction',
+                sparse=True,
+                dtype=np.float32,
             )
             logger.info(f"Volume matrix shape: {volume_matrix.shape}")
+            logger.info(
+                "Volume matrix dtype: %s (sparse=%s)",
+                volume_matrix.dtype,
+                sp.issparse(volume_matrix),
+            )
 
             # Step 6: Run EM fit
             logger.info("Running EM fit (this may take several minutes)")
