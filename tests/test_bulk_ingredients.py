@@ -12,11 +12,11 @@ class TestBulkIngredientUploadDatabaseLayer:
         """Test batch checking of ingredient names for duplicates"""
         # Add test ingredients with unique names
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Gin", "Premium test gin"),
         )
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Vodka", "Premium test vodka"),
         )
 
@@ -40,21 +40,21 @@ class TestBulkIngredientUploadDatabaseLayer:
         """Test batch searching for ingredients by name"""
         # Add test ingredients with unique names
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Spirits", "Spirits category"),
         )
         spirits_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
+            "SELECT id FROM ingredients WHERE name = %s",
             ("Test Spirits",),
         )
         spirits_id = spirits_result[0]["id"]
 
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description, parent_id) VALUES (?, ?, ?)",
+            "INSERT INTO ingredients (name, description, parent_id) VALUES (%s, %s, %s)",
             ("Test Gin", "Premium test gin", spirits_id),
         )
         gin_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
+            "SELECT id FROM ingredients WHERE name = %s",
             ("Test Gin",),
         )
         gin_id = gin_result[0]["id"]
@@ -87,11 +87,11 @@ class TestBulkIngredientUploadDatabaseLayer:
         """Test ingredient hierarchy validation for bulk upload"""
         # Add test ingredients with hierarchy
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Spirits Category", "Spirits category"),
         )
         spirits_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
+            "SELECT id FROM ingredients WHERE name = %s",
             ("Test Spirits Category",),
         )
         spirits_id = spirits_result[0]["id"]
@@ -144,7 +144,7 @@ class TestBulkIngredientUploadIntegration:
         """Test bulk ingredient upload with duplicate names"""
         # Add an existing ingredient
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Existing Gin", "Already exists"),
         )
 
@@ -229,11 +229,11 @@ class TestBulkIngredientUploadIntegration:
         """Test successful bulk ingredient upload with parent relationships"""
         # First create a parent ingredient
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Bulk Test Spirits", "Spirits category for bulk test"),
         )
         parent_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
+            "SELECT id FROM ingredients WHERE name = %s",
             ("Bulk Test Spirits",),
         )
         parent_id = parent_result[0]["id"]
@@ -278,11 +278,11 @@ class TestBulkIngredientUploadIntegration:
         """Test bulk ingredient upload with legacy parent_id field"""
         # First create a parent ingredient
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Legacy Parent Spirits", "Spirits category for legacy test"),
         )
         parent_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?",
+            "SELECT id FROM ingredients WHERE name = %s",
             ("Legacy Parent Spirits",),
         )
         parent_id = parent_result[0]["id"]
@@ -321,7 +321,7 @@ class TestBulkIngredientUploadIntegration:
         """Test bulk ingredient upload with mixed success and failure"""
         # Add an existing ingredient
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Existing Mixed Test Gin", "Already exists"),
         )
 

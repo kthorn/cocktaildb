@@ -274,7 +274,7 @@ async def create_recipe(
                 ingredient_names = []
                 for ing_id in duplicate_ids:
                     ingredient = db.execute_query(
-                        "SELECT name FROM ingredients WHERE id = ?", (ing_id,)
+                        "SELECT name FROM ingredients WHERE id = %s", (ing_id,)
                     )
                     if ingredient:
                         ingredient_names.append(ingredient[0]["name"])

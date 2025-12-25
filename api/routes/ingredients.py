@@ -234,7 +234,7 @@ async def bulk_upload_ingredients(
                 elif ingredient_data.parent_id is not None:
                     # Legacy parent ID validation (still needs individual query)
                     parent_exists = db.execute_query(
-                        "SELECT id FROM ingredients WHERE id = ?",
+                        "SELECT id FROM ingredients WHERE id = %s",
                         (ingredient_data.parent_id,),
                     )
                     if not parent_exists:
