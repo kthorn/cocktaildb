@@ -359,7 +359,7 @@ def build_search_recipes_keyset_sql(
             r.source, r.source_url, r.avg_rating, r.rating_count,
             r.created_at,
             STRING_AGG(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
-            STRING_AGG(CASE WHEN t.created_by = :cognito_user_id THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data,
+            STRING_AGG(CASE WHEN t.created_by = %(cognito_user_id)s THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data,
             ur.rating AS user_rating,
             {sort_expr} AS sort_value
         FROM
@@ -369,23 +369,23 @@ def build_search_recipes_keyset_sql(
         LEFT JOIN
             tags t ON rt.tag_id = t.id
         LEFT JOIN
-            ratings ur ON r.id = ur.recipe_id AND ur.cognito_user_id = :cognito_user_id
+            ratings ur ON r.id = ur.recipe_id AND ur.cognito_user_id = %(cognito_user_id)s
         LEFT JOIN
             recipe_ingredients ri ON r.id = ri.recipe_id
         LEFT JOIN
             ingredients i ON ri.ingredient_id = i.id
         WHERE
-            (:search_query IS NULL OR
-             r.name ILIKE :search_query_with_wildcards)
+            (%(search_query)s IS NULL OR
+             r.name ILIKE %(search_query_with_wildcards)s)
         AND
-            (:min_rating IS NULL OR COALESCE({rating_field}, 0) >= :min_rating)
+            (%(min_rating)s IS NULL OR COALESCE({rating_field}, 0) >= %(min_rating)s)
         AND
-            (:max_rating IS NULL OR COALESCE({rating_field}, 0) <= :max_rating)
+            (%(max_rating)s IS NULL OR COALESCE({rating_field}, 0) <= %(max_rating)s)
         AND
             (
-                :cursor_sort IS NULL
-                OR ({sort_expr} {cursor_operator} :cursor_sort)
-                OR ({sort_expr} = :cursor_sort AND r.id {cursor_operator} :cursor_id)
+                %(cursor_sort)s IS NULL
+                OR ({sort_expr} {cursor_operator} %(cursor_sort)s)
+                OR ({sort_expr} = %(cursor_sort)s AND r.id {cursor_operator} %(cursor_id)s)
             )"""
 
     for condition in must_conditions:
@@ -401,7 +401,7 @@ def build_search_recipes_keyset_sql(
 
     if inventory_filter:
         base_sql += """ AND r.id IN (
-            SELECT r_inv.id 
+            SELECT r_inv.id
             FROM recipes r_inv
             WHERE r_inv.id = r.id
             AND NOT EXISTS (
@@ -411,7 +411,7 @@ def build_search_recipes_keyset_sql(
                 AND NOT EXISTS (
                     SELECT 1 FROM user_ingredients ui_check
                     LEFT JOIN ingredients i_user ON ui_check.ingredient_id = i_user.id
-                    WHERE ui_check.cognito_user_id = :cognito_user_id
+                    WHERE ui_check.cognito_user_id = %(cognito_user_id)s
                     AND (
                         {substitution_match}
                     )
@@ -428,7 +428,7 @@ def build_search_recipes_keyset_sql(
         ORDER BY
             sort_value {sort_direction},
             r.id {sort_direction}
-        LIMIT :limit_plus_one
+        LIMIT %(limit_plus_one)s
     ),
     paginated_with_ingredients AS (
         SELECT
