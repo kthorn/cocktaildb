@@ -176,6 +176,13 @@ def em_fit(
         new_cost_matrix = m_step_blosum(T_sum)
         new_cost_matrix = new_cost_matrix.astype(np.float32, copy=False)
 
+        # Free plans memory before next iteration
+        del plans
+        del T_sum
+        import gc
+        gc.collect()
+        logger.info("EM iter %s RSS after gc: %.1f MB", t + 1, _rss_mb())
+
         # Convergence check
         num = np.linalg.norm(new_cost_matrix - previous_cost_matrix)
         den = np.linalg.norm(previous_cost_matrix) + 1e-12

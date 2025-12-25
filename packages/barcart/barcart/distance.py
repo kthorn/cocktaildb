@@ -455,14 +455,16 @@ def compute_emd(
     if support_idx.size == 0:
         return 0.0 if not return_plan else (0.0, [])
 
+    # Extract subsets and ensure float32 to reduce memory and match cost_matrix dtype
+    target_dtype = cost_matrix.dtype
     if sp.issparse(a):
-        a_sub = a[:, support_idx].toarray().ravel()
+        a_sub = a[:, support_idx].toarray().ravel().astype(target_dtype, copy=False)
     else:
-        a_sub = a[support_idx]
+        a_sub = np.asarray(a[support_idx], dtype=target_dtype)
     if sp.issparse(b):
-        b_sub = b[:, support_idx].toarray().ravel()
+        b_sub = b[:, support_idx].toarray().ravel().astype(target_dtype, copy=False)
     else:
-        b_sub = b[support_idx]
+        b_sub = np.asarray(b[support_idx], dtype=target_dtype)
     cost_sub = cost_matrix[np.ix_(support_idx, support_idx)]
 
     if not return_plan:
@@ -736,7 +738,7 @@ def neighbor_weight_matrix(
     n = distance_matrix.shape[0]
     nn_idx, nn_dist = knn_matrix(distance_matrix, k)
 
-    W = np.zeros_like(distance_matrix, dtype=float)
+    W = np.zeros_like(distance_matrix, dtype=distance_matrix.dtype)
     for r in range(n):
         d = nn_dist[r]
         # Boltzmann weights per row, stabilized by subtracting min
