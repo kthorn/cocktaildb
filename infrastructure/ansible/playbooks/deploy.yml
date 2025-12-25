@@ -10,6 +10,21 @@
     app_group: cocktaildb
 
   tasks:
+    # Validate required environment variables
+    - name: Check COCKTAILDB_DB_PASSWORD is set
+      fail:
+        msg: |
+          COCKTAILDB_DB_PASSWORD environment variable must be set.
+          Run: export COCKTAILDB_DB_PASSWORD='your-password'
+      when: db_password is not defined or db_password == ""
+
+    - name: Warn if using default password in production
+      fail:
+        msg: |
+          Cannot use default password 'changeme' in production.
+          Set COCKTAILDB_DB_PASSWORD to the actual database password.
+      when: app_env == 'prod' and db_password == 'changeme'
+
     # Sync API code
     - name: Sync API code to server
       synchronize:
