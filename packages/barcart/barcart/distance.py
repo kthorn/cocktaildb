@@ -515,6 +515,14 @@ def emd_matrix(
 
     is_sparse = sp.issparse(volume_matrix)
 
+    # Log a small sample of transport plan sizes for debugging memory use.
+    log_limit = 2
+    log_count = 0
+    logger = None
+    if return_plans:
+        import logging
+        logger = logging.getLogger(__name__)
+
     # Precompute supports for each recipe to avoid repeated nonzero scans
     if is_sparse:
         supports = [volume_matrix.getrow(i).indices for i in range(n_recipes)]
@@ -541,6 +549,14 @@ def emd_matrix(
                         support_idx=union_idx,
                     )
                     plans[(i, j)] = plan
+                    if logger is not None and log_count < log_limit:
+                        logger.info(
+                            "EMD plan sample (%s,%s): %s entries",
+                            i,
+                            j,
+                            len(plan),
+                        )
+                        log_count += 1
                 else:
                     distance = compute_emd(
                         row_i,
@@ -577,6 +593,14 @@ def emd_matrix(
                         support_idx=union_idx,
                     )
                     plans[(i, j)] = plan
+                    if logger is not None and log_count < log_limit:
+                        logger.info(
+                            "EMD plan sample (%s,%s): %s entries",
+                            i,
+                            j,
+                            len(plan),
+                        )
+                        log_count += 1
                 else:
                     distance = compute_emd(
                         row_i,
