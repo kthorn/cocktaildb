@@ -63,7 +63,7 @@ get_recipe_by_id_sql = """
         r.id, r.name, r.instructions, r.description, r.image_url,
         r.source, r.source_url, r.avg_rating, r.rating_count,
         STRING_AGG(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
-        STRING_AGG(CASE WHEN t.created_by = :cognito_user_id THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data,
+        STRING_AGG(CASE WHEN t.created_by = %(cognito_user_id)s THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data,
         ur.rating AS user_rating
     FROM
         recipes r
@@ -72,8 +72,8 @@ get_recipe_by_id_sql = """
     LEFT JOIN
         tags t ON rt.tag_id = t.id
     LEFT JOIN
-        ratings ur ON r.id = ur.recipe_id AND ur.cognito_user_id = :cognito_user_id
-    WHERE r.id = :recipe_id
+        ratings ur ON r.id = ur.recipe_id AND ur.cognito_user_id = %(cognito_user_id)s
+    WHERE r.id = %(recipe_id)s
     GROUP BY
         r.id, r.name, r.instructions, r.description, r.image_url,
         r.source, r.source_url, r.avg_rating, r.rating_count,
@@ -85,7 +85,7 @@ get_all_recipes_sql = """
         r.id, r.name, r.instructions, r.description, r.image_url,
         r.source, r.source_url, r.avg_rating, r.rating_count,
         STRING_AGG(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
-        STRING_AGG(CASE WHEN t.created_by = :cognito_user_id THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data
+        STRING_AGG(CASE WHEN t.created_by = %(cognito_user_id)s THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data
     FROM
         recipes r
     LEFT JOIN
