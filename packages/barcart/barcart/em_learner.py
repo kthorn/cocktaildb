@@ -108,6 +108,15 @@ def em_fit(
     if n_jobs is None:
         n_jobs = _get_optimal_n_jobs()
 
+    from scipy import sparse as sp
+
+    if sp.issparse(volume_matrix):
+        if volume_matrix.dtype != np.float32:
+            volume_matrix = volume_matrix.astype(np.float32)
+    else:
+        volume_matrix = np.asarray(volume_matrix, dtype=np.float32)
+    previous_cost_matrix = np.asarray(previous_cost_matrix, dtype=np.float32)
+
     # Log parallelization configuration for diagnostics
     import logging
     logger = logging.getLogger(__name__)
@@ -128,6 +137,8 @@ def em_fit(
             tqdm_cls=_DisabledTqdm,
             tqdm_kwargs=None,
         )
+        if distance_matrix.dtype != np.float32:
+            distance_matrix = distance_matrix.astype(np.float32, copy=False)
         T_sum, n_pairs = expected_ingredient_match_matrix(
             distance_matrix,
             plans,
@@ -140,6 +151,7 @@ def em_fit(
         )
 
         new_cost_matrix = m_step_blosum(T_sum)
+        new_cost_matrix = new_cost_matrix.astype(np.float32, copy=False)
 
         # Convergence check
         num = np.linalg.norm(new_cost_matrix - previous_cost_matrix)
