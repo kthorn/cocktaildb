@@ -1,7 +1,9 @@
 """Analytics regeneration - core logic for local batch job."""
+import gc
 import json
 import logging
 import os
+import resource
 import sys
 from typing import Dict, Any
 
@@ -13,6 +15,15 @@ from utils.analytics_cache import AnalyticsStorage
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+
+def log_memory(stage: str) -> None:
+    """Log current RSS usage in MB for lightweight tracking."""
+    try:
+        rss_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        logger.info("Memory usage after %s: %.1f MB RSS", stage, rss_kb / 1024.0)
+    except Exception:
+        logger.debug("Memory usage unavailable at stage: %s", stage)
 
 
 def enrich_tree_with_recipe_counts(
@@ -70,15 +81,22 @@ def regenerate_analytics() -> Dict[str, Any]:
     all_ingredient_stats = analytics_queries.get_ingredient_usage_stats(
         all_ingredients=True
     )
+    log_memory("ingredient stats query")
 
     # Filter to root-level ingredients for the ingredient-usage endpoint
     ingredient_stats = [
         ing for ing in all_ingredient_stats if ing["parent_id"] is None
     ]
     logger.info("Filtered to %s root-level ingredients", len(ingredient_stats))
+    storage.put_analytics("ingredient-usage", ingredient_stats)
+    ingredient_stats_count = len(ingredient_stats)
+    del ingredient_stats
+    gc.collect()
 
     # Convert all ingredients to DataFrame for tree building
     ingredients_df = pd.DataFrame(all_ingredient_stats)
+    del all_ingredient_stats
+    gc.collect()
     if not ingredients_df.empty:
         ingredients_df = ingredients_df.rename(
             columns={
@@ -92,13 +110,28 @@ def regenerate_analytics() -> Dict[str, Any]:
     # Generate recipe complexity distribution
     logger.info("Generating recipe complexity distribution")
     complexity_stats = analytics_queries.get_recipe_complexity_distribution()
+    storage.put_analytics("recipe-complexity", complexity_stats)
+    complexity_stats_count = len(complexity_stats)
+    del complexity_stats
+    gc.collect()
+    log_memory("recipe complexity stored")
 
     # Generate both cocktail space variants for comparison
     logger.info("Generating Manhattan-based cocktail space")
     cocktail_space_manhattan = analytics_queries.compute_cocktail_space_umap()
+    storage.put_analytics("cocktail-space", cocktail_space_manhattan)
+    cocktail_space_count = len(cocktail_space_manhattan)
+    del cocktail_space_manhattan
+    gc.collect()
+    log_memory("cocktail space manhattan stored")
 
     logger.info("Generating EM-based cocktail space with rollup")
     cocktail_space_em = analytics_queries.compute_cocktail_space_umap_em()
+    storage.put_analytics("cocktail-space-em", cocktail_space_em)
+    cocktail_space_em_count = len(cocktail_space_em)
+    del cocktail_space_em
+    gc.collect()
+    log_memory("cocktail space em stored")
 
     # Generate ingredient tree
     logger.info("Building ingredient tree with recipe counts")
@@ -130,6 +163,7 @@ def regenerate_analytics() -> Dict[str, Any]:
         enriched_tree = enrich_tree_with_recipe_counts(tree_dict, recipe_counts)
 
         logger.info("Built ingredient tree with %s ingredients", len(recipe_counts))
+        ingredient_tree_nodes = len(recipe_counts)
     else:
         logger.warning("No ingredient data available for tree building")
         enriched_tree = {
@@ -140,23 +174,23 @@ def regenerate_analytics() -> Dict[str, Any]:
             "children": [],
         }
         recipe_counts = {}
+        ingredient_tree_nodes = 0
 
-    # Store on local disk
-    logger.info("Storing analytics on local disk")
-    storage.put_analytics("ingredient-usage", ingredient_stats)
-    storage.put_analytics("recipe-complexity", complexity_stats)
-    storage.put_analytics("cocktail-space", cocktail_space_manhattan)
-    storage.put_analytics("cocktail-space-em", cocktail_space_em)
     storage.put_analytics("ingredient-tree", enriched_tree)
+    del enriched_tree
+    del recipe_counts
+    del ingredients_df
+    gc.collect()
+    log_memory("ingredient tree stored")
 
     logger.info("Analytics regeneration completed successfully")
 
     return {
-        "ingredient_stats_count": len(ingredient_stats),
-        "complexity_stats_count": len(complexity_stats),
-        "cocktail_space_count": len(cocktail_space_manhattan),
-        "cocktail_space_em_count": len(cocktail_space_em),
-        "ingredient_tree_nodes": len(recipe_counts),
+        "ingredient_stats_count": ingredient_stats_count,
+        "complexity_stats_count": complexity_stats_count,
+        "cocktail_space_count": cocktail_space_count,
+        "cocktail_space_em_count": cocktail_space_em_count,
+        "ingredient_tree_nodes": ingredient_tree_nodes,
     }
 
 
