@@ -229,7 +229,9 @@ class TestDataConsistencyAndIntegrity:
         cursor = db_with_test_data.cursor()
 
         # Use PostgreSQL information_schema instead of sqlite_master
-        cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+        cursor.execute(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+        )
         tables = [row[0] for row in cursor.fetchall()]
 
         expected_tables = [
@@ -285,8 +287,8 @@ class TestComplexIntegrationScenarios:
                 if ingredient.get("unit_name"):
                     assert len(ingredient["unit_name"]) > 0
 
-        # Get ratings for this recipe (correct endpoint is /ratings/recipes/{id})
-        ratings_response = client.get(f"/ratings/recipes/{recipe_id}")
+        # Get ratings for this recipe
+        ratings_response = client.get(f"/ratings/{recipe_id}")
         assert ratings_response.status_code == status.HTTP_200_OK
 
         ratings_data = ratings_response.json()
