@@ -1062,7 +1062,7 @@ class Database:
                 FROM recipe_ingredients ri
                 JOIN ingredients i ON ri.ingredient_id = i.id
                 LEFT JOIN units u ON ri.unit_id = u.id
-                WHERE ri.recipe_id = :recipe_id
+                WHERE ri.recipe_id = %(recipe_id)s
                 ORDER BY ri.recipe_id ASC,
                     COALESCE(ri.amount * u.conversion_to_ml, 0) DESC,
                     ri.id ASC
@@ -1254,7 +1254,7 @@ class Database:
             recipe = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id FROM recipes WHERE id = :id", {"id": recipe_id}
+                    "SELECT id FROM recipes WHERE id = %(id)s", {"id": recipe_id}
                 ),
             )
             if not recipe:
@@ -1283,7 +1283,7 @@ class Database:
         try:
             # Check if recipe exists first
             existing = self.execute_query(
-                "SELECT id FROM recipes WHERE id = :id", {"id": recipe_id}
+                "SELECT id FROM recipes WHERE id = %(id)s", {"id": recipe_id}
             )
             if not existing:
                 return None
@@ -1359,8 +1359,8 @@ class Database:
                 self.execute_query(
                     """
                     SELECT id, cognito_user_id, cognito_username, recipe_id, rating
-                    FROM ratings 
-                    WHERE recipe_id = :recipe_id
+                    FROM ratings
+                    WHERE recipe_id = %(recipe_id)s
                     """,
                     {"recipe_id": recipe_id},
                 ),
@@ -1378,8 +1378,8 @@ class Database:
                 self.execute_query(
                     """
                     SELECT id, cognito_user_id, cognito_username, recipe_id, rating
-                    FROM ratings 
-                    WHERE recipe_id = :recipe_id AND cognito_user_id = :user_id
+                    FROM ratings
+                    WHERE recipe_id = %(recipe_id)s AND cognito_user_id = %(user_id)s
                     """,
                     {"recipe_id": recipe_id, "user_id": user_id},
                 ),
@@ -1409,7 +1409,7 @@ class Database:
             recipe = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id FROM recipes WHERE id = :id", {"id": data["recipe_id"]}
+                    "SELECT id FROM recipes WHERE id = %(id)s", {"id": data["recipe_id"]}
                 ),
             )
             if not recipe:
@@ -1421,7 +1421,7 @@ class Database:
                 self.execute_query(
                     """
                     SELECT id FROM ratings
-                    WHERE cognito_user_id = :user_id AND recipe_id = :recipe_id
+                    WHERE cognito_user_id = %(user_id)s AND recipe_id = %(recipe_id)s
                     """,
                     {
                         "user_id": data["cognito_user_id"],
@@ -1481,7 +1481,7 @@ class Database:
                     """
                     SELECT id, cognito_user_id, cognito_username, recipe_id, rating
                     FROM ratings
-                    WHERE id = :id
+                    WHERE id = %(id)s
                     """,
                     {"id": rating_id},
                 ),
@@ -1491,7 +1491,7 @@ class Database:
             recipe_updated = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT avg_rating, rating_count FROM recipes WHERE id = :id",
+                    "SELECT avg_rating, rating_count FROM recipes WHERE id = %(id)s",
                     {"id": data["recipe_id"]},
                 ),
             )
@@ -1522,7 +1522,7 @@ class Database:
                 self.execute_query(
                     """
                     SELECT id FROM ratings
-                    WHERE cognito_user_id = :user_id AND recipe_id = :recipe_id
+                    WHERE cognito_user_id = %(user_id)s AND recipe_id = %(recipe_id)s
                     """,
                     {"user_id": user_id, "recipe_id": recipe_id},
                 ),
@@ -1563,14 +1563,14 @@ class Database:
         try:
             logger.info(f"DB: Creating public tag '{name}'")
             self.execute_query(
-                "INSERT INTO tags (name, created_by) VALUES (:name, NULL)",
+                "INSERT INTO tags (name, created_by) VALUES (%(name)s, NULL)",
                 {"name": name},
             )
             # Re-fetch the tag to get its ID
             tag = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name FROM tags WHERE name = :name AND created_by IS NULL",
+                    "SELECT id, name FROM tags WHERE name = %(name)s AND created_by IS NULL",
                     {"name": name},
                 ),
             )
@@ -1598,7 +1598,7 @@ class Database:
             tag = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name FROM tags WHERE name = :name AND created_by IS NULL",
+                    "SELECT id, name FROM tags WHERE name = %(name)s AND created_by IS NULL",
                     {"name": name},
                 ),
             )
@@ -1619,7 +1619,7 @@ class Database:
             self.execute_query(
                 """
                 INSERT INTO tags (name, created_by)
-                VALUES (:name, :cognito_user_id)
+                VALUES (%(name)s, %(cognito_user_id)s)
                 """,
                 {
                     "name": name.strip(),
@@ -1630,8 +1630,8 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, name, created_by as cognito_user_id FROM tags 
-                    WHERE name = :name AND created_by = :cognito_user_id
+                    SELECT id, name, created_by as cognito_user_id FROM tags
+                    WHERE name = %(name)s AND created_by = %(cognito_user_id)s
                     """,
                     {"name": name.strip(), "cognito_user_id": cognito_user_id.strip()},
                 ),
@@ -1664,8 +1664,8 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, name, created_by as cognito_user_id FROM tags 
-                    WHERE name = :name AND created_by = :cognito_user_id
+                    SELECT id, name, created_by as cognito_user_id FROM tags
+                    WHERE name = %(name)s AND created_by = %(cognito_user_id)s
                     """,
                     {"name": name, "cognito_user_id": cognito_user_id},
                 ),
@@ -1707,8 +1707,8 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, name, created_by as cognito_user_id FROM tags 
-                    WHERE created_by = :cognito_user_id ORDER BY name
+                    SELECT id, name, created_by as cognito_user_id FROM tags
+                    WHERE created_by = %(cognito_user_id)s ORDER BY name
                     """,
                     {"cognito_user_id": cognito_user_id},
                 ),
@@ -1725,8 +1725,8 @@ class Database:
             logger.info(f"DB: Adding public tag {tag_id} to recipe {recipe_id}")
             result = self.execute_query(
                 """
-                INSERT INTO recipe_tags (recipe_id, tag_id) 
-                VALUES (:recipe_id, :tag_id)
+                INSERT INTO recipe_tags (recipe_id, tag_id)
+                VALUES (%(recipe_id)s, %(tag_id)s)
                 ON CONFLICT(recipe_id, tag_id) DO NOTHING
                 """,
                 {"recipe_id": recipe_id, "tag_id": tag_id},
@@ -1756,7 +1756,7 @@ class Database:
             result = self.execute_query(
                 """
                 INSERT INTO recipe_tags (recipe_id, tag_id)
-                VALUES (:recipe_id, :tag_id)
+                VALUES (%(recipe_id)s, %(tag_id)s)
                 ON CONFLICT(recipe_id, tag_id) DO NOTHING
                 """,
                 {"recipe_id": recipe_id, "tag_id": tag_id},
@@ -1781,7 +1781,7 @@ class Database:
         """Removes the association of a public tag from a recipe."""
         try:
             result = self.execute_query(
-                "DELETE FROM recipe_tags WHERE recipe_id = :recipe_id AND tag_id = :tag_id",
+                "DELETE FROM recipe_tags WHERE recipe_id = %(recipe_id)s AND tag_id = %(tag_id)s",
                 {"recipe_id": recipe_id, "tag_id": tag_id},
             )
             return result.get("rowCount", 0) > 0
@@ -1800,8 +1800,8 @@ class Database:
             result = self.execute_query(
                 """
                 DELETE FROM recipe_tags
-                WHERE recipe_id = :recipe_id AND tag_id = :tag_id
-                  AND EXISTS (SELECT 1 FROM tags t WHERE t.id = :tag_id AND t.created_by = :cognito_user_id)
+                WHERE recipe_id = %(recipe_id)s AND tag_id = %(tag_id)s
+                  AND EXISTS (SELECT 1 FROM tags t WHERE t.id = %(tag_id)s AND t.created_by = %(cognito_user_id)s)
                 """,
                 {
                     "recipe_id": recipe_id,
@@ -1826,7 +1826,7 @@ class Database:
                     SELECT t.id, t.name
                     FROM recipe_tags rt
                     JOIN tags t ON rt.tag_id = t.id
-                    WHERE rt.recipe_id = :recipe_id AND t.created_by IS NULL
+                    WHERE rt.recipe_id = %(recipe_id)s AND t.created_by IS NULL
                     ORDER BY t.name
                     """,
                     {"recipe_id": recipe_id},
@@ -1848,7 +1848,7 @@ class Database:
                     SELECT t.id, t.name
                     FROM recipe_tags rt
                     JOIN tags t ON rt.tag_id = t.id
-                    WHERE rt.recipe_id = :recipe_id AND t.created_by = :cognito_user_id
+                    WHERE rt.recipe_id = %(recipe_id)s AND t.created_by = %(cognito_user_id)s
                     ORDER BY t.name
                     """,
                     {"recipe_id": recipe_id, "cognito_user_id": cognito_user_id},
@@ -1866,10 +1866,10 @@ class Database:
             tag = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    """SELECT id, name, 
+                    """SELECT id, name,
                        CASE WHEN created_by IS NULL THEN 0 ELSE 1 END as is_private,
                        created_by as created_by
-                       FROM tags WHERE id = :tag_id""",
+                       FROM tags WHERE id = %(tag_id)s""",
                     {"tag_id": tag_id},
                 ),
             )
@@ -1926,7 +1926,7 @@ class Database:
         """
         try:
             result = self.execute_query(
-                "DELETE FROM tags WHERE id = :tag_id AND created_by IS NULL",
+                "DELETE FROM tags WHERE id = %(tag_id)s AND created_by IS NULL",
                 {"tag_id": tag_id},
             )
             success = result.get("rowCount", 0) > 0
@@ -1951,7 +1951,7 @@ class Database:
         """
         try:
             result = self.execute_query(
-                "DELETE FROM tags WHERE id = :tag_id AND created_by = :user_id",
+                "DELETE FROM tags WHERE id = %(tag_id)s AND created_by = %(user_id)s",
                 {"tag_id": tag_id, "user_id": user_id},
             )
             success = result.get("rowCount", 0) > 0
@@ -2037,7 +2037,7 @@ class Database:
                         # Use path-based matching to include child ingredients
                         param_name = f"ingredient_path_{i}"
                         query_params[param_name] = f"%/{ingredient['id']}/%"
-                        condition = f"i2.path LIKE :{param_name}"
+                        condition = f"i2.path LIKE %({param_name})s"
 
                         if operator == "MUST_NOT":
                             must_not_ingredient_conditions.append(condition)
@@ -2078,9 +2078,9 @@ class Database:
 
                             # Build condition for public tags (created_by IS NULL) or user's private tags
                             if user_id:
-                                condition = f"(t3.name = :{tag_param} AND (t3.created_by IS NULL OR t3.created_by = :cognito_user_id))"
+                                condition = f"(t3.name = %({tag_param})s AND (t3.created_by IS NULL OR t3.created_by = %(cognito_user_id)s))"
                             else:
-                                condition = f"(t3.name = :{tag_param} AND t3.created_by IS NULL)"
+                                condition = f"(t3.name = %({tag_param})s AND t3.created_by IS NULL)"
                             tag_conditions.append(condition)
                         else:
                             # Tag doesn't exist, return no results
@@ -2308,7 +2308,7 @@ class Database:
             existing = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id FROM user_ingredients WHERE cognito_user_id = :user_id AND ingredient_id = :ingredient_id",
+                    "SELECT id FROM user_ingredients WHERE cognito_user_id = %(user_id)s AND ingredient_id = %(ingredient_id)s",
                     {"user_id": user_id, "ingredient_id": ingredient_id},
                 ),
             )
@@ -2394,7 +2394,7 @@ class Database:
             existing = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id FROM user_ingredients WHERE cognito_user_id = :user_id AND ingredient_id = :ingredient_id",
+                    "SELECT id FROM user_ingredients WHERE cognito_user_id = %(user_id)s AND ingredient_id = %(ingredient_id)s",
                     {"user_id": user_id, "ingredient_id": ingredient_id},
                 ),
             )
@@ -2419,9 +2419,9 @@ class Database:
                         SELECT ui.ingredient_id, i.name, i.path
                         FROM user_ingredients ui
                         JOIN ingredients i ON ui.ingredient_id = i.id
-                        WHERE ui.cognito_user_id = :user_id 
-                        AND i.path LIKE :child_path_pattern
-                        AND i.id != :ingredient_id
+                        WHERE ui.cognito_user_id = %(user_id)s
+                        AND i.path LIKE %(child_path_pattern)s
+                        AND i.id != %(ingredient_id)s
                         """,
                         {
                             "user_id": user_id,
@@ -2440,7 +2440,7 @@ class Database:
 
             # Remove the ingredient from user's inventory
             result = self.execute_query(
-                "DELETE FROM user_ingredients WHERE cognito_user_id = :user_id AND ingredient_id = :ingredient_id",
+                "DELETE FROM user_ingredients WHERE cognito_user_id = %(user_id)s AND ingredient_id = %(ingredient_id)s",
                 {"user_id": user_id, "ingredient_id": ingredient_id},
             )
 
@@ -2462,7 +2462,7 @@ class Database:
                     SELECT ui.ingredient_id, ui.added_at, i.name, i.description, i.parent_id, i.path
                     FROM user_ingredients ui
                     JOIN ingredients i ON ui.ingredient_id = i.id
-                    WHERE ui.cognito_user_id = :user_id
+                    WHERE ui.cognito_user_id = %(user_id)s
                     ORDER BY i.name
                     """,
                     {"user_id": user_id},
@@ -2503,7 +2503,7 @@ class Database:
                     ingredient_check = cast(
                         List[Dict[str, Any]],
                         self.execute_query(
-                            "SELECT id FROM ingredients WHERE id = :ingredient_id",
+                            "SELECT id FROM ingredients WHERE id = %(ingredient_id)s",
                             {"ingredient_id": ingredient_id},
                         ),
                     )
