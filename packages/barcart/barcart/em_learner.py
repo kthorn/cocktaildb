@@ -5,6 +5,16 @@ from tqdm.auto import tqdm
 from barcart.distance import emd_matrix, expected_ingredient_match_matrix, m_step_blosum
 
 
+def _rss_mb() -> float:
+    """Best-effort RSS reporting for debugging."""
+    try:
+        import resource
+
+        return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
+    except Exception:
+        return -1.0
+
+
 def _get_optimal_n_jobs() -> int:
     """
     Auto-detect optimal n_jobs for parallel EMD matrix computation.
@@ -129,6 +139,7 @@ def em_fit(
     )
     for t in outer_bar:
         # Show only outer loop progress (convergence), not inner loop (recipe pairs)
+        logger.info("EM iter %s RSS before E-step: %.1f MB", t + 1, _rss_mb())
         distance_matrix, plans = emd_matrix(
             volume_matrix,
             previous_cost_matrix,
@@ -136,6 +147,14 @@ def em_fit(
             return_plans=True,
             tqdm_cls=_DisabledTqdm,
             tqdm_kwargs=None,
+        )
+        logger.info(
+            "EM iter %s: plans=%s total_plan_entries=%s avg_entries=%.2f RSS after E-step: %.1f MB",
+            t + 1,
+            len(plans),
+            sum(len(plan) for plan in plans.values()),
+            (sum(len(plan) for plan in plans.values()) / max(1, len(plans))),
+            _rss_mb(),
         )
         if distance_matrix.dtype != np.float32:
             distance_matrix = distance_matrix.astype(np.float32, copy=False)
