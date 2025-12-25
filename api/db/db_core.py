@@ -203,7 +203,7 @@ class Database:
                 parent = cast(
                     List[Dict[str, Any]],
                     self.execute_query(
-                        "SELECT path FROM ingredients WHERE id = :parent_id",
+                        "SELECT path FROM ingredients WHERE id = %(parent_id)s",
                         {"parent_id": data.get("parent_id")},
                     ),
                 )
@@ -254,7 +254,7 @@ class Database:
                 ingredient = cast(
                     List[Dict[str, Any]],
                     self.execute_query(
-                        "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE id = :id",
+                        "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE id = %(id)s",
                         {"id": new_id},
                     ),
                 )
@@ -295,7 +295,7 @@ class Database:
                 old_ingredient = cast(
                     List[Dict[str, Any]],
                     self.execute_query(
-                        "SELECT parent_id, path FROM ingredients WHERE id = :id",
+                        "SELECT parent_id, path FROM ingredients WHERE id = %(id)s",
                         {"id": ingredient_id},
                     ),
                 )
@@ -315,7 +315,7 @@ class Database:
                     parent = cast(
                         List[Dict[str, Any]],
                         self.execute_query(
-                            "SELECT path FROM ingredients WHERE id = :id",
+                            "SELECT path FROM ingredients WHERE id = %(id)s",
                             {"id": new_parent_id},
                         ),
                     )
@@ -342,10 +342,10 @@ class Database:
 
                 # Build the update query dynamically to handle None values properly
                 set_clauses = [
-                    "name = COALESCE(:name, name)",
-                    "description = COALESCE(:description, description)",
-                    "parent_id = :parent_id",
-                    "path = :path",
+                    "name = COALESCE(%(name)s, name)",
+                    "description = COALESCE(%(description)s, description)",
+                    "parent_id = %(parent_id)s",
+                    "path = %(path)s",
                 ]
                 query_params = {
                     "id": ingredient_id,
@@ -357,15 +357,15 @@ class Database:
 
                 # Handle allow_substitution explicitly
                 if "allow_substitution" in data:
-                    set_clauses.append("allow_substitution = :allow_substitution")
+                    set_clauses.append("allow_substitution = %(allow_substitution)s")
                     query_params["allow_substitution"] = data.get("allow_substitution")
 
                 # Update ingredient with new path
                 self.execute_query(
                     f"""
-                    UPDATE ingredients 
+                    UPDATE ingredients
                     SET {", ".join(set_clauses)}
-                    WHERE id = :id
+                    WHERE id = %(id)s
                     """,
                     query_params,
                 )
@@ -377,15 +377,15 @@ class Database:
                     new_descendant_path = descendant_path.replace(old_path, new_path)
 
                     self.execute_query(
-                        "UPDATE ingredients SET path = :path WHERE id = :id",
+                        "UPDATE ingredients SET path = %(path)s WHERE id = %(id)s",
                         {"path": new_descendant_path, "id": descendant["id"]},
                     )
             else:
                 # Simple update without changing the hierarchy
                 # Build the update query dynamically to handle None values properly
                 set_clauses = [
-                    "name = COALESCE(:name, name)",
-                    "description = COALESCE(:description, description)",
+                    "name = COALESCE(%(name)s, name)",
+                    "description = COALESCE(%(description)s, description)",
                 ]
                 query_params = {
                     "id": ingredient_id,
@@ -395,14 +395,14 @@ class Database:
 
                 # Handle allow_substitution explicitly
                 if "allow_substitution" in data:
-                    set_clauses.append("allow_substitution = :allow_substitution")
+                    set_clauses.append("allow_substitution = %(allow_substitution)s")
                     query_params["allow_substitution"] = data.get("allow_substitution")
 
                 self.execute_query(
                     f"""
-                    UPDATE ingredients 
+                    UPDATE ingredients
                     SET {", ".join(set_clauses)}
-                    WHERE id = :id
+                    WHERE id = %(id)s
                     """,
                     query_params,
                 )
@@ -411,7 +411,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE id = :id",
+                    "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE id = %(id)s",
                     {"id": ingredient_id},
                 ),
             )
@@ -429,7 +429,7 @@ class Database:
             ingredient = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id FROM ingredients WHERE id = :id", {"id": ingredient_id}
+                    "SELECT id FROM ingredients WHERE id = %(id)s", {"id": ingredient_id}
                 ),
             )
             if not ingredient:
@@ -439,7 +439,7 @@ class Database:
             children = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id FROM ingredients WHERE parent_id = :parent_id",
+                    "SELECT id FROM ingredients WHERE parent_id = %(parent_id)s",
                     {"parent_id": ingredient_id},
                 ),
             )
@@ -450,7 +450,7 @@ class Database:
             used_in_recipes = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT recipe_id FROM recipe_ingredients WHERE ingredient_id = :ingredient_id LIMIT 1",
+                    "SELECT recipe_id FROM recipe_ingredients WHERE ingredient_id = %(ingredient_id)s LIMIT 1",
                     {"ingredient_id": ingredient_id},
                 ),
             )
@@ -459,7 +459,7 @@ class Database:
 
             # Delete the ingredient
             self.execute_query(
-                "DELETE FROM ingredients WHERE id = :id", {"id": ingredient_id}
+                "DELETE FROM ingredients WHERE id = %(id)s", {"id": ingredient_id}
             )
             return True
         except Exception as e:
@@ -486,7 +486,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path FROM ingredients WHERE LOWER(name) = LOWER(?)",
+                    "SELECT id, name, description, parent_id, path FROM ingredients WHERE LOWER(name) = LOWER(%s)",
                     (ingredient_name,),
                 ),
             )
@@ -503,7 +503,7 @@ class Database:
             exact_result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE LOWER(name) = LOWER(?)",
+                    "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE LOWER(name) = LOWER(%s)",
                     (search_term,),
                 ),
             )
@@ -603,7 +603,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE id = :id",
+                    "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE id = %(id)s",
                     {"id": ingredient_id},
                 ),
             )
@@ -621,7 +621,7 @@ class Database:
             ingredient = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT path FROM ingredients WHERE id = :id", {"id": ingredient_id}
+                    "SELECT path FROM ingredients WHERE id = %(id)s", {"id": ingredient_id}
                 ),
             )
             if not ingredient:
@@ -636,8 +636,8 @@ class Database:
                     """
                 SELECT id, name, description, parent_id, path,
                        (LENGTH(path) - LENGTH(REPLACE(path, '/', '')) - 1) as level
-                FROM ingredients 
-                WHERE path LIKE :path_pattern AND id != :id
+                FROM ingredients
+                WHERE path LIKE %(path_pattern)s AND id != %(id)s
                 ORDER BY path
                 """,
                     {"path_pattern": f"{path}%", "id": ingredient_id},
