@@ -432,6 +432,41 @@ def editor_client(test_client_memory_with_app, mock_editor_user):
 
 
 @pytest.fixture(scope="function")
+def editor_client_with_data(test_client_with_data, mock_editor_user):
+    """Test client with mocked editor authentication AND test data"""
+    from dependencies.auth import UserInfo, require_authentication, require_editor_access
+
+    client, app = test_client_with_data
+
+    # Create UserInfo with only the parameters it expects
+    user_info = UserInfo(
+        user_id=mock_editor_user["user_id"],
+        username=mock_editor_user.get("username"),
+        email=mock_editor_user.get("email"),
+        groups=mock_editor_user.get("cognito:groups", []),
+        claims=mock_editor_user,
+    )
+
+    # Override both dependencies
+    def override_require_authentication():
+        return user_info
+
+    def override_require_editor_access():
+        return user_info
+
+    app.dependency_overrides[require_authentication] = override_require_authentication
+    app.dependency_overrides[require_editor_access] = override_require_editor_access
+
+    yield client
+
+    # Clean up the overrides
+    if require_authentication in app.dependency_overrides:
+        del app.dependency_overrides[require_authentication]
+    if require_editor_access in app.dependency_overrides:
+        del app.dependency_overrides[require_editor_access]
+
+
+@pytest.fixture(scope="function")
 def admin_client(test_client_memory_with_app, mock_admin_user):
     """Test client with mocked admin authentication using FastAPI dependency override"""
     from dependencies.auth import UserInfo, require_authentication, require_editor_access
@@ -684,7 +719,10 @@ def _populate_test_data_pg(cursor):
         ('milliliter', 'ml', 1.0),
         ('teaspoon', 'tsp', 4.92892),
         ('tablespoon', 'tbsp', 14.7868),
-        ('dash', 'dash', 0.9)
+        ('dash', 'dash', 0.9),
+        ('to top', 'to top', NULL),
+        ('to rinse', 'to rinse', NULL),
+        ('Each', 'ea', NULL)
         ON CONFLICT (name) DO NOTHING
     """)
 

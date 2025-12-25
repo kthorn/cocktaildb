@@ -228,7 +228,8 @@ class TestDataConsistencyAndIntegrity:
         """Test that database schema has all expected tables"""
         cursor = db_with_test_data.cursor()
 
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        # Use PostgreSQL information_schema instead of sqlite_master
+        cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
         tables = [row[0] for row in cursor.fetchall()]
 
         expected_tables = [
@@ -284,8 +285,8 @@ class TestComplexIntegrationScenarios:
                 if ingredient.get("unit_name"):
                     assert len(ingredient["unit_name"]) > 0
 
-        # Get ratings for this recipe
-        ratings_response = client.get(f"/recipes/{recipe_id}/ratings")
+        # Get ratings for this recipe (correct endpoint is /ratings/recipes/{id})
+        ratings_response = client.get(f"/ratings/recipes/{recipe_id}")
         assert ratings_response.status_code == status.HTTP_200_OK
 
         ratings_data = ratings_response.json()
@@ -351,9 +352,9 @@ class TestComplexIntegrationScenarios:
 class TestSpecialUnitsIntegration:
     """Integration tests for special units in recipe creation and retrieval"""
 
-    def test_create_and_retrieve_recipe_with_to_top(self, editor_client):
+    def test_create_and_retrieve_recipe_with_to_top(self, editor_client_with_data):
         """Test creating and retrieving recipe with 'to top' unit"""
-        client = editor_client
+        client = editor_client_with_data
 
         # First get ingredients and units for the test
         ingredients_response = client.get("/ingredients")
@@ -402,9 +403,9 @@ class TestSpecialUnitsIntegration:
         assert ingredient["unit_name"] == "to top"
         assert ingredient["ingredient_id"] == test_ingredient["id"]
 
-    def test_create_and_retrieve_recipe_with_to_rinse(self, editor_client):
+    def test_create_and_retrieve_recipe_with_to_rinse(self, editor_client_with_data):
         """Test creating and retrieving recipe with 'to rinse' unit"""
-        client = editor_client
+        client = editor_client_with_data
 
         # Get ingredients and units
         ingredients_response = client.get("/ingredients")
@@ -454,9 +455,9 @@ class TestSpecialUnitsIntegration:
         assert ingredient["unit_name"] == "to rinse"
         assert ingredient["ingredient_id"] == test_ingredient["id"]
 
-    def test_create_and_retrieve_recipe_with_each_unit(self, editor_client):
+    def test_create_and_retrieve_recipe_with_each_unit(self, editor_client_with_data):
         """Test creating and retrieving recipe with 'each' unit"""
-        client = editor_client
+        client = editor_client_with_data
 
         # Get ingredients and units
         ingredients_response = client.get("/ingredients")

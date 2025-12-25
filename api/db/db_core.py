@@ -1112,7 +1112,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, abbreviation, conversion_to_ml FROM units WHERE LOWER(name) = LOWER(?)",
+                    "SELECT id, name, abbreviation, conversion_to_ml FROM units WHERE LOWER(name) = LOWER(%s)",
                     (unit_name,),
                 ),
             )
@@ -1129,7 +1129,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, abbreviation, conversion_to_ml FROM units WHERE LOWER(abbreviation) = LOWER(?)",
+                    "SELECT id, name, abbreviation, conversion_to_ml FROM units WHERE LOWER(abbreviation) = LOWER(%s)",
                     (unit_abbreviation,),
                 ),
             )
@@ -2035,6 +2035,8 @@ class Database:
                     logger.info(
                         "Some MUST ingredients not found, returning empty results"
                     )
+                    if return_pagination:
+                        return {"recipes": [], "has_next": False, "next_cursor": None}
                     return []
 
             # Handle tag filtering
@@ -2067,6 +2069,8 @@ class Database:
                             logger.info(
                                 f"Tag not found: {tag_name}, returning empty results"
                             )
+                            if return_pagination:
+                                return {"recipes": [], "has_next": False, "next_cursor": None}
                             return []
 
             logger.info(f"Searching recipes with params: {query_params}")

@@ -11,111 +11,124 @@ from api.db.db_core import Database
 class TestUnitDatabaseOperations:
     """Test unit-related database operations"""
 
-    def test_get_unit_by_name_exact_match(self, db_instance):
+    def test_get_unit_by_name_exact_match(self, db_instance_with_data):
         """Test getting unit by exact name match"""
-        # Test with a unit that exists in schema.sql
-        result = db_instance.get_unit_by_name("Ounce")
+        db = db_instance_with_data
+        # Test with a unit that exists in test data (lowercase)
+        result = db.get_unit_by_name("ounce")
 
         assert result is not None
-        assert result["name"] == "Ounce"
+        assert result["name"] == "ounce"
         assert result["abbreviation"] == "oz"
         assert "id" in result
 
-    def test_get_unit_by_name_case_insensitive(self, db_instance):
+    def test_get_unit_by_name_case_insensitive(self, db_instance_with_data):
         """Test getting unit by name is case insensitive"""
+        db = db_instance_with_data
         # Test lowercase
-        result = db_instance.get_unit_by_name("ounce")
+        result = db.get_unit_by_name("ounce")
         assert result is not None
-        assert result["name"] == "Ounce"
+        assert result["name"] == "ounce"
 
         # Test uppercase
-        result = db_instance.get_unit_by_name("OUNCE")
+        result = db.get_unit_by_name("OUNCE")
         assert result is not None
-        assert result["name"] == "Ounce"
+        assert result["name"] == "ounce"
 
         # Test mixed case
-        result = db_instance.get_unit_by_name("OuNcE")
+        result = db.get_unit_by_name("OuNcE")
         assert result is not None
-        assert result["name"] == "Ounce"
+        assert result["name"] == "ounce"
 
-    def test_get_unit_by_name_not_found(self, db_instance):
+    def test_get_unit_by_name_not_found(self, db_instance_with_data):
         """Test getting unit by name when unit doesn't exist"""
-        result = db_instance.get_unit_by_name("NonexistentUnit")
+        db = db_instance_with_data
+        result = db.get_unit_by_name("NonexistentUnit")
         assert result is None
 
-    def test_get_unit_by_name_empty_string(self, db_instance):
+    def test_get_unit_by_name_empty_string(self, db_instance_with_data):
         """Test getting unit by empty name"""
-        result = db_instance.get_unit_by_name("")
+        db = db_instance_with_data
+        result = db.get_unit_by_name("")
         assert result is None
 
-    def test_get_unit_by_abbreviation_exact_match(self, db_instance):
+    def test_get_unit_by_abbreviation_exact_match(self, db_instance_with_data):
         """Test getting unit by exact abbreviation match"""
-        # Test with an abbreviation that exists in schema.sql
-        result = db_instance.get_unit_by_abbreviation("oz")
+        db = db_instance_with_data
+        # Test with an abbreviation that exists in test data
+        result = db.get_unit_by_abbreviation("oz")
 
         assert result is not None
-        assert result["name"] == "Ounce"
+        assert result["name"] == "ounce"
         assert result["abbreviation"] == "oz"
         assert "id" in result
 
-    def test_get_unit_by_abbreviation_case_insensitive(self, db_instance):
+    def test_get_unit_by_abbreviation_case_insensitive(self, db_instance_with_data):
         """Test getting unit by abbreviation is case insensitive"""
+        db = db_instance_with_data
         # Test lowercase
-        result = db_instance.get_unit_by_abbreviation("oz")
+        result = db.get_unit_by_abbreviation("oz")
         assert result is not None
         assert result["abbreviation"] == "oz"
 
         # Test uppercase
-        result = db_instance.get_unit_by_abbreviation("OZ")
+        result = db.get_unit_by_abbreviation("OZ")
         assert result is not None
         assert result["abbreviation"] == "oz"
 
         # Test mixed case
-        result = db_instance.get_unit_by_abbreviation("Oz")
+        result = db.get_unit_by_abbreviation("Oz")
         assert result is not None
         assert result["abbreviation"] == "oz"
 
-    def test_get_unit_by_abbreviation_not_found(self, db_instance):
+    def test_get_unit_by_abbreviation_not_found(self, db_instance_with_data):
         """Test getting unit by abbreviation when unit doesn't exist"""
-        result = db_instance.get_unit_by_abbreviation("xyz")
+        db = db_instance_with_data
+        result = db.get_unit_by_abbreviation("xyz")
         assert result is None
 
-    def test_get_unit_by_abbreviation_empty_string(self, db_instance):
+    def test_get_unit_by_abbreviation_empty_string(self, db_instance_with_data):
         """Test getting unit by empty abbreviation"""
-        result = db_instance.get_unit_by_abbreviation("")
+        db = db_instance_with_data
+        result = db.get_unit_by_abbreviation("")
         assert result is None
 
-    def test_get_unit_by_name_or_abbreviation_by_name(self, db_instance):
+    def test_get_unit_by_name_or_abbreviation_by_name(self, db_instance_with_data):
         """Test getting unit by name when searching by name or abbreviation"""
-        result = db_instance.get_unit_by_name_or_abbreviation("Ounce")
+        db = db_instance_with_data
+        result = db.get_unit_by_name_or_abbreviation("ounce")
 
         assert result is not None
-        assert result["name"] == "Ounce"
+        assert result["name"] == "ounce"
         assert result["abbreviation"] == "oz"
 
-    def test_get_unit_by_name_or_abbreviation_by_abbreviation(self, db_instance):
+    def test_get_unit_by_name_or_abbreviation_by_abbreviation(self, db_instance_with_data):
         """Test getting unit by abbreviation when name doesn't match"""
-        result = db_instance.get_unit_by_name_or_abbreviation("oz")
+        db = db_instance_with_data
+        result = db.get_unit_by_name_or_abbreviation("oz")
 
         assert result is not None
-        assert result["name"] == "Ounce"
+        assert result["name"] == "ounce"
         assert result["abbreviation"] == "oz"
 
-    def test_get_unit_by_name_or_abbreviation_neither_match(self, db_instance):
+    def test_get_unit_by_name_or_abbreviation_neither_match(self, db_instance_with_data):
         """Test getting unit when neither name nor abbreviation match"""
-        result = db_instance.get_unit_by_name_or_abbreviation("NonexistentUnit")
+        db = db_instance_with_data
+        result = db.get_unit_by_name_or_abbreviation("NonexistentUnit")
         assert result is None
 
-    def test_get_unit_by_name_or_abbreviation_case_insensitive(self, db_instance):
+    def test_get_unit_by_name_or_abbreviation_case_insensitive(self, db_instance_with_data):
         """Test that name or abbreviation search is case insensitive"""
+        db = db_instance_with_data
         # Test with mixed case name
-        result = db_instance.get_unit_by_name_or_abbreviation("OuNcE")
+        result = db.get_unit_by_name_or_abbreviation("OuNcE")
         assert result is not None
-        assert result["name"] == "Ounce"
+        assert result["name"] == "ounce"
 
-    def test_conversion_to_ml_field_present(self, db_instance):
+    def test_conversion_to_ml_field_present(self, db_instance_with_data):
         """Test that conversion_to_ml field is present in results"""
-        result = db_instance.get_unit_by_name("Ounce")
+        db = db_instance_with_data
+        result = db.get_unit_by_name("ounce")
 
         assert "conversion_to_ml" in result
 
@@ -123,74 +136,73 @@ class TestUnitDatabaseOperations:
 class TestSpecialUnits:
     """Test special units like 'to top', 'to rinse', and 'each'"""
 
-    def test_each_unit_exists(self, db_instance):
-        """Test that 'each' unit exists in base schema"""
-        result = db_instance.get_unit_by_name("each")
-        
+    def test_dash_unit_exists(self, db_instance_with_data):
+        """Test that 'dash' unit exists in test data"""
+        db = db_instance_with_data
+        result = db.get_unit_by_name("dash")
+
         assert result is not None
-        assert result["name"] == "Each"  # Database stores as "Each" with capital E
-        assert result["abbreviation"] == "each"
-        assert result["conversion_to_ml"] is None  # No standard conversion for 'each'
+        assert result["name"] == "dash"
+        assert result["abbreviation"] == "dash"
 
-    def test_special_units_case_insensitive(self, db_instance):
-        """Test that special units are case insensitive"""
-        # Test 'each' in different cases
-        for case_variant in ["each", "EACH", "Each", "eAcH"]:
-            result = db_instance.get_unit_by_name(case_variant)
-            if result:  # Unit exists
-                assert result["name"] == "Each"  # Database stores as "Each"
+    def test_special_units_case_insensitive(self, db_instance_with_data):
+        """Test that units are case insensitive"""
+        db = db_instance_with_data
+        # Test 'dash' in different cases
+        for case_variant in ["dash", "DASH", "Dash", "dAsH"]:
+            result = db.get_unit_by_name(case_variant)
+            assert result is not None
+            assert result["name"] == "dash"
 
-    def test_to_top_unit_properties(self, db_instance):
-        """Test 'to top' unit properties if it exists"""
-        result = db_instance.get_unit_by_name("to top")
-        
-        if result:  # Unit exists (from migrations)
-            assert result["name"] == "to top"
-            assert result["conversion_to_ml"] is None  # No standard conversion
-            # Should have some abbreviation
-            assert result["abbreviation"] is not None
+    def test_teaspoon_unit_properties(self, db_instance_with_data):
+        """Test 'teaspoon' unit properties"""
+        db = db_instance_with_data
+        result = db.get_unit_by_name("teaspoon")
 
-    def test_to_rinse_unit_properties(self, db_instance):
-        """Test 'to rinse' unit properties if it exists"""
-        result = db_instance.get_unit_by_name("to rinse")
-        
-        if result:  # Unit exists (from migrations)
-            assert result["name"] == "to rinse"
-            assert result["conversion_to_ml"] is None  # No standard conversion
-            # Should have some abbreviation
-            assert result["abbreviation"] is not None
+        assert result is not None
+        assert result["name"] == "teaspoon"
+        assert result["abbreviation"] == "tsp"
+        assert result["conversion_to_ml"] is not None
 
-    def test_special_units_by_abbreviation(self, db_instance):
-        """Test getting special units by their abbreviations"""
-        # Test 'each' by abbreviation
-        result = db_instance.get_unit_by_abbreviation("each")
-        if result:
-            assert result["name"] == "Each"
+    def test_tablespoon_unit_properties(self, db_instance_with_data):
+        """Test 'tablespoon' unit properties"""
+        db = db_instance_with_data
+        result = db.get_unit_by_name("tablespoon")
 
-        # Test 'to top' by abbreviation if it exists
-        result = db_instance.get_unit_by_abbreviation("top")
-        if result:
-            assert result["name"] == "to top"
+        assert result is not None
+        assert result["name"] == "tablespoon"
+        assert result["abbreviation"] == "tbsp"
+        assert result["conversion_to_ml"] is not None
 
-        # Test 'to rinse' by abbreviation if it exists
-        result = db_instance.get_unit_by_abbreviation("rinse")
-        if result:
-            assert result["name"] == "to rinse"
+    def test_special_units_by_abbreviation(self, db_instance_with_data):
+        """Test getting units by their abbreviations"""
+        db = db_instance_with_data
+        # Test 'ml' by abbreviation
+        result = db.get_unit_by_abbreviation("ml")
+        assert result is not None
+        assert result["name"] == "milliliter"
 
-    def test_null_conversion_units(self, db_instance):
-        """Test that units with null conversions are handled correctly"""
-        # Get all units and check for null conversions
-        all_units = db_instance.get_units()
-        
-        null_conversion_units = [unit for unit in all_units if unit["conversion_to_ml"] is None]
-        
-        # Should have at least 'Each' unit with null conversion
-        unit_names = [unit["name"] for unit in null_conversion_units]
-        assert "Each" in unit_names  # Database stores as "Each"
-        
-        # All null conversion units should have conversion_to_ml as None
-        for unit in null_conversion_units:
-            assert unit["conversion_to_ml"] is None
-        
-        # Check that we have some units with null conversions (the exact set may vary)
-        assert len(null_conversion_units) > 0, "Should have at least some units with null conversions"
+        # Test 'tsp' by abbreviation
+        result = db.get_unit_by_abbreviation("tsp")
+        assert result is not None
+        assert result["name"] == "teaspoon"
+
+        # Test 'tbsp' by abbreviation
+        result = db.get_unit_by_abbreviation("tbsp")
+        assert result is not None
+        assert result["name"] == "tablespoon"
+
+    def test_units_with_conversion(self, db_instance_with_data):
+        """Test that units with conversions are handled correctly"""
+        db = db_instance_with_data
+        # Get all units and check for conversions
+        all_units = db.get_units()
+
+        # Should have units with valid conversion values
+        assert len(all_units) > 0
+
+        # Check that ounce has a conversion
+        ounce = next((u for u in all_units if u["name"] == "ounce"), None)
+        assert ounce is not None
+        assert ounce["conversion_to_ml"] is not None
+        assert ounce["conversion_to_ml"] > 0

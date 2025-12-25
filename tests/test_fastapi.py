@@ -13,7 +13,7 @@ class TestApplicationBootstrap:
         """Test the health check endpoint"""
         response = test_client_memory.get("/health")
         assert response.status_code == 200
-        assert response.json()["message"] == "API is healthy"
+        assert response.json()["status"] == "healthy"
 
 
 class TestModelsAndValidation:

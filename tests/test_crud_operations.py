@@ -5,7 +5,6 @@ Tests complex CRUD workflows and transactional behavior with isolated database i
 
 import pytest
 from fastapi import status
-from unittest.mock import patch
 from conftest import (
     assert_ingredient_structure,
     assert_recipe_structure,
@@ -79,17 +78,12 @@ class TestComplexRecipeCRUD:
     """Test complex CRUD operations for recipes"""
 
     def test_recipe_with_ingredients_crud_workflow(
-        self, test_db_with_data, mock_user, mocker, monkeypatch
+        self, test_client_with_data, mock_user
     ):
         """Test complete CRUD workflow for recipes with ingredients"""
-        # Set up isolated database environment
-        monkeypatch.setenv("DB_PATH", test_db_with_data)
-        monkeypatch.setenv("ENVIRONMENT", "test")
-
-        # Import and create app after environment is configured
-        from api.main import app
-        from fastapi.testclient import TestClient
         from api.dependencies.auth import UserInfo, require_authentication
+
+        client, app = test_client_with_data
 
         # Create authenticated client with dependency override
         user_info = UserInfo(
@@ -107,7 +101,6 @@ class TestComplexRecipeCRUD:
         app.dependency_overrides[require_authentication] = (
             override_require_authentication
         )
-        client = TestClient(app)
 
         # Get existing ingredients and units for the recipe
         ingredients_response = client.get("/ingredients?limit=2")
