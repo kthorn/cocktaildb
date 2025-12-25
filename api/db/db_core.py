@@ -2,7 +2,6 @@ import base64
 import json
 import logging
 import os
-import re
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Union, Tuple, cast
 
@@ -24,20 +23,6 @@ from core.exceptions import ConflictException, ValidationException
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
-
-
-def _convert_sqlite_to_pg_params(sql: str) -> str:
-    """Convert SQLite parameters to PostgreSQL format.
-
-    Converts:
-    - Named params: :name -> %(name)s
-    - Positional params: ? -> %s
-    """
-    # First convert named params
-    sql = re.sub(r':(\w+)', r'%(\1)s', sql)
-    # Then convert positional params
-    sql = sql.replace('?', '%s')
-    return sql
 
 
 class Database:
@@ -112,16 +97,13 @@ class Database:
         """Execute a SQL query using PostgreSQL"""
         conn = None
         try:
-            # Convert SQLite named params to PostgreSQL format
-            pg_sql = _convert_sqlite_to_pg_params(sql)
-
             conn = self._get_connection()
             cursor = conn.cursor(cursor_factory=RealDictCursor)
 
             if parameters:
-                cursor.execute(pg_sql, parameters)
+                cursor.execute(sql, parameters)
             else:
-                cursor.execute(pg_sql)
+                cursor.execute(sql)
 
             if sql.strip().upper().startswith(("SELECT", "WITH")):
                 # For SELECT queries, return results
@@ -155,9 +137,7 @@ class Database:
                 sql = query.get("sql")
                 params = query.get("parameters", {})
                 if sql is not None:
-                    # Convert SQLite named params to PostgreSQL format
-                    pg_sql = _convert_sqlite_to_pg_params(sql)
-                    cursor.execute(pg_sql, params)
+                    cursor.execute(sql, params)
 
             conn.commit()
             cursor.close()
