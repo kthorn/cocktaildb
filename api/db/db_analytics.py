@@ -411,6 +411,7 @@ class AnalyticsQueries:
             List of dicts with {recipe_id, recipe_name, x, y, ingredients: [...]}
         """
         import numpy as np
+        from scipy import sparse as sp
         from barcart import (
             build_ingredient_tree,
             build_ingredient_distance_matrix,
