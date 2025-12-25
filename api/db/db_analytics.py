@@ -41,7 +41,7 @@ class AnalyticsQueries:
                 where_clause = "WHERE i.parent_id IS NULL"
                 params = {}
             else:
-                where_clause = "WHERE i.parent_id = :parent_id"
+                where_clause = "WHERE i.parent_id = %(parent_id)s"
                 params = {"parent_id": parent_id}
 
             sql = f"""
