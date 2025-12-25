@@ -15,13 +15,13 @@ class TestDatabaseUserIngredients:
         """Test successfully adding an ingredient to user's inventory"""
         # First insert a test ingredient
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Ingredient", "Test Description"),
         )
 
         # Get the ingredient ID
         ingredient_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Test Ingredient",)
         )
         ingredient_id = ingredient_result[0]["id"]
 
@@ -35,7 +35,7 @@ class TestDatabaseUserIngredients:
 
         # Verify ingredient was added to database
         check_result = db_instance.execute_query(
-            "SELECT * FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
+            "SELECT * FROM user_ingredients WHERE cognito_user_id = %s AND ingredient_id = %s",
             (user_id, ingredient_id),
         )
         assert len(check_result) == 1
@@ -46,12 +46,12 @@ class TestDatabaseUserIngredients:
         """Test adding an ingredient that already exists in user's inventory"""
         # Insert test ingredient
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Ingredient", "Test Description"),
         )
 
         ingredient_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Test Ingredient",)
         )
         ingredient_id = ingredient_result[0]["id"]
 
@@ -80,12 +80,12 @@ class TestDatabaseUserIngredients:
         """Test successfully removing an ingredient from user's inventory"""
         # Insert test ingredient
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Ingredient", "Test Description"),
         )
 
         ingredient_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Test Ingredient",)
         )
         ingredient_id = ingredient_result[0]["id"]
 
@@ -101,7 +101,7 @@ class TestDatabaseUserIngredients:
 
         # Verify ingredient was removed from database
         check_result = db_instance.execute_query(
-            "SELECT * FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
+            "SELECT * FROM user_ingredients WHERE cognito_user_id = %s AND ingredient_id = %s",
             (user_id, ingredient_id),
         )
         assert len(check_result) == 0
@@ -110,12 +110,12 @@ class TestDatabaseUserIngredients:
         """Test removing an ingredient that doesn't exist in user's inventory"""
         # Insert test ingredient
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Ingredient", "Test Description"),
         )
 
         ingredient_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Test Ingredient",)
         )
         ingredient_id = ingredient_result[0]["id"]
 
@@ -130,19 +130,19 @@ class TestDatabaseUserIngredients:
         """Test getting all ingredients for a user"""
         # Insert test ingredients
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Ingredient 1", "Test Description 1"),
         )
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Ingredient 2", "Test Description 2"),
         )
 
         ingredient1_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 1",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Test Ingredient 1",)
         )
         ingredient2_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 2",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Test Ingredient 2",)
         )
 
         ingredient1_id = ingredient1_result[0]["id"]
@@ -185,27 +185,27 @@ class TestDatabaseUserIngredients:
         """Test successfully adding multiple ingredients to user's inventory"""
         # Insert test ingredients
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Ingredient 1", "Test Description 1"),
         )
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Ingredient 2", "Test Description 2"),
         )
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Ingredient 3", "Test Description 3"),
         )
 
         # Get ingredient IDs
         ingredient1_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 1",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Test Ingredient 1",)
         )
         ingredient2_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 2",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Test Ingredient 2",)
         )
         ingredient3_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 3",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Test Ingredient 3",)
         )
 
         ingredient_ids = [
@@ -227,7 +227,7 @@ class TestDatabaseUserIngredients:
         # Verify all ingredients were added
         for ingredient_id in ingredient_ids:
             check_result = db_instance.execute_query(
-                "SELECT * FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
+                "SELECT * FROM user_ingredients WHERE cognito_user_id = %s AND ingredient_id = %s",
                 (user_id, ingredient_id),
             )
             assert len(check_result) == 1
@@ -236,19 +236,19 @@ class TestDatabaseUserIngredients:
         """Test bulk adding ingredients with mixed success/failure results"""
         # Insert test ingredients
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Ingredient 1", "Test Description 1"),
         )
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Ingredient 2", "Test Description 2"),
         )
 
         ingredient1_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 1",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Test Ingredient 1",)
         )
         ingredient2_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 2",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Test Ingredient 2",)
         )
 
         ingredient1_id = ingredient1_result[0]["id"]
@@ -274,27 +274,27 @@ class TestDatabaseUserIngredients:
         """Test successfully removing multiple ingredients from user's inventory"""
         # Insert test ingredients
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Ingredient 1", "Test Description 1"),
         )
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Ingredient 2", "Test Description 2"),
         )
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Ingredient 3", "Test Description 3"),
         )
 
         # Get ingredient IDs
         ingredient1_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 1",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Test Ingredient 1",)
         )
         ingredient2_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 2",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Test Ingredient 2",)
         )
         ingredient3_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 3",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Test Ingredient 3",)
         )
 
         ingredient_ids = [
@@ -318,7 +318,7 @@ class TestDatabaseUserIngredients:
         # Verify all ingredients were removed
         for ingredient_id in ingredient_ids:
             check_result = db_instance.execute_query(
-                "SELECT * FROM user_ingredients WHERE cognito_user_id = ? AND ingredient_id = ?",
+                "SELECT * FROM user_ingredients WHERE cognito_user_id = %s AND ingredient_id = %s",
                 (user_id, ingredient_id),
             )
             assert len(check_result) == 0
@@ -327,19 +327,19 @@ class TestDatabaseUserIngredients:
         """Test bulk removing ingredients with mixed success/failure results"""
         # Insert test ingredients
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Ingredient 1", "Test Description 1"),
         )
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Ingredient 2", "Test Description 2"),
         )
 
         ingredient1_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 1",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Test Ingredient 1",)
         )
         ingredient2_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient 2",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Test Ingredient 2",)
         )
 
         ingredient1_id = ingredient1_result[0]["id"]
@@ -362,12 +362,12 @@ class TestDatabaseUserIngredients:
         """Test that user ingredients are properly isolated between users"""
         # Insert test ingredient
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Test Ingredient", "Test Description"),
         )
 
         ingredient_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Test Ingredient",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Test Ingredient",)
         )
         ingredient_id = ingredient_result[0]["id"]
 
@@ -466,27 +466,27 @@ class TestDatabaseUserIngredients:
         """Test that get_user_ingredients returns ingredients sorted by name"""
         # Insert test ingredients in non-alphabetical order
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Zucchini", "Green vegetable"),
         )
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Apple", "Red fruit"),
         )
         db_instance.execute_query(
-            "INSERT INTO ingredients (name, description) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
             ("Banana", "Yellow fruit"),
         )
 
         # Get ingredient IDs
         zucchini_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Zucchini",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Zucchini",)
         )
         apple_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Apple",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Apple",)
         )
         banana_result = db_instance.execute_query(
-            "SELECT id FROM ingredients WHERE name = ?", ("Banana",)
+            "SELECT id FROM ingredients WHERE name = %s", ("Banana",)
         )
 
         ingredient_ids = [

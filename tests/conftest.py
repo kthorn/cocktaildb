@@ -122,6 +122,21 @@ def pg_db_with_schema(postgres_container, postgres_connection_params, schema_sql
 
     # Apply schema
     cursor.execute(schema_sql)
+
+    # Seed essential test data - units that many tests expect
+    cursor.execute("""
+        INSERT INTO units (name, abbreviation, conversion_to_ml) VALUES
+        ('Ounce', 'oz', 29.5735),
+        ('Milliliter', 'ml', 1.0),
+        ('Teaspoon', 'tsp', 4.92892),
+        ('Tablespoon', 'tbsp', 14.7868),
+        ('Dash', 'dash', 0.9),
+        ('Drop', 'drop', 0.05),
+        ('Each', 'ea', NULL),
+        ('To Top', 'top', NULL)
+        ON CONFLICT (name) DO NOTHING
+    """)
+
     cursor.close()
     conn.close()
 

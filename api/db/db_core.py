@@ -257,7 +257,7 @@ class Database:
                 raise
             finally:
                 if conn:
-                    conn.close()
+                    self._return_connection(conn)
         except ConflictException:
             # Re-raise ConflictException without wrapping it
             raise
@@ -788,7 +788,6 @@ class Database:
         except Exception as e:
             if conn:
                 conn.rollback()
-                self._return_connection(conn)
             logger.error(f"Error creating recipe: {str(e)}")
             raise
         finally:
@@ -866,7 +865,7 @@ class Database:
 
             # Commit all recipes at once
             conn.commit()
-            conn.close()
+            self._return_connection(conn)
             conn = None
 
             return created_recipes
@@ -878,7 +877,7 @@ class Database:
             raise
         finally:
             if conn:
-                conn.close()
+                self._return_connection(conn)
 
     def get_recipes_with_ingredients(
         self, cognito_user_id: Optional[str] = None
@@ -1253,7 +1252,7 @@ class Database:
             raise
         finally:
             if conn:
-                conn.close()
+                self._return_connection(conn)
 
     def update_recipe(
         self, recipe_id: int, data: Dict[str, Any]
@@ -1316,7 +1315,7 @@ class Database:
                     )
 
             conn.commit()
-            conn.close()
+            self._return_connection(conn)
             conn = None  # Ensure it's not closed again in finally if commit succeeded
 
             # Fetch and return the updated recipe
@@ -1329,7 +1328,7 @@ class Database:
             raise
         finally:
             if conn:
-                conn.close()
+                self._return_connection(conn)
 
     def get_recipe_ratings(self, recipe_id: int) -> List[Dict[str, Any]]:
         """Get all ratings for a recipe"""
@@ -1451,7 +1450,7 @@ class Database:
                 rating_id = rating_row[0]
 
             conn.commit()
-            conn.close()
+            self._return_connection(conn)
             conn = None
 
             # Fetch the created/updated rating
@@ -1490,7 +1489,7 @@ class Database:
             raise
         finally:
             if conn:
-                conn.close()
+                self._return_connection(conn)
 
     def delete_rating(self, recipe_id: int, user_id: str) -> bool:
         """Delete a rating for a recipe by a specific user"""
@@ -1532,7 +1531,7 @@ class Database:
             raise
         finally:
             if conn:
-                conn.close()
+                self._return_connection(conn)
 
     # --- Tag Management ---
 
@@ -2349,7 +2348,7 @@ class Database:
             )
 
             conn.commit()
-            conn.close()
+            self._return_connection(conn)
             conn = None
 
             # Return the created record with ingredient details
@@ -2369,7 +2368,7 @@ class Database:
             raise
         finally:
             if conn:
-                conn.close()
+                self._return_connection(conn)
 
     def remove_user_ingredient(self, user_id: str, ingredient_id: int) -> bool:
         """Remove an ingredient from a user's inventory, but prevent removing parents if children exist"""
@@ -2536,7 +2535,7 @@ class Database:
             raise
         finally:
             if conn:
-                conn.close()
+                self._return_connection(conn)
 
     def remove_user_ingredients_bulk(
         self, user_id: str, ingredient_ids: List[int]
@@ -2750,7 +2749,7 @@ class Database:
             raise
         finally:
             if conn:
-                conn.close()
+                self._return_connection(conn)
 
     def get_ingredient_recommendations(
         self, user_id: str, limit: int = 20

@@ -169,9 +169,15 @@ class TestRecipeIngredientRelationships:
         """Test recipe with ingredient units"""
         db = db_instance
 
-        # Create ingredient and unit
+        # Create ingredient
         gin = db.create_ingredient(
             {"name": "Gin1", "description": "Gin1", "parent_id": None}
+        )
+
+        # Create unit (not seeded in schema)
+        db.execute_transaction(
+            "INSERT INTO units (name, abbreviation, conversion_to_ml) VALUES (%s, %s, %s)",
+            ("Ounce", "oz", 29.5735)
         )
         unit_result = db.execute_query(
             "SELECT id FROM units WHERE name = %s", ("Ounce",)

@@ -68,9 +68,9 @@ class TestPublicTagCRUD:
         # Retrieve all tags
         all_tags = db.get_public_tags()
 
-        assert len(all_tags) == 6  # There are two tags in the base schema
+        assert len(all_tags) == 4  # Only the 4 tags we created
         retrieved_names = {tag["name"] for tag in all_tags}
-        assert retrieved_names == set(tag_names + ["Classic", "Tiki"])
+        assert retrieved_names == set(tag_names)
 
 
 class TestPrivateTagCRUD:
