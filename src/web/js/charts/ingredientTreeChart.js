@@ -2,6 +2,8 @@
  * Ingredient Tree Chart - Radial tree visualization of ingredient hierarchy
  */
 
+import { createTouchHandlers, isTouchDevice, isMobileViewport } from '../utils/touchInteraction.js';
+
 /**
  * Get a CSS variable value from the document
  * @param {string} varName - CSS variable name (with or without --)
@@ -44,6 +46,8 @@ function getColors() {
     };
 }
 
+const TOUCH_HINT_KEY = 'ingredientTreeTouchHintShown';
+
 /**
  * Create a radial tree chart showing ingredient hierarchy with recipe counts
  * @param {HTMLElement} container - Container element for the chart
@@ -59,6 +63,7 @@ export function createIngredientTreeChart(container, data, options = {}) {
 
     // Detect mobile viewport
     const isMobile = window.innerWidth < 768;
+    const isTouch = isTouchDevice();
 
     // Configuration constants - responsive sizing for mobile
     const FONT_SIZE_PARENT = isMobile ? '4px' : '8px';
@@ -144,36 +149,93 @@ export function createIngredientTreeChart(container, data, options = {}) {
         const nodeEnter = node.enter().append('g')
             .attr('class', d => 'node' + (d.children || d._children ? ' node--internal' : ' node--leaf'))
             .attr('transform', d => `translate(${radialPoint(d.x, d.y)})`)
-            .on('click', clicked)
-            .on('mouseover', function(event, d) {
-                const directCount = d.data.recipe_count || 0;
-                const hierarchicalCount = d.data.hierarchical_recipe_count || 0;
-                const hasChildren = d.children || d._children;
-
-                let tooltipHtml = `<strong>${d.data.name}</strong><br/>`;
-                tooltipHtml += `Direct: ${directCount} recipe${directCount !== 1 ? 's' : ''}`;
-
-                // Only show hierarchical count if node has children
-                if (hasChildren) {
-                    tooltipHtml += `<br/>With children: ${hierarchicalCount} recipe${hierarchicalCount !== 1 ? 's' : ''}`;
+            .on('click', function(event, d) {
+                // Desktop click - expand/collapse
+                if (!isTouch) {
+                    clicked(event, d);
                 }
-
-                const rect = container.getBoundingClientRect();
-                tooltip
-                    .html(tooltipHtml)
-                    .style('left', (event.clientX - rect.left + 10) + 'px')
-                    .style('top', (event.clientY - rect.top - 10) + 'px')
-                    .style('opacity', '1');
-            })
-            .on('mouseout', function() {
-                tooltip.style('opacity', '0');
-            })
-            .on('mousemove', function(event) {
-                const rect = container.getBoundingClientRect();
-                tooltip
-                    .style('left', (event.clientX - rect.left + 10) + 'px')
-                    .style('top', (event.clientY - rect.top - 10) + 'px');
             });
+
+        // Add touch handlers for mobile
+        if (isTouch) {
+            const touchHandlers = createTouchHandlers({
+                onTap: (event, d) => {
+                    // Show tooltip
+                    const directCount = d.data.recipe_count || 0;
+                    const hierarchicalCount = d.data.hierarchical_recipe_count || 0;
+                    const hasChildren = d.children || d._children;
+
+                    let tooltipHtml = `<strong>${d.data.name}</strong><br/>`;
+                    tooltipHtml += `Direct: ${directCount} recipe${directCount !== 1 ? 's' : ''}`;
+                    if (hasChildren) {
+                        tooltipHtml += `<br/>With children: ${hierarchicalCount} recipe${hierarchicalCount !== 1 ? 's' : ''}`;
+                    }
+
+                    // Position tooltip near the node, not the finger
+                    const [nodeX, nodeY] = radialPoint(d.x, d.y);
+                    const svgRect = svg.node().getBoundingClientRect();
+                    const transform = g.attr('transform');
+                    // Parse transform to get current translation
+                    const match = transform.match(/translate\(([^,]+),([^)]+)\)/);
+                    const tx = match ? parseFloat(match[1]) : width / 2;
+                    const ty = match ? parseFloat(match[2]) : height / 2;
+
+                    const tooltipX = nodeX + tx + 10;
+                    const tooltipY = nodeY + ty - 10;
+
+                    tooltip
+                        .html(tooltipHtml)
+                        .style('left', tooltipX + 'px')
+                        .style('top', tooltipY + 'px')
+                        .style('opacity', '1');
+
+                    // Auto-hide after 3 seconds
+                    setTimeout(() => tooltip.style('opacity', '0'), 3000);
+                },
+                onDoubleTap: (event, d) => {
+                    tooltip.style('opacity', '0');
+                    clicked(event, d);
+                }
+            });
+
+            nodeEnter
+                .on('touchstart', function(event, d) {
+                    if (event.touches.length === 1) {
+                        event.preventDefault();
+                        touchHandlers.touchstart(event, d);
+                    }
+                });
+        } else {
+            // Mouse hover handlers for desktop
+            nodeEnter
+                .on('mouseover', function(event, d) {
+                    const directCount = d.data.recipe_count || 0;
+                    const hierarchicalCount = d.data.hierarchical_recipe_count || 0;
+                    const hasChildren = d.children || d._children;
+
+                    let tooltipHtml = `<strong>${d.data.name}</strong><br/>`;
+                    tooltipHtml += `Direct: ${directCount} recipe${directCount !== 1 ? 's' : ''}`;
+                    if (hasChildren) {
+                        tooltipHtml += `<br/>With children: ${hierarchicalCount} recipe${hierarchicalCount !== 1 ? 's' : ''}`;
+                    }
+
+                    const rect = container.getBoundingClientRect();
+                    tooltip
+                        .html(tooltipHtml)
+                        .style('left', (event.clientX - rect.left + 10) + 'px')
+                        .style('top', (event.clientY - rect.top - 10) + 'px')
+                        .style('opacity', '1');
+                })
+                .on('mouseout', function() {
+                    tooltip.style('opacity', '0');
+                })
+                .on('mousemove', function(event) {
+                    const rect = container.getBoundingClientRect();
+                    tooltip
+                        .style('left', (event.clientX - rect.left + 10) + 'px')
+                        .style('top', (event.clientY - rect.top - 10) + 'px');
+                });
+        }
 
         nodeEnter.append('circle')
             .attr('r', 0);
@@ -188,36 +250,37 @@ export function createIngredientTreeChart(container, data, options = {}) {
             .style('opacity', 0)
             .style('display', d => shouldShowLabel(d) ? 'block' : 'none');
 
-        // Update existing nodes with tooltip handlers
-        node.on('mouseover', function(event, d) {
-                const directCount = d.data.recipe_count || 0;
-                const hierarchicalCount = d.data.hierarchical_recipe_count || 0;
-                const hasChildren = d.children || d._children;
+        // Update existing nodes with tooltip handlers (desktop only)
+        if (!isTouch) {
+            node.on('mouseover', function(event, d) {
+                    const directCount = d.data.recipe_count || 0;
+                    const hierarchicalCount = d.data.hierarchical_recipe_count || 0;
+                    const hasChildren = d.children || d._children;
 
-                let tooltipHtml = `<strong>${d.data.name}</strong><br/>`;
-                tooltipHtml += `Direct: ${directCount} recipe${directCount !== 1 ? 's' : ''}`;
+                    let tooltipHtml = `<strong>${d.data.name}</strong><br/>`;
+                    tooltipHtml += `Direct: ${directCount} recipe${directCount !== 1 ? 's' : ''}`;
 
-                // Only show hierarchical count if node has children
-                if (hasChildren) {
-                    tooltipHtml += `<br/>With children: ${hierarchicalCount} recipe${hierarchicalCount !== 1 ? 's' : ''}`;
-                }
+                    if (hasChildren) {
+                        tooltipHtml += `<br/>With children: ${hierarchicalCount} recipe${hierarchicalCount !== 1 ? 's' : ''}`;
+                    }
 
-                const rect = container.getBoundingClientRect();
-                tooltip
-                    .html(tooltipHtml)
-                    .style('left', (event.clientX - rect.left + 10) + 'px')
-                    .style('top', (event.clientY - rect.top - 10) + 'px')
-                    .style('opacity', '1');
-            })
-            .on('mouseout', function() {
-                tooltip.style('opacity', '0');
-            })
-            .on('mousemove', function(event) {
-                const rect = container.getBoundingClientRect();
-                tooltip
-                    .style('left', (event.clientX - rect.left + 10) + 'px')
-                    .style('top', (event.clientY - rect.top - 10) + 'px');
-            });
+                    const rect = container.getBoundingClientRect();
+                    tooltip
+                        .html(tooltipHtml)
+                        .style('left', (event.clientX - rect.left + 10) + 'px')
+                        .style('top', (event.clientY - rect.top - 10) + 'px')
+                        .style('opacity', '1');
+                })
+                .on('mouseout', function() {
+                    tooltip.style('opacity', '0');
+                })
+                .on('mousemove', function(event) {
+                    const rect = container.getBoundingClientRect();
+                    tooltip
+                        .style('left', (event.clientX - rect.left + 10) + 'px')
+                        .style('top', (event.clientY - rect.top - 10) + 'px');
+                });
+        }
 
         // Transition existing nodes
         node.transition()
@@ -344,10 +407,18 @@ export function createIngredientTreeChart(container, data, options = {}) {
     // Initial render
     update(root);
 
-    // Add zoom behavior
+    // Add zoom behavior with two-finger filter for touch
     const zoom = d3.zoom()
         .scaleExtent([0.5, 3])
+        .filter((event) => {
+            // On touch devices, only allow zoom with 2+ fingers
+            if (event.type.startsWith('touch')) {
+                return event.touches.length >= 2;
+            }
+            return true;
+        })
         .on('zoom', (event) => {
+            tooltip.style('opacity', '0'); // Hide tooltip during zoom
             g.attr('transform', event.transform);
         });
 
@@ -355,8 +426,34 @@ export function createIngredientTreeChart(container, data, options = {}) {
     svg.call(zoom)
         .call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2));
 
+    // Show touch hint on mobile (first time only)
+    if (isTouch && !localStorage.getItem(TOUCH_HINT_KEY)) {
+        showTouchHint(container);
+        localStorage.setItem(TOUCH_HINT_KEY, 'true');
+    }
+
     // Add CSS styles
     addTreeStyles(COLORS, STROKE_WIDTH, STROKE_WIDTH_HOVER);
+}
+
+/**
+ * Show a hint overlay for touch gestures
+ */
+function showTouchHint(container) {
+    const hint = document.createElement('div');
+    hint.className = 'touch-hint';
+    hint.textContent = 'Pinch to zoom · Two fingers to pan';
+    container.style.position = 'relative';
+    container.appendChild(hint);
+
+    requestAnimationFrame(() => {
+        hint.classList.add('visible');
+    });
+
+    setTimeout(() => {
+        hint.classList.remove('visible');
+        setTimeout(() => hint.remove(), 300);
+    }, 3000);
 }
 
 function addTreeStyles(COLORS, strokeWidth, strokeWidthHover) {
