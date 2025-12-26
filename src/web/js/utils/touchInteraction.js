@@ -7,6 +7,17 @@ const DOUBLE_TAP_THRESHOLD_MS = 300;
 const TOOLTIP_TIMEOUT_MS = 3000;
 
 /**
+ * Get a stable identifier for a D3 datum
+ * Used for comparing taps on the same element across potential data rebinds
+ */
+function getDataId(d) {
+    if (!d) return null;
+    // Support both direct data objects and D3 hierarchy nodes
+    const data = d.data || d;
+    return data.id || data.ingredient_id || data.recipe_id || data.name || null;
+}
+
+/**
  * Creates touch handlers for a D3 selection
  * @param {Object} options
  * @param {Function} options.onTap - Called on single tap with (event, datum)
@@ -16,7 +27,7 @@ const TOOLTIP_TIMEOUT_MS = 3000;
 export function createTouchHandlers(options = {}) {
     let lastTapTime = 0;
     let tapTimeout = null;
-    let pendingTapData = null;
+    let pendingTapDataId = null;
 
     function handleTouchStart(event, d) {
         // Prevent default to avoid 300ms click delay on mobile
@@ -24,12 +35,14 @@ export function createTouchHandlers(options = {}) {
         if (event.touches && event.touches.length === 1) {
             const now = Date.now();
             const timeSinceLastTap = now - lastTapTime;
+            const currentDataId = getDataId(d);
 
-            if (timeSinceLastTap < DOUBLE_TAP_THRESHOLD_MS && pendingTapData === d) {
+            // Compare by stable ID instead of object reference
+            if (timeSinceLastTap < DOUBLE_TAP_THRESHOLD_MS && pendingTapDataId === currentDataId) {
                 // Double tap detected
                 clearTimeout(tapTimeout);
                 tapTimeout = null;
-                pendingTapData = null;
+                pendingTapDataId = null;
                 lastTapTime = 0;
 
                 if (options.onDoubleTap) {
@@ -38,14 +51,14 @@ export function createTouchHandlers(options = {}) {
             } else {
                 // Potential single tap - wait to see if double tap follows
                 lastTapTime = now;
-                pendingTapData = d;
+                pendingTapDataId = currentDataId;
 
                 clearTimeout(tapTimeout);
                 tapTimeout = setTimeout(() => {
                     if (options.onTap) {
                         options.onTap(event, d);
                     }
-                    pendingTapData = null;
+                    pendingTapDataId = null;
                 }, DOUBLE_TAP_THRESHOLD_MS);
             }
         }
