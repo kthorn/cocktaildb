@@ -146,6 +146,7 @@ export function createRecipePreviewCard(container) {
 
     // Public API
     return {
+        show,           // Direct show without delay (for touch)
         startHover,
         cancelHover,
         hide,

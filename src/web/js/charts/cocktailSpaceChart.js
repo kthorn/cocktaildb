@@ -1,4 +1,5 @@
 import { createRecipePreviewCard } from '../components/recipePreviewCard.js';
+import { createTouchHandlers, isTouchDevice, isMobileViewport } from '../utils/touchInteraction.js';
 
 // =============================================================================
 // Visual Configuration - Tweak these values to adjust appearance
@@ -11,6 +12,8 @@ const DOT_OPACITY_HOVER = 0.8;
 const DOT_STROKE = 'none';
 const DOT_STROKE_WIDTH = 0;
 
+const TOUCH_HINT_KEY = 'cocktailSpaceTouchHintShown';
+
 /**
  * Creates an interactive D3.js scatter plot for cocktail space UMAP visualization
  * @param {HTMLElement} container - Container element for the chart
@@ -21,6 +24,9 @@ const DOT_STROKE_WIDTH = 0;
 export function createCocktailSpaceChart(container, data, options = {}) {
     // Clear container
     container.innerHTML = '';
+
+    const isMobile = isMobileViewport();
+    const isTouch = isTouchDevice();
 
     // Set up dimensions
     const margin = { top: 60, right: 40, bottom: 60, left: 60 };
@@ -78,49 +84,92 @@ export function createCocktailSpaceChart(container, data, options = {}) {
         .attr('stroke', DOT_STROKE)
         .attr('stroke-width', DOT_STROKE_WIDTH)
         .attr('opacity', DOT_OPACITY)
-        .style('cursor', 'pointer')
-        .on('mouseenter', function(event, d) {
-            // Enlarge circle
-            d3.select(this)
-                .transition()
-                .duration(200)
+        .style('cursor', 'pointer');
+
+    // Track current zoom transform for touch handlers
+    let currentTransform = d3.zoomIdentity;
+
+    // Create touch handlers for tap/double-tap
+    const touchHandlers = createTouchHandlers({
+        onTap: (event, d) => {
+            // Show preview card at touch position
+            const touch = event.changedTouches ? event.changedTouches[0] : event.touches[0];
+            previewCard.show(d, touch.pageX, touch.pageY);
+
+            // Highlight the circle
+            circles.attr('opacity', DOT_OPACITY);
+            d3.select(event.target)
                 .attr('r', DOT_RADIUS_HOVER)
                 .attr('opacity', DOT_OPACITY_HOVER);
-
-            // Start preview card hover timer
-            previewCard.startHover(d, event.pageX, event.pageY);
-        })
-        .on('mouseleave', function() {
-            // Restore circle size
-            d3.select(this)
-                .transition()
-                .duration(200)
-                .attr('r', DOT_RADIUS)
-                .attr('opacity', DOT_OPACITY);
-
-            // Cancel preview
-            previewCard.cancelHover();
-        })
-        .on('click', function(event, d) {
-            // Hide preview and trigger modal
+        },
+        onDoubleTap: (event, d) => {
             previewCard.hide();
             if (options.onRecipeClick) {
                 options.onRecipeClick(d.recipe_id, d.recipe_name);
             }
-        });
+        }
+    });
 
-    // Add zoom behavior
+    if (!isTouch) {
+        // Mouse events (desktop)
+        circles
+            .on('mouseenter', function(event, d) {
+                d3.select(this)
+                    .transition()
+                    .duration(200)
+                    .attr('r', DOT_RADIUS_HOVER)
+                    .attr('opacity', DOT_OPACITY_HOVER);
+
+                previewCard.startHover(d, event.pageX, event.pageY);
+            })
+            .on('mouseleave', function() {
+                d3.select(this)
+                    .transition()
+                    .duration(200)
+                    .attr('r', DOT_RADIUS)
+                    .attr('opacity', DOT_OPACITY);
+
+                previewCard.cancelHover();
+            })
+            .on('click', function(event, d) {
+                previewCard.hide();
+                if (options.onRecipeClick) {
+                    options.onRecipeClick(d.recipe_id, d.recipe_name);
+                }
+            });
+    } else {
+        // Touch events (mobile)
+        circles
+            .on('touchstart', function(event, d) {
+                // Only handle single-finger touch for tap detection
+                if (event.touches.length === 1) {
+                    event.preventDefault(); // Prevent scroll on single tap
+                    touchHandlers.touchstart(event, d);
+                }
+            })
+            .on('touchend', function(event, d) {
+                touchHandlers.touchend(event, d);
+            });
+    }
+
+    // Add zoom behavior with two-finger filter for touch
     const zoom = d3.zoom()
         .scaleExtent([0.5, 10])
+        .filter((event) => {
+            // On touch devices, only allow zoom with 2+ fingers
+            if (event.type.startsWith('touch')) {
+                return event.touches.length >= 2;
+            }
+            // Allow all mouse events
+            return true;
+        })
         .on('zoom', (event) => {
-            // Hide preview during zoom/pan
             previewCard.hide();
-
-            const transform = event.transform;
+            currentTransform = event.transform;
 
             circles
-                .attr('cx', d => transform.applyX(xScale(d.x)))
-                .attr('cy', d => transform.applyY(yScale(d.y)));
+                .attr('cx', d => currentTransform.applyX(xScale(d.x)))
+                .attr('cy', d => currentTransform.applyY(yScale(d.y)));
         });
 
     svg.call(zoom);
@@ -133,4 +182,40 @@ export function createCocktailSpaceChart(container, data, options = {}) {
         .attr('font-size', '18px')
         .attr('font-weight', 'bold')
         .text('Cocktail Space - Recipe Similarity Map');
+
+    // Show touch hint on mobile (first time only)
+    if (isTouch && !localStorage.getItem(TOUCH_HINT_KEY)) {
+        showTouchHint(container);
+        localStorage.setItem(TOUCH_HINT_KEY, 'true');
+    }
+
+    // Hide preview when tapping outside
+    document.addEventListener('touchstart', (event) => {
+        if (!container.contains(event.target)) {
+            previewCard.hide();
+            circles.attr('r', DOT_RADIUS).attr('opacity', DOT_OPACITY);
+        }
+    }, { passive: true });
+}
+
+/**
+ * Show a hint overlay for touch gestures
+ */
+function showTouchHint(container) {
+    const hint = document.createElement('div');
+    hint.className = 'touch-hint';
+    hint.textContent = 'Pinch to zoom · Two fingers to pan';
+    container.style.position = 'relative';
+    container.appendChild(hint);
+
+    // Fade in
+    requestAnimationFrame(() => {
+        hint.classList.add('visible');
+    });
+
+    // Fade out after 3 seconds
+    setTimeout(() => {
+        hint.classList.remove('visible');
+        setTimeout(() => hint.remove(), 300);
+    }, 3000);
 }
