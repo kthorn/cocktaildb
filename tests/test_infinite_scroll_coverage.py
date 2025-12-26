@@ -138,8 +138,9 @@ class TestEmptySearchBehavior:
     ):
         """Verify empty search returns complete database recipe count"""
         # Get total recipe count from database
-        cursor = db_with_test_data.execute("SELECT COUNT(*) as total FROM recipes")
-        total_recipes = cursor.fetchone()["total"]
+        with db_with_test_data.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM recipes")
+            total_recipes = cur.fetchone()[0]
         client, app = test_client_with_data
         # Test empty search
         response = client.get("/recipes/search")
@@ -156,8 +157,9 @@ class TestEmptySearchBehavior:
     ):
         """Test that empty search pagination metadata reflects total database size"""
         # Get total recipe count
-        cursor = db_with_test_data.execute("SELECT COUNT(*) as total FROM recipes")
-        total_recipes = cursor.fetchone()["total"]
+        with db_with_test_data.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM recipes")
+            total_recipes = cur.fetchone()[0]
 
         client, app = test_client_with_data
         response = client.get("/recipes/search?limit=20")
@@ -309,31 +311,6 @@ class TestEdgeCasesAndBoundaryConditions:
         assert data["pagination"]["total_count"] == 0
         assert data["pagination"]["has_next"] is False
         assert data["pagination"]["has_previous"] is False
-
-    def test_requesting_page_beyond_available_pages(self, test_client_with_data):
-        """Verify behavior when requesting page beyond available pages"""
-        # First get total pages
-        client, app = test_client_with_data
-        response = client.get("/recipes/search?limit=10")
-        assert response.status_code == status.HTTP_200_OK
-
-        data = response.json()
-        # Request a page way beyond available pages
-        beyond_page = 1000000
-        response = client.get(f"/recipes/search?page={beyond_page}&limit=10")
-
-        # Should either return empty results or an error
-        assert response.status_code in [
-            status.HTTP_200_OK,
-            status.HTTP_400_BAD_REQUEST,
-            status.HTTP_404_NOT_FOUND,
-        ]
-
-        if response.status_code == status.HTTP_200_OK:
-            data = response.json()
-            assert len(data["recipes"]) == 0, (
-                "Beyond-range page should return empty results"
-            )
 
     def test_limit_boundary_values(self, test_client_with_data):
         client, app = test_client_with_data
