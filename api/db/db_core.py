@@ -200,8 +200,8 @@ class Database:
                 cursor = conn.cursor()
                 cursor.execute(
                     """
-                    INSERT INTO ingredients (name, description, parent_id, allow_substitution)
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO ingredients (name, description, parent_id, allow_substitution, created_by)
+                    VALUES (%s, %s, %s, %s, %s)
                     RETURNING id
                     """,
                     (
@@ -209,6 +209,7 @@ class Database:
                         data.get("description"),
                         data.get("parent_id"),
                         data.get("allow_substitution", False),
+                        data.get("created_by"),
                     ),
                 )
                 new_row = cursor.fetchone()

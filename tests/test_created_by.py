@@ -46,3 +46,19 @@ class TestRecipeCreatedByField:
             name="Test Recipe"
         )
         assert recipe.created_by is None
+
+
+class TestIngredientCreatedByDatabase:
+    """Test created_by is saved to database for ingredients"""
+
+    def test_create_ingredient_saves_created_by(self, editor_client_with_data, mock_editor_user):
+        """Creating an ingredient should save created_by to database"""
+        # Create ingredient using editor client (which has proper auth mocking)
+        response = editor_client_with_data.post("/ingredients", json={
+            "name": "Test Created By Ingredient",
+            "description": "Testing created_by field"
+        })
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data.get("created_by") == mock_editor_user["user_id"]
