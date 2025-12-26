@@ -96,6 +96,7 @@ class RecipeResponse(BaseModel):
     avg_rating: Optional[float] = Field(None, description="Average rating")
     rating_count: Optional[int] = Field(None, description="Number of ratings")
     user_rating: Optional[int] = Field(None, description="Current user's rating for this recipe (1-5, null if not rated)")
+    created_by: Optional[str] = Field(None, description="User ID who created this recipe")
     ingredients: List[RecipeIngredientResponse] = Field(
         default=[], description="Recipe ingredients"
     )
