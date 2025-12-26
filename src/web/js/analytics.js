@@ -22,11 +22,45 @@ async function initAnalytics() {
     // Setup tab navigation
     setupTabNavigation();
 
+    // Check for URL hash to load specific tab
+    const hash = window.location.hash.slice(1); // Remove '#'
+    if (hash && isValidTab(hash)) {
+        state.currentTab = hash;
+        activateTab(hash);
+    }
+
     // Load initial data for active tab
     await loadTabData(state.currentTab);
 
     // Highlight active nav item
     highlightActiveNav();
+}
+
+/**
+ * Check if a tab name is valid
+ */
+function isValidTab(tabName) {
+    const validTabs = ['ingredients', 'ingredient-tree', 'complexity', 'cocktail-space', 'cocktail-space-em'];
+    return validTabs.includes(tabName);
+}
+
+/**
+ * Activate a tab by name (updates UI without loading data)
+ */
+function activateTab(tabName) {
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(btn => btn.classList.remove('active'));
+    tabContents.forEach(content => content.classList.remove('active'));
+
+    const targetButton = document.querySelector(`.tab-button[data-tab="${tabName}"]`);
+    const targetContent = document.getElementById(`tab-${tabName}`);
+
+    if (targetButton) targetButton.classList.add('active');
+    if (targetContent) targetContent.classList.add('active');
+
+    syncMobileViewSelector(tabName);
 }
 
 /**
@@ -50,6 +84,9 @@ function setupTabNavigation() {
             // Update state and load data
             state.currentTab = tabName;
             await loadTabData(tabName);
+
+            // Update URL hash for bookmarking/sharing
+            window.history.replaceState(null, '', `#${tabName}`);
 
             // Sync mobile view selector
             syncMobileViewSelector(tabName);
@@ -88,6 +125,9 @@ function setupMobileViewSelector(tabButtons, tabContents) {
         // Update state and load data
         state.currentTab = selectedTab;
         await loadTabData(selectedTab);
+
+        // Update URL hash for bookmarking/sharing
+        window.history.replaceState(null, '', `#${selectedTab}`);
     });
 }
 
