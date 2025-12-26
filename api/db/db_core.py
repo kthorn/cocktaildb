@@ -751,8 +751,8 @@ class Database:
             # Create the recipe
             cursor.execute(
                 """
-                INSERT INTO recipes (name, instructions, description, image_url, source, source_url)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO recipes (name, instructions, description, image_url, source, source_url, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 (
@@ -762,6 +762,7 @@ class Database:
                     data.get("image_url"),
                     data.get("source"),
                     data.get("source_url"),
+                    data.get("created_by"),
                 ),
             )
 

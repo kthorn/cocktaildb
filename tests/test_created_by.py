@@ -62,3 +62,18 @@ class TestIngredientCreatedByDatabase:
         assert response.status_code == 201
         data = response.json()
         assert data.get("created_by") == mock_editor_user["user_id"]
+
+
+class TestRecipeCreatedByDatabase:
+    """Test created_by is saved to database for recipes"""
+
+    def test_create_recipe_saves_created_by(self, editor_client_with_data, mock_editor_user):
+        """Creating a recipe should save created_by to database"""
+        response = editor_client_with_data.post("/recipes", json={
+            "name": "Test Created By Recipe",
+            "instructions": "Test instructions"
+        })
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data.get("created_by") == mock_editor_user["user_id"]
