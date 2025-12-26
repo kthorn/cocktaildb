@@ -2808,6 +2808,35 @@ input[type="radio"]:focus {
     stroke-width: 0;
 }
 
+/* Touch behavior for chart SVGs - allow native scroll, require two fingers for pan/zoom */
+#cocktail-space-chart svg,
+#cocktail-space-em-chart svg,
+#ingredient-tree-chart svg {
+    touch-action: pan-y pinch-zoom;
+}
+
+/* Mobile touch hint overlay */
+.touch-hint {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 100;
+    white-space: nowrap;
+}
+
+.touch-hint.visible {
+    opacity: 1;
+}
+
 /* Upload results */
 .upload-results {
     padding: var(--space-md);
