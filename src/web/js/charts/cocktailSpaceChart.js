@@ -1,5 +1,16 @@
 import { createRecipePreviewCard } from '../components/recipePreviewCard.js';
 
+// =============================================================================
+// Visual Configuration - Tweak these values to adjust appearance
+// =============================================================================
+const DOT_RADIUS = 5;
+const DOT_RADIUS_HOVER = 7;
+const DOT_FILL = 'steelblue';
+const DOT_OPACITY = 0.4;
+const DOT_OPACITY_HOVER = 0.8;
+const DOT_STROKE = 'none';
+const DOT_STROKE_WIDTH = 0;
+
 /**
  * Creates an interactive D3.js scatter plot for cocktail space UMAP visualization
  * @param {HTMLElement} container - Container element for the chart
@@ -62,19 +73,19 @@ export function createCocktailSpaceChart(container, data, options = {}) {
     circles
         .attr('cx', d => xScale(d.x))
         .attr('cy', d => yScale(d.y))
-        .attr('r', 6)
-        .attr('fill', 'steelblue')
-        .attr('stroke', 'white')
-        .attr('stroke-width', 1)
-        .attr('opacity', 0.7)
+        .attr('r', DOT_RADIUS)
+        .attr('fill', DOT_FILL)
+        .attr('stroke', DOT_STROKE)
+        .attr('stroke-width', DOT_STROKE_WIDTH)
+        .attr('opacity', DOT_OPACITY)
         .style('cursor', 'pointer')
         .on('mouseenter', function(event, d) {
             // Enlarge circle
             d3.select(this)
                 .transition()
                 .duration(200)
-                .attr('r', 8)
-                .attr('opacity', 1);
+                .attr('r', DOT_RADIUS_HOVER)
+                .attr('opacity', DOT_OPACITY_HOVER);
 
             // Start preview card hover timer
             previewCard.startHover(d, event.pageX, event.pageY);
@@ -84,8 +95,8 @@ export function createCocktailSpaceChart(container, data, options = {}) {
             d3.select(this)
                 .transition()
                 .duration(200)
-                .attr('r', 6)
-                .attr('opacity', 0.7);
+                .attr('r', DOT_RADIUS)
+                .attr('opacity', DOT_OPACITY);
 
             // Cancel preview
             previewCard.cancelHover();
