@@ -725,6 +725,18 @@ class Database:
 
     def create_recipe(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new recipe with its ingredients"""
+        # Check for case-insensitive duplicate name
+        recipe_name = data.get("name")
+        if recipe_name:
+            existing = self.execute_query(
+                "SELECT id FROM recipes WHERE LOWER(name) = LOWER(%s)",
+                (recipe_name,),
+            )
+            if existing:
+                raise ConflictException(
+                    f"A recipe with the name '{recipe_name}' already exists (case-insensitive). Please use a different name."
+                )
+
         # Validate ingredients before starting database transaction
         if "ingredients" in data and data["ingredients"]:
             self._validate_recipe_ingredients(data["ingredients"])

@@ -9,6 +9,7 @@ import psycopg2.errors
 from typing import Dict, Any, List
 
 from api.db.db_core import Database
+from core.exceptions import ConflictException
 
 
 class TestRecipeCRUD:
@@ -49,7 +50,7 @@ class TestRecipeCRUD:
         db.create_recipe(recipe_data)
 
         # Attempt to create duplicate
-        with pytest.raises(psycopg2.errors.UniqueViolation):
+        with pytest.raises(ConflictException):
             db.create_recipe(recipe_data)
 
     def test_create_recipe_invalid_ingredient(self, db_instance):
@@ -175,9 +176,9 @@ class TestRecipeIngredientRelationships:
         )
 
         # Create unit (not seeded in schema)
-        db.execute_transaction(
-            "INSERT INTO units (name, abbreviation, conversion_to_ml) VALUES (%s, %s, %s)",
-            ("Ounce", "oz", 29.5735)
+        db.execute_query(
+            "INSERT INTO units (name, abbreviation, conversion_to_ml) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+            ("Ounce", "oz", 29.5735),
         )
         unit_result = db.execute_query(
             "SELECT id FROM units WHERE name = %s", ("Ounce",)
@@ -297,17 +298,13 @@ class TestRecipeUpdate:
 
         # Verify gin amount was updated
         gin_ingredient = next(
-            ing
-            for ing in updated["ingredients"]
-            if ing["ingredient_id"] == gin["id"]
+            ing for ing in updated["ingredients"] if ing["ingredient_id"] == gin["id"]
         )
         assert gin_ingredient["amount"] == 2.5
 
         # Verify olive was added
         olive_ingredient = next(
-            ing
-            for ing in updated["ingredients"]
-            if ing["ingredient_id"] == olive["id"]
+            ing for ing in updated["ingredients"] if ing["ingredient_id"] == olive["id"]
         )
         assert olive_ingredient["amount"] == 1.0
 
@@ -499,9 +496,7 @@ class TestRecipeWithRatings:
         db = db_instance
 
         # Create recipe
-        recipe = db.create_recipe(
-            {"name": "Unrated Recipe", "instructions": "Test"}
-        )
+        recipe = db.create_recipe({"name": "Unrated Recipe", "instructions": "Test"})
 
         # Retrieve recipe without user context
         result = db.get_recipe(recipe["id"], None)
@@ -521,8 +516,8 @@ class TestRecipeConstraints:
         # Create first recipe
         db.create_recipe({"name": "Martini", "instructions": "First martini"})
 
-        # Try to create with same name (different case)
-        with pytest.raises(psycopg2.errors.UniqueViolation):
+        # Try to create with same name (different case) - should fail
+        with pytest.raises(ConflictException):
             db.create_recipe({"name": "martini", "instructions": "Second martini"})
 
     def test_recipe_ingredient_foreign_key(self, db_instance):
