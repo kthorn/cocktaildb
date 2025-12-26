@@ -40,6 +40,10 @@
         try_files {path} /index.html
     }
 
+    # Cache static assets (1 hour) - revisit when fingerprinting is added
+    @static path *.js *.css *.png *.jpg *.jpeg *.gif *.svg *.woff *.woff2
+    header @static Cache-Control "public, max-age=3600"
+
     # Security headers
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
