@@ -19,24 +19,6 @@ from api.db.db_core import Database
 class TestDatabaseInitializationErrors:
     """Test database initialization error scenarios"""
 
-    @pytest.mark.skip(reason="File permission tests not applicable to PostgreSQL in testcontainers")
-    def test_database_file_permission_error(self):
-        """Test behavior when database file has permission issues"""
-        # This test is SQLite-specific and not applicable to PostgreSQL
-        pass
-
-    @pytest.mark.skip(reason="Directory tests not applicable to PostgreSQL in testcontainers")
-    def test_database_directory_does_not_exist(self):
-        """Test behavior when database directory doesn't exist"""
-        # This test is SQLite-specific and not applicable to PostgreSQL
-        pass
-
-    @pytest.mark.skip(reason="Corrupted file tests not applicable to PostgreSQL in testcontainers")
-    def test_database_corrupted_file(self):
-        """Test behavior with corrupted database file"""
-        # This test is SQLite-specific and not applicable to PostgreSQL
-        pass
-
     def test_database_schema_missing_tables(self, db_instance):
         """Test behavior when database is missing required tables"""
         db = db_instance
@@ -195,13 +177,6 @@ class TestConcurrencyAndLockingErrors:
         for error in errors:
             assert "database" in error.lower() or "lock" in error.lower()
 
-    @pytest.mark.skip(reason="PostgreSQL locking behavior differs from SQLite - needs rewrite for PostgreSQL")
-    def test_database_locked_retry_mechanism(self, db_instance):
-        """Test retry mechanism when database is locked"""
-        # This test uses SQLite-specific locking mechanisms (BEGIN IMMEDIATE)
-        # PostgreSQL handles locking differently and would need a different test approach
-        pass
-
 
 class TestDataIntegrityErrors:
     """Test data integrity and consistency error scenarios"""
@@ -211,9 +186,7 @@ class TestDataIntegrityErrors:
         db = db_instance
 
         # Create hierarchy: A -> B -> C
-        a = db.create_ingredient(
-            {"name": "A", "description": "A", "parent_id": None}
-        )
+        a = db.create_ingredient({"name": "A", "description": "A", "parent_id": None})
         b = db.create_ingredient(
             {"name": "B", "description": "B", "parent_id": a["id"]}
         )
@@ -378,9 +351,7 @@ class TestEdgeCaseDataValues:
                     {
                         "name": f"Amount Test {amount}",
                         "instructions": "Test",
-                        "ingredients": [
-                            {"ingredient_id": gin["id"], "amount": amount}
-                        ],
+                        "ingredients": [{"ingredient_id": gin["id"], "amount": amount}],
                     }
                 )
 
@@ -408,13 +379,9 @@ class TestEdgeCaseDataValues:
 
         for name in special_names:
             try:
-                db.create_recipe(
-                    {"name": name, "instructions": "Test instructions"}
-                )
+                db.create_recipe({"name": name, "instructions": "Test instructions"})
             except Exception as e:
-                print(
-                    f"Failed to create recipe with special characters '{name}': {e}"
-                )
+                print(f"Failed to create recipe with special characters '{name}': {e}")
 
         # Test searching for these recipes
         for name in special_names:
