@@ -40,8 +40,8 @@ class TestDatabaseInitializationErrors:
     def test_database_schema_missing_tables(self, db_instance):
         """Test behavior when database is missing required tables"""
         db = db_instance
-        # Drop a required table
-        db.execute_query("DROP TABLE ingredients")
+        # Drop a required table (CASCADE needed for PostgreSQL due to FK dependencies)
+        db.execute_query("DROP TABLE ingredients CASCADE")
 
         # Now database operations should fail
         with pytest.raises(psycopg2.Error):
@@ -115,11 +115,17 @@ class TestDataValidationErrors:
         """Test tag creation with various constraint violations"""
         db = db_instance
 
-        # Test private tag with missing user information
-        with pytest.raises(Exception):
+        # Test duplicate public tag name (unique constraint on public tags)
+        db.execute_query(
+            "INSERT INTO tags (name, created_by) VALUES (%s, %s)",
+            ("duplicate_test_tag", None),  # Public tag (created_by = NULL)
+        )
+
+        # Attempting to insert another public tag with the same name should fail
+        with pytest.raises(psycopg2.IntegrityError):
             db.execute_query(
                 "INSERT INTO tags (name, created_by) VALUES (%s, %s)",
-                ("test", None),  # This should succeed as created_by can be NULL for public tags
+                ("duplicate_test_tag", None),  # Duplicate public tag name
             )
 
 
