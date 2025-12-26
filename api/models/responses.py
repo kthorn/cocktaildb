@@ -13,6 +13,7 @@ class IngredientResponse(BaseModel):
     path: Optional[str] = Field(None, description="Ingredient hierarchy path")
     allow_substitution: bool = Field(..., description="Whether this ingredient can be substituted with siblings/ancestors")
     exact_match: Optional[bool] = Field(None, description="Whether this was an exact match for search queries")
+    created_by: Optional[str] = Field(None, description="User ID who created this ingredient")
 
     class Config:
         from_attributes = True
