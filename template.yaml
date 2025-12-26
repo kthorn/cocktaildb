@@ -29,6 +29,27 @@ Parameters:
     Type: String
     Default: ""
     Description: ARN of the ACM certificate for the auth subdomain (must be in us-east-1). Required if Environment is prod.
+  ManageAuthResources:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Whether this stack should manage auth DNS records and ACM certificate.
+  ManageBackupBucketPolicy:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Whether this stack should manage the backup bucket policy.
+  EnableBackupBucketCors:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Whether this stack should manage backup bucket CORS settings.
   CognitoAdvancedSecurity:
     Type: String
     Default: "OFF"
@@ -60,6 +81,10 @@ Conditions:
   IsDevEnvironment: !Not [!Equals [!Ref Environment, "prod"]]
   HasGoogleOAuth: !Not [!Equals [!Ref GoogleClientId, ""]]
   HasAmazonOAuth: !Not [!Equals [!Ref AmazonClientId, ""]]
+  ManageAuthResourcesEnabled: !Equals [!Ref ManageAuthResources, "true"]
+  ManageBackupBucketPolicyEnabled: !Equals [!Ref ManageBackupBucketPolicy, "true"]
+  EnableBackupBucketCorsEnabled: !Equals [!Ref EnableBackupBucketCors, "true"]
+  CreateAuthResources: !And [!Condition IsProdEnvironment, !Condition ManageAuthResourcesEnabled]
 
 Resources:
   # =============================================================================
@@ -70,23 +95,34 @@ Resources:
   BackupBucket:
     Type: AWS::S3::Bucket
     Condition: IsProdEnvironment
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      # Let CloudFormation generate unique name to avoid conflicts
+      BucketName: !Sub "cocktaildbbackups-${AWS::AccountId}-${Environment}"
       PublicAccessBlockConfiguration:
-        BlockPublicAcls: false
+        BlockPublicAcls: true
         BlockPublicPolicy: false
         IgnorePublicAcls: false
         RestrictPublicBuckets: false
-      CorsConfiguration:
-        CorsRules:
-          - AllowedMethods:
-              - GET
-              - HEAD
-            AllowedOrigins:
-              - "*"
-            AllowedHeaders:
-              - "*"
-            MaxAge: 3000
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      CorsConfiguration: !If
+        - EnableBackupBucketCorsEnabled
+        - CorsRules:
+            - AllowedMethods:
+                - GET
+                - HEAD
+              AllowedOrigins:
+                - "*"
+              AllowedHeaders:
+                - "*"
+              MaxAge: 3000
+        - !Ref "AWS::NoValue"
       LifecycleConfiguration:
         Rules:
           - Id: ExpireOldBackups
@@ -100,7 +136,9 @@ Resources:
 
   BackupBucketPolicy:
     Type: AWS::S3::BucketPolicy
-    Condition: IsProdEnvironment
+    Condition: ManageBackupBucketPolicyEnabled
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Bucket: !Ref BackupBucket
       PolicyDocument:
@@ -151,6 +189,8 @@ Resources:
 
   CognitoUserPoolV3:
     Type: AWS::Cognito::UserPool
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       UserPoolName: !Ref UserPoolName
       AliasAttributes:
@@ -169,18 +209,11 @@ Resources:
           RequireUppercase: false
       UserPoolAddOns:
         AdvancedSecurityMode: !Ref CognitoAdvancedSecurity
-      Schema:
-        - Name: email
-          AttributeDataType: String
-          Required: true
-          Mutable: true
-        - Name: preferred_username
-          AttributeDataType: String
-          Required: false
-          Mutable: false
 
   CognitoUserPoolV3Client:
     Type: AWS::Cognito::UserPoolClient
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       UserPoolId: !Ref CognitoUserPoolV3
       ClientName: !Sub cocktaildb-client-${Environment}
@@ -189,6 +222,7 @@ Resources:
         - ALLOW_USER_SRP_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
         - ALLOW_USER_PASSWORD_AUTH
+      AuthSessionValidity: 3
       PreventUserExistenceErrors: ENABLED
       SupportedIdentityProviders:
         - COGNITO
@@ -221,6 +255,7 @@ Resources:
         - openid
         - profile
       AllowedOAuthFlowsUserPoolClient: true
+      EnableTokenRevocation: true
       WriteAttributes:
         - email
       ReadAttributes:
@@ -229,6 +264,8 @@ Resources:
   # Cognito User Pool Groups
   CognitoAdminGroupV3:
     Type: AWS::Cognito::UserPoolGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       UserPoolId: !Ref CognitoUserPoolV3
       GroupName: admin
@@ -237,6 +274,8 @@ Resources:
 
   CognitoEditorGroupV3:
     Type: AWS::Cognito::UserPoolGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       UserPoolId: !Ref CognitoUserPoolV3
       GroupName: editor
@@ -246,6 +285,8 @@ Resources:
   # Cognito Domain for Hosted UI
   CognitoDomainV3:
     Type: AWS::Cognito::UserPoolDomain
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Domain: !If
         - IsProdEnvironment
@@ -260,6 +301,8 @@ Resources:
   # UI Customization for Cognito Hosted UI
   CognitoUICustomizationV3:
     Type: AWS::Cognito::UserPoolUICustomizationAttachment
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     DependsOn: CognitoDomainV3
     Properties:
       UserPoolId: !Ref CognitoUserPoolV3
@@ -315,7 +358,9 @@ Resources:
   # SSL Certificate for Cognito Auth Subdomain (must be in us-east-1)
   AuthCertificate:
     Type: AWS::CertificateManager::Certificate
-    Condition: IsProdEnvironment
+    Condition: CreateAuthResources
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       DomainName: !Sub "${AuthSubdomain}.${DomainName}"
       ValidationMethod: DNS
@@ -326,7 +371,9 @@ Resources:
   # Route 53 Record Set for EC2 (A record pointing to Elastic IP)
   DomainRecordSet:
     Type: AWS::Route53::RecordSet
-    Condition: IsProdEnvironment
+    Condition: CreateAuthResources
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       HostedZoneId: !Ref HostedZoneId
       Name: !Ref DomainName
@@ -338,7 +385,9 @@ Resources:
   # Route 53 Record Set for Auth Subdomain
   AuthDomainRecordSet:
     Type: AWS::Route53::RecordSet
-    Condition: IsProdEnvironment
+    Condition: CreateAuthResources
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       HostedZoneId: !Ref HostedZoneId
       Name: !Sub "${AuthSubdomain}.${DomainName}"
@@ -385,7 +434,10 @@ Outputs:
 
   AuthCertificateARN:
     Description: Auth subdomain ACM Certificate ARN (production only)
-    Value: !If [IsProdEnvironment, !Ref AuthCertificate, "N/A (dev environment)"]
+    Value: !If
+      - CreateAuthResources
+      - !Ref AuthCertificate
+      - "N/A (managed outside stack)"
 
   # IAM (dev only - prod uses separate cocktaildb-prod-ec2 stack)
   EC2RoleArn:
