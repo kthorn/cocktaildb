@@ -73,7 +73,20 @@ Resources:
     Properties:
       # Let CloudFormation generate unique name to avoid conflicts
       PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods:
+              - GET
+              - HEAD
+            AllowedOrigins:
+              - "*"
+            AllowedHeaders:
+              - "*"
+            MaxAge: 3000
       LifecycleConfiguration:
         Rules:
           - Id: ExpireOldBackups
@@ -84,6 +97,21 @@ Resources:
           Value: !Ref Environment
         - Key: Purpose
           Value: database-backups
+
+  BackupBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: IsProdEnvironment
+    Properties:
+      Bucket: !Ref BackupBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: PublicReadBackups
+            Effect: Allow
+            Principal: "*"
+            Action:
+              - s3:GetObject
+            Resource: !Sub "${BackupBucket.Arn}/*"
 
   # =============================================================================
   # IAM - EC2 Role and Instance Profile

@@ -59,6 +59,8 @@ echo ""
 if [ "$DRY_RUN" = true ]; then
     echo "[DRY RUN] Would create backup: $BACKUP_PATH"
     echo "[DRY RUN] Would upload to: s3://${BACKUP_BUCKET}/${BACKUP_FILE}"
+    echo "[DRY RUN] Would upload marker: s3://${BACKUP_BUCKET}/latest.txt"
+    echo "[DRY RUN] Would upload marker: s3://${BACKUP_BUCKET}/latest.json"
     exit 0
 fi
 
@@ -75,6 +77,18 @@ if [ -n "$BACKUP_BUCKET" ] && [ "$LOCAL_ONLY" = false ]; then
     echo "Uploading to s3://${BACKUP_BUCKET}/${BACKUP_FILE}..."
     aws s3 cp "$BACKUP_PATH" "s3://${BACKUP_BUCKET}/${BACKUP_FILE}"
     echo "Upload complete"
+
+    LATEST_TXT_PATH="${BACKUP_DIR}/latest.txt"
+    LATEST_JSON_PATH="${BACKUP_DIR}/latest.json"
+    BACKUP_SIZE_BYTES=$(stat -c %s "$BACKUP_PATH")
+
+    printf '%s\n' "$BACKUP_FILE" > "$LATEST_TXT_PATH"
+    cat > "$LATEST_JSON_PATH" <<JSON
+{"filename":"$BACKUP_FILE","timestamp":"$TIMESTAMP","size_bytes":$BACKUP_SIZE_BYTES}
+JSON
+
+    aws s3 cp "$LATEST_TXT_PATH" "s3://${BACKUP_BUCKET}/latest.txt" --content-type text/plain
+    aws s3 cp "$LATEST_JSON_PATH" "s3://${BACKUP_BUCKET}/latest.json" --content-type application/json
 else
     if [ -z "$BACKUP_BUCKET" ]; then
         echo "Note: BACKUP_BUCKET not set, skipping S3 upload"
