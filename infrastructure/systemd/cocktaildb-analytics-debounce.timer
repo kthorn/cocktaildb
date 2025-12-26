@@ -2,7 +2,7 @@
 Description=Run CocktailDB Analytics Debounce Check Every Minute
 
 [Timer]
-OnUnitActiveSec=60
+OnCalendar=*:*:00
 Persistent=true
 
 [Install]
