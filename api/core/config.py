@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     user_pool_id: str = Field(default="", description="Cognito User Pool ID", env="USER_POOL_ID")
     app_client_id: str = Field(default="", description="Cognito App Client ID", env="APP_CLIENT_ID")
     
+    # S3 settings
+    backup_bucket: str = Field(default="", description="S3 bucket for database backups")
+
     # API settings
     api_title: str = Field(default="Cocktail DB API", description="API title")
     api_version: str = Field(default="1.0.0", description="API version")

@@ -45,7 +45,6 @@ CREATE TABLE recipes (
 CREATE TABLE ratings (
   id SERIAL PRIMARY KEY,
   cognito_user_id TEXT NOT NULL,
-  cognito_username TEXT NOT NULL,
   recipe_id INTEGER NOT NULL,
   rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
   FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,

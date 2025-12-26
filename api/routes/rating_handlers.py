@@ -69,7 +69,6 @@ async def create_or_update_rating_handler(
         rating_dict.update({
             "recipe_id": recipe_id,
             "cognito_user_id": user.user_id,
-            "cognito_username": user.username or user.user_id
         })
         
         result = db.set_rating(rating_dict)

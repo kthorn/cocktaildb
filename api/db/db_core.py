@@ -1352,7 +1352,7 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating
+                    SELECT id, cognito_user_id, recipe_id, rating
                     FROM ratings
                     WHERE recipe_id = %(recipe_id)s
                     """,
@@ -1371,7 +1371,7 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating
+                    SELECT id, cognito_user_id, recipe_id, rating
                     FROM ratings
                     WHERE recipe_id = %(recipe_id)s AND cognito_user_id = %(user_id)s
                     """,
@@ -1392,8 +1392,6 @@ class Database:
             # Check required fields
             if not data.get("cognito_user_id"):
                 raise ValueError("User ID is required")
-            if not data.get("cognito_username"):
-                raise ValueError("Username is required")
             if not data.get("recipe_id"):
                 raise ValueError("Recipe ID is required")
             if "rating" not in data or not (1 <= data["rating"] <= 5):
@@ -1448,13 +1446,12 @@ class Database:
                 # Insert new rating
                 cursor.execute(
                     """
-                    INSERT INTO ratings (cognito_user_id, cognito_username, recipe_id, rating)
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO ratings (cognito_user_id, recipe_id, rating)
+                    VALUES (%s, %s, %s)
                     RETURNING id
                     """,
                     (
                         data["cognito_user_id"],
-                        data["cognito_username"],
                         data["recipe_id"],
                         data["rating"],
                     ),
@@ -1473,7 +1470,7 @@ class Database:
                 List[Dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT id, cognito_user_id, cognito_username, recipe_id, rating
+                    SELECT id, cognito_user_id, recipe_id, rating
                     FROM ratings
                     WHERE id = %(id)s
                     """,
