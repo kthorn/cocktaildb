@@ -16,6 +16,32 @@
                 <div class="about-text">
                     <p>Welcome to my cocktail database - a hobby project to track cocktails and ingredients.</p>
                     
+                    <h3>Why I Built This</h3>
+                    <p>Most cocktail databases treat ingredients as flat lists—but that misses how cocktails actually work. 
+                       A Margarita and a Daiquiri are structurally similar (spirit + citrus + sweetener), even though they 
+                       use different specific ingredients. I wanted a database that captures these relationships.</p>
+                    
+                    <p>A core component of this project is a hierarchical ingredient schema. Ingredients are organized 
+                       into a tree structure: "Four Roses Bourbon" is a child of "Bourbon" which in turn is a child of "Whiskey".
+                       This hierarchy enables analytics and search capabilities that a 
+                       flat database can't match.</p>
+                    
+                    <h3>Analytics & Data Science</h3>
+                    <p>The hierarchical structure unlocks interesting data analysis. Check out the <a href="analytics.html">Analytics page</a> to explore:</p>
+                    <ul>
+                        <li><strong>Ingredient usage patterns</strong> - See which ingredient categories appear most frequently, 
+                            with drill-down into specific items</li>
+                        <li><strong>Ingredient hierarchy tree</strong> - Interactive visualization of the 
+                            ingredient taxonomy with recipe counts</li>
+                        <li><strong>Recipe complexity analysis</strong> - Understand the distribution of cocktail complexity 
+                            across the database</li>
+                        <li><strong>Cocktail similarity mapping</strong> - Using UMAP embeddings based on ingredient overlap, 
+                            visualize "cocktail space" and see which drinks are structurally similar</li>
+                        <li><strong>EM-learned embeddings</strong> - By rolling up ingredients to their parent categories and 
+                            using expectation-maximization to learn ingredient distances, we get even richer similarity metrics 
+                            that reveal the underlying structure of cocktail families</li>
+                    </ul>
+
                     <h3>What You Can Do</h3>
                     <p>Sign up for a free account to:</p>
                     <ul>
@@ -29,7 +55,7 @@
                        not share it with anyone or send any emails other than the ones you receive from Cognito.</p>
 
                     <h3>Contributing Recipes & Ingredients</h3>
-                    <p>To maintain data quality for analysis purposes (coming soon), only editors can add new recipes and ingredients. 
+                    <p>To maintain data quality for the analytics features described above, only editors can add new recipes and ingredients. 
                     If you'd like to become an editor or have recipes to contribute, please contact me at 
                     <a href="mailto:kurt.thorn@gmail.com">kurt.thorn@gmail.com</a>.</p>
                     
@@ -38,9 +64,11 @@
                     <a href="https://github.com/kthorn/cocktaildb">GitHub</a>. As this is a hobby project, 
                     I may not be able to fix them immediately, but I appreciate your feedback.</p>
 
-                    <h3>About The Code</h3>
-                    <p>The code is open source and available on <a href="https://github.com/kthorn/cocktaildb">GitHub</a>. 
-                        Feel free to fork it and use it for your own purposes.</p>
+                    <h3>Open Source & Open Data</h3>
+                    <p>This is both an open source and open data project. The code is available on 
+                        <a href="https://github.com/kthorn/cocktaildb">GitHub</a>, and the full database of recipes and 
+                        ingredients is freely available for download. Feel free to fork it, use the data for your own 
+                        projects, or contribute improvements.</p>
                     <p>
                         <a id="backup-download-link" class="btn btn-secondary" href="#" aria-disabled="true">
                             Download latest database backup
