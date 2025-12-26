@@ -979,6 +979,7 @@ class Database:
                 "avg_rating": recipe_data["avg_rating"],
                 "rating_count": recipe_data["rating_count"],
                 "user_rating": recipe_data["user_rating"],
+                "created_by": recipe_data["created_by"],
                 "ingredients": [],  # To be filled next
                 "tags": [],
             }
@@ -2143,6 +2144,7 @@ class Database:
                         "avg_rating": row.get("avg_rating"),
                         "rating_count": row.get("rating_count"),
                         "user_rating": row.get("user_rating"),
+                        "created_by": row.get("created_by"),
                         "ingredients": [],
                         "tags": [],
                     }

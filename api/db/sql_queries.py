@@ -61,7 +61,7 @@ INGREDIENT_SUBSTITUTION_MATCH = """
 get_recipe_by_id_sql = """
     SELECT
         r.id, r.name, r.instructions, r.description, r.image_url,
-        r.source, r.source_url, r.avg_rating, r.rating_count,
+        r.source, r.source_url, r.avg_rating, r.rating_count, r.created_by,
         STRING_AGG(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
         STRING_AGG(CASE WHEN t.created_by = %(cognito_user_id)s THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data,
         ur.rating AS user_rating
@@ -76,14 +76,14 @@ get_recipe_by_id_sql = """
     WHERE r.id = %(recipe_id)s
     GROUP BY
         r.id, r.name, r.instructions, r.description, r.image_url,
-        r.source, r.source_url, r.avg_rating, r.rating_count,
+        r.source, r.source_url, r.avg_rating, r.rating_count, r.created_by,
         ur.rating;
 """
 
 get_all_recipes_sql = """
     SELECT
         r.id, r.name, r.instructions, r.description, r.image_url,
-        r.source, r.source_url, r.avg_rating, r.rating_count,
+        r.source, r.source_url, r.avg_rating, r.rating_count, r.created_by,
         STRING_AGG(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
         STRING_AGG(CASE WHEN t.created_by = %(cognito_user_id)s THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data
     FROM
@@ -94,7 +94,7 @@ get_all_recipes_sql = """
         tags t ON rt.tag_id = t.id
     GROUP BY
         r.id, r.name, r.instructions, r.description, r.image_url,
-        r.source, r.source_url, r.avg_rating, r.rating_count;
+        r.source, r.source_url, r.avg_rating, r.rating_count, r.created_by;
 """
 
 
@@ -194,7 +194,7 @@ def build_search_recipes_paginated_sql(
     WITH search_results AS (
         SELECT
             r.id, r.name, r.instructions, r.description, r.image_url,
-            r.source, r.source_url, r.avg_rating, r.rating_count,
+            r.source, r.source_url, r.avg_rating, r.rating_count, r.created_by,
             STRING_AGG(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
             STRING_AGG(CASE WHEN t.created_by = %(cognito_user_id)s THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data,
             ur.rating AS user_rating
@@ -256,7 +256,7 @@ def build_search_recipes_paginated_sql(
     base_sql += """
         GROUP BY
             r.id, r.name, r.instructions, r.description, r.image_url,
-            r.source, r.source_url, r.avg_rating, r.rating_count,
+            r.source, r.source_url, r.avg_rating, r.rating_count, r.created_by,
             ur.rating"""
 
     # Handle random sorting separately
@@ -285,7 +285,7 @@ def build_search_recipes_paginated_sql(
     paginated_with_ingredients AS (
         SELECT
             sr.id, sr.name, sr.instructions, sr.description, sr.image_url,
-            sr.source, sr.source_url, sr.avg_rating, sr.rating_count,
+            sr.source, sr.source_url, sr.avg_rating, sr.rating_count, sr.created_by,
             sr.public_tags_data, sr.private_tags_data, sr.user_rating,
             ri.id as recipe_ingredient_id, ri.amount, ri.ingredient_id, i.name as ingredient_name,
             ri.unit_id, u.name as unit_name, u.abbreviation as unit_abbreviation,
@@ -356,7 +356,7 @@ def build_search_recipes_keyset_sql(
     WITH search_results AS (
         SELECT
             r.id, r.name, r.instructions, r.description, r.image_url,
-            r.source, r.source_url, r.avg_rating, r.rating_count,
+            r.source, r.source_url, r.avg_rating, r.rating_count, r.created_by,
             r.created_at,
             STRING_AGG(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
             STRING_AGG(CASE WHEN t.created_by = %(cognito_user_id)s THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data,
@@ -422,7 +422,7 @@ def build_search_recipes_keyset_sql(
     base_sql += f"""
         GROUP BY
             r.id, r.name, r.instructions, r.description, r.image_url,
-            r.source, r.source_url, r.avg_rating, r.rating_count,
+            r.source, r.source_url, r.avg_rating, r.rating_count, r.created_by,
             r.created_at,
             ur.rating
         ORDER BY
@@ -433,7 +433,7 @@ def build_search_recipes_keyset_sql(
     paginated_with_ingredients AS (
         SELECT
             sr.id, sr.name, sr.instructions, sr.description, sr.image_url,
-            sr.source, sr.source_url, sr.avg_rating, sr.rating_count,
+            sr.source, sr.source_url, sr.avg_rating, sr.rating_count, sr.created_by,
             sr.public_tags_data, sr.private_tags_data, sr.user_rating,
             sr.sort_value,
             ri.id as recipe_ingredient_id, ri.amount, ri.ingredient_id, i.name as ingredient_name,
