@@ -235,7 +235,7 @@ class Database:
                 ingredient = cast(
                     List[Dict[str, Any]],
                     self.execute_query(
-                        "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE id = %(id)s",
+                        "SELECT id, name, description, parent_id, path, allow_substitution, created_by FROM ingredients WHERE id = %(id)s",
                         {"id": new_id},
                     ),
                 )
@@ -392,7 +392,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE id = %(id)s",
+                    "SELECT id, name, description, parent_id, path, allow_substitution, created_by FROM ingredients WHERE id = %(id)s",
                     {"id": ingredient_id},
                 ),
             )
@@ -453,7 +453,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients ORDER BY path"
+                    "SELECT id, name, description, parent_id, path, allow_substitution, created_by FROM ingredients ORDER BY path"
                 ),
             )
             return result
@@ -467,7 +467,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path FROM ingredients WHERE LOWER(name) = LOWER(%s)",
+                    "SELECT id, name, description, parent_id, path, allow_substitution, created_by FROM ingredients WHERE LOWER(name) = LOWER(%s)",
                     (ingredient_name,),
                 ),
             )
@@ -484,7 +484,7 @@ class Database:
             exact_result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE LOWER(name) = LOWER(%s)",
+                    "SELECT id, name, description, parent_id, path, allow_substitution, created_by FROM ingredients WHERE LOWER(name) = LOWER(%s)",
                     (search_term,),
                 ),
             )
@@ -497,7 +497,7 @@ class Database:
             partial_result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE name ILIKE %s ORDER BY name",
+                    "SELECT id, name, description, parent_id, path, allow_substitution, created_by FROM ingredients WHERE name ILIKE %s ORDER BY name",
                     (f"%{search_term}%",),
                 ),
             )
@@ -525,7 +525,7 @@ class Database:
             exact_results = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    f"SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE LOWER(name) IN ({placeholders})",
+                    f"SELECT id, name, description, parent_id, path, allow_substitution, created_by FROM ingredients WHERE LOWER(name) IN ({placeholders})",
                     tuple(unique_names),
                 ),
             )
@@ -584,7 +584,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, allow_substitution FROM ingredients WHERE id = %(id)s",
+                    "SELECT id, name, description, parent_id, path, allow_substitution, created_by FROM ingredients WHERE id = %(id)s",
                     {"id": ingredient_id},
                 ),
             )
