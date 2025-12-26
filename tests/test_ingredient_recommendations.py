@@ -12,18 +12,17 @@ class TestIngredientRecommendations:
         """Set up test data for recommendations testing"""
         # Create base ingredients with allow_substitution
         # Use unique test names to avoid conflicts
-        # Map old values: 0→False, 1→True
         db_instance.execute_query(
             """
             INSERT INTO ingredients (id, name, description, parent_id, path, allow_substitution) VALUES
-            (100, 'Test Bourbon', 'American whiskey', 1, '/1/100/', 1),
-            (101, 'Test Rye', 'Rye-based whiskey', 1, '/1/101/', 1),
-            (102, 'Test Lemon', 'Fresh lemon juice', 7, '/7/102/', 1),
-            (103, 'Test Lime', 'Fresh lime juice', 7, '/7/103/', 1),
-            (104, 'Test Syrup', 'Sugar syrup', NULL, '/104/', 0),
-            (105, 'Test Bitters', 'Aromatic bitters', NULL, '/105/', 0),
-            (106, 'Test Vermouth', 'White vermouth', NULL, '/106/', 0),
-            (107, 'Test Orange Liqueur', 'Triple sec style', NULL, '/107/', 0)
+            (100, 'Test Bourbon', 'American whiskey', 1, '/1/100/', TRUE),
+            (101, 'Test Rye', 'Rye-based whiskey', 1, '/1/101/', TRUE),
+            (102, 'Test Lemon', 'Fresh lemon juice', 7, '/7/102/', TRUE),
+            (103, 'Test Lime', 'Fresh lime juice', 7, '/7/103/', TRUE),
+            (104, 'Test Syrup', 'Sugar syrup', NULL, '/104/', FALSE),
+            (105, 'Test Bitters', 'Aromatic bitters', NULL, '/105/', FALSE),
+            (106, 'Test Vermouth', 'White vermouth', NULL, '/106/', FALSE),
+            (107, 'Test Orange Liqueur', 'Triple sec style', NULL, '/107/', FALSE)
             """
         )
 
@@ -98,16 +97,18 @@ class TestIngredientRecommendations:
 
         # User has Bourbon and Simple Syrup
         db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
-            (user_id, 100)  # Bourbon
+            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
+            (user_id, 100),  # Bourbon
         )
         db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
-            (user_id, 104)  # Simple Syrup
+            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
+            (user_id, 104),  # Simple Syrup
         )
 
         # Get recommendations
-        recommendations = db_instance_with_data.get_ingredient_recommendations(user_id, limit=10)
+        recommendations = db_instance_with_data.get_ingredient_recommendations(
+            user_id, limit=10
+        )
 
         # Should recommend ingredients that unlock recipes
         assert len(recommendations) > 0
@@ -127,7 +128,9 @@ class TestIngredientRecommendations:
         self.setup_test_data(db_instance_with_data, user_id)
 
         # User has no ingredients
-        recommendations = db_instance_with_data.get_ingredient_recommendations(user_id, limit=10)
+        recommendations = db_instance_with_data.get_ingredient_recommendations(
+            user_id, limit=10
+        )
 
         # Should return empty list - no "almost makeable" recipes
         assert len(recommendations) == 0
@@ -140,17 +143,19 @@ class TestIngredientRecommendations:
 
         # User has Bourbon, so they're 1 ingredient away from multiple recipes
         db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
-            (user_id, 100)  # Bourbon
+            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
+            (user_id, 100),  # Bourbon
         )
 
         # Also add Simple Syrup
         db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
-            (user_id, 104)  # Simple Syrup
+            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
+            (user_id, 104),  # Simple Syrup
         )
 
-        recommendations = db_instance_with_data.get_ingredient_recommendations(user_id, limit=10)
+        recommendations = db_instance_with_data.get_ingredient_recommendations(
+            user_id, limit=10
+        )
 
         # Should get recommendations
         assert len(recommendations) > 0
@@ -158,7 +163,10 @@ class TestIngredientRecommendations:
         # Verify sorted by recipes_unlocked (descending)
         if len(recommendations) > 1:
             for i in range(len(recommendations) - 1):
-                assert recommendations[i]["recipes_unlocked"] >= recommendations[i + 1]["recipes_unlocked"]
+                assert (
+                    recommendations[i]["recipes_unlocked"]
+                    >= recommendations[i + 1]["recipes_unlocked"]
+                )
 
     def test_recommendations_respects_limit(self, db_instance_with_data):
         """Test that recommendations respect the limit parameter"""
@@ -168,12 +176,14 @@ class TestIngredientRecommendations:
 
         # User has Bourbon
         db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
-            (user_id, 100)  # Bourbon
+            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
+            (user_id, 100),  # Bourbon
         )
 
         # Request only 2 recommendations
-        recommendations = db_instance_with_data.get_ingredient_recommendations(user_id, limit=2)
+        recommendations = db_instance_with_data.get_ingredient_recommendations(
+            user_id, limit=2
+        )
 
         # Should return at most 2
         assert len(recommendations) <= 2
@@ -187,11 +197,13 @@ class TestIngredientRecommendations:
         # Give user all necessary ingredients
         for ingredient_id in [100, 102, 103, 104, 105, 106, 107, 2, 6]:
             db_instance_with_data.execute_query(
-                "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
-                (user_id, ingredient_id)
+                "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
+                (user_id, ingredient_id),
             )
 
-        recommendations = db_instance_with_data.get_ingredient_recommendations(user_id, limit=10)
+        recommendations = db_instance_with_data.get_ingredient_recommendations(
+            user_id, limit=10
+        )
 
         # Should return empty - user can make everything
         assert len(recommendations) == 0
@@ -204,18 +216,22 @@ class TestIngredientRecommendations:
 
         # User has Bourbon and Simple Syrup (can almost make Old Fashioned and Whiskey Sour)
         db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
-            (user_id, 100)  # Bourbon
+            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
+            (user_id, 100),  # Bourbon
         )
         db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
-            (user_id, 104)  # Simple Syrup
+            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
+            (user_id, 104),  # Simple Syrup
         )
 
-        recommendations = db_instance_with_data.get_ingredient_recommendations(user_id, limit=10)
+        recommendations = db_instance_with_data.get_ingredient_recommendations(
+            user_id, limit=10
+        )
 
         # Find Bitters in recommendations
-        bitters_rec = next((r for r in recommendations if r["name"] == "Test Bitters"), None)
+        bitters_rec = next(
+            (r for r in recommendations if r["name"] == "Test Bitters"), None
+        )
         if bitters_rec:
             # Should unlock Old Fashioned and Manhattan
             assert bitters_rec["recipes_unlocked"] >= 1
@@ -229,7 +245,7 @@ class TestIngredientRecommendations:
         db_instance_with_data.execute_query(
             """
             INSERT INTO ingredients (id, name, parent_id, path, allow_substitution) VALUES
-            (200, 'Specific Brand Rum', 2, '/2/200/', 0)
+            (200, 'Specific Brand Rum', 2, '/2/200/', FALSE)
             """
         )
 
@@ -243,11 +259,13 @@ class TestIngredientRecommendations:
 
         # User has generic Rum (id=2)
         db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
-            (user_id, 2)  # Generic Rum
+            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
+            (user_id, 2),  # Generic Rum
         )
 
-        recommendations = db_instance_with_data.get_ingredient_recommendations(user_id, limit=10)
+        recommendations = db_instance_with_data.get_ingredient_recommendations(
+            user_id, limit=10
+        )
 
         # Should recommend the specific brand since user only has generic
         specific_brand = next((r for r in recommendations if r["id"] == 200), None)
@@ -266,10 +284,10 @@ class TestIngredientRecommendations:
         db_instance_with_data.execute_query(
             """
             INSERT INTO ingredients (id, name, parent_id, path, allow_substitution) VALUES
-            (300, 'Test Spirits', NULL, '/300/', 1),
-            (301, 'Test Whiskey Rec', 300, '/300/301/', 1),
-            (302, 'Test Bourbon Rec', 301, '/300/301/302/', 1),
-            (303, 'Test Rye Rec', 301, '/300/301/303/', 1)
+            (300, 'Test Spirits', NULL, '/300/', TRUE),
+            (301, 'Test Whiskey Rec', 300, '/300/301/', TRUE),
+            (302, 'Test Bourbon Rec', 301, '/300/301/302/', TRUE),
+            (303, 'Test Rye Rec', 301, '/300/301/303/', TRUE)
             """
         )
 
@@ -283,11 +301,13 @@ class TestIngredientRecommendations:
 
         # User has Bourbon (sibling of Rye, both allow_substitution=True)
         db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
-            (user_id, 302)  # Bourbon
+            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
+            (user_id, 302),  # Bourbon
         )
 
-        recommendations = db_instance_with_data.get_ingredient_recommendations(user_id, limit=10)
+        recommendations = db_instance_with_data.get_ingredient_recommendations(
+            user_id, limit=10
+        )
 
         # Should recommend Rye since:
         # 1. User has Bourbon (allow_substitution=True)
@@ -311,11 +331,11 @@ class TestIngredientRecommendations:
         db_instance_with_data.execute_query(
             """
             INSERT INTO ingredients (id, name, parent_id, path, allow_substitution) VALUES
-            (400, 'Test Spirits Rec', NULL, '/400/', 1),
-            (401, 'Test Whiskey Anc', 400, '/400/401/', 1),
-            (402, 'Test Bourbon Anc', 401, '/400/401/402/', 1),
-            (403, 'Test Brandy Anc', 400, '/400/403/', 1),
-            (404, 'Test Cognac Anc', 403, '/400/403/404/', 1)
+            (400, 'Test Spirits Rec', NULL, '/400/', TRUE),
+            (401, 'Test Whiskey Anc', 400, '/400/401/', TRUE),
+            (402, 'Test Bourbon Anc', 401, '/400/401/402/', TRUE),
+            (403, 'Test Brandy Anc', 400, '/400/403/', TRUE),
+            (404, 'Test Cognac Anc', 403, '/400/403/404/', TRUE)
             """
         )
 
@@ -329,11 +349,13 @@ class TestIngredientRecommendations:
 
         # User has Cognac (different branch, common ancestor with allow_substitution=True)
         db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
-            (user_id, 404)  # Cognac
+            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
+            (user_id, 404),  # Cognac
         )
 
-        recommendations = db_instance_with_data.get_ingredient_recommendations(user_id, limit=10)
+        recommendations = db_instance_with_data.get_ingredient_recommendations(
+            user_id, limit=10
+        )
 
         # Should recommend Bourbon since:
         # 1. User has Cognac (allow_substitution=True)
@@ -355,9 +377,9 @@ class TestIngredientRecommendations:
         db_instance_with_data.execute_query(
             """
             INSERT INTO ingredients (id, name, parent_id, path, allow_substitution) VALUES
-            (500, 'Test Amaro Rec', NULL, '/500/', 0),
-            (501, 'Test Nonino Rec', 500, '/500/501/', 0),
-            (502, 'Test Montenegro Rec', 500, '/500/502/', 0)
+            (500, 'Test Amaro Rec', NULL, '/500/', FALSE),
+            (501, 'Test Nonino Rec', 500, '/500/501/', FALSE),
+            (502, 'Test Montenegro Rec', 500, '/500/502/', FALSE)
             """
         )
 
@@ -371,15 +393,19 @@ class TestIngredientRecommendations:
 
         # User has Montenegro (sibling, but both allow_substitution=False)
         db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
-            (user_id, 502)  # Montenegro
+            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
+            (user_id, 502),  # Montenegro
         )
 
-        recommendations = db_instance_with_data.get_ingredient_recommendations(user_id, limit=10)
+        recommendations = db_instance_with_data.get_ingredient_recommendations(
+            user_id, limit=10
+        )
 
         # Should recommend Nonino since user doesn't have it and can't substitute
         nonino_rec = next((r for r in recommendations if r["id"] == 501), None)
-        assert nonino_rec is not None, "Should recommend Nonino since Montenegro can't substitute"
+        assert nonino_rec is not None, (
+            "Should recommend Nonino since Montenegro can't substitute"
+        )
 
 
 class TestIngredientRecommendationsAPI:
@@ -390,7 +416,9 @@ class TestIngredientRecommendationsAPI:
         response = test_client_memory.get("/user-ingredients/recommendations")
         assert response.status_code == 401
 
-    def test_recommendations_endpoint_success(self, authenticated_client, db_instance_with_data):
+    def test_recommendations_endpoint_success(
+        self, authenticated_client, db_instance_with_data
+    ):
         """Test successful recommendations API call"""
         user_id = "test-user-123"
 
@@ -400,8 +428,8 @@ class TestIngredientRecommendationsAPI:
 
         # Add some user ingredients
         db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
-            (user_id, 100)  # Bourbon
+            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
+            (user_id, 100),  # Bourbon
         )
 
         response = authenticated_client.get("/user-ingredients/recommendations")
@@ -412,7 +440,9 @@ class TestIngredientRecommendationsAPI:
         assert "total_count" in data
         assert isinstance(data["recommendations"], list)
 
-    def test_recommendations_endpoint_with_limit(self, authenticated_client, db_instance_with_data):
+    def test_recommendations_endpoint_with_limit(
+        self, authenticated_client, db_instance_with_data
+    ):
         """Test recommendations endpoint with custom limit"""
         user_id = "test-user-123"
 
@@ -422,8 +452,8 @@ class TestIngredientRecommendationsAPI:
 
         # Add user ingredient
         db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
-            (user_id, 100)
+            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
+            (user_id, 100),
         )
 
         response = authenticated_client.get("/user-ingredients/recommendations?limit=5")
@@ -432,7 +462,9 @@ class TestIngredientRecommendationsAPI:
         data = response.json()
         assert len(data["recommendations"]) <= 5
 
-    def test_recommendations_response_structure(self, authenticated_client, db_instance_with_data):
+    def test_recommendations_response_structure(
+        self, authenticated_client, db_instance_with_data
+    ):
         """Test that recommendations response has correct structure"""
         user_id = "test-user-123"
 
@@ -442,8 +474,8 @@ class TestIngredientRecommendationsAPI:
 
         # Add user ingredient
         db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (?, ?)",
-            (user_id, 100)
+            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
+            (user_id, 100),
         )
 
         response = authenticated_client.get("/user-ingredients/recommendations")
