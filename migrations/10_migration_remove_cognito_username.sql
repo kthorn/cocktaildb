@@ -7,3 +7,4 @@
 -- Drop the column
 ALTER TABLE ratings DROP COLUMN IF EXISTS cognito_username;
 
+

@@ -4,16 +4,21 @@
 
 -- Enable extensions
 CREATE EXTENSION IF NOT EXISTS pg_trgm;  -- For text search and similarity
+CREATE EXTENSION IF NOT EXISTS citext;   -- For case-insensitive text
 
 -- Table Definitions
 
 CREATE TABLE ingredients (
   id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
+  name CITEXT NOT NULL UNIQUE,
   description TEXT,
   parent_id INTEGER,
   path TEXT,
   allow_substitution BOOLEAN NOT NULL DEFAULT FALSE,
+  percent_abv NUMERIC CHECK (percent_abv >= 0 AND percent_abv <= 100),
+  sugar_g_per_l NUMERIC CHECK (sugar_g_per_l >= 0 AND sugar_g_per_l <= 1000),
+  titratable_acidity_g_per_l NUMERIC CHECK (titratable_acidity_g_per_l >= 0 AND titratable_acidity_g_per_l <= 100),
+  url TEXT,
   created_by TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -29,7 +34,7 @@ CREATE TABLE units (
 
 CREATE TABLE recipes (
   id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
+  name CITEXT NOT NULL UNIQUE,
   instructions TEXT,
   description TEXT,
   image_url TEXT,
@@ -109,6 +114,10 @@ CREATE INDEX idx_ratings_recipe_id ON ratings(recipe_id);
 CREATE INDEX idx_user_ingredients_cognito_user_id ON user_ingredients(cognito_user_id);
 CREATE INDEX idx_user_ingredients_ingredient_id ON user_ingredients(ingredient_id);
 CREATE INDEX idx_recipes_created_by ON recipes(created_by);
+CREATE INDEX idx_recipes_name_id ON recipes(name, id);
+CREATE INDEX idx_recipes_avg_rating_id ON recipes(avg_rating, id);
+CREATE INDEX idx_recipes_created_at_id ON recipes(created_at, id);
+CREATE INDEX idx_recipes_rating_count_id ON recipes(rating_count, id);
 CREATE INDEX idx_ingredients_created_by ON ingredients(created_by);
 
 -- Partial unique indexes for tags (PostgreSQL supports partial indexes)
