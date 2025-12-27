@@ -1,5 +1,7 @@
 # SQLite to PostgreSQL Migration Design
 
+> **LEGACY DOCUMENT**: This migration plan was completed in December 2025. The codebase now uses PostgreSQL exclusively. SQLite references here are historical.
+
 ## Overview
 
 Migrate the CocktailDB API database layer from SQLite to PostgreSQL entirely. After migration, SQLite support will be removed.

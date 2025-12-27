@@ -244,14 +244,14 @@ User has ingredient U, Recipe needs ingredient R
 
 ---
 
-## SQLite Storage
+## PostgreSQL Storage
 
-- **Column**: `allow_substitution BOOLEAN NOT NULL DEFAULT 0`
-- **Values**: SQLite stores booleans as integers
-  - `0` = false (no substitution)
-  - `1` = true (allow substitution)
-- **Python**: Values returned as `int` (0 or 1), not Python `bool`
-- **API**: Pydantic models convert to/from boolean for JSON
+- **Column**: `allow_substitution BOOLEAN NOT NULL DEFAULT FALSE`
+- **Values**: PostgreSQL native boolean type
+  - `FALSE` = no substitution
+  - `TRUE` = allow substitution
+- **Python**: Values returned as Python `bool` via psycopg2
+- **API**: Pydantic models serialize directly to JSON booleans
 
 ---
 ## Testing

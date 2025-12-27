@@ -1,5 +1,7 @@
 # Migrate SQLite Parameter Syntax to Native PostgreSQL
 
+> **LEGACY DOCUMENT**: This migration plan was completed in December 2025. All SQL queries now use native PostgreSQL parameter syntax. SQLite references here are historical.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Remove legacy SQLite parameter conversion layer by migrating all SQL queries to native PostgreSQL parameter format.

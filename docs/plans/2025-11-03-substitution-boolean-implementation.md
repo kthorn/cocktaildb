@@ -1,5 +1,7 @@
 # Boolean Substitution System Implementation Plan
 
+> **LEGACY DOCUMENT**: This plan was implemented in November 2025 when the codebase used SQLite. The substitution system now runs on PostgreSQL. SQLite references here are historical.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Replace 3-level integer substitution system with boolean `allow_substitution` field

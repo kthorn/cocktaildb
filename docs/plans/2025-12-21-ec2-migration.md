@@ -1,5 +1,7 @@
 # CocktailDB EC2 Migration Implementation Plan
 
+> **LEGACY DOCUMENT**: This migration plan was completed in December 2025. CocktailDB now runs on EC2 with PostgreSQL. SQLite references here are historical.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Migrate CocktailDB from serverless (Lambda + EFS + Batch + VPC endpoints) to a single EC2 instance running PostgreSQL, Docker-containerized API, and Caddy reverse proxy.

@@ -1,5 +1,7 @@
 # Ingredient Substitution System: Boolean Overhaul
 
+> **LEGACY DOCUMENT**: This design was implemented in November 2025 when the codebase used SQLite. The substitution system now runs on PostgreSQL. SQLite references here are historical.
+
 **Date:** 2025-11-03
 **Issue:** bd-53
 **Status:** Design Complete, Ready for Implementation

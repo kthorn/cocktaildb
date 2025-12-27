@@ -1,5 +1,7 @@
 # Production EC2 Migration Plan
 
+> **LEGACY DOCUMENT**: This migration plan was completed in December 2025. Production now runs on EC2 with PostgreSQL. SQLite references here are historical.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Safely migrate production from serverless infrastructure (Lambda/EFS/CloudFront) to EC2 with PostgreSQL without breaking user authentication or causing downtime.

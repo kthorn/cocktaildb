@@ -1,5 +1,7 @@
 # Analytics Backend Implementation Plan
 
+> **LEGACY DOCUMENT**: This plan was implemented in October 2025 when the codebase used SQLite. The analytics backend now runs on PostgreSQL. SQLite references here are historical.
+
 > **For Claude:** Use `${CLAUDE_PLUGIN_ROOT}/skills/collaboration/executing-plans/SKILL.md` to implement this plan task-by-task. Follow TDD principles from `${CLAUDE_PLUGIN_ROOT}/skills/testing/test-driven-development/SKILL.md`.
 
 **Goal:** Implement complete analytics backend infrastructure with pre-generated analytics stored in S3, automatic regeneration on database mutations, and FastAPI endpoints for analytics retrieval.

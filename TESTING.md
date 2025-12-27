@@ -125,9 +125,9 @@ aws s3 cp s3://$BACKUP_BUCKET/backup-YYYY-MM-DD_HH-MM-SS.db tests/fixtures/test_
 cp /path/to/test/cocktaildb.db tests/fixtures/test_cocktaildb.db
 ```
 
-### Option 3: In-Memory Testing (Unit Tests)
+### Option 3: Mocked Database Testing (Unit Tests)
 
-Many tests use in-memory SQLite databases and don't require external data setup.
+Many tests use mocked database dependencies and don't require external data setup.
 
 ## Running Tests
 
@@ -189,7 +189,7 @@ python -m pytest tests/ -m "not slow" -v
 
 ### 1. Unit Tests
 - **Purpose**: Test individual functions and endpoints in isolation
-- **Database**: In-memory SQLite or mocked
+- **Database**: Mocked dependencies
 - **Authentication**: Mocked using pytest-mock
 - **Speed**: Fast (< 1 second per test)
 
@@ -265,15 +265,15 @@ def test_unauthorized_access(self, test_client_memory):
 
 #### 1. Database Connection Errors
 ```
-sqlite3.OperationalError: unable to open database file
+psycopg2.OperationalError: could not connect to server
 ```
 
-**Solution**: Ensure test database exists in `tests/fixtures/test_cocktaildb.db`
+**Solution**: Ensure test database is accessible or use mocked database fixtures
 
 ```bash
-# Set up test database as described in Database Setup section
-./scripts/restore-backup.sh --target dev --source prod
-cp /path/to/cocktaildb.db tests/fixtures/test_cocktaildb.db
+# For integration tests, ensure dev PostgreSQL is accessible
+# or download a test database snapshot
+./scripts/download-test-db.sh
 ```
 
 #### 2. Import Errors
