@@ -96,6 +96,19 @@ document.addEventListener('DOMContentLoaded', () => {
         performSearch(); // Auto-search if name is in URL
     }
 
+    const ingredientFromUrl = urlParams.get('ingredient');
+    if (ingredientFromUrl) {
+        // Populate the first ingredient row with the URL parameter
+        const firstRow = ingredientQueryBuilder.querySelector('.item-row');
+        if (firstRow) {
+            const ingredientInput = firstRow.querySelector('.ingredient-search');
+            if (ingredientInput) {
+                ingredientInput.value = decodeURIComponent(ingredientFromUrl);
+            }
+        }
+        performSearch(); // Auto-search if ingredient is in URL
+    }
+
     // Form submit event
     searchForm.addEventListener('submit', async (e) => {
         e.preventDefault();
