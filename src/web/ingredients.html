@@ -56,6 +56,26 @@
                                 rows="3"></textarea>
                         </div>
 
+                        <div class="form-group">
+                            <label for="ingredient-url">URL:</label>
+                            <input type="url" id="ingredient-url" placeholder="https://example.com">
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="ingredient-percent-abv">ABV %:</label>
+                                <input type="number" id="ingredient-percent-abv" min="0" max="100" step="0.1">
+                            </div>
+                            <div class="form-group">
+                                <label for="ingredient-sugar-g-per-l">Sugar (g/L):</label>
+                                <input type="number" id="ingredient-sugar-g-per-l" min="0" max="1000" step="0.1">
+                            </div>
+                            <div class="form-group">
+                                <label for="ingredient-acid-g-per-l">Acid (g/L):</label>
+                                <input type="number" id="ingredient-acid-g-per-l" min="0" max="100" step="0.1">
+                            </div>
+                        </div>
+
                         <div class="form-group checkbox-group">
                             <input type="checkbox" id="ingredient-allow-substitution" name="allow_substitution">
                             <label for="ingredient-allow-substitution">

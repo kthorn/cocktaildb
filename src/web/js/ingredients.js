@@ -22,6 +22,10 @@ window.editIngredient = async function(id) {
         // Populate form with ingredient data
         document.getElementById('ingredient-name').value = ingredient.name;
         document.getElementById('ingredient-description').value = ingredient.description || '';
+        document.getElementById('ingredient-url').value = ingredient.url || '';
+        document.getElementById('ingredient-percent-abv').value = ingredient.percent_abv ?? '';
+        document.getElementById('ingredient-sugar-g-per-l').value = ingredient.sugar_g_per_l ?? '';
+        document.getElementById('ingredient-acid-g-per-l').value = ingredient.titratable_acidity_g_per_l ?? '';
         
         // Set allow_substitution checkbox
         const allowSubstitutionCheckbox = document.getElementById('ingredient-allow-substitution');
@@ -201,6 +205,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const name = document.getElementById('ingredient-name').value.trim();
         const description = document.getElementById('ingredient-description').value.trim();
+        const url = document.getElementById('ingredient-url').value.trim();
+        const percentAbv = parseNumberInput(document.getElementById('ingredient-percent-abv').value);
+        const sugarGPerL = parseNumberInput(document.getElementById('ingredient-sugar-g-per-l').value);
+        const acidGPerL = parseNumberInput(document.getElementById('ingredient-acid-g-per-l').value);
 
         // Get allow_substitution checkbox value
         const allowSubstitutionCheckbox = document.getElementById('ingredient-allow-substitution');
@@ -224,7 +232,11 @@ document.addEventListener('DOMContentLoaded', () => {
             name,
             description,
             parent_id: parentId,
-            allow_substitution: allowSubstitution
+            allow_substitution: allowSubstitution,
+            url: url || null,
+            percent_abv: percentAbv,
+            sugar_g_per_l: sugarGPerL,
+            titratable_acidity_g_per_l: acidGPerL
         };
 
         try {
@@ -244,6 +256,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (resetCheckbox) {
                 resetCheckbox.checked = false;
             }
+            document.getElementById('ingredient-url').value = '';
+            document.getElementById('ingredient-percent-abv').value = '';
+            document.getElementById('ingredient-sugar-g-per-l').value = '';
+            document.getElementById('ingredient-acid-g-per-l').value = '';
             delete ingredientForm.dataset.mode;
             delete ingredientForm.dataset.id;
             const submitButton = ingredientForm.querySelector('button[type="submit"]');
@@ -599,4 +615,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Define a global activeParentIndex variable for parent search navigation
     let activeParentIndex = -1;
+
+    function parseNumberInput(value) {
+        if (!value.trim()) {
+            return null;
+        }
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
 }); 
