@@ -14,6 +14,10 @@ class IngredientCreate(BaseModel):
         default=False,
         description="Whether this ingredient can be substituted with siblings/ancestors"
     )
+    percent_abv: Optional[float] = Field(None, ge=0, le=100)
+    sugar_g_per_l: Optional[float] = Field(None, ge=0, le=1000)
+    titratable_acidity_g_per_l: Optional[float] = Field(None, ge=0, le=100)
+    url: Optional[str] = Field(None, description="Reference URL")
 
     @field_validator("name")
     @classmethod
@@ -44,6 +48,10 @@ class IngredientUpdate(BaseModel):
         None,
         description="Whether this ingredient can be substituted with siblings/ancestors"
     )
+    percent_abv: Optional[float] = Field(None, ge=0, le=100)
+    sugar_g_per_l: Optional[float] = Field(None, ge=0, le=1000)
+    titratable_acidity_g_per_l: Optional[float] = Field(None, ge=0, le=100)
+    url: Optional[str] = Field(None, description="Reference URL")
 
     @field_validator("name", "description")
     @classmethod

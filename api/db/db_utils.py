@@ -1,6 +1,27 @@
 """Database utility functions"""
 
+from dataclasses import dataclass
 from typing import Any, Dict, List
+
+
+@dataclass(frozen=True)
+class RecipeSortSpec:
+    expression: str
+    direction: str
+
+
+RECIPE_SORT_FIELDS = {
+    "name": "r.name",
+    "avg_rating": "COALESCE(r.avg_rating, 0)",
+    "created_at": "r.created_at",
+    "rating_count": "r.rating_count",
+}
+
+
+def build_recipe_sort_spec(sort_by: str, sort_order: str) -> RecipeSortSpec:
+    sort_expr = RECIPE_SORT_FIELDS.get(sort_by, RECIPE_SORT_FIELDS["name"])
+    direction = "DESC" if sort_order == "desc" else "ASC"
+    return RecipeSortSpec(sort_expr, direction)
 
 
 def extract_all_ingredient_ids(ingredients_list: List[Dict[str, Any]]) -> set[int]:

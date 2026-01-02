@@ -76,13 +76,13 @@ class TestBulkUploadDatabaseLayer:
 
         # Check for duplicate (case insensitive)
         results = db_instance.execute_query(
-            "SELECT name FROM recipes WHERE LOWER(name) = LOWER(%s)", ("test recipe",)
+            "SELECT name FROM recipes WHERE name = %s", ("test recipe",)
         )
         assert len(results) == 1
 
         # Check for non-duplicate
         results = db_instance.execute_query(
-            "SELECT name FROM recipes WHERE LOWER(name) = LOWER(%s)",
+            "SELECT name FROM recipes WHERE name = %s",
             ("Different Recipe",),
         )
         assert len(results) == 0

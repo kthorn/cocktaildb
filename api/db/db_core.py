@@ -200,8 +200,11 @@ class Database:
                 cursor = conn.cursor()
                 cursor.execute(
                     """
-                    INSERT INTO ingredients (name, description, parent_id, allow_substitution, created_by)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO ingredients (
+                        name, description, parent_id, allow_substitution, created_by,
+                        percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
                     (
@@ -210,6 +213,10 @@ class Database:
                         data.get("parent_id"),
                         data.get("allow_substitution", False),
                         data.get("created_by"),
+                        data.get("percent_abv"),
+                        data.get("sugar_g_per_l"),
+                        data.get("titratable_acidity_g_per_l"),
+                        data.get("url"),
                     ),
                 )
                 new_row = cursor.fetchone()
@@ -235,7 +242,7 @@ class Database:
                 ingredient = cast(
                     List[Dict[str, Any]],
                     self.execute_query(
-                        "SELECT id, name, description, parent_id, path, allow_substitution, created_by FROM ingredients WHERE id = %(id)s",
+                        "SELECT id, name, description, parent_id, path, allow_substitution, percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url, created_by FROM ingredients WHERE id = %(id)s",
                         {"id": new_id},
                     ),
                 )
@@ -392,7 +399,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, allow_substitution, created_by FROM ingredients WHERE id = %(id)s",
+                    "SELECT id, name, description, parent_id, path, allow_substitution, percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url, created_by FROM ingredients WHERE id = %(id)s",
                     {"id": ingredient_id},
                 ),
             )
@@ -453,7 +460,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, allow_substitution, created_by FROM ingredients ORDER BY path"
+                    "SELECT id, name, description, parent_id, path, allow_substitution, percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url, created_by FROM ingredients ORDER BY path"
                 ),
             )
             return result
@@ -467,7 +474,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, allow_substitution, created_by FROM ingredients WHERE LOWER(name) = LOWER(%s)",
+                    "SELECT id, name, description, parent_id, path, allow_substitution, percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url, created_by FROM ingredients WHERE name = %s",
                     (ingredient_name,),
                 ),
             )
@@ -484,7 +491,7 @@ class Database:
             exact_result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, allow_substitution, created_by FROM ingredients WHERE LOWER(name) = LOWER(%s)",
+                    "SELECT id, name, description, parent_id, path, allow_substitution, percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url, created_by FROM ingredients WHERE name = %s",
                     (search_term,),
                 ),
             )
@@ -497,7 +504,7 @@ class Database:
             partial_result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, allow_substitution, created_by FROM ingredients WHERE name ILIKE %s ORDER BY name",
+                    "SELECT id, name, description, parent_id, path, allow_substitution, percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url, created_by FROM ingredients WHERE name ILIKE %s ORDER BY name",
                     (f"%{search_term}%",),
                 ),
             )
@@ -519,14 +526,15 @@ class Database:
             if not ingredient_names:
                 return {}
             # Create case-insensitive lookup for exact matches
-            unique_names = list(set(name.lower() for name in ingredient_names))
-            placeholders = ",".join("%s" for _ in unique_names)
+            unique_names = list(
+                {name.casefold(): name for name in ingredient_names}.values()
+            )
 
             exact_results = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    f"SELECT id, name, description, parent_id, path, allow_substitution, created_by FROM ingredients WHERE LOWER(name) IN ({placeholders})",
-                    tuple(unique_names),
+                    "SELECT id, name, description, parent_id, path, allow_substitution, percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url, created_by FROM ingredients WHERE name = ANY(%s::citext[])",
+                    (unique_names,),
                 ),
             )
 
@@ -534,12 +542,12 @@ class Database:
             results_map = {}
             for ingredient in exact_results:
                 ingredient["exact_match"] = True
-                results_map[ingredient["name"].lower()] = ingredient
+                results_map[ingredient["name"].casefold()] = ingredient
 
             # Map back to original case names
             final_results = {}
             for original_name in ingredient_names:
-                lower_name = original_name.lower()
+                lower_name = original_name.casefold()
                 if lower_name in results_map:
                     final_results[original_name] = results_map[lower_name]
             return final_results
@@ -556,22 +564,23 @@ class Database:
             if not ingredient_names:
                 return {}
             # Create case-insensitive lookup
-            unique_names = list(set(name.lower() for name in ingredient_names))
-            placeholders = ",".join("%s" for _ in unique_names)
+            unique_names = list(
+                {name.casefold(): name for name in ingredient_names}.values()
+            )
 
             existing_results = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    f"SELECT LOWER(name) as name_lower FROM ingredients WHERE LOWER(name) IN ({placeholders})",
-                    tuple(unique_names),
+                    "SELECT name FROM ingredients WHERE name = ANY(%s::citext[])",
+                    (unique_names,),
                 ),
             )
-            existing_names = {row["name_lower"] for row in existing_results}
+            existing_names = {row["name"].casefold() for row in existing_results}
 
             # Map back to original case names
             final_results = {}
             for original_name in ingredient_names:
-                lower_name = original_name.lower()
+                lower_name = original_name.casefold()
                 final_results[original_name] = lower_name in existing_names
             return final_results
         except Exception as e:
@@ -584,7 +593,7 @@ class Database:
             result = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id, name, description, parent_id, path, allow_substitution, created_by FROM ingredients WHERE id = %(id)s",
+                    "SELECT id, name, description, parent_id, path, allow_substitution, percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url, created_by FROM ingredients WHERE id = %(id)s",
                     {"id": ingredient_id},
                 ),
             )
@@ -730,7 +739,7 @@ class Database:
         recipe_name = data.get("name")
         if recipe_name:
             existing = self.execute_query(
-                "SELECT id FROM recipes WHERE LOWER(name) = LOWER(%s)",
+                "SELECT id FROM recipes WHERE name = %s",
                 (recipe_name,),
             )
             if existing:
@@ -1214,21 +1223,22 @@ class Database:
             if not recipe_names:
                 return {}
             # Create case-insensitive lookup
-            unique_names = list(set(name.lower() for name in recipe_names))
-            placeholders = ",".join("%s" for _ in unique_names)
+            unique_names = list(
+                {name.casefold(): name for name in recipe_names}.values()
+            )
 
             existing_results = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    f"SELECT LOWER(name) as name_lower FROM recipes WHERE LOWER(name) IN ({placeholders})",
-                    tuple(unique_names),
+                    "SELECT name FROM recipes WHERE name = ANY(%s::citext[])",
+                    (unique_names,),
                 ),
             )
-            existing_names = {row["name_lower"] for row in existing_results}
+            existing_names = {row["name"].casefold() for row in existing_results}
             # Map back to original case names
             final_results = {}
             for original_name in recipe_names:
-                lower_name = original_name.lower()
+                lower_name = original_name.casefold()
                 final_results[original_name] = lower_name in existing_names
             return final_results
 

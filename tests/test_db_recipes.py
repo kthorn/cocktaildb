@@ -478,7 +478,6 @@ class TestRecipeWithRatings:
         # Add user rating
         rating_data = {
             "cognito_user_id": "user123",
-            "cognito_username": "testuser",
             "recipe_id": recipe["id"],
             "rating": 4,
         }

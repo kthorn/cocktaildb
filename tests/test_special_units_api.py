@@ -204,7 +204,7 @@ class TestSpecialUnitsInRecipes:
 
         assert cherry_ingredient is not None
         assert cherry_ingredient["amount"] == 1.0
-        assert cherry_ingredient["unit_name"] == "Each"  # Database stores as "Each"
+        assert cherry_ingredient["unit_name"] == "each"
 
     def test_multiple_special_units_in_recipe(self, db_instance):
         """Test recipe containing multiple special units"""
@@ -267,13 +267,13 @@ class TestSpecialUnitsInRecipes:
 
         # Check each ingredient type
         ingredient_checks = {
-            ingredients["gin"]["id"]: {"amount": 2.0, "unit_name": "Ounce"},
+            ingredients["gin"]["id"]: {"amount": 2.0, "unit_name": "ounce"},
             ingredients["champagne"]["id"]: {"amount": None, "unit_name": "to top"},
             ingredients["absinthe"]["id"]: {
                 "amount": None,
                 "unit_name": "to rinse",
             },
-            ingredients["cherry"]["id"]: {"amount": 2.0, "unit_name": "Each"},
+            ingredients["cherry"]["id"]: {"amount": 2.0, "unit_name": "each"},
         }
 
         for ing in retrieved_recipe["ingredients"]:

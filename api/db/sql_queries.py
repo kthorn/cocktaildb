@@ -1,5 +1,7 @@
 from typing import List
 
+from .db_utils import build_recipe_sort_spec
+
 # Shared SQL fragments for ingredient queries
 INGREDIENT_SELECT_FIELDS = """
     ri.id as recipe_ingredient_id, ri.amount, ri.ingredient_id, i.name as ingredient_name,
@@ -189,12 +191,17 @@ def build_search_recipes_paginated_sql(
     """Build the paginated search SQL with optional ingredient filtering"""
     # Determine which rating field to use for filtering
     rating_field = "r.avg_rating" if rating_type == "average" else "ur.rating"
+    sort_spec = build_recipe_sort_spec(sort_by, sort_order)
+    sort_expr = sort_spec.expression
+    sort_direction = sort_spec.direction
+    sort_expr_sr = sort_expr.replace("r.", "sr.")
 
     base_sql = f"""
     WITH search_results AS (
         SELECT
             r.id, r.name, r.instructions, r.description, r.image_url,
             r.source, r.source_url, r.avg_rating, r.rating_count, r.created_by,
+            r.created_at,
             STRING_AGG(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
             STRING_AGG(CASE WHEN t.created_by = %(cognito_user_id)s THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data,
             ur.rating AS user_rating
@@ -257,6 +264,7 @@ def build_search_recipes_paginated_sql(
         GROUP BY
             r.id, r.name, r.instructions, r.description, r.image_url,
             r.source, r.source_url, r.avg_rating, r.rating_count, r.created_by,
+            r.created_at,
             ur.rating"""
 
     # Handle random sorting separately
@@ -268,16 +276,8 @@ def build_search_recipes_paginated_sql(
     else:
         base_sql += """
         ORDER BY
-            CASE
-                WHEN %(sort_by)s = 'name' AND %(sort_order)s = 'asc' THEN r.name
-                WHEN %(sort_by)s = 'avg_rating' AND %(sort_order)s = 'asc' THEN CAST(COALESCE(r.avg_rating, 0) AS TEXT)
-                WHEN %(sort_by)s = 'created_at' AND %(sort_order)s = 'asc' THEN CAST(r.id AS TEXT)
-            END ASC,
-            CASE
-                WHEN %(sort_by)s = 'name' AND %(sort_order)s = 'desc' THEN r.name
-                WHEN %(sort_by)s = 'avg_rating' AND %(sort_order)s = 'desc' THEN CAST(COALESCE(r.avg_rating, 0) AS TEXT)
-                WHEN %(sort_by)s = 'created_at' AND %(sort_order)s = 'desc' THEN CAST(r.id AS TEXT)
-            END DESC
+            {sort_expr} {sort_direction},
+            r.id {sort_direction}
         LIMIT %(limit)s OFFSET %(offset)s
     ),"""
 
@@ -312,23 +312,20 @@ def build_search_recipes_paginated_sql(
     else:
         base_sql += """
         ORDER BY
-            CASE
-                WHEN %(sort_by)s = 'name' AND %(sort_order)s = 'asc' THEN sr.name
-                WHEN %(sort_by)s = 'avg_rating' AND %(sort_order)s = 'asc' THEN CAST(COALESCE(sr.avg_rating, 0) AS TEXT)
-                WHEN %(sort_by)s = 'created_at' AND %(sort_order)s = 'asc' THEN CAST(sr.id AS TEXT)
-            END ASC,
-            CASE
-                WHEN %(sort_by)s = 'name' AND %(sort_order)s = 'desc' THEN sr.name
-                WHEN %(sort_by)s = 'avg_rating' AND %(sort_order)s = 'desc' THEN CAST(COALESCE(sr.avg_rating, 0) AS TEXT)
-                WHEN %(sort_by)s = 'created_at' AND %(sort_order)s = 'desc' THEN CAST(sr.id AS TEXT)
-            END DESC,
+            {sort_expr_sr} {sort_direction},
+            sr.id {sort_direction},
             COALESCE(ri.amount * u.conversion_to_ml, 0) DESC,
             ri.id ASC
     )
     SELECT * FROM paginated_with_ingredients
     """
     # Substitute the shared substitution matching logic
-    return base_sql.format(substitution_match=INGREDIENT_SUBSTITUTION_MATCH)
+    return base_sql.format(
+        substitution_match=INGREDIENT_SUBSTITUTION_MATCH,
+        sort_expr=sort_expr,
+        sort_direction=sort_direction,
+        sort_expr_sr=sort_expr_sr,
+    )
 
 
 def build_search_recipes_keyset_sql(
@@ -342,14 +339,9 @@ def build_search_recipes_keyset_sql(
 ) -> str:
     """Build the paginated search SQL using keyset (cursor) pagination."""
     rating_field = "r.avg_rating" if rating_type == "average" else "ur.rating"
-
-    sort_expr_map = {
-        "name": "r.name",
-        "avg_rating": "COALESCE(r.avg_rating, 0)",
-        "created_at": "r.created_at",
-    }
-    sort_expr = sort_expr_map.get(sort_by, "r.name")
-    sort_direction = "DESC" if sort_order == "desc" else "ASC"
+    sort_spec = build_recipe_sort_spec(sort_by, sort_order)
+    sort_expr = sort_spec.expression
+    sort_direction = sort_spec.direction
     cursor_operator = "<" if sort_order == "desc" else ">"
 
     base_sql = f"""
