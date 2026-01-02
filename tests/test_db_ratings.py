@@ -23,7 +23,6 @@ class TestRatingCRUD:
         # Set rating
         rating_data = {
             "cognito_user_id": "user123",
-            "cognito_username": "testuser",
             "recipe_id": recipe["id"],
             "rating": 4,
         }
@@ -32,7 +31,6 @@ class TestRatingCRUD:
 
         assert result["id"] is not None
         assert result["cognito_user_id"] == "user123"
-        assert result["cognito_username"] == "testuser"
         assert result["recipe_id"] == recipe["id"]
         assert result["rating"] == 4
         assert result["avg_rating"] == 4.0
@@ -48,7 +46,6 @@ class TestRatingCRUD:
         # Set initial rating
         rating_data = {
             "cognito_user_id": "user123",
-            "cognito_username": "testuser",
             "recipe_id": recipe["id"],
             "rating": 3,
         }
@@ -76,7 +73,6 @@ class TestRatingCRUD:
         # User 1 rates 4
         rating1_data = {
             "cognito_user_id": "user1",
-            "cognito_username": "user1",
             "recipe_id": recipe["id"],
             "rating": 4,
         }
@@ -85,7 +81,6 @@ class TestRatingCRUD:
         # User 2 rates 2
         rating2_data = {
             "cognito_user_id": "user2",
-            "cognito_username": "user2",
             "recipe_id": recipe["id"],
             "rating": 2,
         }
@@ -102,27 +97,11 @@ class TestRatingCRUD:
         recipe = db.create_recipe({"name": "Test Recipe", "instructions": "Test"})
 
         rating_data = {
-            "cognito_username": "testuser",
             "recipe_id": recipe["id"],
             "rating": 4,
         }
 
         with pytest.raises(ValueError, match="User ID is required"):
-            db.set_rating(rating_data)
-
-    def test_set_rating_validation_missing_username(self, db_instance):
-        """Test rating validation with missing username"""
-        db = db_instance
-
-        recipe = db.create_recipe({"name": "Test Recipe", "instructions": "Test"})
-
-        rating_data = {
-            "cognito_user_id": "user123",
-            "recipe_id": recipe["id"],
-            "rating": 4,
-        }
-
-        with pytest.raises(ValueError, match="Username is required"):
             db.set_rating(rating_data)
 
     def test_set_rating_validation_missing_recipe_id(self, db_instance):
@@ -131,7 +110,6 @@ class TestRatingCRUD:
 
         rating_data = {
             "cognito_user_id": "user123",
-            "cognito_username": "testuser",
             "rating": 4,
         }
 
@@ -146,7 +124,6 @@ class TestRatingCRUD:
 
         rating_data = {
             "cognito_user_id": "user123",
-            "cognito_username": "testuser",
             "recipe_id": recipe["id"],
             "rating": 0,  # Too low
         }
@@ -162,7 +139,6 @@ class TestRatingCRUD:
 
         rating_data = {
             "cognito_user_id": "user123",
-            "cognito_username": "testuser",
             "recipe_id": recipe["id"],
             "rating": 6,  # Too high
         }
@@ -176,7 +152,6 @@ class TestRatingCRUD:
 
         rating_data = {
             "cognito_user_id": "user123",
-            "cognito_username": "testuser",
             "recipe_id": 999,  # Non-existent recipe
             "rating": 4,
         }
@@ -192,7 +167,6 @@ class TestRatingCRUD:
         recipe = db.create_recipe({"name": "Test Recipe", "instructions": "Test"})
         rating_data = {
             "cognito_user_id": "user123",
-            "cognito_username": "testuser",
             "recipe_id": recipe["id"],
             "rating": 4,
         }
@@ -234,7 +208,6 @@ class TestRatingCRUD:
         for user_id, username, rating in users_and_ratings:
             rating_data = {
                 "cognito_user_id": user_id,
-                "cognito_username": username,
                 "recipe_id": recipe["id"],
                 "rating": rating,
             }
@@ -264,7 +237,6 @@ class TestRatingDeletion:
         recipe = db.create_recipe({"name": "Test Recipe", "instructions": "Test"})
         rating_data = {
             "cognito_user_id": "user123",
-            "cognito_username": "testuser",
             "recipe_id": recipe["id"],
             "rating": 4,
         }
@@ -302,7 +274,6 @@ class TestRatingDeletion:
         db.set_rating(
             {
                 "cognito_user_id": "user1",
-                "cognito_username": "user1",
                 "recipe_id": recipe["id"],
                 "rating": 5,
             }
@@ -310,7 +281,6 @@ class TestRatingDeletion:
         db.set_rating(
             {
                 "cognito_user_id": "user2",
-                "cognito_username": "user2",
                 "recipe_id": recipe["id"],
                 "rating": 3,
             }
@@ -342,7 +312,6 @@ class TestRatingAggregation:
         db.set_rating(
             {
                 "cognito_user_id": "user1",
-                "cognito_username": "user1",
                 "recipe_id": recipe["id"],
                 "rating": 4,
             }
@@ -363,7 +332,6 @@ class TestRatingAggregation:
             db.set_rating(
                 {
                     "cognito_user_id": f"user{i}",
-                    "cognito_username": f"user{i}",
                     "recipe_id": recipe["id"],
                     "rating": rating,
                 }
@@ -383,7 +351,6 @@ class TestRatingAggregation:
         db.set_rating(
             {
                 "cognito_user_id": "user1",
-                "cognito_username": "user1",
                 "recipe_id": recipe["id"],
                 "rating": 4,
             }
@@ -391,7 +358,6 @@ class TestRatingAggregation:
         db.set_rating(
             {
                 "cognito_user_id": "user2",
-                "cognito_username": "user2",
                 "recipe_id": recipe["id"],
                 "rating": 5,
             }
@@ -411,7 +377,6 @@ class TestRatingAggregation:
         db.set_rating(
             {
                 "cognito_user_id": "user1",
-                "cognito_username": "user1",
                 "recipe_id": recipe["id"],
                 "rating": 2,
             }
@@ -425,7 +390,6 @@ class TestRatingAggregation:
         db.set_rating(
             {
                 "cognito_user_id": "user1",
-                "cognito_username": "user1",
                 "recipe_id": recipe["id"],
                 "rating": 5,
             }
@@ -449,7 +413,6 @@ class TestRatingAggregation:
             db.set_rating(
                 {
                     "cognito_user_id": f"user{i}",
-                    "cognito_username": f"user{i}",
                     "recipe_id": recipe["id"],
                     "rating": rating,
                 }
@@ -479,7 +442,6 @@ class TestRatingAggregation:
         db.set_rating(
             {
                 "cognito_user_id": "user1",
-                "cognito_username": "user1",
                 "recipe_id": recipe["id"],
                 "rating": 4,
             }
@@ -511,7 +473,6 @@ class TestRatingConstraints:
         # Set initial rating
         rating_data = {
             "cognito_user_id": "user1",
-            "cognito_username": "user1",
             "recipe_id": recipe["id"],
             "rating": 3,
         }
@@ -536,7 +497,6 @@ class TestRatingConstraints:
         # Try to rate non-existent recipe
         rating_data = {
             "cognito_user_id": "user1",
-            "cognito_username": "user1",
             "recipe_id": 999,  # Non-existent
             "rating": 4,
         }
@@ -553,7 +513,6 @@ class TestRatingConstraints:
         db.set_rating(
             {
                 "cognito_user_id": "user1",
-                "cognito_username": "user1",
                 "recipe_id": recipe["id"],
                 "rating": 4,
             }
@@ -586,7 +545,6 @@ class TestRatingEdgeCases:
         min_rating = db.set_rating(
             {
                 "cognito_user_id": "user1",
-                "cognito_username": "user1",
                 "recipe_id": recipe["id"],
                 "rating": 1,
             }
@@ -597,7 +555,6 @@ class TestRatingEdgeCases:
         max_rating = db.set_rating(
             {
                 "cognito_user_id": "user2",
-                "cognito_username": "user2",
                 "recipe_id": recipe["id"],
                 "rating": 5,
             }
@@ -615,7 +572,6 @@ class TestRatingEdgeCases:
         result = db.set_rating(
             {
                 "cognito_user_id": uuid_user_id,
-                "cognito_username": "uuid_user",
                 "recipe_id": recipe["id"],
                 "rating": 4,
             }
@@ -632,12 +588,10 @@ class TestRatingEdgeCases:
         result = db.set_rating(
             {
                 "cognito_user_id": "user1",
-                "cognito_username": unicode_username,
                 "recipe_id": recipe["id"],
                 "rating": 4,
             }
         )
-        assert result["cognito_username"] == unicode_username
 
     def test_rating_extreme_aggregation_scenarios(self, db_instance):
         """Test aggregation with many ratings"""
@@ -653,7 +607,6 @@ class TestRatingEdgeCases:
             db.set_rating(
                 {
                     "cognito_user_id": f"user{i}",
-                    "cognito_username": f"user{i}",
                     "recipe_id": recipe["id"],
                     "rating": rating,
                 }

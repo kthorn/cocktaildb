@@ -120,15 +120,15 @@ class TestTransactionConsistency:
 
             # Insert multiple ratings
             ratings_data = [
-                ("user1", "user1", recipe["id"], 5),
-                ("user2", "user2", recipe["id"], 3),
-                ("user3", "user3", recipe["id"], 4),
+                ("user1", recipe["id"], 5),
+                ("user2", recipe["id"], 3),
+                ("user3", recipe["id"], 4),
             ]
 
-            for user_id, username, recipe_id, rating in ratings_data:
+            for user_id, recipe_id, rating in ratings_data:
                 cursor.execute(
-                    "INSERT INTO ratings (cognito_user_id, cognito_username, recipe_id, rating) VALUES (%s, %s, %s, %s)",
-                    (user_id, username, recipe_id, rating),
+                    "INSERT INTO ratings (cognito_user_id, recipe_id, rating) VALUES (%s, %s, %s)",
+                    (user_id, recipe_id, rating),
                 )
 
             # Commit all at once
@@ -166,7 +166,6 @@ class TestCascadeOperations:
         db.set_rating(
             {
                 "cognito_user_id": "user1",
-                "cognito_username": "user1",
                 "recipe_id": recipe["id"],
                 "rating": 4,
             }
@@ -269,7 +268,6 @@ class TestConcurrentAccess:
                 result = db_new.set_rating(
                     {
                         "cognito_user_id": f"user{user_num}",
-                        "cognito_username": f"user{user_num}",
                         "recipe_id": recipe["id"],
                         "rating": rating_value,
                     }
@@ -399,8 +397,8 @@ class TestForeignKeyConstraints:
         # Try to add rating for non-existent recipe
         with pytest.raises(psycopg2.errors.ForeignKeyViolation):
             db.execute_query(
-                "INSERT INTO ratings (cognito_user_id, cognito_username, recipe_id, rating) VALUES (%s, %s, %s, %s)",
-                ("user1", "user1", 999, 4),
+                "INSERT INTO ratings (cognito_user_id, recipe_id, rating) VALUES (%s, %s, %s)",
+                ("user1", 999, 4),
             )
 
     def test_tag_associations_foreign_key_enforcement(self, db_instance):

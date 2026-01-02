@@ -83,14 +83,14 @@ class TestDataValidationErrors:
         # Test with rating outside valid range using direct SQL
         with pytest.raises(psycopg2.IntegrityError):
             db.execute_query(
-                "INSERT INTO ratings (cognito_user_id, cognito_username, recipe_id, rating) VALUES (%s, %s, %s, %s)",
-                ("user1", "user1", recipe["id"], 6),  # Rating > 5
+                "INSERT INTO ratings (cognito_user_id, recipe_id, rating) VALUES (%s, %s, %s)",
+                ("user1", recipe["id"], 6),  # Rating > 5
             )
 
         with pytest.raises(psycopg2.IntegrityError):
             db.execute_query(
-                "INSERT INTO ratings (cognito_user_id, cognito_username, recipe_id, rating) VALUES (%s, %s, %s, %s)",
-                ("user1", "user1", recipe["id"], 0),  # Rating < 1
+                "INSERT INTO ratings (cognito_user_id, recipe_id, rating) VALUES (%s, %s, %s)",
+                ("user1", recipe["id"], 0),  # Rating < 1
             )
 
     def test_tag_creation_with_constraint_violations(self, db_instance):
@@ -136,7 +136,6 @@ class TestConcurrencyAndLockingErrors:
                 local_db.set_rating(
                     {
                         "cognito_user_id": f"user{user_id}",
-                        "cognito_username": f"user{user_id}",
                         "recipe_id": recipe["id"],
                         "rating": (user_id % 5) + 1,
                     }
@@ -146,7 +145,6 @@ class TestConcurrencyAndLockingErrors:
                 local_db.set_rating(
                     {
                         "cognito_user_id": f"user{user_id}",
-                        "cognito_username": f"user{user_id}",
                         "recipe_id": recipe["id"],
                         "rating": ((user_id + 1) % 5) + 1,
                     }
@@ -335,7 +333,6 @@ class TestEdgeCaseDataValues:
             result = db.set_rating(
                 {
                     "cognito_user_id": f"user_{rating}",
-                    "cognito_username": f"user_{rating}",
                     "recipe_id": recipe["id"],
                     "rating": rating,
                 }

@@ -12,6 +12,10 @@ class IngredientResponse(BaseModel):
     parent_id: Optional[int] = Field(None, description="Parent ingredient ID")
     path: Optional[str] = Field(None, description="Ingredient hierarchy path")
     allow_substitution: bool = Field(..., description="Whether this ingredient can be substituted with siblings/ancestors")
+    percent_abv: Optional[float] = Field(None, description="Alcohol by volume percentage")
+    sugar_g_per_l: Optional[float] = Field(None, description="Sugar grams per liter")
+    titratable_acidity_g_per_l: Optional[float] = Field(None, description="Titratable acidity grams per liter")
+    url: Optional[str] = Field(None, description="Reference URL")
     exact_match: Optional[bool] = Field(None, description="Whether this was an exact match for search queries")
     created_by: Optional[str] = Field(None, description="User ID who created this ingredient")
 

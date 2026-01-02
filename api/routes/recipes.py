@@ -67,7 +67,7 @@ async def search_recipes(
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     limit: int = Query(20, ge=1, le=1000, description="Number of items per page"),
     sort_by: str = Query(
-        "name", description="Sort field: name, created_at, avg_rating, random"
+        "name", description="Sort field: name, created_at, avg_rating, rating_count, random"
     ),
     sort_order: str = Query("asc", description="Sort order: asc, desc"),
     cursor: Optional[str] = Query(None, description="Cursor for pagination"),
@@ -100,7 +100,7 @@ async def search_recipes(
         )
 
         # Validate sort parameters
-        valid_sort_fields = ["name", "created_at", "avg_rating", "random"]
+        valid_sort_fields = ["name", "created_at", "avg_rating", "rating_count", "random"]
         valid_sort_orders = ["asc", "desc"]
         valid_rating_types = ["average", "user"]
 
@@ -207,7 +207,7 @@ async def search_recipes_authenticated(
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     limit: int = Query(20, ge=1, le=1000, description="Number of items per page"),
     sort_by: str = Query(
-        "name", description="Sort field: name, created_at, avg_rating, random"
+        "name", description="Sort field: name, created_at, avg_rating, rating_count, random"
     ),
     sort_order: str = Query("asc", description="Sort order: asc, desc"),
     cursor: Optional[str] = Query(None, description="Cursor for pagination"),

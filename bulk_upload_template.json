@@ -1,0 +1,41 @@
+[
+  {
+    "name": "Example Cocktail",
+    "instructions": "1. Add ice to shaker\n2. Add all ingredients\n3. Shake well\n4. Strain into glass\n5. Garnish as desired",
+    "description": "A classic cocktail with a modern twist",
+    "ingredients": [
+      {
+        "ingredient_name": "Vodka",
+        "amount": 2.0,
+        "unit_name": "oz"
+      },
+      {
+        "ingredient_name": "Lime Juice",
+        "amount": 0.5,
+        "unit_name": "oz"
+      },
+      {
+        "ingredient_name": "Simple Syrup",
+        "amount": 1.0,
+        "unit_name": "tsp"
+      }
+    ]
+  },
+  {
+    "name": "Another Recipe",
+    "instructions": "Build ingredients directly in glass over ice",
+    "description": "A simple, refreshing drink",
+    "ingredients": [
+      {
+        "ingredient_name": "Gin",
+        "amount": 1.5,
+        "unit_name": "oz"
+      },
+      {
+        "ingredient_name": "Tonic Water",
+        "amount": 4.0,
+        "unit_name": "oz"
+      }
+    ]
+  }
+]
