@@ -1,4 +1,8 @@
-def test_create_ingredient_with_metadata(editor_client):
+import pytest
+
+
+@pytest.mark.asyncio
+async def test_create_ingredient_with_metadata(editor_client):
     payload = {
         "name": "Test Vermouth",
         "description": "Sweet",
@@ -8,7 +12,7 @@ def test_create_ingredient_with_metadata(editor_client):
         "url": "https://example.com/vermouth",
     }
 
-    response = editor_client.post("/ingredients", json=payload)
+    response = await editor_client.post("/ingredients", json=payload)
     assert response.status_code == 201
     body = response.json()
 

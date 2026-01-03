@@ -51,10 +51,11 @@ class TestRecipeCreatedByField:
 class TestIngredientCreatedByDatabase:
     """Test created_by is saved to database for ingredients"""
 
-    def test_create_ingredient_saves_created_by(self, editor_client_with_data, mock_editor_user):
+    @pytest.mark.asyncio
+    async def test_create_ingredient_saves_created_by(self, editor_client_with_data, mock_editor_user):
         """Creating an ingredient should save created_by to database"""
         # Create ingredient using editor client (which has proper auth mocking)
-        response = editor_client_with_data.post("/ingredients", json={
+        response = await editor_client_with_data.post("/ingredients", json={
             "name": "Test Created By Ingredient",
             "description": "Testing created_by field"
         })
@@ -67,9 +68,10 @@ class TestIngredientCreatedByDatabase:
 class TestRecipeCreatedByDatabase:
     """Test created_by is saved to database for recipes"""
 
-    def test_create_recipe_saves_created_by(self, editor_client_with_data, mock_editor_user):
+    @pytest.mark.asyncio
+    async def test_create_recipe_saves_created_by(self, editor_client_with_data, mock_editor_user):
         """Creating a recipe should save created_by to database"""
-        response = editor_client_with_data.post("/recipes", json={
+        response = await editor_client_with_data.post("/recipes", json={
             "name": "Test Created By Recipe",
             "instructions": "Test instructions"
         })

@@ -4,15 +4,18 @@ Tests for tag-based search functionality
 
 import pytest
 
+pytestmark = pytest.mark.asyncio
 
+
+@pytest.mark.asyncio
 class TestTagSearch:
     """Test recipe search by tags functionality"""
 
-    def test_search_recipes_by_single_tag(self, test_client_with_data):
+    async def test_search_recipes_by_single_tag(self, test_client_with_data):
         client, app = test_client_with_data
         """Test searching recipes by a single tag"""
         # First, get all recipes to find available tags
-        all_response = client.get("/recipes/search")
+        all_response = await client.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
 
@@ -27,7 +30,7 @@ class TestTagSearch:
             # Use the first tag from this recipe
             test_tag = recipe_with_tags["tags"][0]["name"]
 
-            response = client.get(f"/recipes/search?tags={test_tag}")
+            response = await client.get(f"/recipes/search?tags={test_tag}")
             assert response.status_code == 200
             data = response.json()
 
@@ -43,11 +46,11 @@ class TestTagSearch:
                     f"Found tags: {tag_names}"
                 )
 
-    def test_search_recipes_by_multiple_tags(self, test_client_with_data):
+    async def test_search_recipes_by_multiple_tags(self, test_client_with_data):
         client, app = test_client_with_data
         """Test searching recipes by multiple tags (AND logic)"""
         # Find a recipe with multiple tags
-        all_response = client.get("/recipes/search")
+        all_response = await client.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
 
@@ -62,7 +65,7 @@ class TestTagSearch:
             tag1 = recipe_with_multiple_tags["tags"][0]["name"]
             tag2 = recipe_with_multiple_tags["tags"][1]["name"]
 
-            response = client.get(f"/recipes/search?tags={tag1},{tag2}")
+            response = await client.get(f"/recipes/search?tags={tag1},{tag2}")
             assert response.status_code == 200
             data = response.json()
 
@@ -79,10 +82,10 @@ class TestTagSearch:
                     f"Recipe '{recipe['name']}' should contain tag '{tag2}'"
                 )
 
-    def test_search_recipes_by_nonexistent_tag(self, test_client_with_data):
+    async def test_search_recipes_by_nonexistent_tag(self, test_client_with_data):
         client, app = test_client_with_data
         """Test searching recipes by a tag that doesn't exist"""
-        response = client.get("/recipes/search?tags=NonexistentTag123456")
+        response = await client.get("/recipes/search?tags=NonexistentTag123456")
         assert response.status_code == 200
         data = response.json()
 
@@ -90,15 +93,15 @@ class TestTagSearch:
         assert data["pagination"]["total_count"] == 0
         assert len(data["recipes"]) == 0
 
-    def test_search_recipes_by_empty_tag(self, test_client_with_data):
+    async def test_search_recipes_by_empty_tag(self, test_client_with_data):
         client, app = test_client_with_data
         """Test searching with empty tag parameter"""
-        response = client.get("/recipes/search?tags=")
+        response = await client.get("/recipes/search?tags=")
         assert response.status_code == 200
         data = response.json()
 
         # Empty tag should return all recipes (same as no filter)
-        all_response = client.get("/recipes/search")
+        all_response = await client.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
 
@@ -106,11 +109,11 @@ class TestTagSearch:
             data["pagination"]["total_count"] == all_data["pagination"]["total_count"]
         )
 
-    def test_search_recipes_tag_filter_vs_no_filter(self, test_client_with_data):
+    async def test_search_recipes_tag_filter_vs_no_filter(self, test_client_with_data):
         client, app = test_client_with_data
         """Test that tag filtering actually filters results"""
         # Get all recipes (no filter)
-        all_response = client.get("/recipes/search")
+        all_response = await client.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
 
@@ -122,7 +125,7 @@ class TestTagSearch:
                 break
 
         if specific_tag:
-            tag_response = client.get(f"/recipes/search?tags={specific_tag}")
+            tag_response = await client.get(f"/recipes/search?tags={specific_tag}")
             assert tag_response.status_code == 200
             tag_data = tag_response.json()
 
@@ -132,11 +135,11 @@ class TestTagSearch:
                 <= all_data["pagination"]["total_count"]
             )
 
-    def test_search_recipes_by_duplicate_tags(self, test_client_with_data):
+    async def test_search_recipes_by_duplicate_tags(self, test_client_with_data):
         """Test searching with duplicate tags in the list"""
         # Get a tag to duplicate
         client, app = test_client_with_data
-        all_response = client.get("/recipes/search")
+        all_response = await client.get("/recipes/search")
         assert all_response.status_code == 200
         all_data = all_response.json()
 
@@ -148,14 +151,14 @@ class TestTagSearch:
 
         if tag_to_duplicate:
             # Search with duplicate tags
-            response = client.get(
+            response = await client.get(
                 f"/recipes/search?tags={tag_to_duplicate},{tag_to_duplicate}"
             )
             assert response.status_code == 200
             data = response.json()
 
             # Should handle duplicates gracefully (same as single tag search)
-            single_response = client.get(f"/recipes/search?tags={tag_to_duplicate}")
+            single_response = await client.get(f"/recipes/search?tags={tag_to_duplicate}")
             assert single_response.status_code == 200
             single_data = single_response.json()
 
@@ -164,7 +167,7 @@ class TestTagSearch:
                 == single_data["pagination"]["total_count"]
             )
 
-    def test_search_recipes_url_encoded_tags(self, test_client_with_data):
+    async def test_search_recipes_url_encoded_tags(self, test_client_with_data):
         client, app = test_client_with_data
         """Test that URL-encoded tag names work correctly"""
         import urllib.parse
@@ -173,7 +176,7 @@ class TestTagSearch:
         tag_with_spaces = "Test Tag"
         encoded_tag = urllib.parse.quote_plus(tag_with_spaces)
 
-        response = client.get(f"/recipes/search?tags={encoded_tag}")
+        response = await client.get(f"/recipes/search?tags={encoded_tag}")
         assert response.status_code == 200
         data = response.json()
 
@@ -181,13 +184,13 @@ class TestTagSearch:
         assert "recipes" in data
         assert "pagination" in data
 
-    def test_search_recipes_by_numeric_tags(self, test_client_with_data):
+    async def test_search_recipes_by_numeric_tags(self, test_client_with_data):
         client, app = test_client_with_data
         """Test searching for purely numeric tags"""
         numeric_tags = ["2023", "1", "21", "100"]
 
         for tag in numeric_tags:
-            response = client.get(f"/recipes/search?tags={tag}")
+            response = await client.get(f"/recipes/search?tags={tag}")
             assert response.status_code == 200
             data = response.json()
 

@@ -408,15 +408,16 @@ class TestIngredientRecommendations:
         )
 
 
+@pytest.mark.asyncio
 class TestIngredientRecommendationsAPI:
     """Test the API endpoint for ingredient recommendations"""
 
-    def test_recommendations_endpoint_requires_auth(self, test_client_memory):
+    async def test_recommendations_endpoint_requires_auth(self, test_client_memory):
         """Test that recommendations endpoint requires authentication"""
-        response = test_client_memory.get("/user-ingredients/recommendations")
+        response = await test_client_memory.get("/user-ingredients/recommendations")
         assert response.status_code == 401
 
-    def test_recommendations_endpoint_success(
+    async def test_recommendations_endpoint_success(
         self, authenticated_client, db_instance_with_data
     ):
         """Test successful recommendations API call"""
@@ -432,7 +433,7 @@ class TestIngredientRecommendationsAPI:
             (user_id, 100),  # Bourbon
         )
 
-        response = authenticated_client.get("/user-ingredients/recommendations")
+        response = await authenticated_client.get("/user-ingredients/recommendations")
         assert response.status_code == 200
 
         data = response.json()
@@ -440,7 +441,7 @@ class TestIngredientRecommendationsAPI:
         assert "total_count" in data
         assert isinstance(data["recommendations"], list)
 
-    def test_recommendations_endpoint_with_limit(
+    async def test_recommendations_endpoint_with_limit(
         self, authenticated_client, db_instance_with_data
     ):
         """Test recommendations endpoint with custom limit"""
@@ -456,13 +457,13 @@ class TestIngredientRecommendationsAPI:
             (user_id, 100),
         )
 
-        response = authenticated_client.get("/user-ingredients/recommendations?limit=5")
+        response = await authenticated_client.get("/user-ingredients/recommendations?limit=5")
         assert response.status_code == 200
 
         data = response.json()
         assert len(data["recommendations"]) <= 5
 
-    def test_recommendations_response_structure(
+    async def test_recommendations_response_structure(
         self, authenticated_client, db_instance_with_data
     ):
         """Test that recommendations response has correct structure"""
@@ -478,7 +479,7 @@ class TestIngredientRecommendationsAPI:
             (user_id, 100),
         )
 
-        response = authenticated_client.get("/user-ingredients/recommendations")
+        response = await authenticated_client.get("/user-ingredients/recommendations")
         assert response.status_code == 200
 
         data = response.json()

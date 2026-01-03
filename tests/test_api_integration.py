@@ -12,14 +12,16 @@ from conftest import (
     assert_valid_response_structure,
 )
 
+pytestmark = pytest.mark.asyncio
+
 
 class TestDataValidation:
     """Test that database data is valid and well-structured"""
 
-    def test_ingredients_data_integrity(self, test_client_with_data):
+    async def test_ingredients_data_integrity(self, test_client_with_data):
         """Test ingredients data structure and relationships"""
         client, app = test_client_with_data
-        response = client.get("/ingredients")
+        response = await client.get("/ingredients")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -45,10 +47,10 @@ class TestDataValidation:
                     f"Parent {parent_id} not found for child {child['name']}"
                 )
 
-    def test_recipes_data_integrity(self, test_client_with_data):
+    async def test_recipes_data_integrity(self, test_client_with_data):
         """Test recipes data structure and completeness"""
         client, app = test_client_with_data
-        response = client.get("/recipes/search")
+        response = await client.get("/recipes/search")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -58,7 +60,7 @@ class TestDataValidation:
 
         # Test detailed recipe structure
         recipe_id = recipes[0]["id"]
-        detail_response = client.get(f"/recipes/{recipe_id}")
+        detail_response = await client.get(f"/recipes/{recipe_id}")
         assert detail_response.status_code == status.HTTP_200_OK
 
         recipe_detail = detail_response.json()
@@ -76,10 +78,10 @@ class TestDataValidation:
             # Check that amount is present
             assert "amount" in ingredient, "Ingredient should have 'amount' field"
 
-    def test_units_data_completeness(self, test_client_with_data):
+    async def test_units_data_completeness(self, test_client_with_data):
         """Test that essential cocktail units exist in test data"""
         client, app = test_client_with_data
-        response = client.get("/units")
+        response = await client.get("/units")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -120,11 +122,11 @@ class TestDataValidation:
 class TestSearchAndPaginationFunctionality:
     """Test search and pagination with test data"""
 
-    def test_ingredients_endpoint_functionality(self, test_client_with_data):
+    async def test_ingredients_endpoint_functionality(self, test_client_with_data):
         """Test ingredients endpoint returns all ingredients (no search functionality)"""
         client, app = test_client_with_data
         # Test basic ingredients endpoint
-        response = client.get("/ingredients")
+        response = await client.get("/ingredients")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -138,7 +140,7 @@ class TestSearchAndPaginationFunctionality:
 
         # Verify that adding search parameters doesn't change results
         # (since search is not implemented for ingredients)
-        search_response = client.get("/ingredients?search=gin")
+        search_response = await client.get("/ingredients?search=gin")
         assert search_response.status_code == status.HTTP_200_OK
         search_data = search_response.json()
 
@@ -151,7 +153,7 @@ class TestSearchAndPaginationFunctionality:
 class TestDataConsistencyAndIntegrity:
     """Test data consistency and integrity with test data"""
 
-    def test_database_referential_integrity(
+    async def test_database_referential_integrity(
         self, test_client_with_data, db_with_test_data
     ):
         """Test referential integrity across all tables"""
@@ -196,7 +198,7 @@ class TestDataConsistencyAndIntegrity:
             f"Found invalid unit references: {invalid_unit_refs}"
         )
 
-    def test_data_quality_constraints(self, test_client_with_data, db_with_test_data):
+    async def test_data_quality_constraints(self, test_client_with_data, db_with_test_data):
         """Test data quality and business rule constraints"""
         cursor = db_with_test_data.cursor()
 
@@ -224,7 +226,7 @@ class TestDataConsistencyAndIntegrity:
             f"Found recipes with empty names: {empty_recipe_names}"
         )
 
-    def test_schema_completeness(self, test_client_with_data, db_with_test_data):
+    async def test_schema_completeness(self, test_client_with_data, db_with_test_data):
         """Test that database schema has all expected tables"""
         cursor = db_with_test_data.cursor()
 
@@ -251,12 +253,12 @@ class TestDataConsistencyAndIntegrity:
 class TestComplexIntegrationScenarios:
     """Test complex integration scenarios that span multiple endpoints"""
 
-    def test_recipe_with_ingredients_and_ratings_flow(self, test_client_with_data):
+    async def test_recipe_with_ingredients_and_ratings_flow(self, test_client_with_data):
         """Test complete recipe workflow with ingredients and ratings"""
         client, app = test_client_with_data
 
         # Get a recipe with detailed information
-        recipes_response = client.get("/recipes/search?limit=1")
+        recipes_response = await client.get("/recipes/search?limit=1")
         assert recipes_response.status_code == status.HTTP_200_OK
 
         recipes_data = recipes_response.json()
@@ -271,7 +273,7 @@ class TestComplexIntegrationScenarios:
         recipe_id = recipes[0]["id"]
 
         # Get detailed recipe with ingredients
-        recipe_detail_response = client.get(f"/recipes/{recipe_id}")
+        recipe_detail_response = await client.get(f"/recipes/{recipe_id}")
         assert recipe_detail_response.status_code == status.HTTP_200_OK
         recipe_detail = recipe_detail_response.json()
 
@@ -288,7 +290,7 @@ class TestComplexIntegrationScenarios:
                     assert len(ingredient["unit_name"]) > 0
 
         # Get ratings for this recipe
-        ratings_response = client.get(f"/ratings/{recipe_id}")
+        ratings_response = await client.get(f"/ratings/{recipe_id}")
         assert ratings_response.status_code == status.HTTP_200_OK
 
         ratings_data = ratings_response.json()
@@ -313,10 +315,10 @@ class TestComplexIntegrationScenarios:
             assert "user_id" in user_rating
             assert "recipe_id" in user_rating
 
-    def test_ingredient_hierarchy_navigation(self, test_client_with_data):
+    async def test_ingredient_hierarchy_navigation(self, test_client_with_data):
         """Test navigating ingredient hierarchies"""
         client, app = test_client_with_data
-        response = client.get("/ingredients")
+        response = await client.get("/ingredients")
         assert response.status_code == status.HTTP_200_OK
 
         ingredients = response.json()
@@ -354,16 +356,16 @@ class TestComplexIntegrationScenarios:
 class TestSpecialUnitsIntegration:
     """Integration tests for special units in recipe creation and retrieval"""
 
-    def test_create_and_retrieve_recipe_with_to_top(self, editor_client_with_data):
+    async def test_create_and_retrieve_recipe_with_to_top(self, editor_client_with_data):
         """Test creating and retrieving recipe with 'to top' unit"""
         client = editor_client_with_data
 
         # First get ingredients and units for the test
-        ingredients_response = client.get("/ingredients")
+        ingredients_response = await client.get("/ingredients")
         assert ingredients_response.status_code == status.HTTP_200_OK
         ingredients = ingredients_response.json()
 
-        units_response = client.get("/units")
+        units_response = await client.get("/units")
         assert units_response.status_code == status.HTTP_200_OK
         units = units_response.json()
 
@@ -388,12 +390,12 @@ class TestSpecialUnitsIntegration:
         }
 
         # Create the recipe
-        create_response = client.post("/recipes", json=recipe_data)
+        create_response = await client.post("/recipes", json=recipe_data)
         assert create_response.status_code == status.HTTP_201_CREATED
         created_recipe = create_response.json()
 
         # Retrieve the recipe and verify structure
-        get_response = client.get(f"/recipes/{created_recipe['id']}")
+        get_response = await client.get(f"/recipes/{created_recipe['id']}")
         assert get_response.status_code == status.HTTP_200_OK
         retrieved_recipe = get_response.json()
 
@@ -405,16 +407,16 @@ class TestSpecialUnitsIntegration:
         assert ingredient["unit_name"] == "to top"
         assert ingredient["ingredient_id"] == test_ingredient["id"]
 
-    def test_create_and_retrieve_recipe_with_to_rinse(self, editor_client_with_data):
+    async def test_create_and_retrieve_recipe_with_to_rinse(self, editor_client_with_data):
         """Test creating and retrieving recipe with 'to rinse' unit"""
         client = editor_client_with_data
 
         # Get ingredients and units
-        ingredients_response = client.get("/ingredients")
+        ingredients_response = await client.get("/ingredients")
         assert ingredients_response.status_code == status.HTTP_200_OK
         ingredients = ingredients_response.json()
 
-        units_response = client.get("/units")
+        units_response = await client.get("/units")
         assert units_response.status_code == status.HTTP_200_OK
         units = units_response.json()
 
@@ -441,11 +443,11 @@ class TestSpecialUnitsIntegration:
         }
 
         # Create and retrieve recipe
-        create_response = client.post("/recipes", json=recipe_data)
+        create_response = await client.post("/recipes", json=recipe_data)
         assert create_response.status_code == status.HTTP_201_CREATED
         created_recipe = create_response.json()
 
-        get_response = client.get(f"/recipes/{created_recipe['id']}")
+        get_response = await client.get(f"/recipes/{created_recipe['id']}")
         assert get_response.status_code == status.HTTP_200_OK
         retrieved_recipe = get_response.json()
 
@@ -457,16 +459,16 @@ class TestSpecialUnitsIntegration:
         assert ingredient["unit_name"] == "to rinse"
         assert ingredient["ingredient_id"] == test_ingredient["id"]
 
-    def test_create_and_retrieve_recipe_with_each_unit(self, editor_client_with_data):
+    async def test_create_and_retrieve_recipe_with_each_unit(self, editor_client_with_data):
         """Test creating and retrieving recipe with 'each' unit"""
         client = editor_client_with_data
 
         # Get ingredients and units
-        ingredients_response = client.get("/ingredients")
+        ingredients_response = await client.get("/ingredients")
         assert ingredients_response.status_code == status.HTTP_200_OK
         ingredients = ingredients_response.json()
 
-        units_response = client.get("/units")
+        units_response = await client.get("/units")
         assert units_response.status_code == status.HTTP_200_OK
         units = units_response.json()
 
@@ -492,11 +494,11 @@ class TestSpecialUnitsIntegration:
         }
 
         # Create and retrieve recipe
-        create_response = client.post("/recipes", json=recipe_data)
+        create_response = await client.post("/recipes", json=recipe_data)
         assert create_response.status_code == status.HTTP_201_CREATED
         created_recipe = create_response.json()
 
-        get_response = client.get(f"/recipes/{created_recipe['id']}")
+        get_response = await client.get(f"/recipes/{created_recipe['id']}")
         assert get_response.status_code == status.HTTP_200_OK
         retrieved_recipe = get_response.json()
 

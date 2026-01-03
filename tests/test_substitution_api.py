@@ -5,26 +5,30 @@ Tests the FastAPI endpoints for creating, updating, and retrieving
 ingredients with substitution_level values.
 """
 
+import httpx
 import pytest
-from fastapi.testclient import TestClient
+import pytest_asyncio
+from httpx import ASGITransport
 from api.main import app
 from api.db.database import get_database
+
 class TestSubstitutionAPI:
     """Test API endpoints with substitution functionality"""
 
-    @pytest.fixture
-    def client(self, db_instance):
+    @pytest_asyncio.fixture
+    async def client(self, db_instance):
         """Create test client with fresh database"""
         app.dependency_overrides[get_database] = lambda: db_instance
-        
-        with TestClient(app) as client:
+
+        transport = ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             yield client
-        
+
         # Clean up
         app.dependency_overrides.clear()
 
-    @pytest.fixture
-    def editor_authenticated_client(self, db_instance, mock_editor_user):
+    @pytest_asyncio.fixture
+    async def editor_authenticated_client(self, db_instance, mock_editor_user):
         """Create test client with fresh database and editor authentication"""
         from dependencies.auth import UserInfo, require_authentication, require_editor_access
         
@@ -48,14 +52,16 @@ class TestSubstitutionAPI:
 
         app.dependency_overrides[require_authentication] = override_require_authentication
         app.dependency_overrides[require_editor_access] = override_require_editor_access
-        
-        with TestClient(app) as client:
+
+        transport = ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             yield client
-        
+
         # Clean up
         app.dependency_overrides.clear()
 
-    def test_create_ingredient_with_allow_substitution(self, editor_authenticated_client: TestClient):
+    @pytest.mark.asyncio
+    async def test_create_ingredient_with_allow_substitution(self, editor_authenticated_client: httpx.AsyncClient):
         """Test POST /ingredients with allow_substitution"""
 
         # Test data
@@ -66,7 +72,7 @@ class TestSubstitutionAPI:
         }
 
         # Make request (no headers needed - authentication is mocked)
-        response = editor_authenticated_client.post(
+        response = await editor_authenticated_client.post(
             "/ingredients",
             json=ingredient_data
         )
@@ -79,7 +85,8 @@ class TestSubstitutionAPI:
         assert result["allow_substitution"] is True
         assert "id" in result
 
-    def test_create_ingredient_with_false_allow_substitution(self, editor_authenticated_client: TestClient):
+    @pytest.mark.asyncio
+    async def test_create_ingredient_with_false_allow_substitution(self, editor_authenticated_client: httpx.AsyncClient):
         """Test creating ingredient with allow_substitution=False"""
 
         ingredient_data = {
@@ -88,7 +95,7 @@ class TestSubstitutionAPI:
             "allow_substitution": False
         }
 
-        response = editor_authenticated_client.post(
+        response = await editor_authenticated_client.post(
             "/ingredients",
             json=ingredient_data
         )
@@ -99,11 +106,12 @@ class TestSubstitutionAPI:
         assert result["name"] == "Test Brand"
         assert result["allow_substitution"] is False
 
-    def test_get_ingredient_includes_allow_substitution(self, editor_authenticated_client: TestClient):
+    @pytest.mark.asyncio
+    async def test_get_ingredient_includes_allow_substitution(self, editor_authenticated_client: httpx.AsyncClient):
         """Test GET /ingredients/{id} returns allow_substitution"""
 
         # First create an ingredient
-        create_response = editor_authenticated_client.post(
+        create_response = await editor_authenticated_client.post(
             "/ingredients",
             json={
                 "name": "Test Whiskey",
@@ -115,18 +123,19 @@ class TestSubstitutionAPI:
         ingredient_id = create_response.json()["id"]
 
         # Get the ingredient (no auth needed for GET)
-        response = editor_authenticated_client.get(f"/ingredients/{ingredient_id}")
+        response = await editor_authenticated_client.get(f"/ingredients/{ingredient_id}")
 
         assert response.status_code == 200
         result = response.json()
         assert result["id"] == ingredient_id
         assert result["allow_substitution"] is True
 
-    def test_update_ingredient_allow_substitution(self, editor_authenticated_client: TestClient):
+    @pytest.mark.asyncio
+    async def test_update_ingredient_allow_substitution(self, editor_authenticated_client: httpx.AsyncClient):
         """Test PUT /ingredients/{id} to update allow_substitution"""
 
         # Create ingredient
-        create_response = editor_authenticated_client.post(
+        create_response = await editor_authenticated_client.post(
             "/ingredients",
             json={
                 "name": "Test Brandy",
@@ -138,7 +147,7 @@ class TestSubstitutionAPI:
         ingredient_id = create_response.json()["id"]
 
         # Update allow_substitution
-        update_response = editor_authenticated_client.put(
+        update_response = await editor_authenticated_client.put(
             f"/ingredients/{ingredient_id}",
             json={
                 "allow_substitution": True
@@ -150,13 +159,14 @@ class TestSubstitutionAPI:
         assert result["allow_substitution"] is True
 
         # Verify the change persisted
-        get_response = editor_authenticated_client.get(f"/ingredients/{ingredient_id}")
+        get_response = await editor_authenticated_client.get(f"/ingredients/{ingredient_id}")
         assert get_response.json()["allow_substitution"] is True
 
-    def test_get_all_ingredients_includes_allow_substitution(self, client: TestClient):
+    @pytest.mark.asyncio
+    async def test_get_all_ingredients_includes_allow_substitution(self, client: httpx.AsyncClient):
         """Test GET /api/v1/ingredients returns allow_substitution for all ingredients"""
 
-        response = client.get("/ingredients")
+        response = await client.get("/ingredients")
         assert response.status_code == 200
 
         ingredients = response.json()
@@ -168,10 +178,11 @@ class TestSubstitutionAPI:
             allow_sub = ingredient["allow_substitution"]
             assert isinstance(allow_sub, bool)
 
-    def test_search_ingredients_includes_allow_substitution(self, client: TestClient):
+    @pytest.mark.asyncio
+    async def test_search_ingredients_includes_allow_substitution(self, client: httpx.AsyncClient):
         """Test GET /api/v1/ingredients/search returns allow_substitution"""
 
-        response = client.get("/ingredients/search?q=whiskey")
+        response = await client.get("/ingredients/search?q=whiskey")
         assert response.status_code == 200
 
         ingredients = response.json()
@@ -180,7 +191,8 @@ class TestSubstitutionAPI:
         for ingredient in ingredients:
             assert "allow_substitution" in ingredient
 
-    def test_bulk_ingredient_upload_with_allow_substitution(self, editor_authenticated_client: TestClient):
+    @pytest.mark.asyncio
+    async def test_bulk_ingredient_upload_with_allow_substitution(self, editor_authenticated_client: httpx.AsyncClient):
         """Test POST /ingredients/bulk with allow_substitution"""
 
         bulk_data = {
@@ -205,7 +217,7 @@ class TestSubstitutionAPI:
             ]
         }
 
-        response = editor_authenticated_client.post(
+        response = await editor_authenticated_client.post(
             "/ingredients/bulk",
             json=bulk_data
         )
@@ -229,11 +241,12 @@ class TestSubstitutionAPI:
             if brand1:
                 assert brand1["allow_substitution"] is False
 
-    def test_allow_substitution_accepts_boolean(self, editor_authenticated_client: TestClient):
+    @pytest.mark.asyncio
+    async def test_allow_substitution_accepts_boolean(self, editor_authenticated_client: httpx.AsyncClient):
         """Test that allow_substitution accepts boolean values"""
 
         # Test with True
-        response = editor_authenticated_client.post(
+        response = await editor_authenticated_client.post(
             "/ingredients",
             json={
                 "name": "Test Ingredient True",
@@ -245,7 +258,7 @@ class TestSubstitutionAPI:
         assert response.json()["allow_substitution"] is True
 
         # Test with False
-        response = editor_authenticated_client.post(
+        response = await editor_authenticated_client.post(
             "/ingredients",
             json={
                 "name": "Test Ingredient False",
@@ -260,17 +273,19 @@ class TestSubstitutionAPI:
 class TestSubstitutionRecipeSearch:
     """Test recipe search with substitution system via API"""
     
-    @pytest.fixture
-    def client(self, db_instance):
+    @pytest_asyncio.fixture
+    async def client(self, db_instance):
         """Create test client with fresh database"""
         app.dependency_overrides[get_database] = lambda: db_instance
-        
-        with TestClient(app) as client:
+
+        transport = ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             yield client
-        
+
         app.dependency_overrides.clear()
 
-    def test_recipe_search_with_allow_substitution(self, client: TestClient):
+    @pytest.mark.asyncio
+    async def test_recipe_search_with_allow_substitution(self, client: httpx.AsyncClient):
         """Test that recipe search API respects allow_substitution"""
 
         # This would require:
@@ -282,7 +297,7 @@ class TestSubstitutionRecipeSearch:
 
         # For now, just test that the endpoint exists and returns expected format
 
-        response = client.get("/recipes/search")
+        response = await client.get("/recipes/search")
 
         # Should return valid response structure even if empty
         assert response.status_code == 200

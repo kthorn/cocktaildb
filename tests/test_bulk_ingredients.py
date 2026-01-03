@@ -110,10 +110,11 @@ class TestBulkIngredientUploadDatabaseLayer:
         assert parent_data["name"] == "Test Spirits Category"
 
 
+@pytest.mark.asyncio
 class TestBulkIngredientUploadIntegration:
     """Test the bulk ingredient upload endpoint integration"""
 
-    def test_bulk_ingredient_upload_requires_authentication(self, test_client_memory):
+    async def test_bulk_ingredient_upload_requires_authentication(self, test_client_memory):
         """Test that bulk ingredient upload requires authentication"""
         ingredients_data = {
             "ingredients": [
@@ -121,26 +122,26 @@ class TestBulkIngredientUploadIntegration:
             ]
         }
 
-        response = test_client_memory.post("/ingredients/bulk", json=ingredients_data)
+        response = await test_client_memory.post("/ingredients/bulk", json=ingredients_data)
         assert response.status_code == 401
 
-    def test_bulk_ingredient_upload_validation_errors(self, admin_client):
+    async def test_bulk_ingredient_upload_validation_errors(self, admin_client):
         """Test bulk ingredient upload validation errors"""
         # Test with empty ingredients list
-        response = admin_client.post(
+        response = await admin_client.post(
             "/ingredients/bulk",
             json={"ingredients": []},
         )
         assert response.status_code == 422
 
         # Test with invalid ingredient data
-        response = admin_client.post(
+        response = await admin_client.post(
             "/ingredients/bulk",
             json={"ingredients": [{"name": ""}]},  # Empty name
         )
         assert response.status_code == 422
 
-    def test_bulk_ingredient_upload_duplicate_names(self, admin_client, db_instance):
+    async def test_bulk_ingredient_upload_duplicate_names(self, admin_client, db_instance):
         """Test bulk ingredient upload with duplicate names"""
         # Add an existing ingredient
         db_instance.execute_query(
@@ -155,7 +156,7 @@ class TestBulkIngredientUploadIntegration:
             ]
         }
 
-        response = admin_client.post(
+        response = await admin_client.post(
             "/ingredients/bulk",
             json=ingredients_data,
         )
@@ -168,7 +169,7 @@ class TestBulkIngredientUploadIntegration:
         assert len(data["validation_errors"]) == 1
         assert data["validation_errors"][0]["error_type"] == "duplicate_name"
 
-    def test_bulk_ingredient_upload_invalid_parent(self, admin_client):
+    async def test_bulk_ingredient_upload_invalid_parent(self, admin_client):
         """Test bulk ingredient upload with invalid parent"""
         ingredients_data = {
             "ingredients": [
@@ -180,7 +181,7 @@ class TestBulkIngredientUploadIntegration:
             ]
         }
 
-        response = admin_client.post(
+        response = await admin_client.post(
             "/ingredients/bulk",
             json=ingredients_data,
         )
@@ -193,7 +194,7 @@ class TestBulkIngredientUploadIntegration:
         assert len(data["validation_errors"]) == 1
         assert data["validation_errors"][0]["error_type"] == "parent_not_found"
 
-    def test_bulk_ingredient_upload_success_simple(self, admin_client, db_instance):
+    async def test_bulk_ingredient_upload_success_simple(self, admin_client, db_instance):
         """Test successful bulk ingredient upload without parent relationships"""
         ingredients_data = {
             "ingredients": [
@@ -205,7 +206,7 @@ class TestBulkIngredientUploadIntegration:
             ]
         }
 
-        response = admin_client.post(
+        response = await admin_client.post(
             "/ingredients/bulk",
             json=ingredients_data,
         )
@@ -223,7 +224,7 @@ class TestBulkIngredientUploadIntegration:
         assert "Bulk Test Gin" in uploaded_names
         assert "Bulk Test Vodka" in uploaded_names
 
-    def test_bulk_ingredient_upload_success_with_parent(
+    async def test_bulk_ingredient_upload_success_with_parent(
         self, admin_client, db_instance
     ):
         """Test successful bulk ingredient upload with parent relationships"""
@@ -253,7 +254,7 @@ class TestBulkIngredientUploadIntegration:
             ]
         }
 
-        response = admin_client.post(
+        response = await admin_client.post(
             "/ingredients/bulk",
             json=ingredients_data,
         )
@@ -274,7 +275,7 @@ class TestBulkIngredientUploadIntegration:
                 "Bulk Test Premium Vodka",
             ]
 
-    def test_bulk_ingredient_upload_legacy_parent_id(self, admin_client, db_instance):
+    async def test_bulk_ingredient_upload_legacy_parent_id(self, admin_client, db_instance):
         """Test bulk ingredient upload with legacy parent_id field"""
         # First create a parent ingredient
         db_instance.execute_query(
@@ -297,7 +298,7 @@ class TestBulkIngredientUploadIntegration:
             ]
         }
 
-        response = admin_client.post(
+        response = await admin_client.post(
             "/ingredients/bulk",
             json=ingredients_data,
         )
@@ -315,7 +316,7 @@ class TestBulkIngredientUploadIntegration:
         assert ingredient["parent_id"] == parent_id
         assert ingredient["name"] == "Legacy Test Gin"
 
-    def test_bulk_ingredient_upload_mixed_success_failure(
+    async def test_bulk_ingredient_upload_mixed_success_failure(
         self, admin_client, db_instance
     ):
         """Test bulk ingredient upload with mixed success and failure"""
@@ -343,7 +344,7 @@ class TestBulkIngredientUploadIntegration:
             ]
         }
 
-        response = admin_client.post(
+        response = await admin_client.post(
             "/ingredients/bulk",
             json=ingredients_data,
         )

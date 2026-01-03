@@ -3,15 +3,15 @@ Basic tests for the FastAPI application - focused on app-level concerns
 """
 
 import pytest
-from fastapi.testclient import TestClient
 
 
 class TestApplicationBootstrap:
     """Test basic application startup and configuration"""
     
-    def test_health_endpoint(self, test_client_memory):
+    @pytest.mark.asyncio
+    async def test_health_endpoint(self, test_client_memory):
         """Test the health check endpoint"""
-        response = test_client_memory.get("/health")
+        response = await test_client_memory.get("/health")
         assert response.status_code == 200
         assert response.json()["status"] == "healthy"
 

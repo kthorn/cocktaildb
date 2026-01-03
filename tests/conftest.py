@@ -14,7 +14,9 @@ from typing import Any, Dict
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import pytest
-from fastapi.testclient import TestClient
+import pytest_asyncio
+import httpx
+from httpx import ASGITransport
 from testcontainers.postgres import PostgresContainer
 
 # Add project root and api directory to Python path for imports
@@ -318,37 +320,39 @@ def mock_admin_user():
     }
 
 
-@pytest.fixture(scope="function")
-def test_client_memory_with_app(test_settings, memory_db_with_schema):
+@pytest_asyncio.fixture(scope="function")
+async def test_client_memory_with_app(test_settings, memory_db_with_schema):
     """Test client with PostgreSQL database with schema - returns both client and app"""
     # Import and create app after environment is configured
     from api.main import app
 
     # Clear any existing dependency overrides
     app.dependency_overrides.clear()
-    client = TestClient(app)
-    yield client, app
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client, app
     # Clean up after test
     app.dependency_overrides.clear()
 
 
-@pytest.fixture(scope="function")
-def test_client_memory(test_client_memory_with_app):
+@pytest_asyncio.fixture(scope="function")
+async def test_client_memory(test_client_memory_with_app):
     """Test client with database with schema - returns only client for simple tests"""
     client, app = test_client_memory_with_app
     yield client
 
 
-@pytest.fixture(scope="function")
-def test_client_with_data(test_settings, test_db_with_data):
+@pytest_asyncio.fixture(scope="function")
+async def test_client_with_data(test_settings, test_db_with_data):
     """Test client with fresh database and predictable test data for integration tests"""
     # Import and create app after environment is configured
     from api.main import app
 
     # Clear any existing dependency overrides
     app.dependency_overrides.clear()
-    client = TestClient(app)
-    yield client, app
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client, app
     # Clean up after test
     app.dependency_overrides.clear()
 
@@ -383,8 +387,8 @@ def db_instance_with_data(test_db_with_data):
     yield db
 
 
-@pytest.fixture(scope="function")
-def authenticated_client(test_client_memory_with_app, mock_user):
+@pytest_asyncio.fixture(scope="function")
+async def authenticated_client(test_client_memory_with_app, mock_user):
     """Test client with mocked authentication using FastAPI dependency override"""
     from dependencies.auth import UserInfo, require_authentication
 
@@ -412,8 +416,8 @@ def authenticated_client(test_client_memory_with_app, mock_user):
         del app.dependency_overrides[require_authentication]
 
 
-@pytest.fixture(scope="function")
-def editor_client(test_client_memory_with_app, mock_editor_user):
+@pytest_asyncio.fixture(scope="function")
+async def editor_client(test_client_memory_with_app, mock_editor_user):
     """Test client with mocked editor authentication using FastAPI dependency override"""
     from dependencies.auth import UserInfo, require_authentication, require_editor_access
 
@@ -447,8 +451,8 @@ def editor_client(test_client_memory_with_app, mock_editor_user):
         del app.dependency_overrides[require_editor_access]
 
 
-@pytest.fixture(scope="function")
-def editor_client_with_data(test_client_with_data, mock_editor_user):
+@pytest_asyncio.fixture(scope="function")
+async def editor_client_with_data(test_client_with_data, mock_editor_user):
     """Test client with mocked editor authentication AND test data"""
     from dependencies.auth import UserInfo, require_authentication, require_editor_access
 
@@ -482,8 +486,8 @@ def editor_client_with_data(test_client_with_data, mock_editor_user):
         del app.dependency_overrides[require_editor_access]
 
 
-@pytest.fixture(scope="function")
-def admin_client(test_client_memory_with_app, mock_admin_user):
+@pytest_asyncio.fixture(scope="function")
+async def admin_client(test_client_memory_with_app, mock_admin_user):
     """Test client with mocked admin authentication using FastAPI dependency override"""
     from dependencies.auth import UserInfo, require_authentication, require_editor_access
 

@@ -12,11 +12,13 @@ from conftest import (
     assert_valid_response_structure,
 )
 
+pytestmark = pytest.mark.asyncio
+
 
 class TestComplexIngredientCRUD:
     """Test complex CRUD operations for ingredients"""
 
-    def test_ingredient_hierarchy_crud_workflow(
+    async def test_ingredient_hierarchy_crud_workflow(
         self, test_client_with_data, mock_user, mocker
     ):
         """Test complete CRUD workflow with ingredient hierarchy"""
@@ -35,7 +37,7 @@ class TestComplexIngredientCRUD:
 
         # Create parent ingredient
         parent_data = {"name": "Test Spirits", "description": "Alcoholic spirits"}
-        parent_response = client.post("/ingredients", json=parent_data)
+        parent_response = await client.post("/ingredients", json=parent_data)
 
         if parent_response.status_code == 201:
             parent_ingredient = parent_response.json()
@@ -47,7 +49,7 @@ class TestComplexIngredientCRUD:
                 "description": "Juniper-flavored spirit",
                 "parent_id": parent_id,
             }
-            child_response = client.post("/ingredients", json=child_data)
+            child_response = await client.post("/ingredients", json=child_data)
 
             if child_response.status_code == 201:
                 child_ingredient = child_response.json()
@@ -56,7 +58,7 @@ class TestComplexIngredientCRUD:
 
                 # Update child ingredient
                 update_data = {"description": "Updated gin description"}
-                update_response = client.put(
+                update_response = await client.put(
                     f"/ingredients/{child_id}", json=update_data
                 )
 
@@ -66,18 +68,18 @@ class TestComplexIngredientCRUD:
                     assert updated_ingredient["parent_id"] == parent_id
 
                 # Delete child first (should succeed)
-                delete_child_response = client.delete(f"/ingredients/{child_id}")
+                delete_child_response = await client.delete(f"/ingredients/{child_id}")
                 assert delete_child_response.status_code in [200, 204]
 
                 # Delete parent (should succeed now that child is gone)
-                delete_parent_response = client.delete(f"/ingredients/{parent_id}")
+                delete_parent_response = await client.delete(f"/ingredients/{parent_id}")
                 assert delete_parent_response.status_code in [200, 204]
 
 
 class TestComplexRecipeCRUD:
     """Test complex CRUD operations for recipes"""
 
-    def test_recipe_with_ingredients_crud_workflow(
+    async def test_recipe_with_ingredients_crud_workflow(
         self, test_client_with_data, mock_user
     ):
         """Test complete CRUD workflow for recipes with ingredients"""
@@ -103,8 +105,8 @@ class TestComplexRecipeCRUD:
         )
 
         # Get existing ingredients and units for the recipe
-        ingredients_response = client.get("/ingredients?limit=2")
-        units_response = client.get("/units?limit=1")
+        ingredients_response = await client.get("/ingredients?limit=2")
+        units_response = await client.get("/units?limit=1")
 
         if (
             ingredients_response.status_code == 200
@@ -132,14 +134,14 @@ class TestComplexRecipeCRUD:
                 ],
             }
 
-            create_response = client.post("/recipes", json=recipe_data)
+            create_response = await client.post("/recipes", json=recipe_data)
 
             if create_response.status_code == 201:
                 created_recipe = create_response.json()
                 recipe_id = created_recipe["id"]
 
                 # Read back the recipe with full details
-                read_response = client.get(f"/recipes/{recipe_id}")
+                read_response = await client.get(f"/recipes/{recipe_id}")
                 assert read_response.status_code == 200
                 read_recipe = read_response.json()
                 assert "ingredients" in read_recipe
@@ -149,14 +151,14 @@ class TestComplexRecipeCRUD:
                 update_data = {
                     "instructions": "Updated: Stir gently with ice, double strain, express lemon peel"
                 }
-                update_response = client.put(f"/recipes/{recipe_id}", json=update_data)
+                update_response = await client.put(f"/recipes/{recipe_id}", json=update_data)
 
                 if update_response.status_code == 200:
                     updated_recipe = update_response.json()
                     assert "Updated:" in updated_recipe["instructions"]
 
                 # Delete the recipe
-                delete_response = client.delete(f"/recipes/{recipe_id}")
+                delete_response = await client.delete(f"/recipes/{recipe_id}")
                 assert delete_response.status_code in [200, 204]
 
         # Clean up the override
@@ -167,7 +169,7 @@ class TestComplexRecipeCRUD:
 class TestConcurrencyAndLocking:
     """Test concurrent operations and data consistency"""
 
-    def test_concurrent_recipe_updates(self, test_client_with_data, mock_user, mocker):
+    async def test_concurrent_recipe_updates(self, test_client_with_data, mock_user, mocker):
         """Test handling of concurrent recipe updates"""
         mock_auth = mocker.patch("api.dependencies.auth.get_user_from_jwt")
         from api.dependencies.auth import UserInfo
@@ -187,7 +189,7 @@ class TestConcurrencyAndLocking:
             "instructions": "Original instructions",
         }
 
-        create_response = client.post("/recipes", json=recipe_data)
+        create_response = await client.post("/recipes", json=recipe_data)
 
         if create_response.status_code == 201:
             recipe_id = create_response.json()["recipe_id"]
@@ -197,14 +199,14 @@ class TestConcurrencyAndLocking:
             update2_data = {"instructions": "Second concurrent update"}
 
             # Both updates should succeed or handle conflicts gracefully
-            response1 = client.put(f"/recipes/{recipe_id}", json=update1_data)
-            response2 = client.put(f"/recipes/{recipe_id}", json=update2_data)
+            response1 = await client.put(f"/recipes/{recipe_id}", json=update1_data)
+            response2 = await client.put(f"/recipes/{recipe_id}", json=update2_data)
 
             # At least one should succeed
             assert response1.status_code == 200 or response2.status_code == 200
 
             # Verify final state is consistent
-            final_response = client.get(f"/recipes/{recipe_id}")
+            final_response = await client.get(f"/recipes/{recipe_id}")
             if final_response.status_code == 200:
                 final_recipe = final_response.json()
                 # Instructions should be one of the updates, not corrupted
@@ -217,12 +219,12 @@ class TestConcurrencyAndLocking:
 class TestComplexQueries:
     """Test complex query operations and edge cases"""
 
-    def test_deep_ingredient_hierarchy_queries(self, test_client_with_data):
+    async def test_deep_ingredient_hierarchy_queries(self, test_client_with_data):
         client, app = test_client_with_data
         """Test querying ingredients with deep hierarchy"""
 
         # Get ingredients with hierarchy
-        response = client.get("/ingredients")
+        response = await client.get("/ingredients")
         if response.status_code == 200:
             ingredients = response.json()
 
@@ -238,7 +240,7 @@ class TestComplexQueries:
                 :3
             ]:  # Test first 3 complex ingredients
                 ingredient_id = ingredient["id"]
-                detail_response = client.get(f"/ingredients/{ingredient_id}")
+                detail_response = await client.get(f"/ingredients/{ingredient_id}")
 
                 if detail_response.status_code == 200:
                     detailed_ingredient = detail_response.json()
