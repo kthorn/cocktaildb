@@ -1,6 +1,7 @@
 """Analytics-specific database queries for CocktailDB"""
 
 import logging
+import os
 from typing import TYPE_CHECKING, Dict, List, Any, Optional, cast
 
 if TYPE_CHECKING:
@@ -420,6 +421,10 @@ class AnalyticsQueries:
             compute_umap_embedding,
         )
         from barcart.rollup import create_rollup_mapping, apply_rollup_to_recipes
+        from utils.analytics_files import (
+            save_em_distance_matrix,
+            save_em_ingredient_distance_matrix,
+        )
 
         try:
             logger.info("Starting EM-based cocktail space computation with rollup")
@@ -506,6 +511,11 @@ class AnalyticsQueries:
             cost_matrix = cost_matrix.astype(np.float32, copy=False)
             logger.info(f"Cost matrix shape: {cost_matrix.shape}")
             logger.info("Cost matrix dtype: %s", cost_matrix.dtype)
+            storage_path = os.environ.get("ANALYTICS_PATH")
+            if storage_path:
+                save_em_ingredient_distance_matrix(storage_path, cost_matrix)
+            else:
+                logger.warning("ANALYTICS_PATH not set; skipping EM ingredient distance write")
 
             # Step 5: Build recipe volume matrix with rolled-up ingredients
             logger.info("Building recipe volume matrix")
@@ -534,6 +544,11 @@ class AnalyticsQueries:
                 iters=5
             )
             logger.info(f"EM fit complete. Max distance: {np.max(final_dist):.4f}")
+            storage_path = os.environ.get("ANALYTICS_PATH")
+            if storage_path:
+                save_em_distance_matrix(storage_path, final_dist)
+            else:
+                logger.warning("ANALYTICS_PATH not set; skipping EM distance matrix write")
 
             # Step 7: Compute UMAP embedding
             logger.info("Computing UMAP embedding")

@@ -4,6 +4,7 @@ import logging
 import os
 from typing import Optional
 from fastapi import APIRouter, Depends
+from fastapi.responses import FileResponse
 
 from dependencies.auth import UserInfo, get_current_user_optional
 from db.database import get_database as get_db
@@ -11,6 +12,7 @@ from db.db_core import Database
 from db.db_analytics import AnalyticsQueries
 from core.exceptions import DatabaseException
 from utils.analytics_cache import AnalyticsStorage
+from utils.analytics_files import get_em_distance_matrix_path
 
 # Configure logger (inherits from main.py configuration)
 logger = logging.getLogger(__name__)
@@ -183,3 +185,31 @@ async def get_ingredient_tree_analytics(
     except Exception as e:
         logger.error(f"Error getting ingredient tree analytics: {str(e)}")
         raise DatabaseException("Failed to retrieve ingredient tree analytics", detail=str(e))
+
+
+@router.get("/recipe-distances-em/download")
+async def download_em_recipe_distances(
+    user: Optional[UserInfo] = Depends(get_current_user_optional),
+):
+    """Download the EM pairwise recipe distance matrix."""
+    try:
+        if not storage_manager:
+            raise DatabaseException("Analytics storage not configured")
+
+        file_path = get_em_distance_matrix_path(ANALYTICS_PATH)
+        if not file_path.exists():
+            raise DatabaseException(
+                "Analytics not generated. Please trigger analytics refresh.",
+                detail="recipe-distances-em file not found in storage"
+            )
+
+        return FileResponse(
+            path=file_path,
+            media_type="application/octet-stream",
+            filename=file_path.name,
+        )
+    except DatabaseException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading EM distance matrix: {str(e)}")
+        raise DatabaseException("Failed to download EM distance matrix", detail=str(e))
