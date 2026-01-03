@@ -412,6 +412,7 @@ class AnalyticsQueries:
             List of dicts with {recipe_id, recipe_name, x, y, ingredients: [...]}
         """
         import numpy as np
+        import os
         from scipy import sparse as sp
         from barcart import (
             build_ingredient_tree,
@@ -421,6 +422,7 @@ class AnalyticsQueries:
             compute_umap_embedding,
         )
         from barcart.rollup import create_rollup_mapping, apply_rollup_to_recipes
+        from utils.analytics_files import save_em_distance_matrix
         from utils.analytics_files import (
             save_em_distance_matrix,
             save_em_ingredient_distance_matrix,
@@ -544,6 +546,11 @@ class AnalyticsQueries:
                 iters=5
             )
             logger.info(f"EM fit complete. Max distance: {np.max(final_dist):.4f}")
+            storage_path = os.environ.get("ANALYTICS_PATH")
+            if storage_path:
+                save_em_distance_matrix(storage_path, final_dist)
+            else:
+                logger.warning("ANALYTICS_PATH not set; skipping EM distance matrix persistence")
             storage_path = os.environ.get("ANALYTICS_PATH")
             if storage_path:
                 save_em_distance_matrix(storage_path, final_dist)

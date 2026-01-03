@@ -188,6 +188,33 @@ async def get_ingredient_tree_analytics(
 
 
 @router.get("/recipe-distances-em/download")
+async def download_recipe_distances_em():
+    """Download the EM pairwise recipe distance matrix."""
+    try:
+        storage_path = os.environ.get("ANALYTICS_PATH", "")
+        if not storage_path:
+            raise DatabaseException("Analytics storage not configured")
+
+        file_path = get_em_distance_matrix_path(storage_path)
+        if not file_path.exists():
+            raise DatabaseException(
+                "Analytics not generated. Please trigger analytics refresh.",
+                detail="recipe-distances-em data not found in storage"
+            )
+
+        return FileResponse(
+            path=file_path,
+            media_type="application/octet-stream",
+            filename=file_path.name,
+        )
+    except DatabaseException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading EM distance matrix: {str(e)}")
+        raise DatabaseException("Failed to download EM distance matrix", detail=str(e))
+
+
+@router.get("/recipe-distances-em/download")
 async def download_em_recipe_distances(
     user: Optional[UserInfo] = Depends(get_current_user_optional),
 ):
