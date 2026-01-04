@@ -130,6 +130,15 @@
         group: root
         mode: '0755'
 
+    - name: Install polkit rule for analytics debounce
+      copy:
+        src: "{{ playbook_dir }}/../files/cocktaildb-analytics.rules"
+        dest: /etc/polkit-1/rules.d/49-cocktaildb-analytics.rules
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart polkit
+
     # Deploy Caddy configuration
     - name: Copy Caddyfile
       copy:
@@ -236,6 +245,11 @@
       shell: |
         cd {{ app_home }}
         docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate
+
+    - name: Restart polkit
+      systemd:
+        name: polkit
+        state: restarted
 
     - name: Restart Caddy
       systemd:

@@ -775,6 +775,51 @@ section, .card-container {
     max-width: 100%;
 }
 
+.recipe-card .similar-cocktails {
+    margin: var(--space-xs) 0;
+    font-family: Georgia, 'Times New Roman', Times, serif;
+}
+
+.recipe-card .similar-cocktails h5 {
+    font-size: var(--text-md);
+    color: var(--accent-color);
+    margin-bottom: var(--space-xs);
+    font-weight: 600;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: var(--line-height-tight);
+}
+
+.recipe-card .similar-list {
+    list-style-type: disc;
+    padding-left: 1.5rem;
+    margin-top: var(--space-xs);
+}
+
+.recipe-card .similar-list li {
+    padding: 2px 0;
+    line-height: var(--line-height-tight);
+}
+
+.recipe-card .similar-list a {
+    color: var(--accent-color);
+    text-decoration: none;
+}
+
+.recipe-card .similar-list a:hover {
+    text-decoration: underline;
+}
+
+.recipe-card .similar-distance {
+    margin-left: var(--space-xs);
+    color: var(--text-medium);
+    font-size: var(--text-xs);
+}
+
+.recipe-card .similar-loading {
+    color: var(--text-medium);
+    font-size: var(--text-sm);
+}
+
 /* Stat cards */
 .stat-card p {
     font-size: 2rem;

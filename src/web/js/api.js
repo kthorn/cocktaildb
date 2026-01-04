@@ -477,6 +477,11 @@ class CocktailAPI {
         return this._request(url, 'GET', null, false);
     }
 
+    async getRecipeSimilar(recipeId) {
+        const url = `/analytics/recipe-similar?recipe_id=${recipeId}`;
+        return this._request(url, 'GET', null, false);
+    }
+
 }
 
 // Create and export the API instance

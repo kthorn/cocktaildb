@@ -642,6 +642,175 @@ def emd_matrix(
     return (emd_matrix, plans) if return_plans else emd_matrix
 
 
+def manhattan_candidates(
+    volume_matrix: np.ndarray,
+    k: int,
+) -> dict[int, np.ndarray]:
+    """
+    Compute top-k nearest neighbors by Manhattan distance for each recipe.
+
+    This is a cheap O(N²) operation used to select candidate pairs before
+    computing the more expensive EMD. Manhattan distance on volume fractions
+    provides a reasonable approximation for filtering.
+
+    Parameters
+    ----------
+    volume_matrix : np.ndarray or sparse matrix
+        Recipe-by-ingredient volume matrix of shape (n_recipes, n_ingredients).
+    k : int
+        Number of nearest neighbors to select per recipe.
+
+    Returns
+    -------
+    candidates : dict[int, np.ndarray]
+        Mapping from recipe index to array of k candidate neighbor indices.
+    """
+    from scipy import sparse as sp
+    from scipy.spatial.distance import cdist
+
+    # Convert sparse to dense for distance computation
+    if sp.issparse(volume_matrix):
+        dense_matrix = volume_matrix.toarray()
+    else:
+        dense_matrix = np.asarray(volume_matrix)
+
+    # Compute full Manhattan distance matrix (cheap - just L1 norm)
+    manhattan_dist = cdist(dense_matrix, dense_matrix, metric='cityblock')
+
+    # For each recipe, find top-k nearest (excluding self)
+    n_recipes = volume_matrix.shape[0]
+    k = min(k, n_recipes - 1)  # Can't have more neighbors than recipes - 1
+
+    candidates = {}
+    np.fill_diagonal(manhattan_dist, np.inf)
+
+    for i in range(n_recipes):
+        # Get indices of k smallest distances
+        nearest_k = np.argpartition(manhattan_dist[i], k)[:k]
+        candidates[i] = nearest_k
+
+    return candidates
+
+
+def emd_candidates(
+    distance_matrix: np.ndarray,
+    k: int,
+) -> dict[int, np.ndarray]:
+    """
+    Compute top-k nearest neighbors from a distance matrix.
+
+    Used to select candidate pairs for subsequent EM iterations based on
+    the previous iteration's EMD distances.
+
+    Parameters
+    ----------
+    distance_matrix : np.ndarray
+        Recipe-by-recipe distance matrix of shape (n_recipes, n_recipes).
+    k : int
+        Number of nearest neighbors to select per recipe.
+
+    Returns
+    -------
+    candidates : dict[int, np.ndarray]
+        Mapping from recipe index to array of k candidate neighbor indices.
+    """
+    n_recipes = distance_matrix.shape[0]
+    k = min(k, n_recipes - 1)
+
+    candidates = {}
+    dmat = distance_matrix.copy()
+    np.fill_diagonal(dmat, np.inf)
+
+    for i in range(n_recipes):
+        nearest_k = np.argpartition(dmat[i], k)[:k]
+        candidates[i] = nearest_k
+
+    return candidates
+
+
+def emd_matrix_constrained(
+    volume_matrix: np.ndarray,
+    cost_matrix: np.ndarray,
+    candidates: dict[int, np.ndarray],
+    return_plans: bool = False,
+) -> tuple[np.ndarray, dict] | np.ndarray:
+    """
+    Compute EMD only for candidate pairs, not the full O(N²) matrix.
+
+    This provides significant speedup when only a subset of pairs need
+    to be computed (e.g., top-k candidates from Manhattan pre-filtering).
+    Non-candidate pairs are left as infinity in the distance matrix.
+
+    Parameters
+    ----------
+    volume_matrix : np.ndarray or sparse matrix
+        Recipe-by-ingredient volume matrix of shape (n_recipes, n_ingredients).
+    cost_matrix : np.ndarray
+        Ingredient-by-ingredient cost matrix of shape (n_ingredients, n_ingredients).
+    candidates : dict[int, np.ndarray]
+        Mapping from recipe index to array of candidate neighbor indices.
+    return_plans : bool, optional
+        If True, also return transport plans for computed pairs (default: False).
+
+    Returns
+    -------
+    emd_mat : np.ndarray
+        Recipe-by-recipe distance matrix. Non-candidate pairs have value inf.
+    plans : dict, optional
+        If return_plans is True, dict mapping (i, j) with i < j to transport plans.
+    """
+    from scipy import sparse as sp
+
+    n_recipes = volume_matrix.shape[0]
+    is_sparse = sp.issparse(volume_matrix)
+    emd_dtype = cost_matrix.dtype
+
+    # Initialize with inf (unknown distances), 0 on diagonal
+    emd_mat = np.full((n_recipes, n_recipes), np.inf, dtype=emd_dtype)
+    np.fill_diagonal(emd_mat, 0.0)
+
+    # Precompute supports
+    if is_sparse:
+        supports = [volume_matrix.getrow(i).indices for i in range(n_recipes)]
+    else:
+        supports = [np.nonzero(volume_matrix[i] > 0)[0] for i in range(n_recipes)]
+
+    plans = {} if return_plans else None
+    pairs_computed = set()
+
+    for i, neighbor_indices in candidates.items():
+        for j in neighbor_indices:
+            j = int(j)
+            # Canonical ordering to avoid duplicate computation
+            pair = (min(i, j), max(i, j))
+            if pair in pairs_computed or i == j:
+                continue
+            pairs_computed.add(pair)
+
+            union_idx = np.union1d(supports[i], supports[j])
+            row_i = volume_matrix.getrow(i) if is_sparse else volume_matrix[i]
+            row_j = volume_matrix.getrow(j) if is_sparse else volume_matrix[j]
+
+            if return_plans:
+                distance, plan = compute_emd(
+                    row_i, row_j, cost_matrix,
+                    return_plan=True, support_idx=union_idx
+                )
+                plans[pair] = plan
+            else:
+                distance = compute_emd(
+                    row_i, row_j, cost_matrix,
+                    return_plan=False, support_idx=union_idx
+                )
+
+            emd_mat[i, j] = emd_dtype.type(distance)
+            emd_mat[j, i] = emd_dtype.type(distance)
+
+    if return_plans:
+        return emd_mat, plans
+    return emd_mat
+
+
 def knn_matrix(
     distance_matrix: np.ndarray,
     k: int,

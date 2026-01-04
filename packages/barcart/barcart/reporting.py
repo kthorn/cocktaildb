@@ -74,3 +74,126 @@ def report_neighbors(
             )
 
     return pd.DataFrame.from_records(records)
+
+
+def build_recipe_similarity(
+    distance_matrix: np.ndarray,
+    plans: dict[tuple[int, int], list[tuple[int, int, float, float]]],
+    recipe_registry: "Registry",
+    ingredient_registry: "Registry",
+    k: int = 4,
+    plan_topk: int = 3,
+    candidate_pairs: set[tuple[int, int]] | None = None,
+) -> list[dict[str, object]]:
+    """Build recipe similarity entries with transport plan summaries."""
+    recipe_registry.validate_matrix(distance_matrix)
+
+    n_recipes = distance_matrix.shape[0]
+    k = min(k, max(0, n_recipes - 1))
+    nn_idx = None
+    nn_dist = None
+
+    if k > 0 and candidate_pairs is None:
+        dmat = distance_matrix.copy()
+        np.fill_diagonal(dmat, np.inf)
+        nn_idx = np.argsort(dmat, axis=1)[:, :k]
+        nn_dist = np.take_along_axis(dmat, nn_idx, axis=1)
+
+    candidate_neighbors = None
+    if candidate_pairs is not None:
+        candidate_neighbors = {idx: [] for idx in range(n_recipes)}
+        for i, j in candidate_pairs:
+            candidate_neighbors[int(i)].append(int(j))
+            candidate_neighbors[int(j)].append(int(i))
+
+    results: list[dict[str, object]] = []
+    for idx in range(n_recipes):
+        recipe_id = int(recipe_registry.get_id(index=idx))
+        recipe_name = recipe_registry.get_name(index=idx)
+        neighbors: list[dict[str, object]] = []
+
+        if k > 0 and candidate_neighbors is not None:
+            neighbor_candidates = candidate_neighbors.get(idx, [])
+            if neighbor_candidates:
+                candidate_distances = [
+                    (neighbor_idx, float(distance_matrix[idx, neighbor_idx]))
+                    for neighbor_idx in neighbor_candidates
+                ]
+                candidate_distances.sort(key=lambda item: item[1])
+                selected = candidate_distances[:k]
+                for neighbor_idx, dist in selected:
+                    neighbor_id = int(recipe_registry.get_id(index=neighbor_idx))
+                    neighbor_name = recipe_registry.get_name(index=neighbor_idx)
+                    i, j = (
+                        (idx, neighbor_idx)
+                        if idx < neighbor_idx
+                        else (neighbor_idx, idx)
+                    )
+                    plan = plans.get((i, j), [])
+                    plan_sorted = sorted(
+                        plan, key=lambda item: item[2], reverse=True
+                    )[:plan_topk]
+                    transport_plan = [
+                        {
+                            "from_ingredient_id": int(
+                                ingredient_registry.get_id(index=int(from_idx))
+                            ),
+                            "to_ingredient_id": int(
+                                ingredient_registry.get_id(index=int(to_idx))
+                            ),
+                            "mass": float(amount),
+                        }
+                        for from_idx, to_idx, amount, _ in plan_sorted
+                    ]
+
+                    neighbors.append(
+                        {
+                            "neighbor_recipe_id": neighbor_id,
+                            "neighbor_name": neighbor_name,
+                            "distance": float(dist),
+                            "transport_plan": transport_plan,
+                        }
+                    )
+        elif k > 0 and nn_idx is not None and nn_dist is not None:
+            for neighbor_idx, dist in zip(nn_idx[idx], nn_dist[idx], strict=False):
+                neighbor_idx = int(neighbor_idx)
+                neighbor_id = int(recipe_registry.get_id(index=neighbor_idx))
+                neighbor_name = recipe_registry.get_name(index=neighbor_idx)
+                i, j = (
+                    (idx, neighbor_idx) if idx < neighbor_idx else (neighbor_idx, idx)
+                )
+                plan = plans.get((i, j), [])
+                plan_sorted = sorted(
+                    plan, key=lambda item: item[2], reverse=True
+                )[:plan_topk]
+                transport_plan = [
+                    {
+                        "from_ingredient_id": int(
+                            ingredient_registry.get_id(index=int(from_idx))
+                        ),
+                        "to_ingredient_id": int(
+                            ingredient_registry.get_id(index=int(to_idx))
+                        ),
+                        "mass": float(amount),
+                    }
+                    for from_idx, to_idx, amount, _ in plan_sorted
+                ]
+
+                neighbors.append(
+                    {
+                        "neighbor_recipe_id": neighbor_id,
+                        "neighbor_name": neighbor_name,
+                        "distance": float(dist),
+                        "transport_plan": transport_plan,
+                    }
+                )
+
+        results.append(
+            {
+                "recipe_id": recipe_id,
+                "recipe_name": recipe_name,
+                "neighbors": neighbors,
+            }
+        )
+
+    return results

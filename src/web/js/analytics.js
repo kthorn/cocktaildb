@@ -590,7 +590,7 @@ async function handleRecipeClick(recipeId, recipeName) {
         modalBody.appendChild(recipeCard);
 
         // Set up link to full recipe page
-        modalLink.href = `/recipe.html?name=${encodeURIComponent(recipeName)}`;
+        modalLink.href = `/recipe.html?id=${encodeURIComponent(recipeId)}`;
 
     } catch (error) {
         console.error('Error loading recipe:', error);

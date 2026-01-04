@@ -14,10 +14,13 @@ from barcart.distance import (
     build_recipe_volume_matrix,
     compute_emd,
     compute_umap_embedding,
+    emd_candidates,
     emd_matrix,
+    emd_matrix_constrained,
     expected_ingredient_match_matrix,
     knn_matrix,
     m_step_blosum,
+    manhattan_candidates,
     neighbor_weight_matrix,
     weighted_distance,
 )
@@ -39,6 +42,10 @@ __all__ = [
     "build_recipe_volume_matrix",
     "compute_emd",
     "emd_matrix",
+    "emd_matrix_constrained",
+    # Candidate selection for constrained EM
+    "manhattan_candidates",
+    "emd_candidates",
     # Neighborhood analysis
     "knn_matrix",
     "report_neighbors",

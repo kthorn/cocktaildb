@@ -35,10 +35,7 @@ def get_em_ingredient_distance_matrix_path(storage_path: str) -> Path:
     )
 
 
-def save_em_ingredient_distance_matrix(
-    storage_path: str,
-    distance_matrix: Any,
-) -> Path:
+def save_em_ingredient_distance_matrix(storage_path: str, distance_matrix: Any) -> Path:
     """Persist the EM ingredient distance matrix to analytics storage."""
     import numpy as np
 
