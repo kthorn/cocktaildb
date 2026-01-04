@@ -477,8 +477,9 @@ class CocktailAPI {
         return this._request(url, 'GET', null, false);
     }
 
-    async getRecipeSimilar(recipeId) {
-        const url = `/analytics/recipe-similar?recipe_id=${recipeId}`;
+    async getRecipeSimilar(recipeId, limit = 5) {
+        const params = new URLSearchParams({ recipe_id: recipeId, limit });
+        const url = `/analytics/recipe-similar?${params.toString()}`;
         return this._request(url, 'GET', null, false);
     }
 

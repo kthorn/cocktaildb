@@ -158,6 +158,7 @@ async def get_cocktail_space_em_analytics(
 @router.get("/recipe-similar")
 async def get_recipe_similar(
     recipe_id: int = Query(..., description="Recipe ID to fetch similar cocktails for"),
+    limit: int = Query(5, ge=1, description="Number of similar cocktails to return"),
     user: Optional[UserInfo] = Depends(get_current_user_optional),
 ):
     """Get similar cocktails for a recipe from stored analytics."""
@@ -188,7 +189,17 @@ async def get_recipe_similar(
                 detail=f"recipe_id={recipe_id}",
             )
 
-        return entry
+        neighbors = entry.get("neighbors", [])
+        if isinstance(neighbors, list):
+            neighbors = sorted(
+                neighbors,
+                key=lambda neighbor: neighbor.get("distance", float("inf")),
+            )[:limit]
+
+        return {
+            **entry,
+            "neighbors": neighbors,
+        }
     except NotFoundException:
         raise
     except Exception as e:
