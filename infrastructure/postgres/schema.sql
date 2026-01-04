@@ -102,6 +102,15 @@ INSERT INTO analytics_refresh_state (id, dirty_at, last_run_at)
 VALUES (1, NULL, NULL)
 ON CONFLICT (id) DO NOTHING;
 
+CREATE TABLE recipe_similarity (
+  recipe_id INTEGER PRIMARY KEY REFERENCES recipes(id) ON DELETE CASCADE,
+  recipe_name TEXT NOT NULL,
+  neighbors JSONB NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE recipe_similarity IS 'Pre-computed similar cocktails from EM distance analysis';
+
 -- Create indexes for better performance
 CREATE INDEX idx_ingredients_parent_id ON ingredients(parent_id);
 CREATE INDEX idx_ingredients_path ON ingredients(path);

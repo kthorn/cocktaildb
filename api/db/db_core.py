@@ -2832,3 +2832,89 @@ class Database:
             raise
 
     # --- End Count Methods ---
+
+    # --- Recipe Similarity Methods ---
+
+    def get_recipe_similarity(self, recipe_id: int) -> Optional[Dict[str, Any]]:
+        """Get pre-computed similar recipes for a given recipe_id"""
+        try:
+            result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    """
+                    SELECT recipe_id, recipe_name, neighbors
+                    FROM recipe_similarity
+                    WHERE recipe_id = %(recipe_id)s
+                    """,
+                    {"recipe_id": recipe_id},
+                ),
+            )
+            if not result:
+                return None
+            row = result[0]
+            # neighbors is already a Python dict/list from JSONB
+            return {
+                "recipe_id": row["recipe_id"],
+                "recipe_name": row["recipe_name"],
+                "neighbors": row["neighbors"],
+            }
+        except Exception as e:
+            logger.error(f"Error getting recipe similarity for {recipe_id}: {str(e)}")
+            raise
+
+    def upsert_recipe_similarity_batch(
+        self, similarities: List[Dict[str, Any]]
+    ) -> int:
+        """
+        Batch upsert recipe similarities during analytics refresh.
+
+        Args:
+            similarities: List of dicts with recipe_id, recipe_name, neighbors
+
+        Returns:
+            Number of rows upserted
+        """
+        if not similarities:
+            return 0
+
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+
+            # Use INSERT ... ON CONFLICT for upsert
+            upsert_sql = """
+                INSERT INTO recipe_similarity (recipe_id, recipe_name, neighbors, created_at)
+                VALUES (%(recipe_id)s, %(recipe_name)s, %(neighbors)s, CURRENT_TIMESTAMP)
+                ON CONFLICT (recipe_id) DO UPDATE SET
+                    recipe_name = EXCLUDED.recipe_name,
+                    neighbors = EXCLUDED.neighbors,
+                    created_at = CURRENT_TIMESTAMP
+            """
+
+            count = 0
+            for item in similarities:
+                cursor.execute(
+                    upsert_sql,
+                    {
+                        "recipe_id": item["recipe_id"],
+                        "recipe_name": item["recipe_name"],
+                        "neighbors": json.dumps(item["neighbors"]),
+                    },
+                )
+                count += 1
+
+            conn.commit()
+            logger.info(f"Upserted {count} recipe similarities")
+            return count
+
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            logger.error(f"Error upserting recipe similarities: {str(e)}")
+            raise
+        finally:
+            if conn:
+                self._return_connection(conn)
+
+    # --- End Recipe Similarity Methods ---

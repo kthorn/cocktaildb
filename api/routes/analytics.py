@@ -159,37 +159,19 @@ async def get_cocktail_space_em_analytics(
 async def get_recipe_similar(
     recipe_id: int = Query(..., description="Recipe ID to fetch similar cocktails for"),
     limit: int = Query(5, ge=1, description="Number of similar cocktails to return"),
+    db: Database = Depends(get_db),
     user: Optional[UserInfo] = Depends(get_current_user_optional),
 ):
-    """Get similar cocktails for a recipe from stored analytics."""
+    """Get similar cocktails for a recipe from PostgreSQL."""
     try:
-        storage_key = "recipe-similar"
-
-        if not storage_manager:
-            raise NotFoundException("Similar recipe analytics not available")
-
-        stored_data = storage_manager.get_analytics(storage_key)
-        if not stored_data or "data" not in stored_data:
-            raise NotFoundException(
-                "Similar recipe analytics not generated",
-                detail=f"{storage_key} data not found in storage",
-            )
-
-        entry = next(
-            (
-                item
-                for item in stored_data["data"]
-                if int(item.get("recipe_id", -1)) == recipe_id
-            ),
-            None,
-        )
-        if not entry:
+        result = db.get_recipe_similarity(recipe_id)
+        if not result:
             raise NotFoundException(
                 "Similar recipe analytics missing for recipe",
                 detail=f"recipe_id={recipe_id}",
             )
 
-        neighbors = entry.get("neighbors", [])
+        neighbors = result.get("neighbors", [])
         if isinstance(neighbors, list):
             neighbors = sorted(
                 neighbors,
@@ -197,7 +179,8 @@ async def get_recipe_similar(
             )[:limit]
 
         return {
-            **entry,
+            "recipe_id": result["recipe_id"],
+            "recipe_name": result["recipe_name"],
             "neighbors": neighbors,
         }
     except NotFoundException:

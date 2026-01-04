@@ -140,7 +140,8 @@ def regenerate_analytics() -> Dict[str, Any]:
         candidate_k=candidate_k,
     )
     storage.put_analytics("cocktail-space-em", cocktail_space_em)
-    storage.put_analytics("recipe-similar", recipe_similarity)
+    # Store recipe similarity in PostgreSQL for fast indexed lookups
+    db.upsert_recipe_similarity_batch(recipe_similarity)
     cocktail_space_em_count = len(cocktail_space_em)
     del cocktail_space_em
     del recipe_similarity
