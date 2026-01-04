@@ -3,7 +3,7 @@
 #
 # This file extends the main requirements.txt with test-specific dependencies
 
--r requirements.txt
+-r api/requirements.txt
 
 # Test frameworks (some already in requirements.txt, listed here for clarity)
 pytest>=7.4.3
