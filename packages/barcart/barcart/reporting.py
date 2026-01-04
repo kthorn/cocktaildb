@@ -124,22 +124,33 @@ def build_recipe_similarity(
                 for neighbor_idx, dist in selected:
                     neighbor_id = int(recipe_registry.get_id(index=neighbor_idx))
                     neighbor_name = recipe_registry.get_name(index=neighbor_idx)
+                    # Plans are stored for (i, j) where i < j
+                    # If idx > neighbor_idx, from/to are reversed relative to current recipe
+                    swap_direction = idx > neighbor_idx
                     i, j = (
                         (idx, neighbor_idx)
                         if idx < neighbor_idx
                         else (neighbor_idx, idx)
                     )
                     plan = plans.get((i, j), [])
+                    # Filter out self-transport (same ingredient to same ingredient)
+                    plan_filtered = [p for p in plan if p[0] != p[1]]
                     plan_sorted = sorted(
-                        plan, key=lambda item: item[2], reverse=True
+                        plan_filtered, key=lambda item: item[2], reverse=True
                     )[:plan_topk]
                     transport_plan = [
                         {
                             "from_ingredient_id": int(
-                                ingredient_registry.get_id(index=int(from_idx))
+                                ingredient_registry.get_id(index=int(to_idx if swap_direction else from_idx))
+                            ),
+                            "from_ingredient_name": ingredient_registry.get_name(
+                                index=int(to_idx if swap_direction else from_idx)
                             ),
                             "to_ingredient_id": int(
-                                ingredient_registry.get_id(index=int(to_idx))
+                                ingredient_registry.get_id(index=int(from_idx if swap_direction else to_idx))
+                            ),
+                            "to_ingredient_name": ingredient_registry.get_name(
+                                index=int(from_idx if swap_direction else to_idx)
                             ),
                             "mass": float(amount),
                         }
@@ -159,20 +170,31 @@ def build_recipe_similarity(
                 neighbor_idx = int(neighbor_idx)
                 neighbor_id = int(recipe_registry.get_id(index=neighbor_idx))
                 neighbor_name = recipe_registry.get_name(index=neighbor_idx)
+                # Plans are stored for (i, j) where i < j
+                # If idx > neighbor_idx, from/to are reversed relative to current recipe
+                swap_direction = idx > neighbor_idx
                 i, j = (
                     (idx, neighbor_idx) if idx < neighbor_idx else (neighbor_idx, idx)
                 )
                 plan = plans.get((i, j), [])
+                # Filter out self-transport (same ingredient to same ingredient)
+                plan_filtered = [p for p in plan if p[0] != p[1]]
                 plan_sorted = sorted(
-                    plan, key=lambda item: item[2], reverse=True
+                    plan_filtered, key=lambda item: item[2], reverse=True
                 )[:plan_topk]
                 transport_plan = [
                     {
                         "from_ingredient_id": int(
-                            ingredient_registry.get_id(index=int(from_idx))
+                            ingredient_registry.get_id(index=int(to_idx if swap_direction else from_idx))
+                        ),
+                        "from_ingredient_name": ingredient_registry.get_name(
+                            index=int(to_idx if swap_direction else from_idx)
                         ),
                         "to_ingredient_id": int(
-                            ingredient_registry.get_id(index=int(to_idx))
+                            ingredient_registry.get_id(index=int(from_idx if swap_direction else to_idx))
+                        ),
+                        "to_ingredient_name": ingredient_registry.get_name(
+                            index=int(from_idx if swap_direction else to_idx)
                         ),
                         "mass": float(amount),
                     }
