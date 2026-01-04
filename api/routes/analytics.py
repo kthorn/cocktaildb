@@ -3,14 +3,14 @@
 import logging
 import os
 from typing import Optional
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import FileResponse
 
 from dependencies.auth import UserInfo, get_current_user_optional
 from db.database import get_database as get_db
 from db.db_core import Database
 from db.db_analytics import AnalyticsQueries
-from core.exceptions import DatabaseException
+from core.exceptions import DatabaseException, NotFoundException
 from utils.analytics_cache import AnalyticsStorage
 from utils.analytics_files import get_em_distance_matrix_path
 
@@ -153,6 +153,47 @@ async def get_cocktail_space_em_analytics(
     except Exception as e:
         logger.error(f"Error getting EM cocktail space analytics: {str(e)}")
         raise DatabaseException("Failed to retrieve EM cocktail space analytics", detail=str(e))
+
+
+@router.get("/recipe-similar")
+async def get_recipe_similar(
+    recipe_id: int = Query(..., description="Recipe ID to fetch similar cocktails for"),
+    user: Optional[UserInfo] = Depends(get_current_user_optional),
+):
+    """Get similar cocktails for a recipe from stored analytics."""
+    try:
+        storage_key = "recipe-similar"
+
+        if not storage_manager:
+            raise NotFoundException("Similar recipe analytics not available")
+
+        stored_data = storage_manager.get_analytics(storage_key)
+        if not stored_data or "data" not in stored_data:
+            raise NotFoundException(
+                "Similar recipe analytics not generated",
+                detail=f"{storage_key} data not found in storage",
+            )
+
+        entry = next(
+            (
+                item
+                for item in stored_data["data"]
+                if int(item.get("recipe_id", -1)) == recipe_id
+            ),
+            None,
+        )
+        if not entry:
+            raise NotFoundException(
+                "Similar recipe analytics missing for recipe",
+                detail=f"recipe_id={recipe_id}",
+            )
+
+        return entry
+    except NotFoundException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting similar recipes: {str(e)}")
+        raise DatabaseException("Failed to retrieve similar recipes", detail=str(e))
 
 
 @router.get("/ingredient-tree")

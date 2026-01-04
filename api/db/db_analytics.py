@@ -549,14 +549,42 @@ class AnalyticsQueries:
 
             # Step 6: Run EM fit
             logger.info("Running EM fit (this may take several minutes)")
-            final_dist, final_cost, log = em_fit(
-                volume_matrix,
-                cost_matrix,
-                len(ingredient_registry),
-                iters=5,
-                candidate_k=candidate_k,
-            )
-            logger.info(f"EM fit complete. Max distance: {np.max(final_dist):.4f}")
+            if return_similarity:
+                final_dist, final_cost, log, final_plans = em_fit(
+                    volume_matrix,
+                    cost_matrix,
+                    len(ingredient_registry),
+                    iters=5,
+                    candidate_k=candidate_k,
+                    return_plans=True,
+                )
+            else:
+                final_dist, final_cost, log = em_fit(
+                    volume_matrix,
+                    cost_matrix,
+                    len(ingredient_registry),
+                    iters=5,
+                    candidate_k=candidate_k,
+                    return_plans=False,
+                )
+            max_distance = np.max(final_dist)
+            logger.info(f"EM fit complete. Max distance: {max_distance:.4f}")
+            finite_mask = np.isfinite(final_dist)
+            if not finite_mask.all():
+                if finite_mask.any():
+                    max_finite = float(np.max(final_dist[finite_mask]))
+                else:
+                    max_finite = 0.0
+                replacement = float(max_finite * 2.0)
+                logger.warning(
+                    "Replacing %s non-finite EM distances with %.4f",
+                    int((~finite_mask).sum()),
+                    replacement,
+                )
+                final_dist = final_dist.copy()
+                final_dist[~finite_mask] = replacement
+                if final_dist.dtype != np.float32:
+                    final_dist = final_dist.astype(np.float32, copy=False)
             storage_path = os.environ.get("ANALYTICS_PATH")
             if storage_path:
                 save_em_distance_matrix(storage_path, final_dist)
@@ -646,19 +674,16 @@ class AnalyticsQueries:
 
             logger.info(f"EM-based UMAP computation complete: {len(result)} recipes")
             if return_similarity:
-                logger.info("Computing recipe similarity artifacts")
-                distance_for_similarity, plans = emd_matrix(
-                    volume_matrix,
-                    final_cost,
-                    return_plans=True,
-                )
+                logger.info("Computing recipe similarity artifacts from EM plans")
+                candidate_pairs = set(final_plans.keys()) if final_plans else set()
                 recipe_similarity = build_recipe_similarity(
-                    distance_for_similarity,
-                    plans,
+                    final_dist,
+                    final_plans or {},
                     recipe_registry,
                     ingredient_registry,
-                    k=4,
+                    k=4 if candidate_k is None else candidate_k,
                     plan_topk=3,
+                    candidate_pairs=candidate_pairs if candidate_pairs else None,
                 )
                 return result, recipe_similarity
 

@@ -67,7 +67,8 @@ def em_fit(
     verbose: bool = False,
     n_jobs: int | None = None,
     candidate_k: int | None = 100,
-) -> tuple[np.ndarray, np.ndarray, dict]:
+    return_plans: bool = False,
+) -> tuple[np.ndarray, np.ndarray, dict] | tuple[np.ndarray, np.ndarray, dict, dict]:
     """
     Run EM iterations to learn ingredient cost matrix from recipe data.
 
@@ -113,6 +114,8 @@ def em_fit(
         Learned ingredient-by-ingredient cost matrix of shape (n_ingredients, n_ingredients).
     log : dict
         Dictionary containing convergence history with key 'delta' (list of relative changes).
+    plans : dict
+        Transport plans from the final E-step, only returned if return_plans is True.
 
     Notes
     -----
@@ -173,6 +176,7 @@ def em_fit(
     outer_bar = tqdm(
         range(iters), disable=not verbose, desc="EM fit", position=0, leave=False
     )
+    last_plans = None
     for t in outer_bar:
         # Show only outer loop progress (convergence), not inner loop (recipe pairs)
         logger.info("EM iter %s RSS before E-step: %.1f MB", t + 1, _rss_mb())
@@ -230,8 +234,12 @@ def em_fit(
         new_cost_matrix = m_step_blosum(T_sum)
         new_cost_matrix = new_cost_matrix.astype(np.float32, copy=False)
 
+        if return_plans:
+            last_plans = plans
+
         # Free plans memory before next iteration
-        del plans
+        if not return_plans:
+            del plans
         del T_sum
         import gc
         gc.collect()
@@ -252,4 +260,6 @@ def em_fit(
                 print("Converged.")
             break
 
+    if return_plans:
+        return distance_matrix, new_cost_matrix, log, (last_plans or {})
     return distance_matrix, new_cost_matrix, log

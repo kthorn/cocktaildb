@@ -62,12 +62,20 @@ function formatAmount(amount) {
  * @param {Object} recipe - Recipe data
  * @param {boolean} showActions - Whether to show edit/delete buttons
  * @param {Function} onRecipeDeleted - Callback when recipe is deleted
+ * @param {Object} options - Optional behavior flags
+ * @param {boolean} options.showSimilar - Whether to load similar cocktails
  * @returns {HTMLElement} The recipe card element
  */
-export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = null) {
+export function createRecipeCard(
+    recipe,
+    showActions = true,
+    onRecipeDeleted = null,
+    options = {}
+) {
     const card = document.createElement('div');
     card.className = 'recipe-card';
     card.dataset.id = recipe.id; // Add recipe ID to card for easier refresh
+    const showSimilar = options.showSimilar === true;
     
     // Only show action buttons if user is an editor/admin and showActions is true
     const shouldShowActions = showActions && api.isEditor();
@@ -157,8 +165,14 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
             <p>${recipe.source_url ? `<a href="${recipe.source_url}" target="_blank" rel="noopener noreferrer">${recipe.source || recipe.source_url}</a>` : recipe.source}</p>
         </div>
         ` : ''}
+        ${showSimilar ? `
+        <div class="similar-cocktails" data-recipe-id="${recipe.id}">
+            <h5>Similar Cocktails</h5>
+            <div class="similar-loading">Loading similar cocktails...</div>
+        </div>
+        ` : ''}
         <div class="card-actions">
-            <button class="share-recipe-btn" data-recipe-name="${encodeURIComponent(recipe.name)}" title="Share recipe link" style="font-size: 0.8em; padding: 4px 8px;">🔗</button>
+            <button class="share-recipe-btn" data-recipe-name="${encodeURIComponent(recipe.name)}" data-recipe-id="${recipe.id}" title="Share recipe link" style="font-size: 0.8em; padding: 4px 8px;">🔗</button>
             ${shouldShowActions ? `
             <button class="edit-recipe" data-id="${recipe.id}">Edit</button>
             <button class="delete-recipe" data-id="${recipe.id}">Delete</button>
@@ -244,12 +258,15 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
     const shareBtn = card.querySelector('.share-recipe-btn');
     if (shareBtn) {
         shareBtn.addEventListener('click', async () => {
-            await handleShareRecipe(recipe.name);
+            await handleShareRecipe(recipe.name, recipe.id);
         });
     }
 
     // Add hover functionality for ingredient hierarchy
     setupIngredientHover(card, recipe);
+    if (showSimilar && recipe.id) {
+        loadSimilarCocktails(card, recipe.id);
+    }
 
     return card;
 }
@@ -257,10 +274,13 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
 /**
  * Handle sharing a recipe by copying the search URL to clipboard
  * @param {string} recipeName - The name of the recipe to share
+ * @param {number} recipeId - The ID of the recipe to share
  */
-async function handleShareRecipe(recipeName) {
+async function handleShareRecipe(recipeName, recipeId) {
     try {
-        const shareUrl = `${window.location.origin}/recipe.html?name=${encodeURIComponent(recipeName)}`;
+        const shareUrl = recipeId
+            ? `${window.location.origin}/recipe.html?id=${encodeURIComponent(recipeId)}`
+            : `${window.location.origin}/recipe.html?name=${encodeURIComponent(recipeName)}`;
 
         // Try to copy to clipboard
         if (navigator.clipboard && window.isSecureContext) {
@@ -284,6 +304,51 @@ async function handleShareRecipe(recipeName) {
     } catch (error) {
         console.error('Error copying to clipboard:', error);
         showShareFeedback('Failed to copy link. Please try again.');
+    }
+}
+
+async function loadSimilarCocktails(card, recipeId) {
+    const container = card.querySelector('.similar-cocktails');
+    if (!container) {
+        return;
+    }
+
+    try {
+        const similar = await api.getRecipeSimilar(recipeId);
+        const neighbors = similar && Array.isArray(similar.neighbors)
+            ? similar.neighbors
+            : [];
+
+        if (neighbors.length === 0) {
+            container.remove();
+            return;
+        }
+
+        const listItems = neighbors.map((neighbor) => {
+            const distance = typeof neighbor.distance === 'number'
+                ? neighbor.distance.toFixed(3)
+                : String(neighbor.distance);
+            return `
+                <li>
+                    <a href="recipe.html?id=${neighbor.neighbor_recipe_id}">${neighbor.neighbor_name}</a>
+                    <span class="similar-distance">${distance}</span>
+                </li>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <h5>Similar Cocktails</h5>
+            <ul class="similar-list">
+                ${listItems}
+            </ul>
+        `;
+    } catch (error) {
+        if (error && error.message && error.message.includes('Resource not found')) {
+            console.log('No similar cocktails found for recipe', recipeId);
+        } else {
+            console.error('Error loading similar cocktails:', error);
+        }
+        container.remove();
     }
 }
 
