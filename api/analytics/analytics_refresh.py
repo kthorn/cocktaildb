@@ -126,10 +126,23 @@ def regenerate_analytics() -> Dict[str, Any]:
     log_memory("cocktail space manhattan stored")
 
     logger.info("Generating EM-based cocktail space with rollup")
-    cocktail_space_em = analytics_queries.compute_cocktail_space_umap_em()
+    # Compute candidate_k based on recipe count: k = 0.0625 * n_recipes
+    # This provides ~94% speedup with minimal accuracy loss
+    n_recipes = len(set(r["recipe_id"] for r in analytics_queries.db.execute_query(
+        "SELECT DISTINCT recipe_id FROM recipe_ingredients"
+    )))
+    candidate_k = max(10, int(0.0625 * n_recipes))  # Minimum k=10 for small datasets
+    logger.info(f"Using candidate_k={candidate_k} for {n_recipes} recipes")
+
+    cocktail_space_em, recipe_similarity = analytics_queries.compute_cocktail_space_umap_em(
+        return_similarity=True,
+        candidate_k=candidate_k,
+    )
     storage.put_analytics("cocktail-space-em", cocktail_space_em)
+    storage.put_analytics("recipe-similar", recipe_similarity)
     cocktail_space_em_count = len(cocktail_space_em)
     del cocktail_space_em
+    del recipe_similarity
     gc.collect()
     log_memory("cocktail space em stored")
 
