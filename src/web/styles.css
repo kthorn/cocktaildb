@@ -682,6 +682,20 @@ section, .card-container {
     flex-shrink: 0;
 }
 
+.recipe-card-compact-link {
+    cursor: pointer;
+}
+
+.recipe-card-cta {
+    margin-top: var(--space-sm);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-align: right;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--accent-color);
+}
+
 /* Recipe card components
    ========================================================================== */
 

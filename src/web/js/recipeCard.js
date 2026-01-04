@@ -74,12 +74,15 @@ export function createRecipeCard(
     onRecipeDeleted = null,
     options = {}
 ) {
-    const card = document.createElement('div');
-    card.className = 'recipe-card';
-    card.dataset.id = recipe.id; // Add recipe ID to card for easier refresh
     const showSimilar = options.showSimilar === true;
     const useCompactLayout = options.compact === true;
     const linkCard = options.linkCard === true;
+    const card = document.createElement('div');
+    card.className = 'recipe-card';
+    card.dataset.id = recipe.id; // Add recipe ID to card for easier refresh
+    if (useCompactLayout && linkCard) {
+        card.classList.add('recipe-card-compact-link');
+    }
     
     // Only show action buttons if user is an editor/admin and showActions is true
     const shouldShowActions = showActions && api.isEditor();
@@ -176,6 +179,9 @@ export function createRecipeCard(
             <h5>Similar Cocktails</h5>
             <div class="similar-loading">Loading similar cocktails...</div>
         </div>
+        ` : ''}
+        ${useCompactLayout && linkCard ? `
+        <div class="recipe-card-cta">Click for details</div>
         ` : ''}
         <div class="card-actions">
             <button class="share-recipe-btn" data-recipe-name="${encodeURIComponent(recipe.name)}" data-recipe-id="${recipe.id}" title="Share recipe link" style="font-size: 0.8em; padding: 4px 8px;">🔗</button>
