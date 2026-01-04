@@ -220,11 +220,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Display results
                 if (reset) {
-                    displayRecipes(allSearchResults, searchResultsContainer, true);
+                    displayRecipes(
+                        allSearchResults,
+                        searchResultsContainer,
+                        true,
+                        null,
+                        { compact: true, linkCard: true }
+                    );
                 } else {
                     // Append new results using consistent displayRecipes approach
                     const tempContainer = document.createElement('div');
-                    displayRecipes(result.recipes, tempContainer, true);
+                    displayRecipes(
+                        result.recipes,
+                        tempContainer,
+                        true,
+                        null,
+                        { compact: true, linkCard: true }
+                    );
                     Array.from(tempContainer.children).forEach(card => {
                         searchResultsContainer.appendChild(card);
                     });

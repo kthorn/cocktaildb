@@ -64,6 +64,8 @@ function formatAmount(amount) {
  * @param {Function} onRecipeDeleted - Callback when recipe is deleted
  * @param {Object} options - Optional behavior flags
  * @param {boolean} options.showSimilar - Whether to load similar cocktails
+ * @param {boolean} options.compact - Whether to use a compact display
+ * @param {boolean} options.linkCard - Whether clicking the card navigates to the full recipe page
  * @returns {HTMLElement} The recipe card element
  */
 export function createRecipeCard(
@@ -76,6 +78,8 @@ export function createRecipeCard(
     card.className = 'recipe-card';
     card.dataset.id = recipe.id; // Add recipe ID to card for easier refresh
     const showSimilar = options.showSimilar === true;
+    const useCompactLayout = options.compact === true;
+    const linkCard = options.linkCard === true;
     
     // Only show action buttons if user is an editor/admin and showActions is true
     const shouldShowActions = showActions && api.isEditor();
@@ -155,6 +159,7 @@ export function createRecipeCard(
                 }).join('')}
             </ul>
         </div>
+        ${useCompactLayout ? '' : `
         <div class="instructions">
             <h5>Instructions</h5>
             <p>${recipe.instructions}</p>
@@ -165,6 +170,7 @@ export function createRecipeCard(
             <p>${recipe.source_url ? `<a href="${recipe.source_url}" target="_blank" rel="noopener noreferrer">${recipe.source || recipe.source_url}</a>` : recipe.source}</p>
         </div>
         ` : ''}
+        `}
         ${showSimilar ? `
         <div class="similar-cocktails" data-recipe-id="${recipe.id}">
             <h5>Similar Cocktails</h5>
@@ -266,6 +272,21 @@ export function createRecipeCard(
     setupIngredientHover(card, recipe);
     if (showSimilar && recipe.id) {
         loadSimilarCocktails(card, recipe.id);
+    }
+
+    if (linkCard && recipe.id) {
+        card.addEventListener('click', (event) => {
+            if (event.defaultPrevented) {
+                return;
+            }
+            const interactiveTarget = event.target.closest(
+                'a, button, input, textarea, select, .tag-chip'
+            );
+            if (interactiveTarget) {
+                return;
+            }
+            window.location.href = `recipe.html?id=${recipe.id}`;
+        });
     }
 
     return card;
@@ -520,7 +541,13 @@ async function refreshRecipeAfterRating(recipeId, ratingResponse) {
  * @param {boolean} showActions - Whether to show edit/delete buttons
  * @param {Function} onRecipeDeleted - Callback when recipe is deleted
  */
-export function displayRecipes(recipes, container, showActions = true, onRecipeDeleted = null) {
+export function displayRecipes(
+    recipes,
+    container,
+    showActions = true,
+    onRecipeDeleted = null,
+    options = {}
+) {
     container.innerHTML = '';
 
     if (!recipes || recipes.length === 0) {
@@ -529,7 +556,7 @@ export function displayRecipes(recipes, container, showActions = true, onRecipeD
     }
 
     recipes.forEach(recipe => {
-        const card = createRecipeCard(recipe, showActions, onRecipeDeleted);
+        const card = createRecipeCard(recipe, showActions, onRecipeDeleted, options);
         container.appendChild(card);
     });
 }
@@ -541,13 +568,19 @@ export function displayRecipes(recipes, container, showActions = true, onRecipeD
  * @param {boolean} showActions - Whether to show edit/delete buttons
  * @param {Function} onRecipeDeleted - Callback when recipe is deleted
  */
-export function appendRecipes(recipes, container, showActions = true, onRecipeDeleted = null) {
+export function appendRecipes(
+    recipes,
+    container,
+    showActions = true,
+    onRecipeDeleted = null,
+    options = {}
+) {
     if (!recipes || recipes.length === 0) {
         return;
     }
 
     recipes.forEach(recipe => {
-        const card = createRecipeCard(recipe, showActions, onRecipeDeleted);
+        const card = createRecipeCard(recipe, showActions, onRecipeDeleted, options);
         container.appendChild(card);
     });
 }

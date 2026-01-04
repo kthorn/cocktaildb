@@ -107,7 +107,7 @@ async function displayRecipe(index) {
         // Use the already loaded full recipe data
         const recipe = recipes[index];
         if (recipe) {
-            const recipeCard = createRecipeCard(recipe, true);
+            const recipeCard = createRecipeCard(recipe, true, null, { showSimilar: true });
             
             document.getElementById('recipe-display').innerHTML = '';
             document.getElementById('recipe-display').appendChild(recipeCard);

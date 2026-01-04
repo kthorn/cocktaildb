@@ -177,6 +177,8 @@ cython_debug/
 *.json
 src/web/js/config.js
 *.db
+*.csv
+*.gz
 
 # Git worktrees
 .worktrees/
