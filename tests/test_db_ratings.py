@@ -189,43 +189,6 @@ class TestRatingCRUD:
         result = db.get_user_rating(recipe["id"], "nonexistent_user")
         assert result is None
 
-    def test_get_recipe_ratings(self, db_instance):
-        """Test retrieving all ratings for a recipe"""
-        db = db_instance
-
-        # Create recipe
-        recipe = db.create_recipe(
-            {"name": "Popular Recipe", "instructions": "Test"}
-        )
-
-        # Create multiple ratings
-        users_and_ratings = [
-            ("user1", "User One", 5),
-            ("user2", "User Two", 3),
-            ("user3", "User Three", 4),
-        ]
-
-        for user_id, username, rating in users_and_ratings:
-            rating_data = {
-                "cognito_user_id": user_id,
-                "recipe_id": recipe["id"],
-                "rating": rating,
-            }
-            db.set_rating(rating_data)
-
-        # Get all ratings
-        result = db.get_recipe_ratings(recipe["id"])
-
-        assert len(result) == 3
-
-        # Verify all ratings are present
-        user_ids = {r["cognito_user_id"] for r in result}
-        assert user_ids == {"user1", "user2", "user3"}
-
-        ratings = {r["rating"] for r in result}
-        assert ratings == {3, 4, 5}
-
-
 class TestRatingDeletion:
     """Test rating deletion operations"""
 
@@ -486,9 +449,8 @@ class TestRatingConstraints:
         assert second_result["id"] == first_result["id"]
 
         # Verify only one rating exists
-        all_ratings = db.get_recipe_ratings(recipe["id"])
-        assert len(all_ratings) == 1
-        assert all_ratings[0]["rating"] == 5
+        recipe_data = db.get_recipe(recipe["id"])
+        assert recipe_data["rating_count"] == 1
 
     def test_rating_recipe_foreign_key(self, db_instance):
         """Test rating foreign key constraint to recipes"""

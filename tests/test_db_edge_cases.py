@@ -235,28 +235,6 @@ class TestQueryErrorHandling:
                 ("Name", "Description"),  # Missing third parameter
             )
 
-    def test_transaction_rollback_on_error(self, db_instance):
-        """Test that transactions are properly rolled back on errors"""
-        db = db_instance
-
-        # Attempt transaction with error
-        with pytest.raises(Exception):
-            db.execute_transaction(
-                [
-                    {
-                        "sql": "INSERT INTO ingredients (name, description) VALUES (%s, %s)",
-                        "parameters": ("Valid Ingredient", "Valid Description"),
-                    },
-                    {"sql": "INVALID SQL STATEMENT", "parameters": ()},
-                ]
-            )
-
-        # Verify no partial data was committed
-        ingredients = db.get_ingredients()
-        ingredient_names = {ing["name"] for ing in ingredients}
-        assert "Valid Ingredient" not in ingredient_names
-
-
 class TestEdgeCaseDataValues:
     """Test edge case data values and boundary conditions"""
 

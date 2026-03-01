@@ -178,7 +178,7 @@ class TestCascadeOperations:
         db.add_private_tag_to_recipe(recipe["id"], private_tag["id"])
 
         # Verify all associations exist
-        assert len(db.get_recipe_ratings(recipe["id"])) == 1
+        assert db.get_recipe(recipe["id"])["rating_count"] == 1
         recipe_tags = db.execute_query(
             "SELECT COUNT(*) as count FROM recipe_tags WHERE recipe_id = %s",
             (recipe["id"],),

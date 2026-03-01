@@ -93,38 +93,6 @@ class TestUnitDatabaseOperations:
         result = db.get_unit_by_abbreviation("")
         assert result is None
 
-    def test_get_unit_by_name_or_abbreviation_by_name(self, db_instance_with_data):
-        """Test getting unit by name when searching by name or abbreviation"""
-        db = db_instance_with_data
-        result = db.get_unit_by_name_or_abbreviation("ounce")
-
-        assert result is not None
-        assert result["name"] == "ounce"
-        assert result["abbreviation"] == "oz"
-
-    def test_get_unit_by_name_or_abbreviation_by_abbreviation(self, db_instance_with_data):
-        """Test getting unit by abbreviation when name doesn't match"""
-        db = db_instance_with_data
-        result = db.get_unit_by_name_or_abbreviation("oz")
-
-        assert result is not None
-        assert result["name"] == "ounce"
-        assert result["abbreviation"] == "oz"
-
-    def test_get_unit_by_name_or_abbreviation_neither_match(self, db_instance_with_data):
-        """Test getting unit when neither name nor abbreviation match"""
-        db = db_instance_with_data
-        result = db.get_unit_by_name_or_abbreviation("NonexistentUnit")
-        assert result is None
-
-    def test_get_unit_by_name_or_abbreviation_case_insensitive(self, db_instance_with_data):
-        """Test that name or abbreviation search is case insensitive"""
-        db = db_instance_with_data
-        # Test with mixed case name
-        result = db.get_unit_by_name_or_abbreviation("OuNcE")
-        assert result is not None
-        assert result["name"] == "ounce"
-
     def test_conversion_to_ml_field_present(self, db_instance_with_data):
         """Test that conversion_to_ml field is present in results"""
         db = db_instance_with_data

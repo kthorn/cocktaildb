@@ -126,30 +126,6 @@ class Database:
             if conn:
                 self._return_connection(conn)
 
-    def execute_transaction(self, queries: List[Dict[str, Any]]) -> None:
-        """Execute multiple queries in a transaction"""
-        conn = None
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-
-            for query in queries:
-                sql = query.get("sql")
-                params = query.get("parameters", {})
-                if sql is not None:
-                    cursor.execute(sql, params)
-
-            conn.commit()
-            cursor.close()
-        except Exception as e:
-            if conn:
-                conn.rollback()
-            logger.error(f"Error executing transaction: {str(e)}")
-            raise
-        finally:
-            if conn:
-                self._return_connection(conn)
-
     def create_ingredient(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new ingredient"""
         try:
@@ -902,63 +878,6 @@ class Database:
             if conn:
                 self._return_connection(conn)
 
-    def get_recipes_with_ingredients(
-        self, cognito_user_id: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """Get all recipes with their full ingredient details (for detailed views)"""
-        try:
-            # 1. Get all recipes
-            params = {"cognito_user_id": cognito_user_id}
-            recipes_result = cast(
-                List[Dict[str, Any]],
-                self.execute_query(get_all_recipes_sql, params),
-            )
-            if not recipes_result:
-                return []
-            # 2. Fetch all recipe ingredients across all recipes
-            recipe_ids = [recipe["id"] for recipe in recipes_result]
-            all_recipe_ingredients_list = cast(
-                List[Dict[str, Any]],
-                self.execute_query(
-                    get_recipe_ingredients_by_recipe_id_sql_factory(recipe_ids),
-                    tuple(recipe_ids),
-                ),
-            )
-            # 3. Identify all necessary ingredient IDs (direct + ancestors) using the helper
-            all_needed_ingredient_ids = extract_all_ingredient_ids(
-                all_recipe_ingredients_list
-            )
-            # 4. Fetch names for all needed ingredients in one query
-            ingredient_names_map = {}
-            if all_needed_ingredient_ids:
-                placeholders = ",".join("%s" for _ in all_needed_ingredient_ids)
-                names_result = cast(
-                    List[Dict[str, Any]],
-                    self.execute_query(
-                        f"SELECT id, name FROM ingredients WHERE id IN ({placeholders})",
-                        tuple(all_needed_ingredient_ids),
-                    ),
-                )
-                ingredient_names_map = {row["id"]: row["name"] for row in names_result}
-            # 5. Assemble full names using the helper method
-            assemble_ingredient_full_names(
-                all_recipe_ingredients_list, ingredient_names_map
-            )
-            # 6. Group ingredients by recipe
-            recipe_ingredients_grouped = {recipe_id: [] for recipe_id in recipe_ids}
-            for ing_data in all_recipe_ingredients_list:
-                recipe_id = ing_data["recipe_id"]
-                # Use the actual recipe_ingredient_id as 'id' for consistency if needed frontend
-                ing_data["id"] = ing_data["recipe_ingredient_id"]
-                recipe_ingredients_grouped[recipe_id].append(ing_data)
-            # 7. Combine recipes with their assembled ingredients
-            for recipe in recipes_result:
-                recipe["ingredients"] = recipe_ingredients_grouped.get(recipe["id"], [])
-            return recipes_result
-        except Exception as e:
-            logger.error(f"Error getting recipes with ingredients: {str(e)}")
-            raise
-
     def get_recipe(
         self, recipe_id: int, cognito_user_id: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
@@ -1163,13 +1082,6 @@ class Database:
             )
             raise
 
-    def get_unit_by_name_or_abbreviation(self, name: str) -> Optional[Dict[str, Any]]:
-        """Get a unit by exact name or abbreviation match (case-insensitive)"""
-        result = self.get_unit_by_name(name)
-        if result:
-            return result
-        return self.get_unit_by_abbreviation(name)
-
     def validate_units_batch(self, unit_names: List[str]) -> Dict[str, Dict[str, Any]]:
         """Batch validate units by name or abbreviation - returns mapping of names to unit data"""
         try:
@@ -1354,25 +1266,6 @@ class Database:
         finally:
             if conn:
                 self._return_connection(conn)
-
-    def get_recipe_ratings(self, recipe_id: int) -> List[Dict[str, Any]]:
-        """Get all ratings for a recipe"""
-        try:
-            result = cast(
-                List[Dict[str, Any]],
-                self.execute_query(
-                    """
-                    SELECT id, cognito_user_id, recipe_id, rating
-                    FROM ratings
-                    WHERE recipe_id = %(recipe_id)s
-                    """,
-                    {"recipe_id": recipe_id},
-                ),
-            )
-            return result
-        except Exception as e:
-            logger.error(f"Error getting ratings for recipe {recipe_id}: {str(e)}")
-            raise
 
     def get_user_rating(self, recipe_id: int, user_id: str) -> Optional[Dict[str, Any]]:
         """Get a specific user's rating for a recipe"""
@@ -1817,49 +1710,6 @@ class Database:
             )
             raise
 
-    def _get_recipe_public_tags(self, recipe_id: int) -> List[Dict[str, Any]]:
-        """Helper method to get all public tags for a specific recipe."""
-        try:
-            return cast(
-                List[Dict[str, Any]],
-                self.execute_query(
-                    """
-                    SELECT t.id, t.name
-                    FROM recipe_tags rt
-                    JOIN tags t ON rt.tag_id = t.id
-                    WHERE rt.recipe_id = %(recipe_id)s AND t.created_by IS NULL
-                    ORDER BY t.name
-                    """,
-                    {"recipe_id": recipe_id},
-                ),
-            )
-        except Exception as e:
-            logger.error(f"Error getting public tags for recipe {recipe_id}: {str(e)}")
-            raise
-
-    def _get_recipe_private_tags(
-        self, recipe_id: int, cognito_user_id: str
-    ) -> List[Dict[str, Any]]:
-        """Helper method to get all private tags for a specific recipe by a specific user."""
-        try:
-            return cast(
-                List[Dict[str, Any]],
-                self.execute_query(
-                    """
-                    SELECT t.id, t.name
-                    FROM recipe_tags rt
-                    JOIN tags t ON rt.tag_id = t.id
-                    WHERE rt.recipe_id = %(recipe_id)s AND t.created_by = %(cognito_user_id)s
-                    ORDER BY t.name
-                    """,
-                    {"recipe_id": recipe_id, "cognito_user_id": cognito_user_id},
-                ),
-            )
-        except Exception as e:
-            logger.error(
-                f"Error getting private tags for recipe {recipe_id} by user {cognito_user_id}: {str(e)}"
-            )
-            raise
 
     def get_tag(self, tag_id: int) -> Optional[Dict[str, Any]]:
         """Gets a tag by its ID from the unified tags table."""
