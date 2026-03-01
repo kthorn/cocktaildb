@@ -1,6 +1,6 @@
 """Custom exceptions for the CocktailDB API"""
 
-from typing import Optional, Any, Dict
+from typing import Optional
 
 
 class CocktailDBException(Exception):
@@ -32,20 +32,6 @@ class NotFoundException(CocktailDBException):
     
     def __init__(self, message: str = "Resource not found", detail: Optional[str] = None):
         super().__init__(message, status_code=404, detail=detail)
-
-
-class AuthenticationException(CocktailDBException):
-    """Authentication-related exceptions"""
-    
-    def __init__(self, message: str = "Authentication failed", detail: Optional[str] = None):
-        super().__init__(message, status_code=401, detail=detail)
-
-
-class AuthorizationException(CocktailDBException):
-    """Authorization-related exceptions"""
-    
-    def __init__(self, message: str = "Access denied", detail: Optional[str] = None):
-        super().__init__(message, status_code=403, detail=detail)
 
 
 class ConflictException(CocktailDBException):

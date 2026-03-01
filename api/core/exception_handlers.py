@@ -1,7 +1,7 @@
 """Global exception handlers for the FastAPI application"""
 
 import logging
-from fastapi import Request, HTTPException
+from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -21,19 +21,6 @@ async def cocktail_db_exception_handler(request: Request, exc: CocktailDBExcepti
         content=ErrorResponse(
             error=exc.message,
             detail=exc.detail
-        ).model_dump(),
-    )
-
-
-async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-    """Handle FastAPI HTTPExceptions"""
-    logger.warning(f"HTTP exception: {exc.status_code} - {exc.detail}")
-    
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=ErrorResponse(
-            error="HTTP Error",
-            detail=str(exc.detail)
         ).model_dump(),
     )
 

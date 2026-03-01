@@ -22,7 +22,6 @@ from core.config import settings
 from core.exceptions import CocktailDBException
 from core.exception_handlers import (
     cocktail_db_exception_handler,
-    http_exception_handler,
     starlette_http_exception_handler,
     validation_exception_handler,
     general_exception_handler,
