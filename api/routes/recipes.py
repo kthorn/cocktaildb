@@ -15,25 +15,17 @@ from db.db_core import Database
 from models.requests import (
     RecipeCreate,
     RecipeUpdate,
-    RatingCreate,
     BulkRecipeUpload,
 )
 from models.responses import (
     RecipeResponse,
     MessageResponse,
-    RatingSummaryResponse,
-    RatingResponse,
     PaginatedSearchResponse,
     PaginationMetadata,
     BulkUploadResponse,
     BulkUploadValidationError,
 )
 from core.exceptions import NotFoundException, DatabaseException, ValidationException
-from .rating_handlers import (
-    get_recipe_ratings_handler,
-    create_or_update_rating_handler,
-    delete_rating_handler,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -304,21 +296,13 @@ async def get_recipe(
 ):
     """Get a specific recipe by ID"""
     try:
-        logger.info(f"Getting recipe {recipe_id}")
-        logger.info(f"Database instance: {db}")
-        logger.info(f"User info: {user}")
-
         user_id = user.user_id if user else None
-        logger.info(f"Resolved user_id: {user_id}")
-
         recipe = db.get_recipe(recipe_id, user_id)
-        logger.info(f"Recipe retrieved: {recipe is not None}")
 
         if not recipe:
             logger.warning(f"Recipe {recipe_id} not found")
             raise NotFoundException(f"Recipe with ID {recipe_id} not found")
 
-        logger.info(f"Returning recipe: {recipe.get('name', 'unnamed')}")
         return RecipeResponse(**recipe)
 
     except NotFoundException:
