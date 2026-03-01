@@ -355,10 +355,21 @@ async function loadSimilarCocktails(card, recipeId) {
             const distance = typeof neighbor.distance === 'number'
                 ? neighbor.distance.toFixed(3)
                 : String(neighbor.distance);
+            const transportPairs = Array.isArray(neighbor.transport_plan)
+                ? neighbor.transport_plan.slice(0, 3).map((plan) => {
+                    const from = plan.from_ingredient_name ?? plan.from_ingredient_id;
+                    const to = plan.to_ingredient_name ?? plan.to_ingredient_id;
+                    return `${from} → ${to}`;
+                })
+                : [];
+            const transportText = transportPairs.length > 0
+                ? ` — ${transportPairs.join('; ')}`
+                : '';
             return `
                 <li>
-                    <a href="recipe.html?id=${neighbor.neighbor_recipe_id}">${neighbor.neighbor_name}</a>
                     <span class="similar-distance">${distance}</span>
+                    <a href="recipe.html?id=${neighbor.neighbor_recipe_id}">${neighbor.neighbor_name}</a>
+                    ${transportText ? `<span class="similar-transport">${transportText}</span>` : ''}
                 </li>
             `;
         }).join('');

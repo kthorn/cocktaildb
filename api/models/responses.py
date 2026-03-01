@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
@@ -310,7 +311,7 @@ class UserIngredientResponse(BaseModel):
     description: Optional[str] = Field(None, description="Ingredient description")
     parent_id: Optional[int] = Field(None, description="Parent ingredient ID")
     path: Optional[str] = Field(None, description="Ingredient hierarchy path")
-    added_at: str = Field(..., description="When ingredient was added to user's inventory")
+    added_at: datetime = Field(..., description="When ingredient was added to user's inventory")
 
     class Config:
         from_attributes = True

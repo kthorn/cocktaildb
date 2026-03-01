@@ -48,7 +48,7 @@ fi
 if [ -n "$MIGRATION_FILE" ] && [ -f "$MIGRATION_FILE" ]; then
   remote_tmp="/tmp/$(basename "$MIGRATION_FILE")"
   scp "${SSH_OPTS[@]}" "$MIGRATION_FILE" "$HOST:$remote_tmp"
-  ssh "${SSH_OPTS[@]}" "$HOST" "sudo -u cocktaildb mkdir -p $APP_DIR/migrations && sudo mv $remote_tmp $APP_DIR/migrations/"
+  ssh "${SSH_OPTS[@]}" "$HOST" "sudo -u cocktaildb mkdir -p $APP_DIR/migrations && sudo mv $remote_tmp $APP_DIR/migrations/ && sudo chown cocktaildb:cocktaildb $APP_DIR/migrations/$(basename "$MIGRATION_FILE")"
 else
   echo "No migration file found to upload. Set COCKTAILDB_MIGRATION_FILE or ensure $REPO_ROOT/migrations exists."
   exit 1

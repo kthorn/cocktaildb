@@ -160,16 +160,45 @@ class TestUserIngredientResponseModels:
             "description": "A test gin",
             "parent_id": None,
             "path": "/1/",
-            "added_at": "2023-01-01T12:00:00Z"
+            "added_at": datetime(2023, 1, 1, 12, 0, 0)
         }
         model = UserIngredientResponse(**data)
-        
+
         assert model.ingredient_id == 1
         assert model.name == "Test Gin"
         assert model.description == "A test gin"
         assert model.parent_id is None
         assert model.path == "/1/"
-        assert model.added_at == "2023-01-01T12:00:00Z"
+        assert model.added_at == datetime(2023, 1, 1, 12, 0, 0)
+
+    def test_user_ingredient_response_accepts_datetime_object(self):
+        """Test UserIngredientResponse accepts datetime objects from database.
+
+        Regression test: the database returns datetime objects for added_at,
+        and the model must accept them without raising ValidationError.
+        """
+        dt = datetime(2025, 8, 5, 17, 5, 29)
+        model = UserIngredientResponse(
+            ingredient_id=1,
+            name="Test Gin",
+            description=None,
+            parent_id=None,
+            path=None,
+            added_at=dt
+        )
+        assert model.added_at == dt
+
+    def test_user_ingredient_response_accepts_string_datetime(self):
+        """Test UserIngredientResponse also accepts ISO format strings"""
+        model = UserIngredientResponse(
+            ingredient_id=1,
+            name="Test Gin",
+            description=None,
+            parent_id=None,
+            path=None,
+            added_at="2023-01-01T12:00:00"
+        )
+        assert model.added_at == datetime(2023, 1, 1, 12, 0, 0)
 
     def test_user_ingredient_response_minimal(self):
         """Test UserIngredientResponse with minimal required data"""
@@ -179,16 +208,15 @@ class TestUserIngredientResponseModels:
             "description": None,
             "parent_id": None,
             "path": None,
-            "added_at": "2023-01-01T12:00:00Z"
+            "added_at": datetime(2023, 1, 1, 12, 0, 0)
         }
         model = UserIngredientResponse(**data)
-        
+
         assert model.ingredient_id == 1
         assert model.name == "Test Gin"
         assert model.description is None
         assert model.parent_id is None
         assert model.path is None
-        assert model.added_at == "2023-01-01T12:00:00Z"
 
     def test_user_ingredient_response_with_hierarchy(self):
         """Test UserIngredientResponse with hierarchical data"""
@@ -198,16 +226,15 @@ class TestUserIngredientResponseModels:
             "description": "A type of gin",
             "parent_id": 1,
             "path": "/1/2/",
-            "added_at": "2023-01-01T12:00:00Z"
+            "added_at": datetime(2023, 1, 1, 12, 0, 0)
         }
         model = UserIngredientResponse(**data)
-        
+
         assert model.ingredient_id == 2
         assert model.name == "London Dry Gin"
         assert model.description == "A type of gin"
         assert model.parent_id == 1
         assert model.path == "/1/2/"
-        assert model.added_at == "2023-01-01T12:00:00Z"
 
     def test_user_ingredient_response_missing_required_field(self):
         """Test UserIngredientResponse with missing required field"""
@@ -216,7 +243,7 @@ class TestUserIngredientResponseModels:
             "description": "A test gin",
             "parent_id": None,
             "path": "/1/",
-            "added_at": "2023-01-01T12:00:00Z"
+            "added_at": datetime(2023, 1, 1, 12, 0, 0)
         }
         
         with pytest.raises(ValidationError) as exc_info:
@@ -234,7 +261,7 @@ class TestUserIngredientResponseModels:
             "description": None,
             "parent_id": None,
             "path": None,
-            "added_at": "2023-01-01T12:00:00Z"
+            "added_at": datetime(2023, 1, 1, 12, 0, 0)
         }
         
         with pytest.raises(ValidationError) as exc_info:
@@ -251,7 +278,7 @@ class TestUserIngredientResponseModels:
                 "description": "A test gin",
                 "parent_id": None,
                 "path": "/1/",
-                "added_at": "2023-01-01T12:00:00Z"
+                "added_at": datetime(2023, 1, 1, 12, 0, 0)
             },
             {
                 "ingredient_id": 2,
@@ -259,7 +286,7 @@ class TestUserIngredientResponseModels:
                 "description": "A test vermouth",
                 "parent_id": None,
                 "path": "/2/",
-                "added_at": "2023-01-01T13:00:00Z"
+                "added_at": datetime(2023, 1, 1, 13, 0, 0)
             }
         ]
         
@@ -294,7 +321,7 @@ class TestUserIngredientResponseModels:
                 "description": "A test gin",
                 "parent_id": None,
                 "path": "/1/",
-                "added_at": "2023-01-01T12:00:00Z"
+                "added_at": datetime(2023, 1, 1, 12, 0, 0)
             }
         ]
         
@@ -424,7 +451,7 @@ class TestUserIngredientModelSerialization:
             "description": "A test gin",
             "parent_id": None,
             "path": "/1/",
-            "added_at": "2023-01-01T12:00:00Z"
+            "added_at": datetime(2023, 1, 1, 12, 0, 0)
         }
         model = UserIngredientResponse(**data)
         
@@ -435,7 +462,7 @@ class TestUserIngredientModelSerialization:
         assert json_data["description"] == "A test gin"
         assert json_data["parent_id"] is None
         assert json_data["path"] == "/1/"
-        assert json_data["added_at"] == "2023-01-01T12:00:00Z"
+        assert json_data["added_at"] == datetime(2023, 1, 1, 12, 0, 0)
 
     def test_user_ingredient_list_response_json_serialization(self):
         """Test UserIngredientListResponse JSON serialization"""
@@ -446,7 +473,7 @@ class TestUserIngredientModelSerialization:
                 "description": "A test gin",
                 "parent_id": None,
                 "path": "/1/",
-                "added_at": "2023-01-01T12:00:00Z"
+                "added_at": datetime(2023, 1, 1, 12, 0, 0)
             }
         ]
         
@@ -488,7 +515,7 @@ class TestUserIngredientModelSerialization:
             "description": "A test gin",
             "parent_id": None,
             "path": "/1/",
-            "added_at": "2023-01-01T12:00:00Z",
+            "added_at": datetime(2023, 1, 1, 12, 0, 0),
             "extra_field": "should_be_accepted"
         }
         
@@ -508,7 +535,7 @@ class TestUserIngredientModelSerialization:
             "description": "A test gin",
             "parent_id": None,
             "path": "/1/",
-            "added_at": "2023-01-01T12:00:00Z"
+            "added_at": datetime(2023, 1, 1, 12, 0, 0)
         }
         model = UserIngredientResponse(**data)
         

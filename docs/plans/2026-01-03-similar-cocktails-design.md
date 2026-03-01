@@ -35,7 +35,13 @@ Create a new analytics JSON artifact (versioned alongside other analytics JSON f
           "neighbor_name": "Hemingway Daiquiri",
           "distance": 0.123,
           "transport_plan": [
-            { "from_ingredient_id": 12, "to_ingredient_id": 98, "mass": 0.34 }
+            {
+              "from_ingredient_id": 12,
+              "from_ingredient_name": "Lillet",
+              "to_ingredient_id": 98,
+              "to_ingredient_name": "Cocchi Americano",
+              "mass": 0.34
+            }
           ]
         }
       ]

@@ -824,6 +824,12 @@ section, .card-container {
 }
 
 .recipe-card .similar-distance {
+    margin-right: var(--space-xs);
+    color: var(--text-medium);
+    font-size: var(--text-xs);
+}
+
+.recipe-card .similar-transport {
     margin-left: var(--space-xs);
     color: var(--text-medium);
     font-size: var(--text-xs);
