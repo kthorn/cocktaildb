@@ -1,7 +1,6 @@
 """Analytics-specific database queries for CocktailDB"""
 
 import logging
-import os
 from typing import TYPE_CHECKING, Dict, List, Any, Optional, cast
 
 if TYPE_CHECKING:
@@ -426,13 +425,11 @@ class AnalyticsQueries:
             build_ingredient_tree,
             build_ingredient_distance_matrix,
             build_recipe_volume_matrix,
-            emd_matrix,
             em_fit,
             compute_umap_embedding,
         )
         from barcart.rollup import create_rollup_mapping, apply_rollup_to_recipes
         from barcart.reporting import build_recipe_similarity
-        from utils.analytics_files import save_em_distance_matrix
         from utils.analytics_files import (
             save_em_distance_matrix,
             save_em_ingredient_distance_matrix,
@@ -590,11 +587,6 @@ class AnalyticsQueries:
                 save_em_distance_matrix(storage_path, final_dist)
             else:
                 logger.warning("ANALYTICS_PATH not set; skipping EM distance matrix persistence")
-            storage_path = os.environ.get("ANALYTICS_PATH")
-            if storage_path:
-                save_em_distance_matrix(storage_path, final_dist)
-            else:
-                logger.warning("ANALYTICS_PATH not set; skipping EM distance matrix write")
 
             # Step 7: Compute UMAP embedding
             logger.info("Computing UMAP embedding")
