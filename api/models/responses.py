@@ -116,20 +116,6 @@ class RecipeResponse(BaseModel):
         from_attributes = True
 
 
-class RecipeListResponse(BaseModel):
-    """Response model for recipe list data"""
-
-    id: int = Field(..., description="Recipe ID")
-    name: str = Field(..., description="Recipe name")
-    description: Optional[str] = Field(None, description="Recipe description")
-    avg_rating: Optional[float] = Field(None, description="Average rating")
-    rating_count: Optional[int] = Field(None, description="Number of ratings")
-    ingredient_count: Optional[int] = Field(None, description="Number of ingredients")
-
-    class Config:
-        from_attributes = True
-
-
 class RatingResponse(BaseModel):
     """Response model for rating data - matches actual database schema"""
 
@@ -164,18 +150,6 @@ class UserInfoResponse(BaseModel):
     username: Optional[str] = Field(None, description="Username")
     email: Optional[str] = Field(None, description="Email address")
     groups: List[str] = Field(default=[], description="User groups")
-
-    class Config:
-        from_attributes = True
-
-
-class SearchResultsResponse(BaseModel):
-    """Response model for search results"""
-
-    recipes: List[RecipeListResponse] = Field(..., description="Recipe results")
-    total_count: int = Field(..., description="Total number of matching recipes")
-    offset: int = Field(..., description="Current offset")
-    limit: int = Field(..., description="Current limit")
 
     class Config:
         from_attributes = True
@@ -220,16 +194,6 @@ class PaginatedRecipeResponse(BaseModel):
     """Response model for paginated recipe data"""
 
     recipes: List[RecipeResponse] = Field(..., description="List of recipes with full details")
-    pagination: PaginationMetadata = Field(..., description="Pagination metadata")
-
-    class Config:
-        from_attributes = True
-
-
-class PaginatedRecipeListResponse(BaseModel):
-    """Response model for paginated recipe list data (lighter version)"""
-
-    recipes: List[RecipeListResponse] = Field(..., description="List of recipe summaries")
     pagination: PaginationMetadata = Field(..., description="Pagination metadata")
 
     class Config:
