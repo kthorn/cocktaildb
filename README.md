@@ -26,7 +26,7 @@ This project uses the following AWS services:
 
 - AWS CLI installed and configured with appropriate credentials
 - Python 3.9 or later
-- boto3 Python package (`pip install boto3`)
+- boto3 Python package (`pip install boto3`) — only needed for `scripts/generate_config.py`, not for running the API
 
 ## Local Development
 
