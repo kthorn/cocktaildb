@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { displayRecipes, createProgressiveRecipeLoader, createRecipeCard } from './recipeCard.js';
+import { displayRecipes } from './recipeCard.js';
 import { createInteractiveStars } from './common.js';
 import { isAuthenticated } from './auth.js';
 

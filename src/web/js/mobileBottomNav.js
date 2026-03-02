@@ -1,6 +1,5 @@
 // Mobile Bottom Navigation Component
 import {
-  NAV_CONFIG,
   NAV_MODES,
   NAV_CLASSES,
   getNavigationItems,
@@ -179,58 +178,6 @@ export class MobileBottomNav {
     // Allow default navigation to proceed
   }
 
-  /**
-   * Destroy the navigation component
-   */
-  destroy() {
-    if (this.container) {
-      this.container.remove();
-      this.container = null;
-    }
-  }
-
-  /**
-   * Update the active item highlight
-   */
-  updateActiveItem() {
-    if (!this.container) return;
-
-    const currentPageId = getCurrentPageId();
-    const items = this.container.querySelectorAll(`.${NAV_CLASSES.NAV_ITEM}`);
-
-    items.forEach(item => {
-      const link = item.querySelector('a');
-      const href = link.getAttribute('href');
-
-      // Check if this item's href matches the current page
-      const itemId = this.findItemIdByHref(href);
-      const isActive = itemId === currentPageId;
-
-      if (isActive) {
-        item.classList.add(NAV_CLASSES.ACTIVE);
-        link.setAttribute('aria-current', 'page');
-      } else {
-        item.classList.remove(NAV_CLASSES.ACTIVE);
-        link.removeAttribute('aria-current');
-      }
-    });
-  }
-
-  /**
-   * Find navigation item ID by href
-   * @param {string} href - Link href
-   * @returns {string|null} Item ID
-   */
-  findItemIdByHref(href) {
-    const allItems = [
-      ...NAV_CONFIG.primary,
-      ...NAV_CONFIG.secondary,
-      ...NAV_CONFIG.admin
-    ];
-
-    const item = allItems.find(i => i.href === href);
-    return item ? item.id : null;
-  }
 }
 
 /**

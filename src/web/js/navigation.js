@@ -193,21 +193,6 @@ export function getCurrentPageId() {
 }
 
 /**
- * Get a navigation item by its ID
- * @param {string} id - The item ID
- * @returns {Object|null} The navigation item or null
- */
-export function getNavigationItemById(id) {
-  const allItems = [
-    ...NAV_CONFIG.primary,
-    ...NAV_CONFIG.secondary,
-    ...NAV_CONFIG.admin
-  ];
-
-  return allItems.find(item => item.id === id) || null;
-}
-
-/**
  * Check if a navigation item should be highlighted as active
  * @param {Object} item - Navigation item
  * @param {string} currentPageId - Current page ID (optional, will auto-detect)
@@ -216,14 +201,6 @@ export function getNavigationItemById(id) {
 export function isNavItemActive(item, currentPageId = null) {
   const pageId = currentPageId || getCurrentPageId();
   return item.id === pageId;
-}
-
-/**
- * Mobile breakpoint detection
- * @returns {boolean} True if current viewport is mobile size
- */
-export function isMobileViewport() {
-  return window.matchMedia('(max-width: 768px)').matches;
 }
 
 /**
@@ -284,16 +261,6 @@ export const NAV_CLASSES = {
   // Auth classes
   AUTH_REQUIRED: 'nav-auth-required',
   ADMIN_ONLY: 'nav-admin-only'
-};
-
-/**
- * Z-index layering for navigation components
- */
-export const NAV_Z_INDEX = {
-  MOBILE_BOTTOM: 1000,
-  MOBILE_MENU: 1100,
-  MOBILE_MENU_OVERLAY: 1050,
-  DESKTOP_NAV: 100
 };
 
 /**

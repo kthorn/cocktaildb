@@ -4,7 +4,6 @@ import {
   NAV_MODES,
   NAV_CLASSES,
   NAV_ANIMATIONS,
-  getNavigationItems,
   getCurrentPageId,
   isNavItemActive,
   dispatchNavEvent,
@@ -386,29 +385,6 @@ export class MobileHamburgerMenu {
     }
   }
 
-  /**
-   * Destroy the menu component
-   */
-  destroy() {
-    this.close();
-
-    if (this.menuContainer) {
-      this.menuContainer.remove();
-      this.menuContainer = null;
-    }
-
-    if (this.overlay) {
-      this.overlay.remove();
-      this.overlay = null;
-    }
-
-    if (this.hamburgerButton) {
-      this.hamburgerButton.remove();
-      this.hamburgerButton = null;
-    }
-
-    document.body.style.overflow = '';
-  }
 }
 
 /**

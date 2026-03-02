@@ -32,8 +32,6 @@ async function initAnalytics() {
     // Load initial data for active tab
     await loadTabData(state.currentTab);
 
-    // Highlight active nav item
-    highlightActiveNav();
 }
 
 /**
@@ -551,15 +549,6 @@ function findMode(data) {
     return data.reduce((max, item) =>
         item.recipe_count > max.recipe_count ? item : max
     );
-}
-
-function highlightActiveNav() {
-    const navLinks = document.querySelectorAll('nav a');
-    navLinks.forEach(link => {
-        if (link.href.includes('analytics.html')) {
-            link.classList.add('active');
-        }
-    });
 }
 
 /**
