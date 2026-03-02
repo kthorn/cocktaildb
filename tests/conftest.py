@@ -31,7 +31,8 @@ TEST_DB_USER = "test_user"
 TEST_DB_PASSWORD = "test_password"
 
 # Path to production backup for integration tests
-PROD_BACKUP_PATH = Path("/home/kurtt/cocktaildb/backup-2025-12-25_08-08-15.sql.gz")
+_backup_env = os.environ.get("PROD_BACKUP_PATH")
+PROD_BACKUP_PATH = Path(_backup_env) if _backup_env else None
 
 
 def _reset_database_singleton():
@@ -167,8 +168,8 @@ def pg_db_with_data(pg_db_with_schema):
 @pytest.fixture(scope="session")
 def pg_db_with_prod_data(postgres_container, postgres_connection_params):
     """PostgreSQL database loaded with production backup - session scoped for efficiency"""
-    if not PROD_BACKUP_PATH.exists():
-        pytest.skip(f"Production backup not found at {PROD_BACKUP_PATH}")
+    if PROD_BACKUP_PATH is None or not PROD_BACKUP_PATH.exists():
+        pytest.skip(f"Production backup not found (set PROD_BACKUP_PATH env var)")
 
     conn = psycopg2.connect(**postgres_connection_params)
     conn.autocommit = True

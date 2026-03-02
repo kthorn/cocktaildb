@@ -69,17 +69,5 @@ class TestModelsAndValidation:
             pytest.skip("Request models not available")
 
 
-# Pytest configuration
-@pytest.fixture(scope="session")
-def test_settings():
-    """Test settings fixture"""
-    return {
-        "db_path": ":memory:",  # Use in-memory SQLite for tests
-        "environment": "test",
-        "debug": True,
-        "log_level": "DEBUG"
-    }
-
-
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
