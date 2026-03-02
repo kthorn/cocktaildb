@@ -400,12 +400,6 @@ document.addEventListener('DOMContentLoaded', () => {
             query.rating_type = 'average';
         }
 
-        // Add exclude unrated filter
-        const excludeUnratedCheckbox = document.getElementById('exclude-unrated');
-        if (excludeUnratedCheckbox && excludeUnratedCheckbox.checked) {
-            query.exclude_unrated = true;
-        }
-        
         // Add selected tags
         if (selectedTags.length > 0) {
             query.tags = selectedTags.map(tag => tag.name);
