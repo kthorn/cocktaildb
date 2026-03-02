@@ -574,10 +574,10 @@ class UserIngredientsManager {
                             <span class="recommendation-badge">${rec.recipes_unlocked} recipe${rec.recipes_unlocked !== 1 ? 's' : ''}</span>
                         </div>
                         <div class="recommendation-actions">
-                            <button class="btn btn-sm btn-primary quick-add-btn" data-ingredient-id="${rec.id}">
+                            <button class="btn btn-small btn-primary quick-add-btn" data-ingredient-id="${rec.id}">
                                 Add to Inventory
                             </button>
-                            <button class="btn btn-sm btn-link expand-btn" data-ingredient-id="${rec.id}">
+                            <button class="btn btn-small btn-link expand-btn" data-ingredient-id="${rec.id}">
                                 <span class="expand-icon">▼</span>
                             </button>
                         </div>
