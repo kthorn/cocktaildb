@@ -292,7 +292,7 @@ Key test scenarios:
 
 ## Implementation Files
 
-- **Database Schema**: `schema-deploy/schema.sql` (line 16)
+- **Database Schema**: `infrastructure/postgres/schema.sql`
 - **Migration Script**: `migrations/08_migration_substitution_level_to_boolean.sql`
 - **Recipe Search Query**: `api/db/sql_queries.py` (lines 199-243)
 - **Ingredient Recommendations**: `api/db/db_core.py` (lines 2656-2697)

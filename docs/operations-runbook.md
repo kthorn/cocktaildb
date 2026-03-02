@@ -137,10 +137,7 @@ Deploys API, frontend, and systemd services.
 
 ### Step 7: Restore Data (if migrating)
 
-```bash
-# Run migration playbook
-COCKTAILDB_DB_PASSWORD="<your-password>" ansible-playbook -i inventory/dev.yml playbooks/migrate-data.yml
-```
+Data migration from SQLite to PostgreSQL has been completed. The migration playbook (`playbooks/migrate-data.yml`) has been removed.
 
 ---
 
