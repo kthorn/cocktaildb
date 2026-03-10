@@ -556,40 +556,7 @@ def emd_matrix(
         return (emd_matrix, plans) if return_plans else emd_matrix
 
     # Parallel path (shared memory threads to avoid copying large matrices)
-    try:
-        from joblib import Parallel, delayed
-    except ImportError:
-        # Fallback to sequential if joblib is not available
-        plans = {} if return_plans else None
-        _tqdm = tqdm_cls if tqdm_cls is not None else tqdm
-        _tk = {"desc": "Computing EMD matrix"}
-        if tqdm_kwargs:
-            _tk.update(tqdm_kwargs)
-        for i in _tqdm(range(n_recipes), **_tk):
-            for j in range(i + 1, n_recipes):
-                union_idx = np.union1d(supports[i], supports[j])
-                row_i = volume_matrix.getrow(i) if is_sparse else volume_matrix[i]
-                row_j = volume_matrix.getrow(j) if is_sparse else volume_matrix[j]
-                if return_plans:
-                    distance, plan = compute_emd(
-                        row_i,
-                        row_j,
-                        cost_matrix,
-                        return_plan=True,
-                        support_idx=union_idx,
-                    )
-                    plans[(i, j)] = plan
-                else:
-                    distance = compute_emd(
-                        row_i,
-                        row_j,
-                        cost_matrix,
-                        return_plan=False,
-                        support_idx=union_idx,
-                    )
-                emd_matrix[i, j] = emd_dtype.type(distance)
-                emd_matrix[j, i] = emd_dtype.type(distance)
-        return (emd_matrix, plans) if return_plans else emd_matrix
+    from joblib import Parallel, delayed
 
     # Log parallel execution configuration
     import logging
@@ -1078,9 +1045,6 @@ def m_step_blosum(
     C_new = -np.log(S + 1e-12)
     C_new = C_new - C_new.min()
     np.fill_diagonal(C_new, 0.0)
-
-    # Prior blend and EMA smoothing (stability)
-    # C_out = (1.0 - prior_blend) * C_new + prior_blend * cost_matrix
 
     # Keep scale consistent
     C_new = _median_rescale(C_new, median_target)
