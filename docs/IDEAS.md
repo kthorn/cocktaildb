@@ -4,6 +4,92 @@ Future work and features under consideration. Not committed to — just captured
 
 ---
 
+## Crawlable Individual Recipe Pages
+
+**Impact: High** — multiplies discoverable surface from ~5 pages to hundreds.
+
+Currently recipes only exist inside the SPA — there are no crawlable `/recipe/{id}` URLs. Each recipe that becomes a real, fetchable HTML page is an independent entry point for agents and search engines answering queries like "negroni recipe" or "what can I make with mezcal?"
+
+**Recommended approach:** Add a FastAPI route at `/recipe/{recipe_id}` that queries the database and renders a Jinja2 template. The SPA remains the primary UI — these pages serve agents and crawlers.
+
+Each page should include:
+- Recipe name as `<h1>` and in `<title>` (e.g., "Negroni — Mixology Tools")
+- `<meta name="description">` summarizing the recipe
+- Ingredients as a visible HTML list with amounts and units
+- Instructions as visible text
+- Source attribution if present
+- JSON-LD structured data (see below)
+- `<link rel="canonical">`
+- Link back to the main site / search
+
+Update `sitemap.xml` to be dynamically generated from the database once recipe pages exist.
+
+This is the prerequisite for JSON-LD structured data to be useful.
+
+---
+
+## JSON-LD Structured Data
+
+**Impact: High** — each recipe becomes machine-parseable via `schema.org/Recipe`.
+
+Embed `<script type="application/ld+json">` in each recipe page (from above). Pairs naturally with the Jinja2 template — generate from the same data the page renders.
+
+Key fields: `name`, `recipeIngredient` (array of strings combining amount + unit + name), `recipeInstructions` (array of `HowToStep` — split instructions text into steps), `recipeCategory`, `keywords` (from tags), `url`. Optional: `description`, `tool` (glassware).
+
+Depends on crawlable recipe pages existing first.
+
+---
+
+## Ingredient Landing Pages
+
+**Impact: High** — directly answers "cocktails with X" queries.
+
+Add a FastAPI route at `/ingredient/{ingredient_id}` rendering a page for each ingredient. The hierarchical ingredient model makes this especially powerful — pages at every level of the tree.
+
+Each page should include:
+- Ingredient name in `<title>` (e.g., "Mezcal Cocktails — Mixology Tools")
+- `<meta description>` (e.g., "12 cocktail recipes using mezcal")
+- Position in the hierarchy using the path field (e.g., "Spirits > Agave spirits > Mezcal")
+- Description, ABV, sugar, and acidity data if present
+- List of all recipes using this ingredient, linked to recipe pages
+- Child ingredients if any (navigate hierarchy via `parent_id`)
+- Substitution info (from `allow_substitution` flag)
+- JSON-LD using `schema.org/ItemList`
+
+---
+
+## Crawlable Analytics Pages
+
+**Impact: Medium** — unique differentiator, surfaces for analytical queries.
+
+The analytics noscript block now has descriptive summaries, but breaking analytics into separate crawlable pages with SEO-friendly titles would surface them for specific queries:
+
+| Page | Title | Surfaces for |
+|------|-------|-------------|
+| `/analytics/ingredient-usage` | "Most common cocktail ingredients" | "popular cocktail ingredients," "most used spirits" |
+| `/analytics/ingredient-tree` | "Cocktail ingredient taxonomy" | "types of bitters," "categories of spirits" |
+| `/analytics/complexity` | "Cocktail complexity: recipes by ingredient count" | "simple cocktails," "easy three-ingredient drinks" |
+| `/analytics/similar` | "Cocktail similarity map" | "cocktails similar to X," "drinks like a Manhattan" |
+
+Could be FastAPI-rendered pages with static summaries that the JS visualizations enhance on load.
+
+A lighter alternative: a deploy-time script that queries the API and injects live numbers (top ingredients, average complexity) into the existing analytics.html noscript block.
+
+---
+
+## API Directory Submissions
+
+**Impact: Medium** — one-time effort with long-term discoverability payoff.
+
+The API is free, open, and has a full OpenAPI spec + Swagger UI — stronger than most cocktail APIs. Submit to:
+
+- [Public APIs](https://github.com/public-apis/public-apis) — PR-based, high visibility
+- [PublicAPI.dev](https://publicapi.dev)
+- [APIs.guru](https://apis.guru) — accepts OpenAPI specs directly
+- Consider [RapidAPI Hub](https://rapidapi.com) as a free listing
+
+---
+
 ## MCP Server
 
 Wrap the cocktail API in the [Model Context Protocol](https://modelcontextprotocol.io/) so agents like Claude, Cursor, and Windsurf can call it directly as tools rather than discovering and constructing HTTP requests manually.
@@ -12,40 +98,6 @@ FastAPI already generates an OpenAPI spec at `/api/v1/openapi.json`, which could
 
 ---
 
-## JSON-LD Structured Data
-
-Embed [schema.org/Recipe](https://schema.org/Recipe) markup in recipe pages so search engines can display rich result cards (image, ingredients, prep time, ratings).
-
-**The SPA problem:** Since recipe pages are client-rendered SPA routes, crawlers that don't execute JavaScript won't see the markup. Options:
-
-- **Build-time pre-rendering:** Generate static HTML for each recipe at deploy time with JSON-LD embedded. Most reliable for search engines.
-- **Server-side injection:** Have the API or Caddy inject a `<script type="application/ld+json">` block into the HTML response for recipe URLs. Avoids a full SSR setup.
-- **Noscript block:** Extend the existing noscript fallback pattern to include structured data. Simpler but less standard.
-
-Lower priority until there's a reason to care about search engine rich results specifically.
-
----
-
-## Individual Recipe Pages
-
-Currently recipes only exist inside the SPA — there are no crawlable `/recipe/{name}` URLs. Adding server-rendered or pre-rendered recipe pages would make each recipe independently linkable and discoverable by agents and search engines.
-
-This is a prerequisite for JSON-LD structured data to be useful, and would make the sitemap significantly more valuable (one entry per recipe instead of just top-level pages).
-
----
-
-## Ingredient Landing Pages
-
-No `/ingredient/{name}` pages exist. Adding pages that list recipes by ingredient would give agents and search engines another way to navigate the database and would improve internal linking.
-
----
-
 ## Search and Recipe Pages for Non-JS Clients
 
 `/search.html` returns form UI structure but no content without JS. `/recipes.html` is an add-recipe form, not a browsable recipe list. Adding noscript fallbacks with links to the API search endpoint or a static recipe index would help agents that land on these pages.
-
----
-
-## Analytics Noscript Content
-
-The analytics page has a noscript block pointing to raw API endpoints, but the actual analytics content (charts, visualizations) requires JavaScript. Consider adding a static summary of key stats (top ingredients, recipe count by complexity) in the noscript block so agents get useful data without needing to make separate API calls.
