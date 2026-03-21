@@ -103,12 +103,34 @@ app.include_router(analytics.router)
 
 
 # Root endpoint
-@app.get("/", response_model=MessageResponse)
+@app.get("/")
 async def root():
-    """Root endpoint returning API information"""
-    return MessageResponse(
-        message=f"CocktailDB API v{settings.api_version} - Environment: {settings.environment}"
-    )
+    """Root endpoint returning self-describing API information for agent discovery"""
+    return {
+        "name": "Mixology Tools API",
+        "description": "Public API for the Mixology Tools cocktail recipe database. "
+                       "Search cocktails by name, ingredient, or category. "
+                       "Hierarchical ingredient taxonomy with analytics.",
+        "version": settings.api_version,
+        "docs": "/api/v1/docs",
+        "redoc": "/api/v1/redoc",
+        "openapi": "/api/v1/openapi.json",
+        "endpoints": {
+            "search_recipes": "/api/v1/recipes/search",
+            "get_recipe": "/api/v1/recipes/{id}",
+            "ingredients": "/api/v1/ingredients",
+            "get_ingredient": "/api/v1/ingredients/{id}",
+            "search_ingredients": "/api/v1/ingredients/search",
+            "stats": "/api/v1/stats",
+            "units": "/api/v1/units",
+            "public_tags": "/api/v1/tags/public",
+            "analytics_ingredient_usage": "/api/v1/analytics/ingredient-usage",
+            "analytics_recipe_complexity": "/api/v1/analytics/recipe-complexity",
+            "analytics_cocktail_space": "/api/v1/analytics/cocktail-space",
+            "analytics_ingredient_tree": "/api/v1/analytics/ingredient-tree",
+            "analytics_recipe_similar": "/api/v1/analytics/recipe-similar",
+        },
+    }
 
 
 # Health check endpoint

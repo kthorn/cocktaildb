@@ -14,12 +14,20 @@ class TestBasicEndpoints:
     """Test basic application endpoints"""
 
     async def test_root_endpoint(self, test_client_memory):
-        """Test root endpoint returns expected message"""
+        """Test root endpoint returns self-describing API information"""
         response = await test_client_memory.get("/")
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert "message" in data
-        assert "CocktailDB API" in data["message"]
+        assert data["name"] == "Mixology Tools API"
+        assert "description" in data
+        assert "docs" in data
+        assert "openapi" in data
+        assert "endpoints" in data
+        # Verify key endpoints are listed
+        endpoints = data["endpoints"]
+        assert "search_recipes" in endpoints
+        assert "ingredients" in endpoints
+        assert "stats" in endpoints
 
 
 class TestIngredientEndpoints:
