@@ -389,7 +389,7 @@ document.addEventListener('DOMContentLoaded', () => {
         div.innerHTML = `
             <div class="ingredient-fields">
                 <div class="form-group">
-                    <input type="number" class="ingredient-amount" name="ingredient-amount" placeholder="Amount" step="0.25" min="0">
+                    <input type="number" class="ingredient-amount" name="ingredient-amount" placeholder="Amount" step="0.125" min="0">
                 </div>
                 <div class="form-group">
                     <select class="ingredient-unit" name="ingredient-unit">
