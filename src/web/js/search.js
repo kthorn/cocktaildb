@@ -102,6 +102,14 @@ document.addEventListener('DOMContentLoaded', () => {
         await performSearch();
     });
 
+    // Explicit Enter key handler for Safari compatibility
+    nameSearch.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            performSearch();
+        }
+    });
+
     // Reset button event
     resetButton.addEventListener('click', () => {
         searchForm.reset();
