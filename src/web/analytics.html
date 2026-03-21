@@ -15,14 +15,35 @@
     <main class="analytics-container">
         <noscript>
             <h1>Cocktail Database Analytics</h1>
-            <p>Interactive analytics for the Mixology Tools cocktail database. Requires JavaScript for visualizations.</p>
-            <p>Raw analytics data is available via the API:</p>
-            <ul>
-                <li><a href="/api/v1/analytics/ingredient-usage">Ingredient usage statistics (JSON)</a></li>
-                <li><a href="/api/v1/analytics/recipe-complexity">Recipe complexity distribution (JSON)</a></li>
-                <li><a href="/api/v1/analytics/cocktail-space">Cocktail similarity coordinates (JSON)</a></li>
-                <li><a href="/api/v1/analytics/ingredient-tree">Ingredient hierarchy tree (JSON)</a></li>
-            </ul>
+            <p>Interactive analytics for the Mixology Tools cocktail database.
+               JavaScript enables the full interactive visualizations; summaries below.</p>
+
+            <h2>Ingredient Usage</h2>
+            <p>Explore which ingredients appear most frequently across recipes. The data is
+               hierarchical — top-level categories (spirits, citrus, sweeteners) break down
+               into specific ingredients. Click through to see usage counts at each level.</p>
+            <p><a href="/api/v1/analytics/ingredient-usage">Raw data (JSON)</a></p>
+
+            <h2>Ingredient Taxonomy</h2>
+            <p>A radial tree visualization of the full ingredient hierarchy. Ingredients are
+               organized into categories like spirits, liqueurs, bitters, citrus, sweeteners,
+               and modifiers, each with multiple levels of specificity.</p>
+            <p><a href="/api/v1/analytics/ingredient-tree">Raw data (JSON)</a></p>
+
+            <h2>Recipe Complexity</h2>
+            <p>Distribution of recipes by number of ingredients. Most cocktails use 3–6
+               ingredients. The simplest are two-ingredient highballs; the most complex
+               are tiki drinks and punches with 8+ components.</p>
+            <p><a href="/api/v1/analytics/recipe-complexity">Raw data (JSON)</a></p>
+
+            <h2>Cocktail Similarity</h2>
+            <p>UMAP embeddings position recipes in 2D space based on ingredient overlap.
+               Structurally similar cocktails cluster together — sours (spirit + citrus +
+               sweetener) form a distinct cluster separate from stirred spirit-forward
+               drinks like Manhattans and Old Fashioneds. Two distance metrics are
+               available: Manhattan distance and a learned metric from the EM algorithm
+               with ingredients rolled up to parent categories.</p>
+            <p><a href="/api/v1/analytics/cocktail-space">Raw data (JSON)</a></p>
         </noscript>
         <section class="analytics-header">
             <h2>Database Analytics</h2>

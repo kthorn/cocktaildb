@@ -4,11 +4,12 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="description" content="Curated cocktail recipe database with hierarchical ingredients, analytics, and a public API. Search by name, ingredient, or spirit category.">
-        <meta property="og:title" content="Mixology Tools">
-        <meta property="og:description" content="Curated cocktail recipe database with hierarchical ingredients, analytics, and a public API.">
+        <meta name="description" content="Cocktail recipe database with hierarchical ingredient taxonomy, UMAP similarity analytics, and a free public API. Search by name, ingredient, or category.">
+        <meta property="og:title" content="Mixology Tools — Cocktail Recipe Database">
+        <meta property="og:description" content="Open cocktail database with hierarchical ingredient taxonomy and free public API">
         <meta property="og:type" content="website">
         <meta property="og:url" content="https://mixology.tools/">
+        <link rel="canonical" href="https://mixology.tools">
         <title>Mixology Tools</title>
         <!-- Prevent FOUC (Flash of Unstyled Content) with common.js fallback -->
     </head>
@@ -19,21 +20,19 @@
         <main>
             <noscript>
                 <h1>Mixology Tools</h1>
-                <p>A curated cocktail recipe database with hierarchical ingredients, analytics, and a public API.
-                   Search cocktails by name, ingredient, or spirit category.</p>
-                <h2>Explore</h2>
-                <ul>
-                    <li><a href="/about.html">About this project</a></li>
-                    <li><a href="/search.html">Search recipes</a></li>
-                    <li><a href="/analytics.html">Database analytics</a></li>
-                </ul>
-                <h2>Public API</h2>
-                <p>This site has a public read-only API. Machine-readable documentation:</p>
-                <ul>
-                    <li><a href="/api/v1/openapi.json">OpenAPI specification (JSON)</a></li>
-                    <li><a href="/api/v1/docs">Interactive API docs (Swagger UI)</a></li>
-                    <li><a href="/api/v1/stats">Database statistics</a></li>
-                </ul>
+                <p>A curated cocktail recipe database with a hierarchical ingredient taxonomy,
+                   UMAP similarity analytics, and a free public API.</p>
+                <nav>
+                    <ul>
+                        <li><a href="/about.html">About — how the ingredient hierarchy and analytics work</a></li>
+                        <li><a href="/search.html">Search recipes</a></li>
+                        <li><a href="/analytics.html">Analytics — ingredient usage, complexity, cocktail similarity maps</a></li>
+                        <li><a href="/api/v1/docs">API Documentation (Swagger UI)</a></li>
+                        <li><a href="/api/v1/openapi.json">OpenAPI Spec (JSON)</a></li>
+                    </ul>
+                </nav>
+                <p>The database and API are free and open. Source code on
+                   <a href="https://github.com/kthorn/cocktaildb">GitHub</a>.</p>
             </noscript>
 
             <section class="recipe-carousel">
