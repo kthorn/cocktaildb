@@ -77,9 +77,45 @@ A lighter alternative: a deploy-time script that queries the API and injects liv
 
 ---
 
+## Rate Limiting and Cache Headers
+
+**Impact: High** — prerequisite before publicizing the API.
+
+**Do this before API directory submissions.**
+
+Currently zero protection at any layer. The instance has 2 uvicorn workers and a 10-connection database pool — easy to overwhelm with sustained traffic or a misbehaving scraper.
+
+### Rate limiting with `slowapi`
+
+Add [`slowapi`](https://github.com/laurentS/slowapi) (a FastAPI-friendly wrapper around `limits`). In-memory storage is fine for a single-instance deployment — no Redis needed.
+
+Suggested limits:
+- **Read-only public endpoints** (search, get recipe, ingredients, analytics, stats): ~60 req/min per IP
+- **Write endpoints** (create/update recipe, ratings): ~20 req/min per IP
+- **Authenticated users**: higher limits (identify via JWT)
+- **OpenAPI/docs**: ~10 req/min (these are large responses, mostly fetched once)
+
+Implementation: add `slowapi` to `requirements.txt`, create a `Limiter` instance in `main.py`, decorate routes or use a default limit. Return `429 Too Many Requests` with a `Retry-After` header.
+
+### Cache headers on read-only responses
+
+Add `Cache-Control` headers to read-only API responses so well-behaved agents and intermediaries don't re-fetch constantly. No library needed — just set response headers.
+
+Suggested values:
+- `/stats`, `/analytics/*`: `public, max-age=3600` (1 hour — changes infrequently)
+- `GET /recipes/{id}`, `GET /ingredients/{id}`: `public, max-age=300` (5 min)
+- Search results: `public, max-age=60` (1 min)
+- Write responses, auth endpoints: `no-store`
+
+### Future hardening: Caddy-level rate limiting
+
+The `caddy-ratelimit` plugin can block abusive IPs before requests reach FastAPI. Requires rebuilding Caddy with the plugin (it's not in core). Worth considering if `slowapi` proves insufficient, but adds deployment complexity.
+
+---
+
 ## API Directory Submissions
 
-**Impact: Medium** — one-time effort with long-term discoverability payoff.
+**Impact: Medium** — one-time effort with long-term discoverability payoff. **Do after rate limiting is in place.**
 
 The API is free, open, and has a full OpenAPI spec + Swagger UI — stronger than most cocktail APIs. Submit to:
 
