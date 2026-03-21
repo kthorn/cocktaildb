@@ -20,9 +20,13 @@
                         <div class="main-search-fields">
                             <div class="form-group form-group-inline">
                                 <label for="name-search">Name</label>
-                                <input type="text" id="name-search"
-                                    name="name-search"
-                                    placeholder="Search by recipe name">
+                                <div class="name-search-wrapper">
+                                    <input type="text" id="name-search"
+                                        name="name-search"
+                                        placeholder="Search by recipe name"
+                                        autocomplete="off">
+                                    <div id="name-suggestions-dropdown" class="name-suggestions-dropdown hidden"></div>
+                                </div>
                             </div>
 
                             <div class="form-row">
