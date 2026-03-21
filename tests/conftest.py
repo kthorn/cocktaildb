@@ -60,6 +60,17 @@ def clear_database_cache():
     _reset_database_singleton()
 
 
+@pytest.fixture(scope="function", autouse=True)
+def reset_rate_limiter():
+    """Reset rate limiter state after each test to prevent cross-test 429s"""
+    yield
+    try:
+        from middleware.rate_limit import RateLimitMiddleware
+        RateLimitMiddleware.reset_all()
+    except (ImportError, AttributeError):
+        pass  # Middleware not yet created
+
+
 @pytest.fixture(scope="session")
 def postgres_container():
     """Session-scoped PostgreSQL container - shared across all tests"""
