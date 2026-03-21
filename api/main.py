@@ -28,7 +28,6 @@ from core.exception_handlers import (
 )
 from routes import ingredients, recipes, ratings, units, tags, auth, admin, user_ingredients, stats, analytics
 from routes.tags import recipe_tags_router
-from models.responses import MessageResponse
 
 # Configure logging
 logging.basicConfig(
