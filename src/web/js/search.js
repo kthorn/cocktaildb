@@ -943,6 +943,13 @@ document.addEventListener('DOMContentLoaded', () => {
         activeSuggestionIndex = -1;
     }
 
+    // Escape HTML special characters to prevent XSS in innerHTML
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     // Name search autocomplete functionality
     function setupNameAutocomplete() {
         const nameInput = document.getElementById('name-search');
@@ -1011,16 +1018,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const queryLower = query.toLowerCase();
             const html = nameSuggestions.map((recipe, index) => {
-                // Highlight matching portion of the name
+                // Highlight matching portion of the name (with HTML escaping)
                 const name = recipe.name;
                 const matchIndex = name.toLowerCase().indexOf(queryLower);
                 let displayName;
                 if (matchIndex >= 0) {
-                    displayName = name.substring(0, matchIndex)
-                        + '<strong>' + name.substring(matchIndex, matchIndex + query.length) + '</strong>'
-                        + name.substring(matchIndex + query.length);
+                    displayName = escapeHtml(name.substring(0, matchIndex))
+                        + '<strong>' + escapeHtml(name.substring(matchIndex, matchIndex + query.length)) + '</strong>'
+                        + escapeHtml(name.substring(matchIndex + query.length));
                 } else {
-                    displayName = name;
+                    displayName = escapeHtml(name);
                 }
 
                 return `<div class="name-suggestion-item" data-index="${index}" data-recipe-id="${recipe.id}">${displayName}</div>`;
@@ -1095,6 +1102,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function hideNameDropdown() {
+        if (nameSearchTimeout) {
+            clearTimeout(nameSearchTimeout);
+            nameSearchTimeout = null;
+        }
         const dropdown = document.getElementById('name-suggestions-dropdown');
         dropdown.classList.add('hidden');
         activeNameSuggestionIndex = -1;
