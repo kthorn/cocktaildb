@@ -1823,6 +1823,59 @@ input[type="radio"]:focus {
     font-style: italic;
 }
 
+/* Name search autosuggest dropdown */
+.name-search-wrapper {
+    position: relative;
+    flex: 1;
+}
+
+.name-search-wrapper input {
+    width: 100%;
+}
+
+.name-suggestions-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--bg-white);
+    border: 1px solid var(--border-light);
+    border-top: none;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    max-height: 250px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.name-suggestions-dropdown.hidden {
+    display: none;
+}
+
+.name-suggestion-item {
+    padding: var(--space-sm) var(--space-md);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-bottom: 1px solid var(--border-lighter);
+}
+
+.name-suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.name-suggestion-item:hover,
+.name-suggestion-item.highlighted {
+    background-color: var(--bg-light);
+}
+
+.name-suggestions-dropdown .no-results,
+.name-suggestions-dropdown .loading {
+    padding: var(--space-md);
+    text-align: center;
+    color: var(--text-light);
+    font-style: italic;
+}
+
 /* Admin tag management */
 .tags-management-list {
     max-height: 400px;
