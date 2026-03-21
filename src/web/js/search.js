@@ -173,6 +173,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Reset selected tags
         selectedTags = [];
         renderTagChips();
+
+        // Reset name autosuggest
+        hideNameDropdown();
+        nameSuggestions = [];
         
         // Reset sort to default
         currentSortBy = 'name';
