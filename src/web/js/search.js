@@ -17,6 +17,11 @@ let tagSuggestions = [];
 let activeSuggestionIndex = -1;
 let tagSearchTimeout = null;
 
+// Name autocomplete management
+let nameSearchTimeout = null;
+let nameSuggestions = [];
+let activeNameSuggestionIndex = -1;
+
 // Search pagination state
 let currentSearchQuery = null;
 let currentSearchPage = 1;
@@ -64,7 +69,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Setup tag autocomplete
     setupTagAutocomplete();
-    
+
+    // Setup name search autocomplete
+    setupNameAutocomplete();
+
     // Setup star rating filter
     setupStarRatingFilter();
     
@@ -103,8 +111,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Explicit Enter key handler for Safari compatibility
+    // (defers to autosuggest keyboard navigation when dropdown is open)
     nameSearch.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
+            const dropdown = document.getElementById('name-suggestions-dropdown');
+            if (dropdown && !dropdown.classList.contains('hidden')) {
+                // Let the autosuggest keydown handler deal with it
+                return;
+            }
             e.preventDefault();
             performSearch();
         }
@@ -924,7 +938,164 @@ document.addEventListener('DOMContentLoaded', () => {
         dropdown.classList.add('hidden');
         activeSuggestionIndex = -1;
     }
-    
+
+    // Name search autocomplete functionality
+    function setupNameAutocomplete() {
+        const nameInput = document.getElementById('name-search');
+        const dropdown = document.getElementById('name-suggestions-dropdown');
+
+        if (!nameInput || !dropdown) return;
+
+        // Input event for name search (debounced)
+        nameInput.addEventListener('input', handleNameInput);
+
+        // Keyboard navigation for suggestions
+        nameInput.addEventListener('keydown', handleNameSuggestKeydown);
+
+        // Click outside to close dropdown
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.name-search-wrapper')) {
+                hideNameDropdown();
+            }
+        });
+
+        // Click on a suggestion
+        dropdown.addEventListener('click', handleNameSuggestionClick);
+    }
+
+    function handleNameInput(e) {
+        const query = e.target.value.trim();
+
+        if (nameSearchTimeout) {
+            clearTimeout(nameSearchTimeout);
+        }
+
+        if (query.length < 2) {
+            hideNameDropdown();
+            return;
+        }
+
+        // Debounce the search
+        nameSearchTimeout = setTimeout(() => {
+            searchRecipeNames(query);
+        }, 300);
+    }
+
+    async function searchRecipeNames(query) {
+        const dropdown = document.getElementById('name-suggestions-dropdown');
+
+        try {
+            dropdown.innerHTML = '<div class="loading">Searching...</div>';
+            showNameDropdown();
+
+            // Use the existing search API with a small limit for suggestions
+            const result = await api.searchRecipes(
+                { name: query },
+                1,    // page
+                5,    // limit — only need a few suggestions
+                'name',
+                'asc'
+            );
+
+            if (!result || !result.recipes || result.recipes.length === 0) {
+                dropdown.innerHTML = '<div class="no-results">No recipes found</div>';
+                nameSuggestions = [];
+                return;
+            }
+
+            nameSuggestions = result.recipes;
+
+            const queryLower = query.toLowerCase();
+            const html = nameSuggestions.map((recipe, index) => {
+                // Highlight matching portion of the name
+                const name = recipe.name;
+                const matchIndex = name.toLowerCase().indexOf(queryLower);
+                let displayName;
+                if (matchIndex >= 0) {
+                    displayName = name.substring(0, matchIndex)
+                        + '<strong>' + name.substring(matchIndex, matchIndex + query.length) + '</strong>'
+                        + name.substring(matchIndex + query.length);
+                } else {
+                    displayName = name;
+                }
+
+                return `<div class="name-suggestion-item" data-index="${index}" data-recipe-id="${recipe.id}">${displayName}</div>`;
+            }).join('');
+
+            dropdown.innerHTML = html;
+            activeNameSuggestionIndex = -1;
+
+        } catch (error) {
+            console.error('Error searching recipe names:', error);
+            dropdown.innerHTML = '<div class="no-results">Error loading suggestions</div>';
+        }
+    }
+
+    function handleNameSuggestKeydown(e) {
+        const dropdown = document.getElementById('name-suggestions-dropdown');
+
+        if (dropdown.classList.contains('hidden')) return;
+
+        const items = dropdown.querySelectorAll('.name-suggestion-item');
+
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                activeNameSuggestionIndex = Math.min(activeNameSuggestionIndex + 1, items.length - 1);
+                updateNameSuggestionHighlight(items);
+                break;
+
+            case 'ArrowUp':
+                e.preventDefault();
+                activeNameSuggestionIndex = Math.max(activeNameSuggestionIndex - 1, -1);
+                updateNameSuggestionHighlight(items);
+                break;
+
+            case 'Enter':
+                e.preventDefault();
+                if (activeNameSuggestionIndex >= 0 && items[activeNameSuggestionIndex]) {
+                    navigateToRecipe(items[activeNameSuggestionIndex]);
+                } else {
+                    // No suggestion highlighted — run full search
+                    hideNameDropdown();
+                    performSearch();
+                }
+                break;
+
+            case 'Escape':
+                hideNameDropdown();
+                break;
+        }
+    }
+
+    function updateNameSuggestionHighlight(items) {
+        items.forEach((item, index) => {
+            item.classList.toggle('highlighted', index === activeNameSuggestionIndex);
+        });
+    }
+
+    function handleNameSuggestionClick(e) {
+        const item = e.target.closest('.name-suggestion-item');
+        if (item) {
+            navigateToRecipe(item);
+        }
+    }
+
+    function navigateToRecipe(item) {
+        const recipeId = item.dataset.recipeId;
+        window.location.href = `/recipe.html?id=${recipeId}`;
+    }
+
+    function showNameDropdown() {
+        document.getElementById('name-suggestions-dropdown').classList.remove('hidden');
+    }
+
+    function hideNameDropdown() {
+        const dropdown = document.getElementById('name-suggestions-dropdown');
+        dropdown.classList.add('hidden');
+        activeNameSuggestionIndex = -1;
+    }
+
     // Star rating filter functionality
     function setupStarRatingFilter() {
         const container = document.getElementById('star-rating-filter-container');
