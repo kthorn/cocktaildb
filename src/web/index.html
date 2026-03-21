@@ -2,6 +2,13 @@
 <html lang="en">
 
     <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="description" content="Curated cocktail recipe database with hierarchical ingredients, analytics, and a public API. Search by name, ingredient, or spirit category.">
+        <meta property="og:title" content="Mixology Tools">
+        <meta property="og:description" content="Curated cocktail recipe database with hierarchical ingredients, analytics, and a public API.">
+        <meta property="og:type" content="website">
+        <meta property="og:url" content="https://mixology.tools/">
         <title>Mixology Tools</title>
         <!-- Prevent FOUC (Flash of Unstyled Content) with common.js fallback -->
     </head>
@@ -10,6 +17,25 @@
         <!-- Header will be loaded by common.js -->
 
         <main>
+            <noscript>
+                <h1>Mixology Tools</h1>
+                <p>A curated cocktail recipe database with hierarchical ingredients, analytics, and a public API.
+                   Search cocktails by name, ingredient, or spirit category.</p>
+                <h2>Explore</h2>
+                <ul>
+                    <li><a href="/about.html">About this project</a></li>
+                    <li><a href="/search.html">Search recipes</a></li>
+                    <li><a href="/analytics.html">Database analytics</a></li>
+                </ul>
+                <h2>Public API</h2>
+                <p>This site has a public read-only API. Machine-readable documentation:</p>
+                <ul>
+                    <li><a href="/api/v1/openapi.json">OpenAPI specification (JSON)</a></li>
+                    <li><a href="/api/v1/docs">Interactive API docs (Swagger UI)</a></li>
+                    <li><a href="/api/v1/stats">Database statistics</a></li>
+                </ul>
+            </noscript>
+
             <section class="recipe-carousel">
                 <div class="carousel-container">
                     <button id="prev-recipe"
