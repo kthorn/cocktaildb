@@ -57,3 +57,13 @@ Implemented as Caddy path matchers and header directives — easy to adjust with
 - DDoS protection (would need Caddy `rate_limit` plugin or AWS WAF)
 - Per-user rate limits for authenticated users (not needed while the only authenticated users are site owners)
 - Rate limiting by API key (no API key system exists; could be added later if the API is monetized or gets heavy use from specific consumers)
+
+## Implementation notes
+
+Used a custom `RateLimitMiddleware` (in `api/middleware/rate_limit.py`) instead of `slowapi`. A custom middleware is simpler (~50 lines), has no new dependency, and matches the existing `CORSHeaderMiddleware` pattern.
+
+Auth exemption was removed from the original design. 60 req/min per IP doesn't affect normal browser use, and checking for a Bearer header without validating the JWT would allow trivial bypass. All requests are rate-limited equally; `OPTIONS` and `/health` are exempt.
+
+Rate limiting is per-worker (in-memory). With 2 uvicorn workers, the effective limit per IP is up to ~120 req/min. This is acceptable for the threat model (preventing instance overload).
+
+Cache headers are only applied to endpoints that return identical responses regardless of authentication (`/stats`, all analytics endpoints, `/units`, `/tags/public`, `/openapi.json`). Endpoints like `/recipes/*` include user-specific fields (`user_rating`, `private_tags`) and must not be cached as `public`.

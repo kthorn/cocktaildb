@@ -26,6 +26,7 @@ from core.exception_handlers import (
     validation_exception_handler,
     general_exception_handler,
 )
+from middleware.rate_limit import RateLimitMiddleware
 from routes import ingredients, recipes, ratings, units, tags, auth, admin, user_ingredients, stats, analytics
 from routes.tags import recipe_tags_router
 
@@ -78,7 +79,9 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# Add CORS middleware
+# Rate limiting first, then CORS wraps outermost (last registered = outermost).
+# This ensures 429 responses still get CORS headers.
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(CORSHeaderMiddleware)
 
 # Add exception handlers

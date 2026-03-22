@@ -44,6 +44,25 @@
     @static path *.js *.css *.png *.jpg *.jpeg *.gif *.svg *.woff *.woff2
     header @static Cache-Control "public, max-age=3600"
 
+    # Cache headers for read-only, non-personalized API responses
+    @api_stable {
+        method GET
+        path /api/v1/stats /api/v1/analytics/ingredient-usage /api/v1/analytics/recipe-complexity /api/v1/analytics/cocktail-space /api/v1/analytics/cocktail-space-em /api/v1/analytics/ingredient-tree /api/v1/analytics/recipe-similar /api/v1/analytics/recipe-distances-em/download
+    }
+    header @api_stable Cache-Control "public, max-age=3600"
+
+    @api_public_lists {
+        method GET
+        path /api/v1/units /api/v1/tags/public
+    }
+    header @api_public_lists Cache-Control "public, max-age=300"
+
+    @api_openapi {
+        method GET
+        path /api/v1/openapi.json
+    }
+    header @api_openapi Cache-Control "public, max-age=86400"
+
     # Security headers
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
