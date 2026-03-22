@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (nameFromUrl) {
         // Populate the name search field with the URL parameter
-        nameSearch.value = decodeURIComponent(nameFromUrl);
+        nameSearch.value = nameFromUrl;
         performSearch(); // Auto-search if name is in URL
     }
 
@@ -111,7 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (firstRow) {
             const ingredientInput = firstRow.querySelector('.ingredient-search');
             if (ingredientInput) {
-                ingredientInput.value = decodeURIComponent(ingredientFromUrl);
+                ingredientInput.value = ingredientFromUrl;
             }
         }
         performSearch(); // Auto-search if ingredient is in URL
