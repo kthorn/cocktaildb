@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}Not Found — Mixology Tools{% endblock %}
+
+{% block content %}
+<div class="ssr-content ssr-error">
+    <h1>Not Found</h1>
+    <p>{{ message | default("The page you're looking for doesn't exist.") }}</p>
+    <p><a href="/search.html">Search for recipes →</a></p>
+</div>
+{% endblock %}

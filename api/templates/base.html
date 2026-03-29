@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{% block description %}Mixology Tools — cocktail recipe database with public API{% endblock %}">
+    {% block extra_head %}{% endblock %}
+    <title>{% block title %}Mixology Tools{% endblock %}</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        .ssr-content { max-width: 800px; margin: 0 auto; padding: 1rem; }
+        .ssr-content h1 { margin-bottom: 0.5rem; }
+        .ssr-ingredients { list-style: none; padding: 0; }
+        .ssr-ingredients li { padding: 0.25rem 0; }
+        .ssr-breadcrumb { color: #888; font-size: 0.9rem; margin-bottom: 1rem; }
+        .ssr-breadcrumb a { color: #666; }
+        .ssr-tags { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.5rem 0; }
+        .ssr-tag { background: #eee; padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.85rem; }
+        .ssr-rating { color: #e8a030; }
+        .ssr-properties { margin: 1rem 0; }
+        .ssr-properties dt { font-weight: bold; display: inline; }
+        .ssr-properties dd { display: inline; margin-left: 0.5rem; margin-right: 1.5rem; }
+        .ssr-children { list-style: none; padding: 0; }
+        .ssr-children li { padding: 0.25rem 0; }
+        .ssr-error { text-align: center; padding: 3rem 1rem; }
+    </style>
+</head>
+<body>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}{{ ingredient.name }} Cocktails — Mixology Tools{% endblock %}
+
+{% block description %}{{ ingredient.name }}{% if ingredient.description %} — {{ ingredient.description }}{% endif %}. Browse cocktail recipes using {{ ingredient.name }}.{% endblock %}
+
+{% block extra_head %}
+<meta property="og:title" content="{{ ingredient.name }} Cocktails — Mixology Tools">
+<meta property="og:url" content="{{ base_url }}/ingredient/{{ ingredient.id }}">
+<meta property="og:type" content="website">
+<link rel="canonical" href="{{ base_url }}/ingredient/{{ ingredient.id }}">
+<script type="application/ld+json">
+{{ json_ld | tojson }}
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="ssr-content">
+    {% if breadcrumb %}
+    <nav class="ssr-breadcrumb">
+        {% for crumb in breadcrumb %}
+            {% if not loop.last %}
+                <a href="/ingredient/{{ crumb.id }}">{{ crumb.name }}</a> &gt;
+            {% else %}
+                {{ crumb.name }}
+            {% endif %}
+        {% endfor %}
+    </nav>
+    {% endif %}
+
+    <h1>{{ ingredient.name }}</h1>
+
+    {% if ingredient.description %}
+    <p>{{ ingredient.description }}</p>
+    {% endif %}
+
+    {% if ingredient.percent_abv or ingredient.sugar_g_per_l or ingredient.titratable_acidity_g_per_l %}
+    <dl class="ssr-properties">
+        {% if ingredient.percent_abv %}
+        <dt>ABV:</dt><dd>{{ ingredient.percent_abv }}%</dd>
+        {% endif %}
+        {% if ingredient.sugar_g_per_l %}
+        <dt>Sugar:</dt><dd>{{ ingredient.sugar_g_per_l }} g/L</dd>
+        {% endif %}
+        {% if ingredient.titratable_acidity_g_per_l %}
+        <dt>Acidity:</dt><dd>{{ ingredient.titratable_acidity_g_per_l }} g/L</dd>
+        {% endif %}
+    </dl>
+    {% endif %}
+
+    {% if children %}
+    <h2>Types of {{ ingredient.name }}</h2>
+    <ul class="ssr-children">
+        {% for child in children %}
+        <li><a href="/ingredient/{{ child.id }}">{{ child.name }}</a></li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <h2>Cocktail Recipes</h2>
+    <p><a href="/search.html?ingredients={{ ingredient.id }}">Browse all recipes using {{ ingredient.name }} →</a></p>
+</div>
+{% endblock %}

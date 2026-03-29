@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}{{ recipe.name }} — Mixology Tools{% endblock %}
+
+{% block description %}{{ recipe.name }} cocktail recipe: {{ ingredient_summary }}{% endblock %}
+
+{% block extra_head %}
+<meta property="og:title" content="{{ recipe.name }} — Mixology Tools">
+<meta property="og:description" content="{{ recipe.name }} cocktail recipe: {{ ingredient_summary }}">
+<meta property="og:url" content="{{ base_url }}/recipe/{{ recipe.id }}">
+<meta property="og:type" content="article">
+<link rel="canonical" href="{{ base_url }}/recipe/{{ recipe.id }}">
+<script type="application/ld+json">
+{{ json_ld | tojson }}
+</script>
+{% endblock %}
+
+{% block content %}
+<div id="recipe-container" class="ssr-content">
+    <section class="section-title">
+        <h2 id="recipe-page-title">{{ recipe.name }}</h2>
+    </section>
+    <section class="recipe-display-section">
+        {% if recipe.avg_rating %}
+        <div class="ssr-rating">★ {{ "%.1f" | format(recipe.avg_rating) }} ({{ recipe.rating_count }} rating{{ "s" if recipe.rating_count != 1 else "" }})</div>
+        {% endif %}
+
+        {% if public_tags %}
+        <div class="ssr-tags">
+            {% for tag in public_tags %}
+            <span class="ssr-tag">{{ tag }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if recipe.description %}
+        <p>{{ recipe.description }}</p>
+        {% endif %}
+
+        <h3>Ingredients</h3>
+        <ul class="ssr-ingredients">
+            {% for ing in recipe.ingredients %}
+            <li>
+                {% if ing.amount %}{{ ing.amount }}{% endif %}
+                {% if ing.unit_abbreviation %} {{ ing.unit_abbreviation }}{% endif %}
+                {{ ing.ingredient_name }}
+            </li>
+            {% endfor %}
+        </ul>
+
+        {% if recipe.instructions %}
+        <h3>Instructions</h3>
+        <p>{{ recipe.instructions }}</p>
+        {% endif %}
+
+        {% if recipe.source %}
+        <p class="recipe-source">
+            Source:
+            {% if recipe.source_url and recipe.source_url.startswith(('http://', 'https://')) %}
+                <a href="{{ recipe.source_url }}" rel="noopener noreferrer">{{ recipe.source }}</a>
+            {% else %}
+                {{ recipe.source }}
+            {% endif %}
+        </p>
+        {% endif %}
+
+        {% if similar_recipes %}
+        <h3>Similar Cocktails</h3>
+        <ul>
+            {% for sim in similar_recipes %}
+            <li><a href="/recipe/{{ sim.neighbor_recipe_id }}">{{ sim.neighbor_name }}</a></li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="/js/common.js"></script>
+<script type="module" src="/js/recipe.js"></script>
+{% endblock %}
