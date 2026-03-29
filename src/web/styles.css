@@ -840,6 +840,23 @@ section, .card-container {
     font-size: var(--text-sm);
 }
 
+.recipe-card .cocktail-space-link {
+    margin-top: var(--space-sm);
+    padding-top: var(--space-sm);
+    border-top: 1px solid var(--border-light);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.recipe-card .cocktail-space-link a {
+    color: var(--accent-color);
+    text-decoration: none;
+    font-size: var(--text-sm);
+}
+
+.recipe-card .cocktail-space-link a:hover {
+    text-decoration: underline;
+}
+
 /* Cocktail space highlight ring animation */
 @keyframes cocktail-space-pulse {
     0% {
