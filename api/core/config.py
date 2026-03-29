@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     api_version: str = Field(default="1.0.0", description="API version")
     api_description: str = Field(default="API for managing cocktail recipes and ingredients")
     
+    # Site URL (for canonical links, sitemaps, JSON-LD)
+    base_url: str = Field(default="https://mixology.tools", description="Public base URL for the site")
+
     # Environment
     environment: str = Field(default="dev", description="Environment (dev/prod)")
     debug: bool = Field(default=False, description="Debug mode")
