@@ -179,6 +179,9 @@ export function createRecipeCard(
             <h5>Similar Cocktails</h5>
             <div class="similar-loading">Loading similar cocktails...</div>
         </div>
+        <div class="cocktail-space-link">
+            <a href="analytics.html#cocktail-space?highlight=${recipe.id}">📍 View in Cocktail Space →</a>
+        </div>
         ` : ''}
         ${useCompactLayout && linkCard ? `
         <div class="recipe-card-cta">Click for details</div>

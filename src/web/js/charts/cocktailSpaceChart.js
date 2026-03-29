@@ -170,9 +170,127 @@ export function createCocktailSpaceChart(container, data, options = {}) {
             circles
                 .attr('cx', d => currentTransform.applyX(xScale(d.x)))
                 .attr('cy', d => currentTransform.applyY(yScale(d.y)));
+
+            // Update highlight ring positions if active
+            if (highlightRings && highlightData) {
+                highlightRings
+                    .attr('cx', currentTransform.applyX(xScale(highlightData.x)))
+                    .attr('cy', currentTransform.applyY(yScale(highlightData.y)));
+            }
         });
 
     svg.call(zoom);
+
+    // --- Highlight state (closed over by returned API) ---
+    let highlightRings = null;      // d3 selection of ring <circle> elements
+    let highlightData = null;       // the {x, y} data point being highlighted
+    let highlightTimeoutIds = [];   // setTimeout IDs for cleanup
+    let highlightOnComplete = null; // callback when highlight finishes
+    let highlightCompleted = false; // ensures onComplete called exactly once
+
+    function dispose() {
+        // Clear all pending timeouts
+        highlightTimeoutIds.forEach(id => clearTimeout(id));
+        highlightTimeoutIds = [];
+
+        // Remove ring elements
+        if (highlightRings) {
+            highlightRings.remove();
+            highlightRings = null;
+        }
+        highlightData = null;
+        highlightOnComplete = null;
+        highlightCompleted = false;
+    }
+
+    function highlightRecipe(recipeId, onComplete) {
+        // Clean up any existing highlight first
+        dispose();
+
+        const noop = () => {};
+        highlightOnComplete = onComplete || noop;
+        highlightCompleted = false;
+
+        function callOnCompleteOnce() {
+            if (!highlightCompleted) {
+                highlightCompleted = true;
+                highlightOnComplete();
+            }
+        }
+
+        // Find the data point
+        const point = data.find(d => d.recipe_id === recipeId);
+        if (!point) {
+            callOnCompleteOnce();
+            return;
+        }
+        highlightData = point;
+
+        // Compute zoom transform to center on point at k=3
+        const k = 3;
+        const tx = width / 2 - xScale(point.x) * k;
+        const ty = height / 2 - yScale(point.y) * k;
+        const newTransform = d3.zoomIdentity.translate(tx, ty).scale(k);
+
+        // Animate zoom
+        const transition = svg.transition()
+            .duration(750)
+            .call(zoom.transform, newTransform);
+
+        // After zoom completes (or is interrupted), show rings
+        let zoomFinished = false;
+        function onZoomDone() {
+            if (zoomFinished) return;
+            zoomFinished = true;
+            showPulsingRings(point, callOnCompleteOnce);
+        }
+
+        transition.on('end', onZoomDone);
+        transition.on('interrupt', onZoomDone);
+    }
+
+    function showPulsingRings(point, callOnCompleteOnce) {
+        const cx = currentTransform.applyX(xScale(point.x));
+        const cy = currentTransform.applyY(yScale(point.y));
+
+        // Get the clipped group (first <g> child with clip-path)
+        const clipGroup = g.select('g[clip-path]');
+
+        // Two concentric rings with offset animation delays
+        highlightRings = clipGroup.selectAll('.highlight-ring')
+            .data([0, 1])
+            .enter()
+            .append('circle')
+            .attr('class', 'highlight-ring')
+            .attr('cx', cx)
+            .attr('cy', cy)
+            .attr('r', DOT_RADIUS)
+            .attr('fill', 'none')
+            .attr('stroke', '#e8a030')
+            .attr('stroke-width', 2)
+            .attr('pointer-events', 'none')
+            .style('animation', (d, i) =>
+                `cocktail-space-pulse 1.5s ease-out ${i * 0.5}s infinite`
+            );
+
+        // After 10 seconds, fade out and clean up
+        const fadeId = setTimeout(() => {
+            if (highlightRings) {
+                highlightRings
+                    .transition()
+                    .duration(500)
+                    .style('opacity', 0)
+                    .on('end', function() {
+                        if (!highlightRings) return;
+                        callOnCompleteOnce();
+                        dispose();
+                    });
+            } else {
+                callOnCompleteOnce();
+            }
+        }, 10000);
+        highlightTimeoutIds.push(fadeId);
+    }
 
     // Add title
     svg.append('text')
@@ -196,6 +314,8 @@ export function createCocktailSpaceChart(container, data, options = {}) {
             circles.attr('r', DOT_RADIUS).attr('opacity', DOT_OPACITY);
         }
     }, { passive: true });
+
+    return { highlightRecipe, dispose };
 }
 
 /**

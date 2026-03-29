@@ -10,7 +10,10 @@ const state = {
     currentTab: 'ingredients',
     ingredientHierarchy: [],
     currentParentId: null,
-    lastUpdated: null
+    lastUpdated: null,
+    highlightRecipeId: null,
+    cocktailSpaceChart: null,
+    cocktailSpaceEmChart: null
 };
 
 /**
@@ -22,11 +25,24 @@ async function initAnalytics() {
     // Setup tab navigation
     setupTabNavigation();
 
-    // Check for URL hash to load specific tab
-    const hash = window.location.hash.slice(1); // Remove '#'
-    if (hash && isValidTab(hash)) {
-        state.currentTab = hash;
-        activateTab(hash);
+    // Check for URL hash to load specific tab (supports ?highlight=N params)
+    const rawHash = window.location.hash.slice(1); // Remove '#'
+    const [tabPart, queryPart] = rawHash.split('?', 2);
+    if (tabPart && isValidTab(tabPart)) {
+        state.currentTab = tabPart;
+        activateTab(tabPart);
+
+        // Parse highlight parameter
+        if (queryPart) {
+            const params = new URLSearchParams(queryPart);
+            const highlightVal = params.get('highlight');
+            if (highlightVal && /^\d+$/.test(highlightVal)) {
+                const id = parseInt(highlightVal, 10);
+                if (id > 0) {
+                    state.highlightRecipeId = id;
+                }
+            }
+        }
     }
 
     // Load initial data for active tab
@@ -81,6 +97,15 @@ function setupTabNavigation() {
 
             // Update state and load data
             state.currentTab = tabName;
+
+            // Dispose active chart highlights when switching tabs
+            if (state.cocktailSpaceChart) {
+                state.cocktailSpaceChart.dispose();
+            }
+            if (state.cocktailSpaceEmChart) {
+                state.cocktailSpaceEmChart.dispose();
+            }
+
             await loadTabData(tabName);
 
             // Update URL hash for bookmarking/sharing
@@ -122,6 +147,15 @@ function setupMobileViewSelector(tabButtons, tabContents) {
 
         // Update state and load data
         state.currentTab = selectedTab;
+
+        // Dispose active chart highlights when switching tabs
+        if (state.cocktailSpaceChart) {
+            state.cocktailSpaceChart.dispose();
+        }
+        if (state.cocktailSpaceEmChart) {
+            state.cocktailSpaceEmChart.dispose();
+        }
+
         await loadTabData(selectedTab);
 
         // Update URL hash for bookmarking/sharing
@@ -453,9 +487,18 @@ async function loadCocktailSpaceData() {
         }
 
         // Render chart
-        createCocktailSpaceChart(chartContainer, response.data, {
+        state.cocktailSpaceChart = createCocktailSpaceChart(chartContainer, response.data, {
             onRecipeClick: handleRecipeClick
         });
+
+        // Trigger highlight if requested via URL hash
+        if (state.highlightRecipeId && state.cocktailSpaceChart) {
+            const recipeId = state.highlightRecipeId;
+            state.highlightRecipeId = null; // Consume once
+            state.cocktailSpaceChart.highlightRecipe(recipeId, () => {
+                history.replaceState(null, '', '#' + state.currentTab);
+            });
+        }
 
         // Update stats
         document.getElementById('cocktail-space-count').textContent = response.data.length;
@@ -504,9 +547,18 @@ async function loadCocktailSpaceEmData() {
         }
 
         // Render chart
-        createCocktailSpaceChart(chartContainer, response.data, {
+        state.cocktailSpaceEmChart = createCocktailSpaceChart(chartContainer, response.data, {
             onRecipeClick: handleRecipeClick
         });
+
+        // Trigger highlight if requested via URL hash
+        if (state.highlightRecipeId && state.cocktailSpaceEmChart) {
+            const recipeId = state.highlightRecipeId;
+            state.highlightRecipeId = null;
+            state.cocktailSpaceEmChart.highlightRecipe(recipeId, () => {
+                history.replaceState(null, '', '#' + state.currentTab);
+            });
+        }
 
         // Update stats
         document.getElementById('cocktail-space-em-count').textContent = response.data.length;
