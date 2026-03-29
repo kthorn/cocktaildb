@@ -1,5 +1,7 @@
 # CloudWatch Logging Implementation Plan
 
+**Status:** Refined
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Ship all EC2 logs (API container, backup/analytics services, Caddy) to CloudWatch with proper retention policies.
@@ -8,7 +10,7 @@
 
 **Tech Stack:** AWS CloudWatch Logs, Docker awslogs driver, Amazon CloudWatch Agent, CloudFormation, Ansible
 
-**Tradeoff:** With `awslogs`, `docker logs` no longer works on the instance. Use `aws logs tail /cocktaildb/{env}/api --follow` instead.
+**Tradeoff:** With `awslogs`, `docker logs` no longer works on the instance. Use `aws logs tail /cocktaildb/{env}/api --since 30m` (or `--follow`) instead.
 
 **Log Groups:**
 
@@ -46,6 +48,10 @@ Add a second policy entry to `EC2Role.Properties.Policies`, after the existing `
                 Resource:
                   - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/cocktaildb/${Environment}/*
                   - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/cocktaildb/${Environment}/*:*
+              - Effect: Allow
+                Action:
+                  - logs:DescribeLogGroups
+                Resource: '*'
 ```
 
 **Step 2: Validate the template**
@@ -55,12 +61,12 @@ Expected: Valid template response with parameters listed
 
 **Step 3: Deploy to dev**
 
-Run: `aws cloudformation deploy --template-file infrastructure/cloudformation/ec2-iam.yaml --stack-name cocktaildb-ec2-dev --parameter-overrides Environment=dev --capabilities CAPABILITY_NAMED_IAM`
+Run: `aws cloudformation deploy --template-file infrastructure/cloudformation/ec2-iam.yaml --stack-name cocktaildb-dev-ec2 --parameter-overrides Environment=dev --capabilities CAPABILITY_NAMED_IAM`
 Expected: Stack update completes successfully
 
 **Step 4: Deploy to prod**
 
-Run: `aws cloudformation deploy --template-file infrastructure/cloudformation/ec2-iam.yaml --stack-name cocktaildb-ec2-prod --parameter-overrides Environment=prod --capabilities CAPABILITY_NAMED_IAM`
+Run: `aws cloudformation deploy --template-file infrastructure/cloudformation/ec2-iam.yaml --stack-name cocktaildb-prod-ec2 --parameter-overrides Environment=prod --capabilities CAPABILITY_NAMED_IAM`
 Expected: Stack update completes successfully
 
 **Step 5: Commit**
@@ -95,6 +101,8 @@ Conditions:
 Resources:
   ApiLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       LogGroupName: !Sub /cocktaildb/${Environment}/api
       RetentionInDays: !If [IsProd, 90, 30]
@@ -106,6 +114,8 @@ Resources:
 
   BackupLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       LogGroupName: !Sub /cocktaildb/${Environment}/backup
       RetentionInDays: 30
@@ -117,6 +127,8 @@ Resources:
 
   AnalyticsLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       LogGroupName: !Sub /cocktaildb/${Environment}/analytics
       RetentionInDays: 14
@@ -128,6 +140,8 @@ Resources:
 
   CaddyLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       LogGroupName: !Sub /cocktaildb/${Environment}/caddy
       RetentionInDays: !If [IsProd, 30, 14]
@@ -181,7 +195,8 @@ git commit -m "feat: add CloudWatch log group definitions with retention policie
 
 **Files:**
 - Modify: `docker-compose.prod.yml`
-- Modify: `docker-compose.dev.yml`
+
+Note: Only `docker-compose.prod.yml` needs changes. The Ansible deploy playbook only copies `docker-compose.yml` and `docker-compose.prod.yml` to EC2 — `docker-compose.dev.yml` is for local laptop development and should keep `json-file` logging. The base `docker-compose.yml` also keeps `json-file` so `docker logs` works locally.
 
 **Step 1: Update docker-compose.prod.yml**
 
@@ -197,7 +212,7 @@ services:
     logging:
       driver: "awslogs"
       options:
-        awslogs-region: "us-east-1"
+        awslogs-region: "${AWS_REGION}"
         awslogs-group: "/cocktaildb/${ENVIRONMENT}/api"
         awslogs-stream-prefix: "api"
     deploy:
@@ -208,48 +223,17 @@ services:
           memory: 256M
 ```
 
-The `ENVIRONMENT` variable is already set in `.env` via `infrastructure/ansible/files/env.j2` (line 25: `ENVIRONMENT={{ app_env }}`). Docker Compose substitutes it automatically.
+Both `AWS_REGION` and `ENVIRONMENT` are already set in `.env` via `infrastructure/ansible/files/env.j2`. Docker Compose substitutes them automatically.
 
-**Step 2: Add logging to docker-compose.dev.yml**
+**Step 2: Validate compose config**
 
-Add a `logging` block to the dev compose file (used on dev EC2 instance, not local laptops):
+Run: `DB_PASSWORD=x ENVIRONMENT=dev AWS_REGION=us-east-1 docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet`
+Expected: No errors (validates variable substitution and structure). The dummy env vars satisfy required variables for validation only.
 
-```yaml
-# docker-compose.dev.yml
-# Development overrides for local testing
-
-services:
-  api:
-    build:
-      context: ./api
-      dockerfile: Dockerfile.prod
-    environment:
-      - ENVIRONMENT=development
-      - LOG_LEVEL=DEBUG
-    logging:
-      driver: "awslogs"
-      options:
-        awslogs-region: "us-east-1"
-        awslogs-group: "/cocktaildb/dev/api"
-        awslogs-stream-prefix: "api"
-    ports:
-      - "8000:8000"  # Expose to all interfaces for local dev
-    volumes:
-      # Mount code for hot-reload (optional - remove for production-like testing)
-      # - ./api:/app:ro
-```
-
-Note: The base `docker-compose.yml` keeps `json-file` driver so local laptop development still uses `docker logs` normally. The dev/prod overrides switch to `awslogs` for EC2.
-
-**Step 3: Validate compose config**
-
-Run: `docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet`
-Expected: No errors (validates variable substitution and structure)
-
-**Step 4: Commit**
+**Step 3: Commit**
 
 ```bash
-git add docker-compose.prod.yml docker-compose.dev.yml
+git add docker-compose.prod.yml
 git commit -m "feat: switch Docker logging to CloudWatch awslogs driver"
 ```
 
@@ -383,7 +367,7 @@ Add after the "Copy analytics debounce script" task (after line 131) and before 
         owner: root
         group: root
         mode: '0644'
-      notify: Restart CloudWatch Agent
+      register: cwagent_config
 
     - name: Apply CloudWatch Agent configuration
       command: >
@@ -392,22 +376,15 @@ Add after the "Copy analytics debounce script" task (after line 131) and before 
         -m ec2
         -s
         -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-      changed_when: false
+      when: cwagent_config.changed
+
+    - name: Ensure CloudWatch Agent is started
+      systemd:
+        name: amazon-cloudwatch-agent
+        state: started
 ```
 
-**Step 2: Add the handler**
-
-Add to the `handlers` section (after the existing handlers):
-
-```yaml
-    - name: Restart CloudWatch Agent
-      command: >
-        /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl
-        -a fetch-config
-        -m ec2
-        -s
-        -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-```
+The `register` + `when: changed` pattern avoids `meta: flush_handlers` which would trigger unrelated handlers (Caddy restart, etc.) out of order. The `Ensure started` task is a safety net for cases where the service was stopped manually.
 
 **Step 3: Commit**
 
@@ -422,17 +399,17 @@ git commit -m "feat: add CloudWatch Agent config deployment to Ansible"
 
 **Step 1: Run provision on dev**
 
-Run: `cd infrastructure/ansible && ansible-playbook -i inventory/dev.yml playbooks/provision.yml`
+Run: `cd infrastructure/ansible && COCKTAILDB_DB_PASSWORD="<password>" ansible-playbook -i inventory/dev.yml playbooks/provision.yml`
 Expected: `amazon-cloudwatch-agent` installed, service enabled
 
 **Step 2: Run deploy on dev**
 
-Run: `cd infrastructure/ansible && ansible-playbook -i inventory/dev.yml playbooks/deploy.yml`
+Run: `cd infrastructure/ansible && COCKTAILDB_DB_PASSWORD="<password>" ansible-playbook -i inventory/dev.yml playbooks/deploy.yml`
 Expected: Agent config deployed, API container restarted with awslogs driver
 
 **Step 3: Verify API logs in CloudWatch**
 
-Run: `aws logs tail /cocktaildb/dev/api --follow`
+Run: `aws logs tail /cocktaildb/dev/api --since 5m`
 Expected: API startup logs appear (uvicorn worker messages)
 
 **Step 4: Verify CloudWatch Agent status**
@@ -446,7 +423,13 @@ SSH to dev instance and run: `sudo systemctl start cocktaildb-backup.service`
 Then: `aws logs tail /cocktaildb/dev/backup --since 5m`
 Expected: Backup log entries appear
 
-**Step 6: Verify Caddy logs**
+**Step 6: Trigger analytics to test journal shipping**
+
+SSH to dev instance and run: `sudo systemctl start cocktaildb-analytics.service`
+Then: `aws logs tail /cocktaildb/dev/analytics --since 5m`
+Expected: Analytics log entries appear
+
+**Step 7: Verify Caddy logs**
 
 Run: `aws logs tail /cocktaildb/dev/caddy --since 5m`
 Expected: Access log entries from Caddy (may need to hit the site first)
