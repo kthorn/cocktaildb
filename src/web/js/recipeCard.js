@@ -294,7 +294,7 @@ export function createRecipeCard(
             if (interactiveTarget) {
                 return;
             }
-            window.location.href = `recipe.html?id=${recipe.id}`;
+            window.location.href = `/recipe/${recipe.id}`;
         });
     }
 
@@ -309,8 +309,8 @@ export function createRecipeCard(
 async function handleShareRecipe(recipeName, recipeId) {
     try {
         const shareUrl = recipeId
-            ? `${window.location.origin}/recipe.html?id=${encodeURIComponent(recipeId)}`
-            : `${window.location.origin}/recipe.html?name=${encodeURIComponent(recipeName)}`;
+            ? `${window.location.origin}/recipe/${encodeURIComponent(recipeId)}`
+            : `${window.location.origin}/recipe/by-name?name=${encodeURIComponent(recipeName)}`;
 
         // Try to copy to clipboard
         if (navigator.clipboard && window.isSecureContext) {
@@ -371,7 +371,7 @@ async function loadSimilarCocktails(card, recipeId) {
             return `
                 <li>
                     <span class="similar-distance">${distance}</span>
-                    <a href="recipe.html?id=${neighbor.neighbor_recipe_id}">${neighbor.neighbor_name}</a>
+                    <a href="/recipe/${neighbor.neighbor_recipe_id}">${neighbor.neighbor_name}</a>
                     ${transportText ? `<span class="similar-transport">${transportText}</span>` : ''}
                 </li>
             `;

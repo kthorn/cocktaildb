@@ -1107,7 +1107,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function navigateToRecipe(item) {
         const recipeId = item.dataset.recipeId;
-        window.location.href = `/recipe.html?id=${recipeId}`;
+        window.location.href = `/recipe/${recipeId}`;
     }
 
     function showNameDropdown() {
