@@ -250,10 +250,18 @@
         disable_gpg_check: true
       when: cw_agent_installed.rc != 0
 
+    - name: Create CloudWatch Agent config directory
+      file:
+        path: /etc/cocktaildb
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
     - name: Deploy CloudWatch Agent config
       copy:
         src: ../../cloudwatch/amazon-cloudwatch-agent.json
-        dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+        dest: /etc/cocktaildb/amazon-cloudwatch-agent.json
         owner: root
         group: root
         mode: '0644'
@@ -264,7 +272,7 @@
         /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl
         -a fetch-config
         -m ec2
-        -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+        -c file:/etc/cocktaildb/amazon-cloudwatch-agent.json
         -s
       args:
         creates: /opt/aws/amazon-cloudwatch-agent/logs/amazon-cloudwatch-agent.log
@@ -330,5 +338,5 @@
         /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl
         -a fetch-config
         -m ec2
-        -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+        -c file:/etc/cocktaildb/amazon-cloudwatch-agent.json
         -s
