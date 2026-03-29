@@ -202,5 +202,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Check API logs**: `sudo journalctl -u cocktaildb -f`
 - **Check Caddy logs**: `sudo journalctl -u caddy -f`
 - **PostgreSQL logs**: `sudo journalctl -u postgresql -f`
+- **CloudWatch Logs (prod)**: Caddy access logs in `/cocktaildb/prod/caddy-access` — query via `aws logs filter-log-events --log-group-name /cocktaildb/prod/caddy-access --limit 10` or use Logs Insights in the Console. See `docs/operations-runbook.md` for sample queries.
 - **Local frontend testing**: Use `./scripts/local-config.sh && ./scripts/serve.sh` to test UI changes
 - **Local API testing**: Run FastAPI locally with `cd api && python main.py`

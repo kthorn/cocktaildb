@@ -206,6 +206,69 @@ ssh -i ~/.ssh/id_ed25519 ec2-user@dev.mixology.tools "sudo journalctl -u caddy -
 ssh -i ~/.ssh/id_ed25519 ec2-user@dev.mixology.tools "sudo journalctl -u postgresql -n 100"
 ```
 
+### CloudWatch Logs (Prod)
+
+Caddy access logs are shipped to CloudWatch via the CloudWatch Agent. Log group: `/cocktaildb/prod/caddy-access`. Retention: 30 days.
+
+**Quick check — recent requests:**
+
+```bash
+aws logs filter-log-events \
+  --log-group-name /cocktaildb/prod/caddy-access \
+  --limit 10
+```
+
+**Logs Insights queries** (run via Console > CloudWatch > Logs Insights, or CLI):
+
+```bash
+# Start a query (returns query ID)
+aws logs start-query \
+  --log-group-name /cocktaildb/prod/caddy-access \
+  --start-time $(date -d '1 hour ago' +%s) \
+  --end-time $(date +%s) \
+  --query-string 'fields @timestamp, @message | limit 20'
+
+# Get results (use query ID from above)
+aws logs get-query-results --query-id <query-id>
+```
+
+**Useful Logs Insights queries:**
+
+```
+# Top pages by request count
+fields request.uri, status
+| stats count() as requests by request.uri
+| sort requests desc
+| limit 20
+
+# Traffic over time (hourly buckets)
+fields @timestamp
+| stats count() as requests by bin(1h)
+
+# Error rate
+fields status
+| stats count() as total,
+        sum(status >= 400) as errors
+| display total, errors, (errors / total) * 100 as error_pct
+
+# Slow requests (>1s)
+fields request.uri, duration, status
+| filter duration > 1
+| sort duration desc
+| limit 20
+
+# Requests by status code
+fields status
+| stats count() as requests by status
+| sort requests desc
+```
+
+**CloudWatch Agent status (on EC2):**
+
+```bash
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status
+```
+
 ---
 
 ## 3. Deployments
