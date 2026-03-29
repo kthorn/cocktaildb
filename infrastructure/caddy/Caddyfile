@@ -33,6 +33,43 @@
         reverse_proxy localhost:8000
     }
 
+    # Server-rendered recipe pages
+    handle /recipe/* {
+        reverse_proxy localhost:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    # Server-rendered ingredient pages
+    handle /ingredient/* {
+        reverse_proxy localhost:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    # Dynamic sitemap
+    handle /sitemap.xml {
+        reverse_proxy localhost:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    # Legacy recipe.html redirects
+    @legacy_recipe_id {
+        path /recipe.html
+        query id=*
+    }
+    redir @legacy_recipe_id /recipe/{query.id} 301
+
+    @legacy_recipe_name {
+        path /recipe.html
+        query name=*
+    }
+    redir @legacy_recipe_name /recipe/by-name?name={query.name} 302
+
     # Static files (frontend)
     handle {
         root * /opt/cocktaildb/web
@@ -103,6 +140,18 @@
     }
 
     handle /health {
+        reverse_proxy localhost:8000
+    }
+
+    handle /recipe/* {
+        reverse_proxy localhost:8000
+    }
+
+    handle /ingredient/* {
+        reverse_proxy localhost:8000
+    }
+
+    handle /sitemap.xml {
         reverse_proxy localhost:8000
     }
 
