@@ -19,7 +19,21 @@ class Settings(BaseSettings):
     # API settings
     api_title: str = Field(default="Cocktail DB API", description="API title")
     api_version: str = Field(default="1.0.0", description="API version")
-    api_description: str = Field(default="API for managing cocktail recipes and ingredients")
+    api_description: str = Field(default=(
+        "Public API for the Mixology Tools cocktail recipe database. "
+        "Search cocktails by name, ingredient, tag, or rating. "
+        "Hierarchical ingredient taxonomy with analytics.\n\n"
+        "## Authentication\n\n"
+        "All GET endpoints are **public** and require no authentication. "
+        "Passing a Bearer token (Cognito JWT) personalizes responses with "
+        "private tags, user ratings, and inventory filtering. "
+        "Write operations (POST, PUT, DELETE) require authentication.\n\n"
+        "There are no API keys — read access is fully open.\n\n"
+        "## Rate Limits\n\n"
+        "**60 requests per minute** per IP address (sliding window). "
+        "Every response includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers. "
+        "A `429` response includes a `Retry-After` header with the number of seconds to wait."
+    ))
     
     # Site URL (for canonical links, sitemaps, JSON-LD)
     base_url: str = Field(default="https://mixology.tools", description="Public base URL for the site")

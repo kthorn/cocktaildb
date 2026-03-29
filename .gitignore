@@ -175,6 +175,7 @@ cython_debug/
 
 *.txt
 !src/web/robots.txt
+!src/web/llms.txt
 *.json
 src/web/js/config.js
 *.db

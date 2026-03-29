@@ -1,0 +1,38 @@
+# Mixology Tools
+
+> Cocktail recipe database with a public API. Search cocktails by name, ingredient, or category. Hierarchical ingredient taxonomy with analytics.
+
+## Site
+
+- Homepage: https://mixology.tools
+- Search: https://mixology.tools/search.html
+- Recipe pages: https://mixology.tools/recipe/{id} (server-rendered HTML with JSON-LD structured data)
+- Ingredient pages: https://mixology.tools/ingredient/{id}
+
+## API
+
+- Base URL: https://mixology.tools/api/v1
+- OpenAPI spec: https://mixology.tools/api/v1/openapi.json
+- Interactive docs: https://mixology.tools/api/v1/docs
+
+All GET endpoints are public and require no authentication. Passing a Bearer token personalizes results (private tags, user ratings, inventory filtering). Write operations (POST/PUT/DELETE) require a Cognito JWT.
+
+### Key Endpoints
+
+- GET /api/v1/recipes/search — Search recipes by name, ingredient, tag, or rating. Supports pagination.
+- GET /api/v1/recipes/{id} — Get a single recipe with ingredients, tags, and ratings.
+- GET /api/v1/ingredients — List all ingredients in a hierarchical taxonomy.
+- GET /api/v1/ingredients/{id} — Get a single ingredient with properties (ABV, sugar, acidity).
+- GET /api/v1/ingredients/search — Search ingredients by name.
+- GET /api/v1/stats — Total recipe and ingredient counts.
+- GET /api/v1/units — List measurement units with mL conversions.
+- GET /api/v1/tags/public — List all public tags.
+- GET /api/v1/analytics/ingredient-usage — Ingredient usage statistics.
+- GET /api/v1/analytics/recipe-complexity — Recipe complexity distribution.
+- GET /api/v1/analytics/cocktail-space — 2D cocktail similarity map.
+- GET /api/v1/analytics/ingredient-tree — Ingredient hierarchy tree.
+- GET /api/v1/analytics/recipe-similar — Similar recipe recommendations.
+
+### Rate Limits
+
+60 requests per minute per IP. Every response includes X-RateLimit-Limit and X-RateLimit-Remaining headers. A 429 response includes a Retry-After header.

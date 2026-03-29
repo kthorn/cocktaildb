@@ -1,8 +1,9 @@
 User-agent: *
 Allow: /
 
-# Public API documentation
-# Interactive docs: https://mixology.tools/api/v1/docs
-# OpenAPI spec: https://mixology.tools/api/v1/openapi.json
-
 Sitemap: https://mixology.tools/sitemap.xml
+
+# LLM/agent discovery
+# llms.txt: https://mixology.tools/llms.txt
+# OpenAPI spec: https://mixology.tools/api/v1/openapi.json
+# Interactive docs: https://mixology.tools/api/v1/docs
