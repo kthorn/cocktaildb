@@ -281,8 +281,9 @@ export function createCocktailSpaceChart(container, data, options = {}) {
                     .duration(500)
                     .style('opacity', 0)
                     .on('end', function() {
-                        dispose();
+                        if (!highlightRings) return;
                         callOnCompleteOnce();
+                        dispose();
                     });
             } else {
                 callOnCompleteOnce();
