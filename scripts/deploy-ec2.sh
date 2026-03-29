@@ -37,11 +37,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Check required environment variables
-: "${COCKTAILDB_HOST:?Must set COCKTAILDB_HOST to EC2 IP address}"
 : "${COCKTAILDB_DB_PASSWORD:?Must set COCKTAILDB_DB_PASSWORD}"
 
 # Set defaults for optional vars
-export COCKTAILDB_DOMAIN="${COCKTAILDB_DOMAIN:-}"
 export AWS_REGION="${AWS_REGION:-us-east-1}"
 export ENVIRONMENT="$ENVIRONMENT"
 
@@ -49,10 +47,9 @@ echo "========================================"
 echo "  CocktailDB EC2 Deployment"
 echo "========================================"
 echo ""
-echo "Target Host: $COCKTAILDB_HOST"
 echo "Environment: $ENVIRONMENT"
-echo "Domain: ${COCKTAILDB_DOMAIN:-<not set>}"
-echo "Provision: $PROVISION"
+echo "Inventory:   inventory/${ENVIRONMENT}.yml"
+echo "Provision:   $PROVISION"
 echo ""
 
 # Check if Ansible is installed
@@ -93,14 +90,6 @@ echo "========================================"
 echo "  Deployment Complete!"
 echo "========================================"
 echo ""
-if [ -n "$COCKTAILDB_DOMAIN" ]; then
-    echo "Application URL: https://${COCKTAILDB_DOMAIN}"
-else
-    echo "Application URL: http://${COCKTAILDB_HOST}"
-fi
-echo ""
 echo "Useful commands:"
-echo "  SSH:    ssh -i ~/.ssh/cocktaildb-ec2.pem ec2-user@${COCKTAILDB_HOST}"
-echo "  Logs:   ssh ... 'docker logs cocktaildb-api-1'"
 echo "  Status: ./infrastructure/scripts/ec2-status.sh $ENVIRONMENT"
 echo ""
