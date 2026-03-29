@@ -48,6 +48,8 @@ Resources:
                   # Backup bucket (prod only, but safe to include for dev)
                   - !Sub arn:aws:s3:::cocktaildbbackups-${AWS::AccountId}-${Environment}
                   - !Sub arn:aws:s3:::cocktaildbbackups-${AWS::AccountId}-${Environment}/*
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Tags:
         - Key: Environment
           Value: !Ref Environment
