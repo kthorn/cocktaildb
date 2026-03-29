@@ -230,6 +230,45 @@
         enabled: yes
         daemon_reload: yes
 
+    # CloudWatch Agent for log shipping
+    - name: Check if CloudWatch Agent is installed
+      command: rpm -q amazon-cloudwatch-agent
+      register: cw_agent_installed
+      changed_when: false
+      failed_when: false
+
+    - name: Download CloudWatch Agent RPM
+      get_url:
+        url: "https://amazoncloudwatch-agent.s3.amazonaws.com/amazon_linux/arm64/latest/amazon-cloudwatch-agent.rpm"
+        dest: /tmp/amazon-cloudwatch-agent.rpm
+      when: cw_agent_installed.rc != 0
+
+    - name: Install CloudWatch Agent
+      dnf:
+        name: /tmp/amazon-cloudwatch-agent.rpm
+        state: present
+        disable_gpg_check: true
+      when: cw_agent_installed.rc != 0
+
+    - name: Deploy CloudWatch Agent config
+      copy:
+        src: ../../cloudwatch/amazon-cloudwatch-agent.json
+        dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart CloudWatch Agent
+
+    - name: Start and enable CloudWatch Agent
+      shell: >
+        /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl
+        -a fetch-config
+        -m ec2
+        -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+        -s
+      args:
+        creates: /opt/aws/amazon-cloudwatch-agent/logs/amazon-cloudwatch-agent.log
+
     # Install Python packages
     - name: Install Python dependencies
       pip:
@@ -285,3 +324,11 @@
     - name: Daemon reload
       systemd:
         daemon_reload: yes
+
+    - name: Restart CloudWatch Agent
+      shell: >
+        /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl
+        -a fetch-config
+        -m ec2
+        -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+        -s
