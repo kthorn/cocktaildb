@@ -27,7 +27,7 @@ from core.exception_handlers import (
     general_exception_handler,
 )
 from middleware.rate_limit import RateLimitMiddleware
-from routes import ingredients, recipes, ratings, units, tags, auth, admin, user_ingredients, stats, analytics
+from routes import ingredients, recipes, ratings, units, tags, auth, admin, user_ingredients, stats, analytics, pages
 from routes.tags import recipe_tags_router
 
 # Configure logging
@@ -102,6 +102,7 @@ app.include_router(admin.router)
 app.include_router(user_ingredients.router)
 app.include_router(stats.router)
 app.include_router(analytics.router)
+app.include_router(pages.router)
 
 
 # Root endpoint
