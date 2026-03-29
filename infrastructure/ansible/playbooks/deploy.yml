@@ -37,7 +37,6 @@
           - "--exclude=.pytest_cache"
           - "--exclude=tests/"
           - "--exclude=*.db"
-      notify: Restart API
 
     # Sync frontend code
     - name: Sync frontend code to server
@@ -91,7 +90,6 @@
       loop:
         - "{{ playbook_dir }}/../../../docker-compose.yml"
         - "{{ playbook_dir }}/../../../docker-compose.prod.yml"
-      notify: Restart API
 
     # Copy repo .dockerignore for root build context
     - name: Copy docker ignore
@@ -180,7 +178,6 @@
         owner: "{{ app_user }}"
         group: "{{ app_group }}"
         mode: '0600'
-      notify: Restart API
 
     - name: Create analytics directory
       file:
@@ -198,23 +195,11 @@
         group: "{{ app_group }}"
         recurse: yes
 
-    # Build Docker image
-    - name: Build Docker image
-      community.docker.docker_image:
-        name: cocktaildb-api
-        tag: latest
-        source: build
-        build:
-          path: "{{ app_home }}"
-          dockerfile: api/Dockerfile.prod
-        force_source: yes
-      notify: Restart API
-
-    # Start API container
-    - name: Start API with Docker Compose
+    # Build and start API container (always rebuild to pick up code changes)
+    - name: Build and start API with Docker Compose
       shell: |
         cd {{ app_home }}
-        docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+        docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --force-recreate
 
     # Enable systemd timers
     - name: Enable backup timer
@@ -244,7 +229,7 @@
     - name: Restart API
       shell: |
         cd {{ app_home }}
-        docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate
+        docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --force-recreate
 
     - name: Restart polkit
       systemd:

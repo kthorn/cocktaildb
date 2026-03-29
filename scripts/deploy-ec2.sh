@@ -71,21 +71,21 @@ ansible-galaxy collection install -r requirements.yml --force
 if [ "$PROVISION" = true ]; then
     echo ""
     echo "=== Running Provisioning Playbook ==="
-    ansible-playbook playbooks/provision.yml -v
+    ansible-playbook -i "inventory/${ENVIRONMENT}.yml" playbooks/provision.yml -v
 
     echo ""
     echo "=== Running Database Setup Playbook ==="
-    ansible-playbook playbooks/setup-database.yml -v
+    ansible-playbook -i "inventory/${ENVIRONMENT}.yml" playbooks/setup-database.yml -v
 
     echo ""
     echo "=== Running Caddy Deployment Playbook ==="
-    ansible-playbook playbooks/deploy-caddy.yml -v
+    ansible-playbook -i "inventory/${ENVIRONMENT}.yml" playbooks/deploy-caddy.yml -v
 fi
 
 # Run deployment
 echo ""
 echo "=== Running Deployment Playbook ==="
-ansible-playbook playbooks/deploy.yml -v
+ansible-playbook -i "inventory/${ENVIRONMENT}.yml" playbooks/deploy.yml -v
 
 # Show completion message
 echo ""
