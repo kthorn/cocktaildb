@@ -840,6 +840,18 @@ section, .card-container {
     font-size: var(--text-sm);
 }
 
+/* Cocktail space highlight ring animation */
+@keyframes cocktail-space-pulse {
+    0% {
+        r: 5;
+        opacity: 0.6;
+    }
+    100% {
+        r: 15;
+        opacity: 0;
+    }
+}
+
 /* Stat cards */
 .stat-card p {
     font-size: 2rem;
