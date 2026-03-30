@@ -195,6 +195,45 @@
         group: "{{ app_group }}"
         recurse: yes
 
+    # Sync migrations
+    - name: Sync migrations to server
+      synchronize:
+        src: "{{ playbook_dir }}/../../../migrations/"
+        dest: "{{ app_home }}/migrations/"
+        delete: yes
+
+    # Seed schema_migrations with pre-existing migrations (idempotent)
+    - name: Seed schema_migrations table
+      shell: |
+        source {{ app_home }}/.env
+        export PGPASSWORD=$DB_PASSWORD
+        psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -v ON_ERROR_STOP=1 <<'SQL'
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            filename TEXT PRIMARY KEY,
+            applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO schema_migrations (filename) VALUES
+          ('01_migration_add_conversion_to_ml_to_units.sql'),
+          ('02_migration_add_top_and_rinse_units.sql'),
+          ('03_migration_clean_private_tags.sql'),
+          ('04_migration_unify_tags_tables.sql'),
+          ('05_migration_add_user_ingredient_tracking.sql'),
+          ('06_migration_add_user_tracking_to_recipes_and_ingredients.sql'),
+          ('07_migration_add_substitution_level_to_ingredients.sql'),
+          ('08_migration_substitution_level_to_boolean.sql'),
+          ('09_migration_add_analytics_refresh_state.sql'),
+          ('10_migration_remove_cognito_username.sql'),
+          ('11_migration_db_optimizations.sql'),
+          ('12_migration_add_recipe_similarity.sql')
+        ON CONFLICT DO NOTHING;
+        SQL
+
+    # Run pending database migrations before restarting the API
+    - name: Run database migrations
+      shell: |
+        cd {{ app_home }}
+        ./scripts/run-migrations.sh {{ app_env }}
+
     # Build and start API container (always rebuild to pick up code changes)
     - name: Build and start API with Docker Compose
       shell: |
