@@ -5,6 +5,7 @@
 -- Enable extensions
 CREATE EXTENSION IF NOT EXISTS pg_trgm;  -- For text search and similarity
 CREATE EXTENSION IF NOT EXISTS citext;   -- For case-insensitive text
+CREATE EXTENSION IF NOT EXISTS unaccent; -- For accent-insensitive search
 
 -- Table Definitions
 

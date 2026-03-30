@@ -167,7 +167,7 @@ def build_search_recipes_paginated_sql(
             ingredients i ON ri.ingredient_id = i.id
         WHERE
             (%(search_query)s IS NULL OR
-             r.name ILIKE %(search_query_with_wildcards)s)
+             unaccent(r.name) ILIKE unaccent(%(search_query_with_wildcards)s))
         AND
             (%(min_rating)s IS NULL OR COALESCE({rating_field}, 0) >= %(min_rating)s)
         AND
@@ -316,7 +316,7 @@ def build_search_recipes_keyset_sql(
             ingredients i ON ri.ingredient_id = i.id
         WHERE
             (%(search_query)s IS NULL OR
-             r.name ILIKE %(search_query_with_wildcards)s)
+             unaccent(r.name) ILIKE unaccent(%(search_query_with_wildcards)s))
         AND
             (%(min_rating)s IS NULL OR COALESCE({rating_field}, 0) >= %(min_rating)s)
         AND
