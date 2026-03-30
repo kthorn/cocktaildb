@@ -858,13 +858,18 @@ section, .card-container {
 }
 
 /* Cocktail space highlight ring animation */
+.highlight-ring {
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
 @keyframes cocktail-space-pulse {
     0% {
-        r: 5;
+        transform: scale(1);
         opacity: 0.6;
     }
     100% {
-        r: 15;
+        transform: scale(3);
         opacity: 0;
     }
 }
