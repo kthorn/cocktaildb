@@ -11,6 +11,7 @@ assert.match(chartSource, /const MAX_VISIBLE_CALLOUTS\s*=\s*20/);
 assert.match(chartSource, /\.scaleExtent\(\[0\.5,\s*50\]\)/);
 assert.match(chartSource, /visiblePoints\.length\s*<=\s*MAX_VISIBLE_CALLOUTS/);
 assert.match(chartSource, /class',\s*'recipe-callouts'/);
+assert.match(chartSource, /class',\s*'recipe-callout'/);
 assert.ok(
     (chartSource.match(/updateCallouts\(currentTransform\)/g) || []).length >= 2,
     'callouts must update on initial render and zoom'

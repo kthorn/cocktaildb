@@ -136,7 +136,7 @@ export function createCocktailSpaceChart(container, data, options = {}) {
 
                 previewCard.cancelHover();
             })
-            .on('click', (event, d) => {
+            .on('click', function(event, d) {
                 previewCard.hide();
                 if (options.onRecipeClick) {
                     options.onRecipeClick(d.recipe_id, d.recipe_name);
@@ -145,16 +145,44 @@ export function createCocktailSpaceChart(container, data, options = {}) {
     } else {
         // Touch events (mobile)
         circles
-            .on('touchstart', (event, d) => {
+            .on('touchstart', function(event, d) {
                 // Only handle single-finger touch for tap detection
                 if (event.touches.length === 1) {
                     event.preventDefault(); // Prevent scroll on single tap
                     touchHandlers.touchstart(event, d);
                 }
             })
-            .on('touchend', (event, d) => {
+            .on('touchend', function(event, d) {
                 touchHandlers.touchend(event, d);
             });
+    }
+
+    /**
+     * Update recipe-name callouts for visible points within the current viewport.
+     * Only shown when the number of visible points is at most MAX_VISIBLE_CALLOUTS.
+     */
+    function updateCallouts(transform) {
+        const visiblePoints = data.map(d => ({
+            ...d,
+            calloutX: transform.applyX(xScale(d.x)),
+            calloutY: transform.applyY(yScale(d.y))
+        })).filter(d =>
+            d.calloutX >= 0 && d.calloutX <= width &&
+            d.calloutY >= 0 && d.calloutY <= height
+        );
+
+        const labels = visiblePoints.length <= MAX_VISIBLE_CALLOUTS ? visiblePoints : [];
+
+        calloutLayer.selectAll('text')
+            .data(labels, d => d.recipe_id)
+            .join(
+                enter => enter.append('text').attr('class', 'recipe-callout'),
+                update => update,
+                exit => exit.remove()
+            )
+            .attr('x', d => d.calloutX + 8)
+            .attr('y', d => d.calloutY - 8)
+            .text(d => d.recipe_name);
     }
 
     // Add zoom behavior with two-finger filter for touch
@@ -188,34 +216,6 @@ export function createCocktailSpaceChart(container, data, options = {}) {
 
     svg.call(zoom);
     updateCallouts(currentTransform);
-
-    /**
-     * Update recipe-name callouts for visible points within the current viewport.
-     * Only shown when the number of visible points is at most MAX_VISIBLE_CALLOUTS.
-     */
-    function updateCallouts(transform) {
-        const visiblePoints = data.map(d => ({
-            ...d,
-            calloutX: transform.applyX(xScale(d.x)),
-            calloutY: transform.applyY(yScale(d.y))
-        })).filter(d =>
-            d.calloutX >= 0 && d.calloutX <= width &&
-            d.calloutY >= 0 && d.calloutY <= height
-        );
-
-        const labels = visiblePoints.length <= MAX_VISIBLE_CALLOUTS ? visiblePoints : [];
-
-        calloutLayer.selectAll('text')
-            .data(labels, d => d.recipe_id)
-            .join(
-                enter => enter.append('text').attr('class', 'recipe-callout'),
-                update => update,
-                exit => exit.remove()
-            )
-            .attr('x', d => d.calloutX + 8)
-            .attr('y', d => d.calloutY - 8)
-            .text(d => d.recipe_name);
-    }
 
     // --- Highlight state (closed over by returned API) ---
     let highlightRings = null;      // d3 selection of ring <circle> elements
@@ -316,7 +316,7 @@ export function createCocktailSpaceChart(container, data, options = {}) {
                     .transition()
                     .duration(500)
                     .style('opacity', 0)
-                    .on('end', () => {
+                    .on('end', function() {
                         if (!highlightRings) return;
                         callOnCompleteOnce();
                         dispose();
