@@ -13,6 +13,7 @@ const DOT_STROKE = 'none';
 const DOT_STROKE_WIDTH = 0;
 
 const TOUCH_HINT_KEY = 'cocktailSpaceTouchHintShown';
+const MAX_VISIBLE_CALLOUTS = 20;
 
 /**
  * Creates an interactive D3.js scatter plot for cocktail space UMAP visualization
@@ -86,6 +87,10 @@ export function createCocktailSpaceChart(container, data, options = {}) {
         .attr('opacity', DOT_OPACITY)
         .style('cursor', 'pointer');
 
+    const calloutLayer = g.append('g')
+        .attr('class', 'recipe-callouts')
+        .attr('clip-path', 'url(#clip)');
+
     // Track current zoom transform for touch handlers
     let currentTransform = d3.zoomIdentity;
 
@@ -131,7 +136,7 @@ export function createCocktailSpaceChart(container, data, options = {}) {
 
                 previewCard.cancelHover();
             })
-            .on('click', function(event, d) {
+            .on('click', (event, d) => {
                 previewCard.hide();
                 if (options.onRecipeClick) {
                     options.onRecipeClick(d.recipe_id, d.recipe_name);
@@ -140,21 +145,21 @@ export function createCocktailSpaceChart(container, data, options = {}) {
     } else {
         // Touch events (mobile)
         circles
-            .on('touchstart', function(event, d) {
+            .on('touchstart', (event, d) => {
                 // Only handle single-finger touch for tap detection
                 if (event.touches.length === 1) {
                     event.preventDefault(); // Prevent scroll on single tap
                     touchHandlers.touchstart(event, d);
                 }
             })
-            .on('touchend', function(event, d) {
+            .on('touchend', (event, d) => {
                 touchHandlers.touchend(event, d);
             });
     }
 
     // Add zoom behavior with two-finger filter for touch
     const zoom = d3.zoom()
-        .scaleExtent([0.5, 10])
+        .scaleExtent([0.5, 50])
         .filter((event) => {
             // On touch devices, only allow zoom with 2+ fingers
             if (event.type.startsWith('touch')) {
@@ -171,6 +176,8 @@ export function createCocktailSpaceChart(container, data, options = {}) {
                 .attr('cx', d => currentTransform.applyX(xScale(d.x)))
                 .attr('cy', d => currentTransform.applyY(yScale(d.y)));
 
+            updateCallouts(currentTransform);
+
             // Update highlight ring positions if active
             if (highlightRings && highlightData) {
                 highlightRings
@@ -180,6 +187,35 @@ export function createCocktailSpaceChart(container, data, options = {}) {
         });
 
     svg.call(zoom);
+    updateCallouts(currentTransform);
+
+    /**
+     * Update recipe-name callouts for visible points within the current viewport.
+     * Only shown when the number of visible points is at most MAX_VISIBLE_CALLOUTS.
+     */
+    function updateCallouts(transform) {
+        const visiblePoints = data.map(d => ({
+            ...d,
+            calloutX: transform.applyX(xScale(d.x)),
+            calloutY: transform.applyY(yScale(d.y))
+        })).filter(d =>
+            d.calloutX >= 0 && d.calloutX <= width &&
+            d.calloutY >= 0 && d.calloutY <= height
+        );
+
+        const labels = visiblePoints.length <= MAX_VISIBLE_CALLOUTS ? visiblePoints : [];
+
+        calloutLayer.selectAll('text')
+            .data(labels, d => d.recipe_id)
+            .join(
+                enter => enter.append('text').attr('class', 'recipe-callout'),
+                update => update,
+                exit => exit.remove()
+            )
+            .attr('x', d => d.calloutX + 8)
+            .attr('y', d => d.calloutY - 8)
+            .text(d => d.recipe_name);
+    }
 
     // --- Highlight state (closed over by returned API) ---
     let highlightRings = null;      // d3 selection of ring <circle> elements
@@ -280,7 +316,7 @@ export function createCocktailSpaceChart(container, data, options = {}) {
                     .transition()
                     .duration(500)
                     .style('opacity', 0)
-                    .on('end', function() {
+                    .on('end', () => {
                         if (!highlightRings) return;
                         callOnCompleteOnce();
                         dispose();
