@@ -48,6 +48,7 @@ The existing `initAnalytics()` already reads `window.location.hash` to determine
 ```
 
 Parsing logic (replaces the existing hash parsing block at lines 26-30 of `initAnalytics()`):
+
 1. Split hash on first `?` → tab name + query string
 2. Validate tab name with existing `isValidTab()` — this split **must** happen before the `isValidTab()` check, since the current code passes the raw hash (including query string) to `isValidTab()` which would fail
 3. Parse query string with `new URLSearchParams(queryString)`, take first `highlight` value via `.get('highlight')`
@@ -66,6 +67,7 @@ const chart = createCocktailSpaceChart(container, data, options);
 ```
 
 **`highlightRecipe(recipeId, onComplete)`** does:
+
 1. Find the data point matching `recipeId` in the bound data
 2. If not found, call `onComplete()` immediately and return (so the caller can clean up the hash)
 3. Compute a zoom transform that centers the point at scale `k = 3` (clamped to the zoom behavior's `scaleExtent`) using the captured `zoom` behavior and `svg` selection (both are local variables inside `createCocktailSpaceChart` — the returned API closes over them)
@@ -76,11 +78,13 @@ const chart = createCocktailSpaceChart(container, data, options);
 The chart code never touches `window.history` or `window.location` — all URL/hash management stays in `analytics.js` via the `onComplete` callback. This keeps the chart module view-only.
 
 **Zoom transform note**: The existing chart applies zoom by manually recomputing each circle's `cx`/`cy` via `currentTransform.applyX(xScale(d.x))` rather than using a group-level `transform` attribute. This means appended ring elements will **not** automatically move with zoom. The ring positions must be updated inside the existing zoom event handler. The implementation should:
+
 - Store a reference to the ring elements (if active)
 - In the zoom handler, update ring `cx`/`cy` the same way circles are updated
 - When rings are removed (after 10s fade), clear the reference so the zoom handler skips the update
 
 **`dispose()`** is a separate method on the returned chart API object. It clears all pending timeouts and removes ring elements. This is called:
+
 - Before a new `highlightRecipe()` call (idempotent re-highlight)
 - When the chart container is cleared/reloaded (e.g., data refresh)
 - On tab switch away from the cocktail space tab (analytics.js should call `dispose()` in the tab-switch handler)
@@ -88,6 +92,7 @@ The chart code never touches `window.history` or `window.location` — all URL/h
 Store the active timeout IDs in the closure so `dispose()` can `clearTimeout` them.
 
 **Pulsing ring implementation**:
+
 - Two concentric `<circle>` elements with `fill: none`, `stroke: #e8a030`, `pointer-events: none`, offset animation (`0s` and `0.5s` delay)
 - CSS `@keyframes` animation: radius expands from dot size to ~3x, opacity fades from 0.6 to 0
 - Animation duration: ~1.5s per pulse, repeating

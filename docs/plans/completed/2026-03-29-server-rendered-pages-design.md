@@ -88,6 +88,7 @@ Lives under `api/` so it's included by the existing `COPY api/ .` in `Dockerfile
 ### `base.html`
 
 Provides:
+
 - Charset, viewport meta tags
 - Blocks for `title`, `description`, `extra_head` (JSON-LD, canonical URL, OG tags)
 - References the existing `/styles.css` from the frontend static root (served by Caddy)
@@ -97,6 +98,7 @@ Provides:
 ### `recipe.html`
 
 Server-rendered content:
+
 - `<title>`: "{name} -- Mixology Tools"
 - `<meta name="description">`: auto-generated summary (e.g., "Negroni cocktail recipe: Gin, Campari, Sweet Vermouth")
 - OG tags (`og:title`, `og:description`, `og:url`, `og:type`)
@@ -106,6 +108,7 @@ Server-rendered content:
 - Content wrapped in `<div id="recipe-container">` — the SPA JS targets this container and replaces its contents
 
 Script loading (same as current `recipe.html`):
+
 - `common.js`, `api.js`, `auth.js`, `recipeCard.js`, `recipe.js`
 - When JS executes in a browser, it reads the recipe ID from the URL path, fetches from the API, and renders the interactive recipe card — replacing the static HTML
 - Agents/crawlers without JS see the fully rendered static content
@@ -113,6 +116,7 @@ Script loading (same as current `recipe.html`):
 ### `ingredient.html`
 
 Server-rendered content:
+
 - `<title>`: "{name} Cocktails -- Mixology Tools"
 - `<meta name="description">`: e.g., "12 cocktail recipes using mezcal"
 - Hierarchy breadcrumb (e.g., Spirits > Agave Spirits > Mezcal) with each level linked to `/ingredient/{id}`
@@ -156,6 +160,7 @@ Embedded in recipe pages as `<script type="application/ld+json">`:
 ```
 
 Fields mapped from existing data:
+
 - `name` from `recipe.name`
 - `recipeIngredient` — array of strings combining `amount`, `unit_abbreviation`, and `ingredient_name` from each `RecipeIngredientResponse`
 - `recipeInstructions` — split `recipe.instructions` into steps (by newline or sentence), each as a `HowToStep`
@@ -175,6 +180,7 @@ Minimal changes to make the existing SPA work with `/recipe/{id}` URLs.
 ### `recipe.js`
 
 Currently reads `?id=` from `window.location.search`. Change to:
+
 1. Extract ID from URL path (`/recipe/42` -> `42`)
 2. Fall back to query param for edge cases
 
@@ -201,6 +207,7 @@ Returns `Response(content=xml_string, media_type="application/xml")`.
 ### Content
 
 Generated from DB queries:
+
 - All recipe IDs -> `/recipe/{id}` entries (priority 0.8)
 - All ingredient IDs -> `/ingredient/{id}` entries (priority 0.7)
 - Static pages: homepage (1.0), about/search/analytics/recipes (0.7), API docs + OpenAPI spec (0.9)
