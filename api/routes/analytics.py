@@ -2,8 +2,8 @@
 
 import logging
 import os
-from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from typing import Any, Dict, List, Optional, cast
+from fastapi import APIRouter, Depends, Query, Response
 from fastapi.responses import FileResponse
 
 from dependencies.auth import UserInfo, get_current_user_optional
@@ -22,6 +22,46 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 # Initialize storage manager
 ANALYTICS_PATH = os.environ.get("ANALYTICS_PATH", "")
 storage_manager = AnalyticsStorage(ANALYTICS_PATH) if ANALYTICS_PATH else None
+PRIVATE_CACHE_CONTROL = "private, no-store"
+
+
+def add_cocktail_space_ratings(
+    stored_data: dict, db: Database, user: Optional[UserInfo]
+) -> dict:
+    """Add live personal or average ratings to cached UMAP coordinates."""
+    recipe_ids = [point["recipe_id"] for point in stored_data.get("data", [])]
+    ratings = {}
+    if recipe_ids:
+        if user:
+            query = """
+                SELECT r.id AS recipe_id, ur.rating
+                FROM recipes r
+                LEFT JOIN ratings ur
+                  ON ur.recipe_id = r.id AND ur.cognito_user_id = %(user_id)s
+                WHERE r.id = ANY(%(recipe_ids)s)
+            """
+            params = {"recipe_ids": recipe_ids, "user_id": user.user_id}
+        else:
+            query = """
+                SELECT r.id AS recipe_id, NULLIF(r.avg_rating, 0) AS rating
+                FROM recipes r
+                WHERE r.id = ANY(%(recipe_ids)s)
+            """
+            params = {"recipe_ids": recipe_ids}
+        rows = cast(List[Dict[str, Any]], db.execute_query(query, params))
+        ratings = {row["recipe_id"]: row["rating"] or None for row in rows}
+
+    return {
+        **stored_data,
+        "data": [
+            {**point, "rating": ratings.get(point["recipe_id"])}
+            for point in stored_data.get("data", [])
+        ],
+        "metadata": {
+            **stored_data.get("metadata", {}),
+            "rating_source": "user" if user else "average",
+        },
+    }
 
 
 @router.get("/ingredient-usage")
@@ -103,10 +143,12 @@ async def get_recipe_complexity_analytics(
 
 @router.get("/cocktail-space")
 async def get_cocktail_space_analytics(
+    response: Response,
     db: Database = Depends(get_db),
     user: Optional[UserInfo] = Depends(get_current_user_optional),
 ):
     """Get UMAP embedding of recipe space based on ingredient similarity"""
+    response.headers["Cache-Control"] = PRIVATE_CACHE_CONTROL
     try:
         storage_key = "cocktail-space"
 
@@ -120,7 +162,7 @@ async def get_cocktail_space_analytics(
                 detail="cocktail-space data not found in storage"
             )
 
-        return stored_data
+        return add_cocktail_space_ratings(stored_data, db, user)
     except DatabaseException:
         raise
     except Exception as e:
@@ -130,10 +172,12 @@ async def get_cocktail_space_analytics(
 
 @router.get("/cocktail-space-em")
 async def get_cocktail_space_em_analytics(
+    response: Response,
     db: Database = Depends(get_db),
     user: Optional[UserInfo] = Depends(get_current_user_optional),
 ):
     """Get UMAP embedding of recipe space based on EM-learned distances with ingredient rollup"""
+    response.headers["Cache-Control"] = PRIVATE_CACHE_CONTROL
     try:
         storage_key = "cocktail-space-em"
 
@@ -147,7 +191,7 @@ async def get_cocktail_space_em_analytics(
                 detail="cocktail-space-em data not found in storage"
             )
 
-        return stored_data
+        return add_cocktail_space_ratings(stored_data, db, user)
     except DatabaseException:
         raise
     except Exception as e:

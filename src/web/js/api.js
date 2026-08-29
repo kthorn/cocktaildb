@@ -464,12 +464,12 @@ class CocktailAPI {
 
     async getCocktailSpaceAnalytics() {
         const url = `/analytics/cocktail-space`;
-        return this._request(url, 'GET', null, false);
+        return this._request(url, 'GET', null, this.isAuthenticated());
     }
 
     async getCocktailSpaceEmAnalytics() {
         const url = `/analytics/cocktail-space-em`;
-        return this._request(url, 'GET', null, false);
+        return this._request(url, 'GET', null, this.isAuthenticated());
     }
 
     async getIngredientTreeAnalytics() {
