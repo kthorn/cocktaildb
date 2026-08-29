@@ -208,7 +208,10 @@ def test_restore_aborts_before_shutdown_when_timer_state_is_unknown(tmp_path):
     assert result.returncode != 0
     commands = (tmp_path / "commands").read_text()
     assert "stop api" not in commands
-    assert "Could not determine whether cocktaildb-analytics-debounce.timer is active" in result.stderr
+    assert (
+        "Could not determine whether cocktaildb-analytics-debounce.timer is active"
+        in result.stderr
+    )
 
 
 def test_restore_failure_keeps_api_and_background_writers_stopped(tmp_path):
@@ -242,7 +245,9 @@ def test_restore_escalates_when_writer_shutdown_cannot_be_verified(tmp_path):
     )
 
     assert result.returncode != 0
-    assert "CRITICAL: could not verify that all database writers stopped" in result.stderr
+    assert (
+        "CRITICAL: could not verify that all database writers stopped" in result.stderr
+    )
     assert "API and analytics remain stopped" not in result.stderr
 
 
@@ -252,7 +257,9 @@ def test_restore_escalates_when_writer_state_query_fails(tmp_path):
     )
 
     assert result.returncode != 0
-    assert "CRITICAL: could not verify that all database writers stopped" in result.stderr
+    assert (
+        "CRITICAL: could not verify that all database writers stopped" in result.stderr
+    )
     assert "API and analytics remain stopped" not in result.stderr
 
 
