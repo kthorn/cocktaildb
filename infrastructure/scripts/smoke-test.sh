@@ -42,13 +42,13 @@ test_endpoint() {
 
     if [ "$status" = "$expected_status" ]; then
         echo "PASS (HTTP $status)"
-        ((PASS++))
+        ((++PASS))
     elif [ "$status" = "000" ]; then
         echo "FAIL (connection error)"
-        ((FAIL++))
+        ((++FAIL))
     else
         echo "FAIL (expected $expected_status, got $status)"
-        ((FAIL++))
+        ((++FAIL))
     fi
 }
 
@@ -66,16 +66,16 @@ test_json_field() {
 
     if [ -z "$response" ]; then
         echo "FAIL (no response)"
-        ((FAIL++))
+        ((++FAIL))
         return
     fi
 
     if echo "$response" | grep -q "\"$field\""; then
         echo "PASS (contains $field)"
-        ((PASS++))
+        ((++PASS))
     else
         echo "FAIL (missing $field)"
-        ((FAIL++))
+        ((++FAIL))
     fi
 }
 
