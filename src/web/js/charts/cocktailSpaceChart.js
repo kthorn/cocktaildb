@@ -1,5 +1,6 @@
 import { createRecipePreviewCard } from '../components/recipePreviewCard.js';
 import { createTouchHandlers, isTouchDevice, isMobileViewport } from '../utils/touchInteraction.js';
+import { placeCallouts } from './calloutLayout.mjs';
 
 // =============================================================================
 // Visual Configuration - Tweak these values to adjust appearance
@@ -18,9 +19,10 @@ const MAX_VISIBLE_CALLOUTS = 20;
 /**
  * Creates an interactive D3.js scatter plot for cocktail space UMAP visualization
  * @param {HTMLElement} container - Container element for the chart
- * @param {Array} data - Array of {recipe_id, recipe_name, x, y} objects
+ * @param {Array} data - Array of {recipe_id, recipe_name, x, y, rating} objects
  * @param {Object} options - Configuration options
  * @param {Function} options.onRecipeClick - Callback when recipe point is clicked: (recipeId, recipeName) => {}
+ * @param {'user'|'average'} options.ratingSource - Rating represented by each point
  */
 export function createCocktailSpaceChart(container, data, options = {}) {
     // Clear container
@@ -28,6 +30,28 @@ export function createCocktailSpaceChart(container, data, options = {}) {
 
     const isMobile = isMobileViewport();
     const isTouch = isTouchDevice();
+    const ratingSource = options.ratingSource === 'user' ? 'user' : 'average';
+    const ratingColor = d3.scaleSequential([1, 5], d3.interpolateViridis);
+
+    const ratingControls = d3.select(container)
+        .append('div')
+        .attr('class', 'cocktail-space-rating-controls');
+    const ratingLabel = ratingControls.append('label');
+    const ratingToggle = ratingLabel.append('input')
+        .attr('type', 'checkbox');
+    ratingLabel.append('span')
+        .text(ratingSource === 'user' ? 'Color by my rating' : 'Color by average rating');
+    const ratingLegend = ratingControls.append('div')
+        .attr('class', 'cocktail-space-rating-legend hidden')
+        .attr('aria-hidden', 'true');
+    [1, 2, 3, 4, 5].forEach(rating => {
+        const item = ratingLegend.append('span');
+        item.append('i').style('background-color', ratingColor(rating));
+        item.append('span').text(rating);
+    });
+    const unratedItem = ratingLegend.append('span');
+    unratedItem.append('i').style('background-color', '#9ca3af');
+    unratedItem.append('span').text('Unrated');
 
     // Set up dimensions
     const margin = { top: 60, right: 40, bottom: 60, left: 60 };
@@ -86,6 +110,17 @@ export function createCocktailSpaceChart(container, data, options = {}) {
         .attr('stroke-width', DOT_STROKE_WIDTH)
         .attr('opacity', DOT_OPACITY)
         .style('cursor', 'pointer');
+
+    ratingToggle.on('change', function() {
+        const enabled = this.checked;
+        circles.attr('fill', d => enabled
+            ? (d.rating == null ? '#9ca3af' : ratingColor(d.rating))
+            : DOT_FILL
+        );
+        ratingLegend
+            .classed('hidden', !enabled)
+            .attr('aria-hidden', String(!enabled));
+    });
 
     const calloutLayer = g.append('g')
         .attr('class', 'recipe-callouts')
@@ -172,17 +207,47 @@ export function createCocktailSpaceChart(container, data, options = {}) {
         );
 
         const labels = visiblePoints.length <= MAX_VISIBLE_CALLOUTS ? visiblePoints : [];
-
-        calloutLayer.selectAll('text')
+        const text = calloutLayer.selectAll('text')
             .data(labels, d => d.recipe_id)
             .join(
                 enter => enter.append('text').attr('class', 'recipe-callout'),
                 update => update,
                 exit => exit.remove()
             )
-            .attr('x', d => d.calloutX + 8)
-            .attr('y', d => d.calloutY - 8)
             .text(d => d.recipe_name);
+
+        const textWidths = new Map();
+        text.each(function(d) {
+            textWidths.set(d.recipe_name, this.getComputedTextLength());
+        });
+        const positioned = placeCallouts(
+            labels,
+            width,
+            height,
+            recipeName => textWidths.get(recipeName)
+        );
+
+        calloutLayer.selectAll('text')
+            .data(positioned, d => d.recipe_id)
+            .join(
+                enter => enter.append('text').attr('class', 'recipe-callout'),
+                update => update,
+                exit => exit.remove()
+            )
+            .attr('x', d => d.labelX)
+            .attr('y', d => d.labelY)
+            .attr('text-anchor', d => d.anchor)
+            .text(d => d.recipe_name);
+
+        calloutLayer.selectAll('line')
+            .data(positioned.filter(d => d.distance > 10), d => d.recipe_id)
+            .join('line')
+            .attr('class', 'recipe-callout-line')
+            .attr('x1', d => d.calloutX)
+            .attr('y1', d => d.calloutY)
+            .attr('x2', d => d.labelX)
+            .attr('y2', d => d.labelY - 4)
+            .lower();
     }
 
     // Add zoom behavior with two-finger filter for touch

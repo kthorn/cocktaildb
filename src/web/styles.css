@@ -2939,6 +2939,34 @@ input[type="radio"]:focus {
     font-family: Arial, sans-serif;
 }
 
+.cocktail-space-rating-controls {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    margin-bottom: var(--space-sm);
+}
+
+.cocktail-space-rating-controls label,
+.cocktail-space-rating-legend,
+.cocktail-space-rating-legend > span {
+    align-items: center;
+    display: flex;
+    gap: var(--space-xs);
+}
+
+.cocktail-space-rating-legend > span {
+    font-size: var(--text-sm);
+}
+
+.cocktail-space-rating-legend i {
+    border: 1px solid #6b7280;
+    border-radius: 50%;
+    display: inline-block;
+    height: 10px;
+    width: 10px;
+}
+
 #cocktail-space-chart .recipe-callout,
 #cocktail-space-em-chart .recipe-callout {
     fill: #1f2937;
@@ -2949,6 +2977,13 @@ input[type="radio"]:focus {
     stroke: #fff;
     stroke-linejoin: round;
     stroke-width: 3px;
+}
+
+#cocktail-space-chart .recipe-callout-line,
+#cocktail-space-em-chart .recipe-callout-line {
+    pointer-events: none;
+    stroke: #6b7280;
+    stroke-width: 1px;
 }
 
 #cocktail-space-chart .grid line {

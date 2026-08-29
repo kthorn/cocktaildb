@@ -488,7 +488,8 @@ async function loadCocktailSpaceData() {
 
         // Render chart
         state.cocktailSpaceChart = createCocktailSpaceChart(chartContainer, response.data, {
-            onRecipeClick: handleRecipeClick
+            onRecipeClick: handleRecipeClick,
+            ratingSource: response.metadata?.rating_source
         });
 
         // Trigger highlight if requested via URL hash
@@ -548,7 +549,8 @@ async function loadCocktailSpaceEmData() {
 
         // Render chart
         state.cocktailSpaceEmChart = createCocktailSpaceChart(chartContainer, response.data, {
-            onRecipeClick: handleRecipeClick
+            onRecipeClick: handleRecipeClick,
+            ratingSource: response.metadata?.rating_source
         });
 
         // Trigger highlight if requested via URL hash
