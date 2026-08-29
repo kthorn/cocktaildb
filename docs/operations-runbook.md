@@ -163,17 +163,16 @@ ssh ec2-user@$COCKTAILDB_HOST "sudo journalctl -u cocktaildb-backup.service -n 5
 
 ### Restore from S3 Backup
 
+List the available backups, then run the restore from the repository root:
+
 ```bash
-# List available backups
 aws s3 ls s3://cocktaildbbackups-<account-id>-prod/
-
-# Download specific backup
-aws s3 cp s3://cocktaildbbackups-<account-id>-prod/backup-2024-01-15_08-00-00.sql.gz /tmp/
-
-# Restore (on EC2)
-ssh ec2-user@$COCKTAILDB_HOST
-gunzip -c /tmp/backup-*.sql.gz | psql -U cocktaildb -d cocktaildb
+SSH_KEY=~/.ssh/cocktaildb-ec2.pem \
+  ./scripts/restore-postgres.sh prod \
+  s3://cocktaildbbackups-<account-id>-prod/backup-<timestamp>.sql.gz
 ```
+
+The script requires an environment-specific confirmation, downloads and validates the selected backup on EC2, creates and reports a safety backup, locks out overlapping restores, stops the API and analytics jobs, recreates and restores the database, then restarts the API and checks database-backed stats. If restoration fails after writers stop, the API, analytics, and backup timer remain stopped; inspect `journalctl -u cocktaildb-backup.service` and the reported safety backup before restarting services.
 
 ### Connect to PostgreSQL
 
