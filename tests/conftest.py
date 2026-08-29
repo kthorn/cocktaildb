@@ -74,15 +74,27 @@ def reset_rate_limiter():
 @pytest.fixture(scope="session")
 def postgres_container():
     """Session-scoped PostgreSQL container - shared across all tests"""
-    with PostgresContainer(
-        image=POSTGRES_IMAGE,
-        username=TEST_DB_USER,
-        password=TEST_DB_PASSWORD,
-        dbname=TEST_DB_NAME,
-    ) as container:
-        # Wait for container to be ready
-        container.get_connection_url()
-        yield container
+    ready = False
+    try:
+        with PostgresContainer(
+            image=POSTGRES_IMAGE,
+            username=TEST_DB_USER,
+            password=TEST_DB_PASSWORD,
+            dbname=TEST_DB_NAME,
+        ) as container:
+            # Wait for container to be ready
+            container.get_connection_url()
+            ready = True
+            yield container
+    except Exception as error:
+        if ready:
+            raise
+        pytest.exit(
+            "Unable to start the PostgreSQL test container. "
+            "Ensure Docker is running and accessible with `docker info`. "
+            f"Original error: {error}",
+            returncode=2,
+        )
 
 
 @pytest.fixture(scope="session")
