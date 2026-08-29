@@ -1,5 +1,5 @@
 import { createRecipePreviewCard } from '../components/recipePreviewCard.js';
-import { createTouchHandlers, isTouchDevice, isMobileViewport } from '../utils/touchInteraction.js';
+import { createTouchHandlers, isTouchDevice } from '../utils/touchInteraction.js';
 import { placeCallouts } from './calloutLayout.mjs';
 
 // =============================================================================
@@ -14,7 +14,8 @@ const DOT_STROKE = 'none';
 const DOT_STROKE_WIDTH = 0;
 
 const TOUCH_HINT_KEY = 'cocktailSpaceTouchHintShown';
-const MAX_VISIBLE_CALLOUTS = 20;
+const MAX_VISIBLE_CALLOUTS = 50;
+const UNRATED_COLOR = '#cbd5e1';
 
 /**
  * Creates an interactive D3.js scatter plot for cocktail space UMAP visualization
@@ -28,10 +29,9 @@ export function createCocktailSpaceChart(container, data, options = {}) {
     // Clear container
     container.innerHTML = '';
 
-    const isMobile = isMobileViewport();
     const isTouch = isTouchDevice();
     const ratingSource = options.ratingSource === 'user' ? 'user' : 'average';
-    const ratingColor = d3.scaleSequential([1, 5], d3.interpolateViridis);
+    const ratingColor = d3.scaleSequential([1, 5], t => d3.interpolateBlues(0.2 + t * 0.7));
 
     const ratingControls = d3.select(container)
         .append('div')
@@ -50,7 +50,7 @@ export function createCocktailSpaceChart(container, data, options = {}) {
         item.append('span').text(rating);
     });
     const unratedItem = ratingLegend.append('span');
-    unratedItem.append('i').style('background-color', '#9ca3af');
+    unratedItem.append('i').style('background-color', UNRATED_COLOR);
     unratedItem.append('span').text('Unrated');
 
     // Set up dimensions
@@ -114,7 +114,7 @@ export function createCocktailSpaceChart(container, data, options = {}) {
     ratingToggle.on('change', function() {
         const enabled = this.checked;
         circles.attr('fill', d => enabled
-            ? (d.rating == null ? '#9ca3af' : ratingColor(d.rating))
+            ? (d.rating == null ? UNRATED_COLOR : ratingColor(d.rating))
             : DOT_FILL
         );
         ratingLegend
@@ -142,7 +142,7 @@ export function createCocktailSpaceChart(container, data, options = {}) {
                 .attr('r', DOT_RADIUS_HOVER)
                 .attr('opacity', DOT_OPACITY_HOVER);
         },
-        onDoubleTap: (event, d) => {
+        onDoubleTap: (_event, d) => {
             previewCard.hide();
             if (options.onRecipeClick) {
                 options.onRecipeClick(d.recipe_id, d.recipe_name);
@@ -171,7 +171,7 @@ export function createCocktailSpaceChart(container, data, options = {}) {
 
                 previewCard.cancelHover();
             })
-            .on('click', function(event, d) {
+            .on('click', function(_event, d) {
                 previewCard.hide();
                 if (options.onRecipeClick) {
                     options.onRecipeClick(d.recipe_id, d.recipe_name);
@@ -370,7 +370,7 @@ export function createCocktailSpaceChart(container, data, options = {}) {
             .attr('stroke', '#e8a030')
             .attr('stroke-width', 2)
             .attr('pointer-events', 'none')
-            .style('animation', (d, i) =>
+            .style('animation', (_d, i) =>
                 `cocktail-space-pulse 1.5s ease-out ${i * 0.5}s infinite`
             );
 
