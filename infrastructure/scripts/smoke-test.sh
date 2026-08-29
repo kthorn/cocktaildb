@@ -85,10 +85,10 @@ test_json_field "Health response" "/health" "status"
 
 echo ""
 echo "=== API Endpoints ==="
-test_endpoint "Recipes list" "/api/v1/recipes"
+test_endpoint "Recipes list" "/api/v1/recipes/search"
 test_endpoint "Ingredients list" "/api/v1/ingredients"
 test_endpoint "Units list" "/api/v1/units"
-test_endpoint "Tags list" "/api/v1/tags"
+test_endpoint "Tags list" "/api/v1/tags/public"
 
 echo ""
 echo "=== Analytics Endpoints ==="
@@ -103,8 +103,8 @@ test_endpoint "Static CSS" "/css/styles.css"
 
 echo ""
 echo "=== API Response Validation ==="
-test_json_field "Recipes has data" "/api/v1/recipes" "recipes"
-test_json_field "Ingredients has data" "/api/v1/ingredients" "ingredients"
+test_json_field "Recipes has data" "/api/v1/recipes/search" "recipes"
+test_json_field "Ingredients has data" "/api/v1/ingredients" "name"
 
 echo ""
 echo "========================================"
