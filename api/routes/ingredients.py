@@ -1,35 +1,41 @@
 """Ingredients endpoints for the CocktailDB API"""
 
 import logging
-from typing import List, Optional
-from fastapi import APIRouter, Depends, status
 
+from fastapi import APIRouter, Body, Depends, status
+
+from bulk_ingredient_values import BULK_VALUE_LIMITS, parse_bulk_ingredient_values
+from core.exceptions import (
+    ConflictException,
+    DatabaseException,
+    NotFoundException,
+    ValidationException,
+)
+from db.database import get_database as get_db
+from db.db_bulk_values import bulk_update_ingredient_values
+from db.db_core import Database
 from dependencies.auth import (
     UserInfo,
     get_current_user_optional,
-    require_authentication,
     require_editor_access,
 )
-from db.database import get_database as get_db
-from db.db_core import Database
-from models.requests import IngredientCreate, IngredientUpdate, BulkIngredientUpload
+from models.requests import BulkIngredientUpload, IngredientCreate, IngredientUpdate
 from models.responses import (
-    IngredientResponse,
-    MessageResponse,
     BulkIngredientUploadResponse,
     BulkIngredientUploadValidationError,
+    IngredientResponse,
+    MessageResponse,
 )
-from core.exceptions import NotFoundException, DatabaseException, ConflictException
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ingredients", tags=["ingredients"])
 
 
-@router.get("", response_model=List[IngredientResponse])
+@router.get("", response_model=list[IngredientResponse])
 async def get_ingredients(
     db: Database = Depends(get_db),
-    user: Optional[UserInfo] = Depends(get_current_user_optional),
+    user: UserInfo | None = Depends(get_current_user_optional),
 ):
     """Get all ingredients"""
     try:
@@ -38,14 +44,14 @@ async def get_ingredients(
         return [IngredientResponse(**ingredient) for ingredient in ingredients]
     except Exception as e:
         logger.error(f"Error getting ingredients: {str(e)}")
-        raise DatabaseException("Failed to retrieve ingredients", detail=str(e))
+        raise DatabaseException("Failed to retrieve ingredients", detail=str(e)) from e
 
 
-@router.get("/search", response_model=List[IngredientResponse])
+@router.get("/search", response_model=list[IngredientResponse])
 async def search_ingredients(
     q: str,
     db: Database = Depends(get_db),
-    user: Optional[UserInfo] = Depends(get_current_user_optional),
+    user: UserInfo | None = Depends(get_current_user_optional),
 ):
     """Search ingredients by name"""
     try:
@@ -54,7 +60,7 @@ async def search_ingredients(
         return [IngredientResponse(**ingredient) for ingredient in ingredients]
     except Exception as e:
         logger.error(f"Error searching ingredients: {str(e)}")
-        raise DatabaseException("Failed to search ingredients", detail=str(e))
+        raise DatabaseException("Failed to search ingredients", detail=str(e)) from e
 
 
 @router.post("", response_model=IngredientResponse, status_code=status.HTTP_201_CREATED)
@@ -80,14 +86,14 @@ async def create_ingredient(
         raise
     except Exception as e:
         logger.error(f"Error creating ingredient: {str(e)}")
-        raise DatabaseException("Failed to create ingredient", detail=str(e))
+        raise DatabaseException("Failed to create ingredient", detail=str(e)) from e
 
 
 @router.get("/{ingredient_id}", response_model=IngredientResponse)
 async def get_ingredient(
     ingredient_id: int,
     db: Database = Depends(get_db),
-    user: Optional[UserInfo] = Depends(get_current_user_optional),
+    user: UserInfo | None = Depends(get_current_user_optional),
 ):
     """Get a specific ingredient by ID"""
     try:
@@ -103,7 +109,7 @@ async def get_ingredient(
         raise
     except Exception as e:
         logger.error(f"Error getting ingredient {ingredient_id}: {str(e)}")
-        raise DatabaseException("Failed to retrieve ingredient", detail=str(e))
+        raise DatabaseException("Failed to retrieve ingredient", detail=str(e)) from e
 
 
 @router.put("/{ingredient_id}", response_model=IngredientResponse)
@@ -127,15 +133,121 @@ async def update_ingredient(
             k: v for k, v in ingredient_data.model_dump().items() if v is not None
         }
 
-        updated_ingredient = db.update_ingredient(ingredient_id, update_dict)
+        value_updates = {
+            field: update_dict.pop(field)
+            for field in BULK_VALUE_LIMITS
+            if field in update_dict
+        }
+        if update_dict:
+            db.update_ingredient(ingredient_id, update_dict)
+        if value_updates:
+            bulk_update_ingredient_values(
+                db, {ingredient_id: value_updates}, overwrite=True
+            )
 
+        updated_ingredient = db.get_ingredient(ingredient_id)
+        if updated_ingredient is None:
+            raise NotFoundException(f"Ingredient with ID {ingredient_id} not found")
         return IngredientResponse(**updated_ingredient)
 
     except NotFoundException:
         raise
     except Exception as e:
         logger.error(f"Error updating ingredient {ingredient_id}: {str(e)}")
-        raise DatabaseException("Failed to update ingredient", detail=str(e))
+        raise DatabaseException("Failed to update ingredient", detail=str(e)) from e
+
+
+@router.post("/bulk-values")
+async def upload_ingredient_values(
+    csv_text: str = Body(..., media_type="text/csv"),
+    db: Database = Depends(get_db),
+    user: UserInfo = Depends(require_editor_access),
+):
+    """Populate blank ingredient measurement fields from CSV."""
+    try:
+        rows = parse_bulk_ingredient_values(csv_text)
+    except ValueError as error:
+        raise ValidationException(
+            "Invalid ingredient value CSV", detail=str(error)
+        ) from error
+
+    ingredients = {}
+    updates = {}
+    expected_values = {}
+    validation_errors = []
+    conflicts = []
+    unchanged_count = 0
+
+    for row in rows:
+        ingredient_id = row["ingredient_id"]
+        ingredient = ingredients.setdefault(
+            ingredient_id, db.get_ingredient(ingredient_id)
+        )
+        if ingredient is None:
+            validation_errors.append(f"Ingredient {ingredient_id} does not exist")
+            continue
+        if ingredient["name"] != row["ingredient_name"]:
+            validation_errors.append(
+                f"Ingredient {ingredient_id} name '{row['ingredient_name']}' "
+                f"does not match '{ingredient['name']}'"
+            )
+            continue
+
+        field = row["field"]
+        value = row["value"]
+        ingredient_updates = updates.setdefault(ingredient_id, {})
+        if field in ingredient_updates:
+            if ingredient_updates[field] != value:
+                conflicts.append(
+                    f"Ingredient {ingredient_id} has conflicting {field} values in the CSV"
+                )
+            else:
+                unchanged_count += 1
+            continue
+
+        existing_value = ingredient.get(field)
+        expected_values.setdefault(ingredient_id, {})[field] = existing_value
+        if existing_value is None:
+            ingredient_updates[field] = value
+        elif existing_value == value:
+            unchanged_count += 1
+        else:
+            conflicts.append(
+                f"Ingredient {ingredient_id} already has {field}={existing_value}"
+            )
+
+    if validation_errors:
+        raise ValidationException(
+            "Invalid ingredient value CSV", detail="; ".join(validation_errors)
+        )
+    if conflicts:
+        raise ConflictException(
+            "Ingredient values conflict with curated data", detail="; ".join(conflicts)
+        )
+
+    updates = {
+        ingredient_id: fields for ingredient_id, fields in updates.items() if fields
+    }
+    if expected_values:
+        try:
+            bulk_update_ingredient_values(
+                db,
+                updates,
+                expected_names={
+                    ingredient_id: ingredients[ingredient_id]["name"]
+                    for ingredient_id in expected_values
+                },
+                expected_values=expected_values,
+            )
+        except ValueError as error:
+            raise ConflictException(
+                "Ingredient values changed during upload", detail=str(error)
+            ) from error
+    return {
+        "updated_count": sum(len(fields) for fields in updates.values()),
+        "unchanged_count": unchanged_count,
+        "errors": [],
+    }
 
 
 @router.delete("/{ingredient_id}", response_model=MessageResponse)
@@ -163,7 +275,7 @@ async def delete_ingredient(
         raise
     except Exception as e:
         logger.error(f"Error deleting ingredient {ingredient_id}: {str(e)}")
-        raise DatabaseException("Failed to delete ingredient", detail=str(e))
+        raise DatabaseException("Failed to delete ingredient", detail=str(e)) from e
 
 
 @router.post(
@@ -196,11 +308,11 @@ async def bulk_upload_ingredients(
         # Collect all unique names for batch validation
         all_ingredient_names = [ingredient.name for ingredient in bulk_data.ingredients]
         all_parent_names = list(
-            set(
+            {
                 ingredient.parent_name
                 for ingredient in bulk_data.ingredients
                 if ingredient.parent_name is not None
-            )
+            }
         )
 
         logger.info(
@@ -380,4 +492,6 @@ async def bulk_upload_ingredients(
         logger.error(
             f"Error in bulk ingredient upload after {total_duration:.3f}s: {str(e)}"
         )
-        raise DatabaseException("Failed to bulk upload ingredients", detail=str(e))
+        raise DatabaseException(
+            "Failed to bulk upload ingredients", detail=str(e)
+        ) from e

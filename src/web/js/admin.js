@@ -20,6 +20,8 @@ function setupAdminPage() {
     const downloadIngredientTemplateBtn = document.getElementById('download-ingredient-template-btn');
     const ingredientFileInput = document.getElementById('ingredient-file-input');
     const uploadIngredientsBtn = document.getElementById('upload-ingredients-btn');
+    const ingredientValueFileInput = document.getElementById('ingredient-value-file-input');
+    const uploadIngredientValuesBtn = document.getElementById('upload-ingredient-values-btn');
     
     if (downloadTemplateBtn) {
         downloadTemplateBtn.addEventListener('click', downloadTemplate);
@@ -49,6 +51,18 @@ function setupAdminPage() {
     if (uploadIngredientsBtn) {
         uploadIngredientsBtn.addEventListener('click', () => handleBulkUpload(getIngredientUploadConfig()));
     }
+
+    const ingredientValueConfig = getIngredientValueUploadConfig();
+    if (ingredientValueFileInput) {
+        ingredientValueFileInput.addEventListener('change', (event) => {
+            handleFileSelection(event, ingredientValueConfig);
+        });
+    }
+    if (uploadIngredientValuesBtn) {
+        uploadIngredientValuesBtn.addEventListener('click', () => {
+            handleBulkValueUpload(ingredientValueConfig);
+        });
+    }
     
     // Tag management elements
     const refreshTagsBtn = document.getElementById('refresh-tags-btn');
@@ -67,32 +81,26 @@ function setupAdminPage() {
 
 function updateUIBasedOnAuth() {
     const adminTools = document.querySelector('.admin-tools');
-    
     if (!adminTools) {
         console.error('Admin tools container not found');
         return;
     }
-    
+
+    let accessMessage = null;
     if (!isAuthenticated()) {
-        adminTools.innerHTML = `
-            <div class="card-container">
-                <p>Please log in to access admin tools.</p>
-            </div>
-        `;
-        return;
+        accessMessage = 'Please log in to access admin tools.';
+    } else if (!api.isEditor()) {
+        accessMessage = 'Editor access required. Only editors and admins can access admin tools.';
     }
-    
-    if (!api.isEditor()) {
-        adminTools.innerHTML = `
-            <div class="card-container">
-                <p>Editor access required. Only editors and admins can access admin tools.</p>
-            </div>
-        `;
-        return;
+
+    if (accessMessage) {
+        const card = document.createElement('div');
+        card.className = 'card-container';
+        const message = document.createElement('p');
+        message.textContent = accessMessage;
+        card.append(message);
+        adminTools.replaceChildren(card);
     }
-    
-    // User has editor permissions, admin tools are already visible in HTML
-    // No need to hide/show since the HTML contains the admin tools by default
 }
 
 
@@ -226,12 +234,13 @@ function getIngredientUploadConfig() {
 function handleFileSelection(event, config) {
     const file = event.target.files[0];
     const uploadBtn = document.getElementById(config.uploadBtnId);
+    const fileExtension = config.fileExtension || '.json';
+    const fileLabel = config.fileLabel || 'JSON';
     
     if (file) {
         // Validate file type
-        const isJson = file.type.includes('json') || file.name.toLowerCase().endsWith('.json');
-        if (!isJson) {
-            showMessage('Please select a JSON file', 'error');
+        if (!file.name.toLowerCase().endsWith(fileExtension)) {
+            showMessage(`Please select a ${fileLabel} file`, 'error');
             event.target.value = '';
             uploadBtn.disabled = true;
             return;
@@ -322,6 +331,45 @@ function readFile(file) {
         reader.onerror = reject;
         reader.readAsText(file);
     });
+}
+
+function getIngredientValueUploadConfig() {
+    return {
+        fileInputId: 'ingredient-value-file-input',
+        uploadBtnId: 'upload-ingredient-values-btn',
+        progressId: 'ingredient-value-upload-progress',
+        resultsId: 'ingredient-value-upload-results',
+        itemLabel: 'ingredient value',
+        buttonText: 'Upload Ingredient Values',
+        fileExtension: '.csv',
+        fileLabel: 'CSV'
+    };
+}
+
+async function handleBulkValueUpload(config) {
+    const fileInput = document.getElementById(config.fileInputId);
+    const file = fileInput?.files[0];
+    if (!file) {
+        showMessage('Please select a file first', 'error');
+        return;
+    }
+
+    try {
+        showUploadProgress(true, 'Uploading ingredient values...', config);
+        const result = await api.bulkUploadIngredientValues(await readFile(file));
+        const results = document.getElementById(config.resultsId);
+        if (results) {
+            results.textContent = `${result.updated_count} updated, ${result.unchanged_count} unchanged.`;
+        }
+        fileInput.value = '';
+    } catch (error) {
+        console.error('Error uploading ingredient values:', error);
+        showMessage(`Error uploading ingredient values: ${error.message}`, 'error');
+    } finally {
+        showUploadProgress(false, '', config);
+        const uploadBtn = document.getElementById(config.uploadBtnId);
+        if (uploadBtn) uploadBtn.disabled = !fileInput.value;
+    }
 }
 
 function validateJsonStructure(data) {
@@ -425,7 +473,7 @@ function showUploadProgress(show, message, config) {
         }
         if (uploadBtn) {
             uploadBtn.disabled = false;
-            uploadBtn.textContent = config.itemLabel === 'recipe' ? 'Upload Recipes' : 'Upload Ingredients';
+            uploadBtn.textContent = config.buttonText || (config.itemLabel === 'recipe' ? 'Upload Recipes' : 'Upload Ingredients');
         }
     }
 }
@@ -436,7 +484,7 @@ function displayUploadResults(result, config) {
         return;
     }
 
-    resultsDiv.innerHTML = '';
+    resultsDiv.replaceChildren();
     const wrapper = document.createElement('div');
     wrapper.className = 'upload-results';
 
@@ -638,7 +686,6 @@ async function loadPublicTags() {
         }
         
         const tags = await api.getPublicTags();
-        
         if (tags.length === 0) {
             renderPublicTagStatus(tagsList, 'empty-message', 'No public tags found.');
             return;
