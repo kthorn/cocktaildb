@@ -82,6 +82,32 @@
                     </div>
 
                     <div class="card-container">
+                        <h3>Bulk Ingredient Value Upload</h3>
+                        <p style="color: var(--text-light); margin-bottom: var(--space-md);">
+                            Upload a CSV containing ingredient_id, ingredient_name, field, and value. Existing unequal values are rejected without changing any ingredients.
+                        </p>
+                        <div>
+                            <label for="ingredient-value-file-input" class="form-label">Upload Ingredient Value CSV File:</label>
+                            <input type="file" id="ingredient-value-file-input" accept=".csv,text/csv" class="form-control" style="margin-bottom: var(--space-sm);">
+                            <button id="upload-ingredient-values-btn" class="btn btn-primary" disabled>
+                                Upload Ingredient Values
+                            </button>
+                            <p style="color: var(--text-light); margin-top: var(--space-xs);">
+                                Limit: 200 values per upload.
+                            </p>
+                        </div>
+                        <div id="ingredient-value-upload-progress" style="display: none; margin-top: var(--space-sm);">
+                            <div class="progress-bar">
+                                <div class="progress-fill"></div>
+                            </div>
+                            <p style="color: var(--text-light); margin-top: var(--space-xs);">
+                                Uploading ingredient values...
+                            </p>
+                        </div>
+                        <div id="ingredient-value-upload-results" role="status" aria-live="polite" style="margin-top: var(--space-md);"></div>
+                    </div>
+
+                    <div class="card-container">
                         <h3>Public Tag Management</h3>
                         <p style="color: var(--text-light); margin-bottom: var(--space-md);">
                             Manage public tags used across all recipes. Deleting a tag will remove it from all recipes.

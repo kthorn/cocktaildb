@@ -133,6 +133,7 @@ def pg_db_with_schema(postgres_container, postgres_connection_params, schema_sql
             -- Drop extensions first (they own functions that can't be dropped)
             DROP EXTENSION IF EXISTS pg_trgm CASCADE;
             DROP EXTENSION IF EXISTS citext CASCADE;
+            DROP EXTENSION IF EXISTS unaccent CASCADE;
 
             -- Drop all tables
             FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP

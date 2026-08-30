@@ -1,7 +1,7 @@
 import config from './config.js';
 import { isAuthenticated } from './auth.js';
 
-class CocktailAPI {
+export class CocktailAPI {
     constructor(baseUrl = '') {
         this.baseUrl = baseUrl || config.apiUrl;
     }
@@ -52,8 +52,9 @@ class CocktailAPI {
 
         // Only add Content-Type header for requests with body (POST, PUT, etc.)
         if (body) {
-            options.headers['Content-Type'] = 'application/json';
-            options.body = JSON.stringify(body);
+            const isCsv = typeof body === 'string';
+            options.headers['Content-Type'] = isCsv ? 'text/csv' : 'application/json';
+            options.body = isCsv ? body : JSON.stringify(body);
         }
 
         // Add Authorization header for non-GET requests or when explicitly required
@@ -155,6 +156,13 @@ class CocktailAPI {
             throw new Error('Editor access required. Only editors and admins can bulk upload ingredients.');
         }
         return this._request('/ingredients/bulk', 'POST', ingredientsData);
+    }
+
+    async bulkUploadIngredientValues(csvText) {
+        if (!this.isEditor()) {
+            throw new Error('Editor access required. Only editors and admins can update ingredient values.');
+        }
+        return this._request('/ingredients/bulk-values', 'POST', csvText);
     }
 
     // Search recipes with various criteria
