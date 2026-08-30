@@ -7,11 +7,7 @@ class FakeElement {
     constructor(tagName = 'div') {
         this.tagName = tagName.toUpperCase();
         this.children = [];
-        this.parentNode = null;
         this.className = '';
-        this.style = {};
-        this.disabled = false;
-        this.listeners = {};
         this._textContent = '';
         this.innerHTMLAssignments = [];
         this.dataset = new Proxy({}, {
@@ -37,44 +33,14 @@ class FakeElement {
 
     set innerHTML(value) {
         this.innerHTMLAssignments.push(value);
-        this._textContent = '';
-        this.children = [];
-        parseMarkup(String(value), this);
     }
 
     appendChild(child) {
-        child.parentNode = this;
         this.children.push(child);
         return child;
     }
 
-    append(...items) {
-        items.forEach(item => {
-            if (typeof item === 'string') {
-                this._textContent += item;
-            } else {
-                this.appendChild(item);
-            }
-        });
-    }
-
-    insertBefore(child, before) {
-        child.parentNode = this;
-        const index = this.children.indexOf(before);
-        this.children.splice(index === -1 ? this.children.length : index, 0, child);
-        return child;
-    }
-
-    remove() {
-        if (!this.parentNode) return;
-        const index = this.parentNode.children.indexOf(this);
-        if (index !== -1) this.parentNode.children.splice(index, 1);
-        this.parentNode = null;
-    }
-
-    addEventListener(eventName, handler) {
-        this.listeners[eventName] = handler;
-    }
+    addEventListener() {}
 
     querySelector(selector) {
         return this.querySelectorAll(selector)[0] || null;
@@ -91,15 +57,6 @@ class FakeElement {
         visit(this);
         return matches;
     }
-
-    closest(selector) {
-        let element = this;
-        while (element) {
-            if (matchesSelector(element, selector)) return element;
-            element = element.parentNode;
-        }
-        return null;
-    }
 }
 
 function matchesSelector(element, selector) {
@@ -109,38 +66,9 @@ function matchesSelector(element, selector) {
     return element.tagName === selector.toUpperCase();
 }
 
-function parseMarkup(markup, parent) {
-    const tokens = markup.match(/<[^>]+>|[^<]+/g) || [];
-    const stack = [parent];
-    for (const token of tokens) {
-        if (token.startsWith('</')) {
-            if (stack.length > 1) stack.pop();
-            continue;
-        }
-        if (!token.startsWith('<')) {
-            stack[stack.length - 1]._textContent += token;
-            continue;
-        }
-
-        const match = token.match(/^<([a-z][\w-]*)([^>]*)>/i);
-        if (!match) continue;
-        const element = new FakeElement(match[1]);
-        const attributes = match[2];
-        const classMatch = attributes.match(/class="([^"]*)"/);
-        if (classMatch) element.className = classMatch[1];
-        for (const [, name, value] of attributes.matchAll(/(data-[\w-]+)="([^"]*)"/g)) {
-            element.dataset[name.slice(5).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = value;
-        }
-        stack[stack.length - 1].appendChild(element);
-        if (!['IMG', 'INPUT', 'BR', 'HR', 'META', 'LINK'].includes(element.tagName)) {
-            stack.push(element);
-        }
-    }
-}
-
 const sourcePath = path.join(__dirname, '..', 'src', 'web', 'js', 'admin.js');
 const source = fs.readFileSync(sourcePath, 'utf8').replace(/^import .*;\n/gm, '') + `
-this.testExports = { loadPublicTags, handleDeletePublicTag };
+this.testExports = { loadPublicTags };
 `;
 
 const tagsList = new FakeElement('div');
@@ -165,9 +93,6 @@ const context = vm.createContext({
             usage_count: 1,
         }],
     },
-    isAuthenticated: () => true,
-    initAuth: async () => {},
-    console,
     setTimeout: () => {},
 });
 vm.runInContext(source, context, { filename: sourcePath });
