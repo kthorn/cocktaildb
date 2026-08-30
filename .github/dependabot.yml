@@ -1,0 +1,16 @@
+---
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /api
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 4
+
+  - package-ecosystem: pip
+    directory: /packages/barcart
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 4
