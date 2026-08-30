@@ -2,26 +2,31 @@
 """
 Test script to evaluate constrained EM with different k values.
 
-Compares full O(N²) EM vs constrained top-k approaches to measure:
-1. Speed improvement
-2. Quality impact on learned distances
-3. Neighbor accuracy (do we still find the same nearest neighbors?)
+Compares constrained top-k EM settings and Manhattan distance to measure:
+1. Runtime and memory proxies
+2. Learned-cost and nearest-neighbor stability
+3. HDBSCAN cluster coverage and adjusted agreement (ARI/AMI)
+4. UMAP neighborhood and cluster preservation
+
+Exact O(N²) EM is opt-in because of its runtime and transport-plan memory cost.
 
 Usage:
-    # Fetch data from production API
-    python scripts/test_constrained_em.py --api https://mixology.tools
+    # Compare current, wider, and high-coverage candidate settings
+    python scripts/test_constrained_em.py --use-cache --output-dir /tmp/em-benchmark
 
-    # Use cached data (after first run)
-    python scripts/test_constrained_em.py --use-cache
-
-    # Test specific k values
-    python scripts/test_constrained_em.py --k-values 50,100,200
+    # Tune UMAP after choosing a distance configuration
+    python scripts/test_constrained_em.py \
+        --tune-umap-matrix /tmp/em-benchmark/k-195.npz \
+        --output-dir /tmp/umap-benchmark
 """
 
 import argparse
+import hashlib
+import importlib.metadata
 import json
 import logging
 import os
+import resource
 import sys
 import time
 from dataclasses import dataclass
@@ -55,12 +60,14 @@ class EMResult:
     elapsed_seconds: float
     pairs_computed: int
     k_value: Optional[int]  # None for full computation
+    iterations_run: int
+    process_peak_rss_mb: float
 
 
 def compute_manhattan_candidates(
     volume_matrix: np.ndarray | sp.spmatrix,
     k: int,
-) -> dict[int, np.ndarray]:
+) -> tuple[dict[int, np.ndarray], np.ndarray]:
     """
     Compute top-k nearest neighbors by Manhattan distance for each recipe.
 
@@ -160,6 +167,7 @@ def constrained_emd_matrix(
                     row_i, row_j, cost_matrix,
                     return_plan=True, support_idx=union_idx
                 )
+                assert plans is not None
                 plans[pair] = plan
             else:
                 distance = compute_emd(
@@ -253,6 +261,200 @@ def constrained_em_fit(
         cost_matrix = new_cost_matrix.copy()
 
     return distance_matrix, cost_matrix, log, total_pairs
+
+
+def complete_distance_matrix(distance_matrix: np.ndarray) -> np.ndarray:
+    """Replace unknown distances with twice the largest computed distance."""
+    completed = np.asarray(distance_matrix).copy()
+    finite = completed[np.isfinite(completed)]
+    replacement = float(finite.max() * 2) if finite.size else 0.0
+    completed[~np.isfinite(completed)] = replacement
+    return completed
+
+
+def cluster_distance_matrix(
+    distance_matrix: np.ndarray,
+    min_cluster_size: int = 10,
+    min_samples: int = 1,
+) -> np.ndarray:
+    """Find compact HDBSCAN clusters in a precomputed distance matrix."""
+    from sklearn.cluster import HDBSCAN
+
+    return HDBSCAN(
+        metric="precomputed",
+        min_cluster_size=min_cluster_size,
+        min_samples=min_samples,
+        cluster_selection_method="leaf",
+        n_jobs=-1,
+    ).fit_predict(complete_distance_matrix(distance_matrix))
+
+
+def summarize_clusters(distance_matrix: np.ndarray, labels: np.ndarray) -> dict:
+    """Summarize HDBSCAN output without assuming any clusters exist."""
+    from sklearn.metrics import silhouette_score
+
+    clustered = labels >= 0
+    cluster_ids, cluster_sizes = np.unique(labels[clustered], return_counts=True)
+    return {
+        "clusters": int(len(cluster_ids)),
+        "clustered": int(clustered.sum()),
+        "coverage": float(clustered.mean()),
+        "noise": int((~clustered).sum()),
+        "minimum_size": int(cluster_sizes.min()) if cluster_sizes.size else None,
+        "median_size": float(np.median(cluster_sizes)) if cluster_sizes.size else None,
+        "maximum_size": int(cluster_sizes.max()) if cluster_sizes.size else None,
+        "silhouette": float(silhouette_score(
+            distance_matrix[np.ix_(clustered, clustered)],
+            labels[clustered],
+            metric="precomputed",
+        )) if len(cluster_ids) > 1 else None,
+    }
+
+
+def adjusted_cluster_agreement(left: np.ndarray, right: np.ndarray) -> dict:
+    """Compare cluster labels, treating -1 as noise and also excluding it."""
+    from sklearn.metrics import adjusted_mutual_info_score, adjusted_rand_score
+
+    joint = (left >= 0) & (right >= 0)
+    return {
+        "ari_all": float(adjusted_rand_score(left, right)),
+        "ami_all": float(adjusted_mutual_info_score(left, right)),
+        "ari_joint": float(adjusted_rand_score(left[joint], right[joint])),
+        "ami_joint": float(adjusted_mutual_info_score(left[joint], right[joint])),
+        "jointly_clustered": int(joint.sum()),
+    }
+
+
+def neighborhood_preservation(
+    source_distances: np.ndarray,
+    embedding: np.ndarray,
+    k: int,
+) -> dict:
+    """Measure local-neighbor recall, trustworthiness, and continuity."""
+    from sklearn.metrics import pairwise_distances
+
+    n = source_distances.shape[0]
+    if source_distances.shape != (n, n) or embedding.shape[0] != n:
+        raise ValueError("source distances and embedding must contain the same samples")
+    if not 0 < k < n / 2:
+        raise ValueError("trustworthiness requires 0 < k < n / 2")
+
+    embedding_distances = pairwise_distances(embedding)
+    source_order = np.argsort(source_distances, axis=1, kind="stable")
+    embedding_order = np.argsort(embedding_distances, axis=1, kind="stable")
+    source_neighbors = source_order[:, 1:k + 1]
+    embedding_neighbors = embedding_order[:, 1:k + 1]
+
+    source_ranks = np.empty_like(source_order)
+    embedding_ranks = np.empty_like(embedding_order)
+    rows = np.arange(n)[:, None]
+    source_ranks[rows, source_order] = np.arange(n)
+    embedding_ranks[rows, embedding_order] = np.arange(n)
+
+    recalls = []
+    trust_penalty = 0
+    continuity_penalty = 0
+    for i in range(n):
+        source_set = set(source_neighbors[i])
+        embedding_set = set(embedding_neighbors[i])
+        recalls.append(len(source_set & embedding_set) / k)
+        trust_penalty += sum(source_ranks[i, j] - k for j in embedding_set - source_set)
+        continuity_penalty += sum(
+            embedding_ranks[i, j] - k for j in source_set - embedding_set
+        )
+
+    scale = 2 / (n * k * (2 * n - 3 * k - 1))
+    return {
+        "knn_recall": float(np.mean(recalls)),
+        "trustworthiness": float(1 - scale * trust_penalty),
+        "continuity": float(1 - scale * continuity_penalty),
+    }
+
+
+def run_umap_grid(
+    distance_matrix: np.ndarray,
+    neighbors: list[int],
+    min_distances: list[float],
+    seeds: list[int],
+    neighborhood_sizes: list[int],
+    cluster_min_size: int,
+    cluster_min_samples: int,
+) -> list[dict]:
+    """Evaluate UMAP settings against source neighborhoods and clusters."""
+    from barcart import compute_umap_embedding
+    from sklearn.metrics import pairwise_distances, silhouette_score
+
+    completed = complete_distance_matrix(distance_matrix)
+    reference_labels = cluster_distance_matrix(
+        completed,
+        min_cluster_size=cluster_min_size,
+        min_samples=cluster_min_samples,
+    )
+    reference_clustered = reference_labels >= 0
+    results = []
+
+    for n_neighbors in neighbors:
+        for min_dist in min_distances:
+            for seed in seeds:
+                started = time.time()
+                embedding_started = time.time()
+                embedding = compute_umap_embedding(
+                    completed,
+                    n_neighbors=n_neighbors,
+                    min_dist=min_dist,
+                    random_state=seed,
+                )
+                embedding_seconds = time.time() - embedding_started
+                embedding_distances = pairwise_distances(embedding)
+                embedding_labels = cluster_distance_matrix(
+                    embedding_distances,
+                    min_cluster_size=cluster_min_size,
+                    min_samples=cluster_min_samples,
+                )
+                neighborhoods = {
+                    str(k): neighborhood_preservation(completed, embedding, k)
+                    for k in neighborhood_sizes
+                }
+                cluster_agreement = adjusted_cluster_agreement(
+                    reference_labels, embedding_labels
+                )
+                local_score = float(np.mean([
+                    metric
+                    for values in neighborhoods.values()
+                    for metric in (
+                        values["knn_recall"],
+                        values["trustworthiness"],
+                        values["continuity"],
+                    )
+                ]))
+                reference_cluster_ids = np.unique(
+                    reference_labels[reference_clustered]
+                )
+                reference_silhouette = (
+                    float(silhouette_score(
+                        embedding_distances[np.ix_(
+                            reference_clustered, reference_clustered
+                        )],
+                        reference_labels[reference_clustered],
+                        metric="precomputed",
+                    ))
+                    if len(reference_cluster_ids) > 1
+                    else None
+                )
+                results.append({
+                    "n_neighbors": n_neighbors,
+                    "min_dist": min_dist,
+                    "seed": seed,
+                    "embedding_seconds": embedding_seconds,
+                    "evaluation_seconds": time.time() - started - embedding_seconds,
+                    "total_seconds": time.time() - started,
+                    "local_preservation_score": local_score,
+                    "neighborhoods": neighborhoods,
+                    "cluster_agreement": cluster_agreement,
+                    "reference_cluster_silhouette_in_embedding": reference_silhouette,
+                })
+
+    return results
 
 
 def compare_neighbor_accuracy(
@@ -437,6 +639,23 @@ def load_data_from_api(api_base: str, use_cache: bool = False):
     return ingredients_df, recipes_df
 
 
+def build_manhattan_distance(recipes_df, recipe_registry) -> np.ndarray:
+    """Build the unrolled Manhattan matrix in recipe-registry order."""
+    from sklearn.metrics import pairwise_distances
+
+    recipe_matrix = recipes_df.pivot_table(
+        index="recipe_id",
+        columns="ingredient_id",
+        values="volume_fraction",
+        aggfunc="sum",
+        fill_value=0.0,
+    )
+    recipe_matrix.index = recipe_matrix.index.map(str)
+    ordered_ids = [recipe_registry.get_id(index=i) for i in range(len(recipe_registry))]
+    recipe_matrix = recipe_matrix.reindex(ordered_ids, fill_value=0.0)
+    return pairwise_distances(recipe_matrix, metric="manhattan").astype(np.float32)
+
+
 def prepare_matrices(ingredients_df, recipes_df):
     """Build cost matrix and volume matrix from dataframes."""
     import numpy as np
@@ -524,7 +743,7 @@ def run_full_em(volume_matrix, cost_matrix, n_ingredients, iters=5) -> EMResult:
 
     dist, cost, log = em_fit(
         volume_matrix, cost_matrix, n_ingredients,
-        iters=iters, verbose=True
+        iters=iters, verbose=True, candidate_k=None
     )
 
     elapsed = time.time() - t0
@@ -532,8 +751,10 @@ def run_full_em(volume_matrix, cost_matrix, n_ingredients, iters=5) -> EMResult:
         distance_matrix=dist,
         cost_matrix=cost,
         elapsed_seconds=elapsed,
-        pairs_computed=full_pairs * iters,
-        k_value=None
+        pairs_computed=full_pairs * len(log["delta"]),
+        k_value=None,
+        iterations_run=len(log["delta"]),
+        process_peak_rss_mb=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024,
     )
 
 
@@ -553,22 +774,94 @@ def run_constrained_em(volume_matrix, cost_matrix, n_ingredients, k, iters=5) ->
         cost_matrix=cost,
         elapsed_seconds=elapsed,
         pairs_computed=total_pairs,
-        k_value=k
+        k_value=k,
+        iterations_run=len(log["delta"]),
+        process_peak_rss_mb=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024,
     )
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Test constrained EM performance")
     parser.add_argument("--api", type=str, default="https://mixology.tools",
                         help="API base URL (default: https://mixology.tools)")
     parser.add_argument("--use-cache", action="store_true",
                         help="Use cached data from previous run")
-    parser.add_argument("--iters", type=int, default=3, help="EM iterations")
-    parser.add_argument("--k-values", type=str, default="50,100,200",
-                        help="Comma-separated k values to test")
-    parser.add_argument("--skip-full", action="store_true",
-                        help="Skip full O(N²) baseline (for quick testing)")
+    parser.add_argument("--iters", type=int, default=5, help="Maximum EM iterations")
+    parser.add_argument("--k-values", type=str, default="195,391,780",
+                        help="Comma-separated candidate counts to compare")
+    parser.add_argument("--include-full", action="store_true",
+                        help="Also run exact O(N²) EM (slow and memory intensive)")
+    parser.add_argument("--cluster-min-size", type=int, default=10)
+    parser.add_argument("--cluster-min-samples", type=int, default=1)
+    parser.add_argument("--output-dir", type=Path,
+                        help="Optional directory for matrices and JSON results")
+    parser.add_argument("--tune-umap-matrix", type=Path,
+                        help="Tune UMAP from a saved .npy or benchmark .npz matrix")
+    parser.add_argument("--umap-neighbors", default="5,10,15,30,50")
+    parser.add_argument("--umap-min-dists", default="0,0.01,0.05,0.1,0.25")
+    parser.add_argument("--umap-seeds", default="0,1,42")
+    return parser
+
+
+def main():
+    parser = build_parser()
     args = parser.parse_args()
+
+    if args.tune_umap_matrix and args.include_full:
+        parser.error("--include-full cannot be combined with --tune-umap-matrix")
+
+    if args.tune_umap_matrix:
+        saved = np.load(args.tune_umap_matrix)
+        distance_matrix = (
+            saved["distance_matrix"]
+            if isinstance(saved, np.lib.npyio.NpzFile)
+            else saved
+        )
+        umap_results = run_umap_grid(
+            distance_matrix,
+            neighbors=[int(value) for value in args.umap_neighbors.split(",")],
+            min_distances=[float(value) for value in args.umap_min_dists.split(",")],
+            seeds=[int(value) for value in args.umap_seeds.split(",")],
+            neighborhood_sizes=[5, 10, 20],
+            cluster_min_size=args.cluster_min_size,
+            cluster_min_samples=args.cluster_min_samples,
+        )
+        ranked = sorted(
+            umap_results,
+            key=lambda result: (
+                result["local_preservation_score"],
+                result["cluster_agreement"]["ami_all"],
+            ),
+            reverse=True,
+        )
+        for result in ranked[:10]:
+            logger.info(
+                "neighbors=%d min_dist=%.2f seed=%d local=%.3f ARI=%.3f AMI=%.3f",
+                result["n_neighbors"],
+                result["min_dist"],
+                result["seed"],
+                result["local_preservation_score"],
+                result["cluster_agreement"]["ari_all"],
+                result["cluster_agreement"]["ami_all"],
+            )
+        if args.output_dir:
+            args.output_dir.mkdir(parents=True, exist_ok=True)
+            (args.output_dir / "umap-summary.json").write_text(
+                json.dumps({
+                    "source_matrix": str(args.tune_umap_matrix),
+                    "source_sha256": hashlib.sha256(
+                        args.tune_umap_matrix.read_bytes()
+                    ).hexdigest(),
+                    "completion_policy": "production-compatible imputed proxy: unknown distances become 2x the source matrix's maximum computed distance",
+                    "software": {
+                        package: importlib.metadata.version(package)
+                        for package in ("numpy", "scikit-learn", "umap-learn")
+                    },
+                    "results": ranked,
+                }, indent=2),
+                encoding="utf-8",
+            )
+        return
 
     k_values = [int(k) for k in args.k_values.split(",")]
 
@@ -587,10 +880,17 @@ def main():
     logger.info(f"FULL PAIRS: {full_pairs:,} per iteration")
     logger.info(f"{'='*60}\n")
 
+    manhattan_started = time.time()
+    manhattan_distances = build_manhattan_distance(recipes_df, recipe_registry)
+    manhattan_seconds = time.time() - manhattan_started
+    manhattan_peak_rss_mb = (
+        resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+    )
+
     results: dict[str, EMResult] = {}
 
-    # Run full EM baseline (unless skipped)
-    if not args.skip_full:
+    # Exact EM is deliberately opt-in because it is slow and memory intensive.
+    if args.include_full:
         results["full"] = run_full_em(
             volume_matrix, cost_matrix, n_ingredients, iters=args.iters
         )
@@ -604,58 +904,137 @@ def main():
         )
         logger.info(f"CONSTRAINED k={k}: {results[key].elapsed_seconds:.1f}s")
 
-    # Compare results
-    logger.info(f"\n{'='*60}")
-    logger.info("RESULTS COMPARISON")
-    logger.info(f"{'='*60}")
+    reference_name = "full" if "full" in results else f"k={max(k_values)}"
+    reference = results[reference_name]
+    distance_matrices = {
+        **{name: result.distance_matrix for name, result in results.items()},
+        "manhattan": manhattan_distances,
+    }
+    labels = {
+        name: cluster_distance_matrix(
+            distances,
+            min_cluster_size=args.cluster_min_size,
+            min_samples=args.cluster_min_samples,
+        )
+        for name, distances in distance_matrices.items()
+    }
 
-    for name, result in results.items():
-        speedup = ""
-        if "full" in results and name != "full":
-            speedup = f" (speedup: {results['full'].elapsed_seconds / result.elapsed_seconds:.1f}x)"
-        logger.info(f"{name:12s}: {result.elapsed_seconds:7.1f}s, {result.pairs_computed:,} pairs{speedup}")
+    logger.info("\n%s", "=" * 60)
+    logger.info("RESULTS COMPARISON (reference=%s)", reference_name)
+    if not args.include_full:
+        logger.warning(
+            "%s is the widest-candidate proxy, not exact EM ground truth",
+            reference_name,
+        )
+    logger.info("%s", "=" * 60)
 
-    # Neighbor accuracy comparison
-    if "full" in results:
-        logger.info(f"\n{'='*60}")
-        logger.info("NEIGHBOR ACCURACY (vs full computation)")
-        logger.info(f"{'='*60}")
-
-        for name, result in results.items():
-            if name == "full":
-                continue
-
-            accuracy = compare_neighbor_accuracy(
-                results["full"].distance_matrix,
-                result.distance_matrix,
-                k_neighbors=10
+    summary = {
+        "reference": reference_name,
+        "reference_kind": "exact" if args.include_full else "widest_candidate_proxy",
+        "reference_warning": None if args.include_full else "Agreement with the widest candidate run is sensitivity analysis, not accuracy against ground truth.",
+        "completion_policy": "production-compatible imputed proxy: unknown distances become 2x each matrix's maximum computed distance",
+        "input": {
+            "api": args.api,
+            "used_cache": args.use_cache,
+            "recipes": n_recipes,
+            "ingredients_after_rollup": n_ingredients,
+            "recipe_ids_sha256": hashlib.sha256("\n".join(
+                recipe_registry.get_id(index=i) for i in range(len(recipe_registry))
+            ).encode()).hexdigest(),
+        },
+        "software": {
+            package: importlib.metadata.version(package)
+            for package in ("numpy", "pandas", "scikit-learn", "umap-learn", "POT")
+        },
+        "exact_em_included": args.include_full,
+        "cluster_min_size": args.cluster_min_size,
+        "cluster_min_samples": args.cluster_min_samples,
+        "results": {},
+    }
+    for name, distances in distance_matrices.items():
+        completed = complete_distance_matrix(distances)
+        result_labels = labels[name]
+        cluster_stats = summarize_clusters(completed, result_labels)
+        agreement = adjusted_cluster_agreement(labels[reference_name], result_labels)
+        neighbor_metrics = {
+            str(k): {
+                key: float(value)
+                for key, value in compare_neighbor_accuracy(
+                    reference.distance_matrix,
+                    distances,
+                    k_neighbors=k,
+                ).items()
+            }
+            for k in (10, 20, 50)
+        }
+        result_summary = {
+            "clusters": cluster_stats,
+            "agreement_with_reference": agreement,
+            "neighbor_overlap_with_reference": neighbor_metrics,
+            "unknown_distance_fraction": float((~np.isfinite(distances)).mean()),
+        }
+        if name in results:
+            result = results[name]
+            result_summary.update({
+                "elapsed_seconds": result.elapsed_seconds,
+                "pairs_computed": result.pairs_computed,
+                "iterations_requested": args.iters,
+                "iterations_run": result.iterations_run,
+                "candidate_k": result.k_value,
+                "process_peak_rss_mb_cumulative": result.process_peak_rss_mb,
+            })
+            cost_delta = np.linalg.norm(result.cost_matrix - reference.cost_matrix)
+            result_summary["cost_relative_difference"] = float(
+                cost_delta / (np.linalg.norm(reference.cost_matrix) + 1e-12)
             )
-            logger.info(
-                f"{name:12s}: mean={accuracy['mean_overlap']:.1%}, "
-                f"min={accuracy['min_overlap']:.1%}, "
-                f"perfect={accuracy['perfect_matches']:.1%}"
-            )
+            result_summary["cost_correlation"] = float(np.corrcoef(
+                result.cost_matrix.ravel(), reference.cost_matrix.ravel()
+            )[0, 1])
+        else:
+            result_summary["elapsed_seconds"] = manhattan_seconds
+            result_summary["pairs_computed"] = full_pairs
+            result_summary["process_peak_rss_mb_cumulative"] = manhattan_peak_rss_mb
 
-    # Cost matrix similarity
-    if "full" in results:
-        logger.info(f"\n{'='*60}")
-        logger.info("COST MATRIX SIMILARITY")
-        logger.info(f"{'='*60}")
+        summary["results"][name] = result_summary
+        silhouette = cluster_stats["silhouette"]
+        logger.info(
+            "%s: clusters=%d coverage=%.1f%% silhouette=%s ARI=%.3f AMI=%.3f",
+            name,
+            cluster_stats["clusters"],
+            cluster_stats["coverage"] * 100,
+            f"{silhouette:.3f}" if silhouette is not None else "n/a",
+            agreement["ari_all"],
+            agreement["ami_all"],
+        )
 
-        full_cost = results["full"].cost_matrix
+    if args.output_dir:
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        recipe_ids = np.array([
+            recipe_registry.get_id(index=i) for i in range(len(recipe_registry))
+        ])
+        ingredient_ids = np.array([
+            ingredient_registry.get_id(index=i)
+            for i in range(len(ingredient_registry))
+        ])
         for name, result in results.items():
-            if name == "full":
-                continue
-
-            # Frobenius norm of difference
-            diff_norm = np.linalg.norm(result.cost_matrix - full_cost)
-            full_norm = np.linalg.norm(full_cost)
-            rel_diff = diff_norm / (full_norm + 1e-12)
-
-            # Correlation
-            corr = np.corrcoef(full_cost.flatten(), result.cost_matrix.flatten())[0, 1]
-
-            logger.info(f"{name:12s}: rel_diff={rel_diff:.4f}, correlation={corr:.4f}")
+            np.savez_compressed(
+                args.output_dir / f"{name.replace('=', '-')}.npz",
+                distance_matrix=result.distance_matrix,
+                cost_matrix=result.cost_matrix,
+                labels=labels[name],
+                recipe_ids=recipe_ids,
+                ingredient_ids=ingredient_ids,
+            )
+        np.savez_compressed(
+            args.output_dir / "manhattan.npz",
+            distance_matrix=manhattan_distances,
+            labels=labels["manhattan"],
+            recipe_ids=recipe_ids,
+        )
+        (args.output_dir / "summary.json").write_text(
+            json.dumps(summary, indent=2), encoding="utf-8"
+        )
+        logger.info("Wrote benchmark artifacts to %s", args.output_dir)
 
 
 if __name__ == "__main__":
