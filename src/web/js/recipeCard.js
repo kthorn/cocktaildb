@@ -25,8 +25,15 @@ function formatAmount(amount) {
     }
 
     const fractions = {
-        '1/8': 1/8, '1/4': 1/4, '1/3': 1/3, '3/8': 3/8, '1/2': 1/2, 
-        '5/8': 5/8, '2/3': 2/3, '3/4': 3/4, '7/8': 7/8
+        '1/8': 1 / 8,
+        '1/4': 1 / 4,
+        '1/3': 1 / 3,
+        '3/8': 3 / 8,
+        '1/2': 1 / 2,
+        '5/8': 5 / 8,
+        '2/3': 2 / 3,
+        '3/4': 3 / 4,
+        '7/8': 7 / 8,
     };
 
     let bestMatch = null;
@@ -39,7 +46,7 @@ function formatAmount(amount) {
             bestMatch = fractionStr;
         }
     }
-    
+
     // Check if the remainder is close to 1 (e.g. 0.995 should be next integer)
     if (1 - fractionalPart < tolerance) {
         return String(integerPart + 1);
@@ -68,12 +75,7 @@ function formatAmount(amount) {
  * @param {boolean} options.linkCard - Whether clicking the card navigates to the full recipe page
  * @returns {HTMLElement} The recipe card element
  */
-export function createRecipeCard(
-    recipe,
-    showActions = true,
-    onRecipeDeleted = null,
-    options = {}
-) {
+export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = null, options = {}) {
     const showSimilar = options.showSimilar === true;
     const useCompactLayout = options.compact === true;
     const linkCard = options.linkCard === true;
@@ -83,36 +85,40 @@ export function createRecipeCard(
     if (useCompactLayout && linkCard) {
         card.classList.add('recipe-card-compact-link');
     }
-    
+
     // Only show action buttons if user is an editor/admin and showActions is true
     const shouldShowActions = showActions && api.isEditor();
     const shouldShowAddTagButton = isAuthenticated(); // Check if user is authenticated for add tag button
-    
+
     // Deduplicate tags by ID to handle any backend duplicates
     const uniqueTagsMap = new Map();
     if (recipe.tags && Array.isArray(recipe.tags)) {
-        recipe.tags.forEach(tag => {
+        recipe.tags.forEach((tag) => {
             if (tag && tag.id && tag.name && tag.name.trim() !== '') {
                 uniqueTagsMap.set(tag.id, tag);
             }
         });
     }
     const deduplicatedTags = Array.from(uniqueTagsMap.values());
-    
-    const publicTags = deduplicatedTags.filter(tag => tag.type === 'public');
-    const privateTags = deduplicatedTags.filter(tag => tag.type === 'private');
+
+    const publicTags = deduplicatedTags.filter((tag) => tag.type === 'public');
+    const privateTags = deduplicatedTags.filter((tag) => tag.type === 'private');
     const hasAnyTags = publicTags.length > 0 || privateTags.length > 0;
-    
+
     // Helper function to generate tag chips
     function generateTagChips(tags, isPrivate = false) {
-        return tags.map(tag => `
+        return tags
+            .map(
+                (tag) => `
             <span class="tag-chip ${isPrivate ? 'tag-private' : 'tag-public'}" data-tag-id="${tag.id}" data-tag-type="${tag.type}">
                 ${tag.name}
                 ${shouldShowActions ? `<button class="tag-remove-btn" data-recipe-id="${recipe.id}" data-tag-id="${tag.id}" data-tag-type="${tag.type}" title="Remove from recipe">×</button>` : ''}
             </span>
-        `).join('');
+        `,
+            )
+            .join('');
     }
-    
+
     // Start with the basic recipe details
     card.innerHTML = `
         <h4 class="recipe-title">${recipe.name}</h4>
@@ -123,13 +129,17 @@ export function createRecipeCard(
                     ${generateTagChips(privateTags, true)}
                 </div>
                 <span class="no-tags-placeholder" style="display: ${hasAnyTags ? 'none' : 'inline'};">No tags yet</span>
-                ${shouldShowAddTagButton ? `
+                ${
+                    shouldShowAddTagButton
+                        ? `
                 <button class="add-tag-btn" 
                         data-recipe-id="${recipe.id}" 
                         data-recipe-name="${encodeURIComponent(recipe.name)}" 
                         data-recipe-tags='${JSON.stringify(recipe.tags || [])}' 
                         title="Add or edit tags">(+) Tag</button>
-                ` : ''}
+                `
+                        : ''
+                }
             </div>
             <div id="rating-container-${recipe.id}" class="recipe-rating"></div>
         </div>
@@ -137,44 +147,67 @@ export function createRecipeCard(
         <div class="ingredients">
             <h5>Ingredients</h5>
             <ul>
-                ${(recipe.ingredients || []).map(ing => {
-                    // Use base ingredient name only (hierarchy will show in tooltip on hover)
-                    const ingredientName = (ing.ingredient_name || ing.name || ing.full_name || 'Unknown ingredient').trim();
-                    
-                    // Special handling for specific units
-                    if (ing.unit_name === 'to top' && (ing.amount === null || ing.amount === undefined || ing.amount === 0)) {
-                        return `<li><span class="ingredient-name" data-ingredient-path="${ing.ingredient_path || ''}">${ingredientName}</span>, to top</li>`;
-                    }
-                    if (ing.unit_name === 'to rinse' && (ing.amount === null || ing.amount === undefined || ing.amount === 0)) {
-                        return `<li><span class="ingredient-name" data-ingredient-path="${ing.ingredient_path || ''}">${ingredientName}</span>, to rinse</li>`;
-                    }
-                    if (ing.unit_name === 'each' || ing.unit_name === 'Each') {
-                        // For 'each' unit, don't display the unit name
+                ${(recipe.ingredients || [])
+                    .map((ing) => {
+                        // Use base ingredient name only (hierarchy will show in tooltip on hover)
+                        const ingredientName = (
+                            ing.ingredient_name ||
+                            ing.name ||
+                            ing.full_name ||
+                            'Unknown ingredient'
+                        ).trim();
+
+                        // Special handling for specific units
+                        if (
+                            ing.unit_name === 'to top' &&
+                            (ing.amount === null || ing.amount === undefined || ing.amount === 0)
+                        ) {
+                            return `<li><span class="ingredient-name" data-ingredient-path="${ing.ingredient_path || ''}">${ingredientName}</span>, to top</li>`;
+                        }
+                        if (
+                            ing.unit_name === 'to rinse' &&
+                            (ing.amount === null || ing.amount === undefined || ing.amount === 0)
+                        ) {
+                            return `<li><span class="ingredient-name" data-ingredient-path="${ing.ingredient_path || ''}">${ingredientName}</span>, to rinse</li>`;
+                        }
+                        if (ing.unit_name === 'each' || ing.unit_name === 'Each') {
+                            // For 'each' unit, don't display the unit name
+                            const formattedAmount = formatAmount(ing.amount);
+                            return `<li>${formattedAmount ? formattedAmount + ' ' : ''}<span class="ingredient-name" data-ingredient-path="${ing.ingredient_path || ''}">${ingredientName}</span></li>`;
+                        }
+
+                        // Default handling for all other units
                         const formattedAmount = formatAmount(ing.amount);
-                        return `<li>${formattedAmount ? formattedAmount + ' ' : ''}<span class="ingredient-name" data-ingredient-path="${ing.ingredient_path || ''}">${ingredientName}</span></li>`;
-                    }
-                    
-                    // Default handling for all other units
-                    const formattedAmount = formatAmount(ing.amount);
-                    const unitDisplay = ing.unit_name ? ` ${ing.unit_name}` : '';
-                    
-                    return `<li>${formattedAmount}${unitDisplay} <span class="ingredient-name" data-ingredient-path="${ing.ingredient_path || ''}">${ingredientName}</span></li>`;
-                }).join('')}
+                        const unitDisplay = ing.unit_name ? ` ${ing.unit_name}` : '';
+
+                        return `<li>${formattedAmount}${unitDisplay} <span class="ingredient-name" data-ingredient-path="${ing.ingredient_path || ''}">${ingredientName}</span></li>`;
+                    })
+                    .join('')}
             </ul>
         </div>
-        ${useCompactLayout ? '' : `
+        ${
+            useCompactLayout
+                ? ''
+                : `
         <div class="instructions">
             <h5>Instructions</h5>
             <p>${recipe.instructions}</p>
         </div>
-        ${recipe.source || recipe.source_url ? `
+        ${
+            recipe.source || recipe.source_url
+                ? `
         <div class="recipe-source">
             <h5>Source</h5>
             <p>${recipe.source_url ? `<a href="${recipe.source_url}" target="_blank" rel="noopener noreferrer">${recipe.source || recipe.source_url}</a>` : recipe.source}</p>
         </div>
-        ` : ''}
-        `}
-        ${showSimilar ? `
+        `
+                : ''
+        }
+        `
+        }
+        ${
+            showSimilar
+                ? `
         <div class="similar-cocktails" data-recipe-id="${recipe.id}">
             <h5>Similar Cocktails</h5>
             <div class="similar-loading">Loading similar cocktails...</div>
@@ -182,16 +215,26 @@ export function createRecipeCard(
         <div class="cocktail-space-link">
             <a href="/analytics.html#cocktail-space-em?highlight=${recipe.id}">📍 View in Cocktail Space →</a>
         </div>
-        ` : ''}
-        ${useCompactLayout && linkCard ? `
+        `
+                : ''
+        }
+        ${
+            useCompactLayout && linkCard
+                ? `
         <div class="recipe-card-cta">Click for details</div>
-        ` : ''}
+        `
+                : ''
+        }
         <div class="card-actions">
             <button class="share-recipe-btn" data-recipe-name="${encodeURIComponent(recipe.name)}" data-recipe-id="${recipe.id}" title="Share recipe link" style="font-size: 0.8em; padding: 4px 8px;">🔗</button>
-            ${shouldShowActions ? `
+            ${
+                shouldShowActions
+                    ? `
             <button class="edit-recipe" data-id="${recipe.id}">Edit</button>
             <button class="delete-recipe" data-id="${recipe.id}">Delete</button>
-            ` : ''}
+            `
+                    : ''
+            }
         </div>
     `;
 
@@ -203,7 +246,7 @@ export function createRecipeCard(
             const wrapper = document.createElement('div');
             wrapper.className = 'star-rating interactive';
             wrapper.dataset.recipeId = recipe.id;
-            
+
             // Add interactive rating for logged in users
             const starComponent = createInteractiveStars({
                 initialRating: recipe.user_rating, // Use user_rating from the recipe object
@@ -211,16 +254,16 @@ export function createRecipeCard(
                 showDifferentStates: true,
                 onClick: async (rating) => {
                     await submitRating(recipe.id, rating);
-                }
+                },
             });
             wrapper.appendChild(starComponent);
-            
+
             // Add user rating indicator
             const userIndicator = document.createElement('span');
             userIndicator.className = 'user-rating-indicator';
             const hasRating = recipe.user_rating !== null && recipe.user_rating !== undefined;
             const ratingValue = recipe.user_rating ?? 0;
-            
+
             if (!hasRating) {
                 userIndicator.textContent = ' (not rated)';
                 userIndicator.style.color = '#999';
@@ -235,17 +278,20 @@ export function createRecipeCard(
                 userIndicator.style.fontSize = '0.8em';
             }
             wrapper.appendChild(userIndicator);
-            
+
             // Add rating stats
             const stats = document.createElement('span');
             stats.className = 'rating-stats';
             stats.textContent = ` - Avg: ${(recipe.avg_rating || 0).toFixed(1)} (${recipe.rating_count || 0})`;
             wrapper.appendChild(stats);
-            
+
             ratingContainer.appendChild(wrapper);
         } else {
             // Show static rating for non-logged in users
-            const staticRating = generateStarRating(recipe.avg_rating || 0, recipe.rating_count || 0);
+            const staticRating = generateStarRating(
+                recipe.avg_rating || 0,
+                recipe.rating_count || 0,
+            );
             ratingContainer.innerHTML = staticRating;
         }
     }
@@ -254,13 +300,13 @@ export function createRecipeCard(
     if (shouldShowActions) {
         const deleteBtn = card.querySelector('.delete-recipe');
         const editBtn = card.querySelector('.edit-recipe');
-        
+
         if (deleteBtn) {
             deleteBtn.addEventListener('click', async () => {
                 await deleteRecipe(recipe.id, onRecipeDeleted);
             });
         }
-        
+
         if (editBtn) {
             editBtn.addEventListener('click', () => {
                 // Navigate to recipes page with edit parameter
@@ -289,7 +335,7 @@ export function createRecipeCard(
                 return;
             }
             const interactiveTarget = event.target.closest(
-                'a, button, input, textarea, select, .tag-chip'
+                'a, button, input, textarea, select, .tag-chip',
             );
             if (interactiveTarget) {
                 return;
@@ -345,37 +391,37 @@ async function loadSimilarCocktails(card, recipeId) {
 
     try {
         const similar = await api.getRecipeSimilar(recipeId);
-        const neighbors = similar && Array.isArray(similar.neighbors)
-            ? similar.neighbors
-            : [];
+        const neighbors = similar && Array.isArray(similar.neighbors) ? similar.neighbors : [];
 
         if (neighbors.length === 0) {
             container.remove();
             return;
         }
 
-        const listItems = neighbors.map((neighbor) => {
-            const distance = typeof neighbor.distance === 'number'
-                ? neighbor.distance.toFixed(3)
-                : String(neighbor.distance);
-            const transportPairs = Array.isArray(neighbor.transport_plan)
-                ? neighbor.transport_plan.slice(0, 3).map((plan) => {
-                    const from = plan.from_ingredient_name ?? plan.from_ingredient_id;
-                    const to = plan.to_ingredient_name ?? plan.to_ingredient_id;
-                    return `${from} → ${to}`;
-                })
-                : [];
-            const transportText = transportPairs.length > 0
-                ? ` — ${transportPairs.join('; ')}`
-                : '';
-            return `
+        const listItems = neighbors
+            .map((neighbor) => {
+                const distance =
+                    typeof neighbor.distance === 'number'
+                        ? neighbor.distance.toFixed(3)
+                        : String(neighbor.distance);
+                const transportPairs = Array.isArray(neighbor.transport_plan)
+                    ? neighbor.transport_plan.slice(0, 3).map((plan) => {
+                          const from = plan.from_ingredient_name ?? plan.from_ingredient_id;
+                          const to = plan.to_ingredient_name ?? plan.to_ingredient_id;
+                          return `${from} → ${to}`;
+                      })
+                    : [];
+                const transportText =
+                    transportPairs.length > 0 ? ` — ${transportPairs.join('; ')}` : '';
+                return `
                 <li>
                     <span class="similar-distance">${distance}</span>
                     <a href="/recipe/${neighbor.neighbor_recipe_id}">${neighbor.neighbor_name}</a>
                     ${transportText ? `<span class="similar-transport">${transportText}</span>` : ''}
                 </li>
             `;
-        }).join('');
+            })
+            .join('');
 
         container.innerHTML = `
             <h5>Similar Cocktails</h5>
@@ -418,11 +464,11 @@ function showShareFeedback(message) {
         `;
         document.body.appendChild(feedback);
     }
-    
+
     feedback.textContent = message;
     feedback.style.display = 'block';
     feedback.style.opacity = '1';
-    
+
     // Hide after 2 seconds
     setTimeout(() => {
         feedback.style.opacity = '0';
@@ -444,24 +490,24 @@ async function submitRating(recipeId, rating) {
             alert('Please log in to rate recipes.');
             return;
         }
-        
+
         // Get user info
         const userInfo = getUserInfo();
         if (!userInfo || !userInfo.cognitoUserId) {
             console.error('Unable to get user information');
             return;
         }
-        
+
         // Submit the rating with required fields
-        const ratingData = { 
+        const ratingData = {
             rating: rating,
-            comment: '' // Optional comment field
+            comment: '', // Optional comment field
         };
-        
+
         console.log(`Submitting rating ${rating} for recipe ${recipeId}`);
         const response = await api.setRating(recipeId, ratingData);
         console.log('Rating submitted successfully:', response);
-        
+
         // Show success notification
         const container = document.querySelector(`.star-rating[data-recipe-id="${recipeId}"]`);
         if (container) {
@@ -469,16 +515,15 @@ async function submitRating(recipeId, rating) {
             notification.className = 'rating-notification';
             notification.textContent = 'Rating saved!';
             container.appendChild(notification);
-            
+
             // Remove notification after animation
             setTimeout(() => {
                 notification.remove();
             }, 2500);
         }
-        
+
         // Refresh the recipe to show updated average rating
         refreshRecipeAfterRating(recipeId, response);
-        
     } catch (error) {
         console.error('Error submitting rating:', error);
         alert(`Failed to submit rating: ${error.message || 'Please try again.'}`);
@@ -494,14 +539,14 @@ async function refreshRecipeAfterRating(recipeId, ratingResponse) {
     try {
         // Fetch the latest recipe data to get updated avg_rating
         const recipe = await api.getRecipe(recipeId);
-        
+
         // Find the recipe card using the data-id attribute
         const recipeCard = document.querySelector(`.recipe-card[data-id="${recipeId}"]`);
         if (!recipeCard) {
             console.log(`Recipe card for ID ${recipeId} not found for refresh`);
             return;
         }
-        
+
         // Re-render just the rating component
         const ratingContainer = recipeCard.querySelector(`#rating-container-${recipeId}`);
         if (ratingContainer) {
@@ -509,7 +554,7 @@ async function refreshRecipeAfterRating(recipeId, ratingResponse) {
             const wrapper = document.createElement('div');
             wrapper.className = 'star-rating interactive';
             wrapper.dataset.recipeId = recipeId;
-            
+
             // Create star component with submitted rating
             const starComponent = createInteractiveStars({
                 initialRating: ratingResponse?.rating || 0,
@@ -517,15 +562,15 @@ async function refreshRecipeAfterRating(recipeId, ratingResponse) {
                 showDifferentStates: true,
                 onClick: async (rating) => {
                     await submitRating(recipeId, rating);
-                }
+                },
             });
             wrapper.appendChild(starComponent);
-            
+
             // Add user rating indicator
             const userIndicator = document.createElement('span');
             userIndicator.className = 'user-rating-indicator';
             const submittedRating = ratingResponse?.rating || 0;
-            
+
             if (submittedRating === 0) {
                 userIndicator.textContent = ' (0 stars)';
                 userIndicator.style.color = '#666';
@@ -536,18 +581,18 @@ async function refreshRecipeAfterRating(recipeId, ratingResponse) {
                 userIndicator.style.fontSize = '0.8em';
             }
             wrapper.appendChild(userIndicator);
-            
+
             // Add rating stats
             const stats = document.createElement('span');
             stats.className = 'rating-stats';
             stats.textContent = ` - Avg: ${(recipe.avg_rating || 0).toFixed(1)} (${recipe.rating_count || 0})`;
             wrapper.appendChild(stats);
-            
+
             // Clear and replace
             ratingContainer.innerHTML = '';
             ratingContainer.appendChild(wrapper);
         }
-        
+
         console.log(`Recipe ${recipeId} refreshed with new rating data`);
     } catch (error) {
         console.error('Error refreshing recipe after rating:', error);
@@ -566,7 +611,7 @@ export function displayRecipes(
     container,
     showActions = true,
     onRecipeDeleted = null,
-    options = {}
+    options = {},
 ) {
     container.innerHTML = '';
 
@@ -575,7 +620,7 @@ export function displayRecipes(
         return;
     }
 
-    recipes.forEach(recipe => {
+    recipes.forEach((recipe) => {
         const card = createRecipeCard(recipe, showActions, onRecipeDeleted, options);
         container.appendChild(card);
     });
@@ -660,13 +705,19 @@ function ensureTagModal() {
         tagInputEl.addEventListener('keypress', (e) => {
             if (e.key === 'Enter' || e.key === ',') {
                 e.preventDefault();
-                const tags = tagInputEl.value.split(',').map(t => t.trim()).filter(t => t);
+                const tags = tagInputEl.value
+                    .split(',')
+                    .map((t) => t.trim())
+                    .filter((t) => t);
                 tags.forEach(addTagToModal);
                 tagInputEl.value = '';
             }
         });
         tagInputEl.addEventListener('blur', () => {
-            const tags = tagInputEl.value.split(',').map(t => t.trim()).filter(t => t);
+            const tags = tagInputEl.value
+                .split(',')
+                .map((t) => t.trim())
+                .filter((t) => t);
             if (tags.length > 0) {
                 tags.forEach(addTagToModal);
                 tagInputEl.value = '';
@@ -680,13 +731,14 @@ async function loadExistingTags() {
         // Load public tags
         const publicTags = await api.getPublicTags();
         displayExistingTags(publicTags, publicTagsListEl, 'public');
-        
+
         // Load private tags if user is authenticated
         if (isAuthenticated()) {
             const privateTags = await api.getPrivateTags();
             displayExistingTags(privateTags, privateTagsListEl, 'private');
         } else {
-            privateTagsListEl.innerHTML = '<p class="auth-required">Login required to view private tags</p>';
+            privateTagsListEl.innerHTML =
+                '<p class="auth-required">Login required to view private tags</p>';
         }
     } catch (error) {
         console.error('Error loading existing tags:', error);
@@ -700,9 +752,9 @@ function displayExistingTags(tags, containerEl, tagType) {
         containerEl.innerHTML = `<p class="no-tags">No ${tagType} tags available</p>`;
         return;
     }
-    
+
     containerEl.innerHTML = '';
-    tags.forEach(tag => {
+    tags.forEach((tag) => {
         const tagElement = document.createElement('button');
         tagElement.className = 'existing-tag-btn';
         tagElement.dataset.tagName = tag.name;
@@ -711,12 +763,12 @@ function displayExistingTags(tags, containerEl, tagType) {
             <span class="tag-icon">${tagType === 'private' ? '&#x1F512;' : '&#x1F30D;'}</span>
             <span class="tag-name">${tag.name}</span>
         `;
-        
+
         // Check if tag is already added to current recipe
-        const isAlreadyAdded = currentRecipeTags.some(t => 
-            t.name.toLowerCase() === tag.name.toLowerCase() && t.type === tagType
+        const isAlreadyAdded = currentRecipeTags.some(
+            (t) => t.name.toLowerCase() === tag.name.toLowerCase() && t.type === tagType,
         );
-        
+
         if (isAlreadyAdded) {
             tagElement.classList.add('tag-already-added');
             tagElement.disabled = true;
@@ -727,7 +779,7 @@ function displayExistingTags(tags, containerEl, tagType) {
                 tagElement.disabled = true;
             });
         }
-        
+
         containerEl.appendChild(tagElement);
     });
 }
@@ -741,12 +793,12 @@ function openTagEditorModal(recipeId, recipeName, currentTagsJson) {
     tagEditorRecipeNameEl.textContent = decodeURIComponent(recipeName);
     try {
         const parsedTags = JSON.parse(currentTagsJson || '[]');
-        currentRecipeTags = parsedTags.map(tag => {
+        currentRecipeTags = parsedTags.map((tag) => {
             if (typeof tag === 'string') return { name: tag, type: 'public', id: undefined };
-            return { 
-                id: tag.id ? parseInt(tag.id) : undefined, 
-                name: tag.name, 
-                type: tag.type || 'public' 
+            return {
+                id: tag.id ? parseInt(tag.id) : undefined,
+                name: tag.name,
+                type: tag.type || 'public',
             };
         });
         originalRecipeTagsForEdit = JSON.parse(JSON.stringify(currentRecipeTags));
@@ -757,10 +809,10 @@ function openTagEditorModal(recipeId, recipeName, currentTagsJson) {
     }
     renderTagChipsInModal();
     tagInputEl.value = '';
-    
+
     // Load existing tags for selection
     loadExistingTags();
-    
+
     tagEditorModalElement.style.display = 'block';
     tagInputEl.focus();
 }
@@ -781,7 +833,10 @@ function renderTagChipsInModal() {
     tagChipsContainerEl.innerHTML = '';
     currentRecipeTags.forEach((tag, index) => {
         const chip = document.createElement('div');
-        chip.classList.add('tag-chip', tag.type === 'private' ? 'tag-chip-private' : 'tag-chip-public');
+        chip.classList.add(
+            'tag-chip',
+            tag.type === 'private' ? 'tag-chip-private' : 'tag-chip-public',
+        );
         chip.dataset.index = index;
         chip.innerHTML = `
             <span class="tag-icon">${tag.type === 'private' ? '&#x1F512;' : '&#x1F30D;'}</span>
@@ -803,7 +858,12 @@ function renderTagChipsInModal() {
 
 function addTagToModal(tagName, tagType = 'public') {
     const trimmedName = tagName.trim();
-    if (trimmedName && !currentRecipeTags.some(t => t.name.toLowerCase() === trimmedName.toLowerCase() && t.type === tagType)) {
+    if (
+        trimmedName &&
+        !currentRecipeTags.some(
+            (t) => t.name.toLowerCase() === trimmedName.toLowerCase() && t.type === tagType,
+        )
+    ) {
         currentRecipeTags.push({ name: trimmedName, type: tagType });
         renderTagChipsInModal();
         // Refresh existing tags display to show updated state
@@ -821,13 +881,13 @@ function removeTagFromModal(index) {
 function refreshExistingTagsDisplay() {
     // Re-enable buttons for tags that are no longer in currentRecipeTags
     const existingTagBtns = document.querySelectorAll('.existing-tag-btn');
-    existingTagBtns.forEach(btn => {
+    existingTagBtns.forEach((btn) => {
         const tagName = btn.dataset.tagName;
         const tagType = btn.dataset.tagType;
-        const isCurrentlyAdded = currentRecipeTags.some(t => 
-            t.name.toLowerCase() === tagName.toLowerCase() && t.type === tagType
+        const isCurrentlyAdded = currentRecipeTags.some(
+            (t) => t.name.toLowerCase() === tagName.toLowerCase() && t.type === tagType,
         );
-        
+
         if (isCurrentlyAdded) {
             btn.classList.add('tag-already-added');
             btn.disabled = true;
@@ -859,15 +919,16 @@ async function handleSaveTags() {
         console.log('Save tags process started');
         console.log('Original recipe tags:', originalRecipeTagsForEdit);
         console.log('Current recipe tags (in modal):', currentRecipeTags);
-        
+
         const tagsToActuallyRemove = [];
         const tagsToActuallyAdd = [];
 
         for (const originalTag of originalRecipeTagsForEdit) {
-            const stillExistsWithSameType = modalFinalTags.some(finalTag =>
-                finalTag.id === originalTag.id &&
-                finalTag.name.toLowerCase() === originalTag.name.toLowerCase() &&
-                finalTag.type === originalTag.type
+            const stillExistsWithSameType = modalFinalTags.some(
+                (finalTag) =>
+                    finalTag.id === originalTag.id &&
+                    finalTag.name.toLowerCase() === originalTag.name.toLowerCase() &&
+                    finalTag.type === originalTag.type,
             );
             if (!stillExistsWithSameType && originalTag.id) {
                 tagsToActuallyRemove.push(originalTag);
@@ -875,10 +936,12 @@ async function handleSaveTags() {
         }
 
         for (const finalTag of modalFinalTags) {
-            const existedBeforeWithSameType = originalRecipeTagsForEdit.some(originalTag =>
-                (finalTag.id && originalTag.id === finalTag.id ||
-                 !finalTag.id && originalTag.name.toLowerCase() === finalTag.name.toLowerCase()) &&
-                originalTag.type === finalTag.type
+            const existedBeforeWithSameType = originalRecipeTagsForEdit.some(
+                (originalTag) =>
+                    ((finalTag.id && originalTag.id === finalTag.id) ||
+                        (!finalTag.id &&
+                            originalTag.name.toLowerCase() === finalTag.name.toLowerCase())) &&
+                    originalTag.type === finalTag.type,
             );
             if (!existedBeforeWithSameType) {
                 tagsToActuallyAdd.push(finalTag);
@@ -895,13 +958,17 @@ async function handleSaveTags() {
                 continue;
             }
             console.log('Removing tag from recipe:', { recipeId, tag });
-            const removeResult = await api.removeTagFromRecipe(recipeId, parseInt(tag.id), tag.type);
+            const removeResult = await api.removeTagFromRecipe(
+                recipeId,
+                parseInt(tag.id),
+                tag.type,
+            );
             console.log('Remove tag result:', removeResult);
         }
         // Deduplicate tags to add to prevent race conditions
         const uniqueTagsToAdd = [];
         const seenTags = new Set();
-        
+
         for (const tag of tagsToActuallyAdd) {
             const tagKey = `${tag.name.toLowerCase()}-${tag.type}`;
             if (!seenTags.has(tagKey)) {
@@ -909,10 +976,10 @@ async function handleSaveTags() {
                 uniqueTagsToAdd.push(tag);
             }
         }
-        
+
         console.log('Original tags to add:', tagsToActuallyAdd);
         console.log('Deduplicated tags to add:', uniqueTagsToAdd);
-        
+
         for (const tag of uniqueTagsToAdd) {
             console.log('Adding tag to recipe:', { recipeId, tag });
             const addResult = await api.addTagToRecipe(recipeId, tag.name, tag.type);
@@ -923,17 +990,20 @@ async function handleSaveTags() {
         const recipeCardElement = document.querySelector(`.recipe-card[data-id="${recipeId}"]`);
         if (recipeCardElement) {
             const tagsContainer = recipeCardElement.querySelector('.recipe-tags .tags-container');
-            const noTagsPlaceholder = recipeCardElement.querySelector('.recipe-tags .no-tags-placeholder');
+            const noTagsPlaceholder = recipeCardElement.querySelector(
+                '.recipe-tags .no-tags-placeholder',
+            );
             const addTagButtonOnCard = recipeCardElement.querySelector('.add-tag-btn');
 
             // Get fresh data from API to ensure consistency
             const updatedRecipeData = await api.getRecipe(recipeId);
             console.log('Fresh recipe data from API:', updatedRecipeData);
-            
+
             // The API returns tags in the main 'tags' array, not separate public_tags/private_tags
-            const freshTags = updatedRecipeData && updatedRecipeData.tags ? updatedRecipeData.tags : [];
+            const freshTags =
+                updatedRecipeData && updatedRecipeData.tags ? updatedRecipeData.tags : [];
             console.log('Fresh tags from API:', freshTags);
-            
+
             // Log each tag structure for debugging
             freshTags.forEach((tag, index) => {
                 console.log(`Tag ${index}:`, tag);
@@ -941,7 +1011,7 @@ async function handleSaveTags() {
 
             // Deduplicate tags by ID to handle any backend duplicates
             const uniqueTagsMap = new Map();
-            freshTags.forEach(tag => {
+            freshTags.forEach((tag) => {
                 if (tag && tag.id && tag.name && tag.name.trim() !== '') {
                     uniqueTagsMap.set(tag.id, tag);
                 }
@@ -950,9 +1020,9 @@ async function handleSaveTags() {
             console.log('Deduplicated tags:', deduplicatedTags);
 
             // Separate public and private tags from deduplicated data
-            const publicTags = deduplicatedTags.filter(t => t.type === 'public');
-            const privateTags = deduplicatedTags.filter(t => t.type === 'private');
-            
+            const publicTags = deduplicatedTags.filter((t) => t.type === 'public');
+            const privateTags = deduplicatedTags.filter((t) => t.type === 'private');
+
             console.log('Filtered public tags:', publicTags);
             console.log('Filtered private tags:', privateTags);
             const hasAnyTags = publicTags.length > 0 || privateTags.length > 0;
@@ -961,16 +1031,21 @@ async function handleSaveTags() {
                 // Helper function to generate tag chips (same as in createRecipeCard)
                 const shouldShowActions = isAuthenticated(); // For tag removal buttons
                 function generateTagChips(tags, isPrivate = false) {
-                    return tags.map(tag => `
+                    return tags
+                        .map(
+                            (tag) => `
                         <span class="tag-chip ${isPrivate ? 'tag-private' : 'tag-public'}" data-tag-id="${tag.id}" data-tag-type="${tag.type}">
                             ${tag.name}
                             ${shouldShowActions ? `<button class="tag-remove-btn" data-recipe-id="${recipeId}" data-tag-id="${tag.id}" data-tag-type="${tag.type}" title="Remove from recipe">×</button>` : ''}
                         </span>
-                    `).join('');
+                    `,
+                        )
+                        .join('');
                 }
-                
+
                 // Update the tags container with fresh data from API
-                tagsContainer.innerHTML = generateTagChips(publicTags, false) + generateTagChips(privateTags, true);
+                tagsContainer.innerHTML =
+                    generateTagChips(publicTags, false) + generateTagChips(privateTags, true);
                 tagsContainer.style.display = hasAnyTags ? 'inline' : 'none';
             }
             if (noTagsPlaceholder) {
@@ -1008,47 +1083,51 @@ document.addEventListener('click', async (e) => {
     if (removeTagButton) {
         e.preventDefault();
         e.stopPropagation(); // Prevent triggering other click handlers
-        
+
         const recipeId = parseInt(removeTagButton.dataset.recipeId);
         const tagId = parseInt(removeTagButton.dataset.tagId);
         const tagType = removeTagButton.dataset.tagType;
         const tagName = removeTagButton.parentElement.textContent.replace('×', '').trim();
-        
+
         // Validate that we have valid integer IDs
         if (isNaN(recipeId) || isNaN(tagId)) {
             alert('Invalid recipe or tag ID. Please refresh the page and try again.');
             return;
         }
-        
+
         // Confirm removal
         if (!confirm(`Remove "${tagName}" from this recipe?`)) {
             return;
         }
-        
+
         try {
             removeTagButton.disabled = true;
             removeTagButton.textContent = '...';
-            
+
             // Call the API to remove the tag from the recipe
             const response = await api.removeTagFromRecipe(recipeId, tagId, tagType);
-            
+
             if (response.success !== false) {
                 // Find elements before removing the tag chip
                 const tagChip = removeTagButton.parentElement;
                 const recipeCard = removeTagButton.closest('.recipe-card');
-                const tagsContainer = recipeCard ? recipeCard.querySelector('.tags-container') : null;
-                const noTagsPlaceholder = recipeCard ? recipeCard.querySelector('.no-tags-placeholder') : null;
-                
+                const tagsContainer = recipeCard
+                    ? recipeCard.querySelector('.tags-container')
+                    : null;
+                const noTagsPlaceholder = recipeCard
+                    ? recipeCard.querySelector('.no-tags-placeholder')
+                    : null;
+
                 // Remove the tag chip from the UI
                 tagChip.remove();
-                
+
                 if (tagsContainer && tagsContainer.children.length === 0) {
                     tagsContainer.style.display = 'none';
                     if (noTagsPlaceholder) {
                         noTagsPlaceholder.style.display = 'inline';
                     }
                 }
-                
+
                 // Show success feedback
                 console.log(`Tag "${tagName}" removed from recipe`);
             } else {
@@ -1057,7 +1136,7 @@ document.addEventListener('click', async (e) => {
         } catch (error) {
             console.error('Error removing tag:', error);
             alert(`Failed to remove tag: ${error.message}`);
-            
+
             // Restore button state
             removeTagButton.disabled = false;
             removeTagButton.textContent = '×';
@@ -1084,7 +1163,7 @@ async function deleteRecipe(id, onRecipeDeleted = null) {
     try {
         await api.deleteRecipe(id);
         alert('Recipe deleted successfully!');
-        
+
         // Call the callback if provided, or use window.loadRecipes if available
         if (typeof onRecipeDeleted === 'function') {
             onRecipeDeleted();
@@ -1180,4 +1259,4 @@ function setupIngredientHover(card, recipe) {
             }
         });
     });
-} 
+}

@@ -8,7 +8,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Get recipe ID from URL path (/recipe/42) or query param (?id=42) as fallback
     const pathMatch = window.location.pathname.match(/^\/recipe\/(\d+)$/);
-    const recipeId = pathMatch ? pathMatch[1] : new URLSearchParams(window.location.search).get('id');
+    const recipeId = pathMatch
+        ? pathMatch[1]
+        : new URLSearchParams(window.location.search).get('id');
     const recipeName = new URLSearchParams(window.location.search).get('name');
 
     if (!recipeId && !recipeName) {

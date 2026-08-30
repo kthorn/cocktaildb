@@ -1,10 +1,11 @@
 """Tests for local analytics storage manager"""
+
 import json
 import sys
 import os
 
 # Add api directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'api'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "api"))
 
 from utils.analytics_cache import AnalyticsStorage
 
@@ -30,7 +31,7 @@ def test_get_analytics_success(tmp_path):
 
     test_payload = {
         "data": [{"test": "value"}],
-        "metadata": {"generated_at": "2025-01-01T00:00:00Z"}
+        "metadata": {"generated_at": "2025-01-01T00:00:00Z"},
     }
     file_path = tmp_path / "v1" / "ingredient-usage.json"
     file_path.write_text(json.dumps(test_payload), encoding="utf-8")

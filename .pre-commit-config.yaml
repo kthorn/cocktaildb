@@ -1,0 +1,19 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format
+        entry: ruff format
+        language: python
+        additional_dependencies:
+          - ruff==0.16.5
+        types:
+          - python
+
+      - id: prettier
+        name: prettier
+        entry: prettier --write
+        language: node
+        additional_dependencies:
+          - prettier@3.9.6
+        files: ^(src/web/.*\.(js|mjs|html)|tests/.*\.(js|mjs))$

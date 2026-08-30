@@ -58,9 +58,7 @@ class TestTransactionConsistency:
         # Verify recipe remains unchanged
         current_recipe = db.get_recipe(recipe["id"])
         assert current_recipe["name"] == original_recipe["name"]
-        assert len(current_recipe["ingredients"]) == len(
-            original_recipe["ingredients"]
-        )
+        assert len(current_recipe["ingredients"]) == len(original_recipe["ingredients"])
 
     def test_ingredient_hierarchy_update_transaction(self, db_instance):
         """Test transaction consistency when updating ingredient hierarchy"""
@@ -106,7 +104,9 @@ class TestTransactionConsistency:
         assert updated_london_gin["path"] != original_london_gin_path
         assert updated_london_gin["path"].startswith(updated_gin["path"])
 
-    def test_rating_aggregation_transaction_consistency(self, db_instance, pg_db_with_schema):
+    def test_rating_aggregation_transaction_consistency(
+        self, db_instance, pg_db_with_schema
+    ):
         """Test that rating aggregation updates are transactionally consistent"""
         db = db_instance
 
@@ -258,9 +258,7 @@ class TestConcurrentAccess:
     def test_concurrent_rating_updates(self, db_instance):
         """Test concurrent rating updates on the same recipe"""
         db = db_instance
-        recipe = db.create_recipe(
-            {"name": "Popular Recipe", "instructions": "Test"}
-        )
+        recipe = db.create_recipe({"name": "Popular Recipe", "instructions": "Test"})
 
         def add_rating(user_num, rating_value):
             db_new = Database()
@@ -286,8 +284,7 @@ class TestConcurrentAccess:
                 for user_num, rating in rating_data
             ]
             results = [
-                future.result()
-                for future in concurrent.futures.as_completed(futures)
+                future.result() for future in concurrent.futures.as_completed(futures)
             ]
 
         # Verify all ratings were added
@@ -358,8 +355,7 @@ class TestConcurrentAccess:
                 for child_id, cat_id in moves
             ]
             results = [
-                future.result()
-                for future in concurrent.futures.as_completed(futures)
+                future.result() for future in concurrent.futures.as_completed(futures)
             ]
 
         # Verify all moves succeeded

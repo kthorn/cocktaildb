@@ -15,41 +15,45 @@ function setupAdminPage() {
     const downloadTemplateBtn = document.getElementById('download-template-btn');
     const fileInput = document.getElementById('recipe-file-input');
     const uploadBtn = document.getElementById('upload-recipes-btn');
-    
+
     // Ingredient upload elements
-    const downloadIngredientTemplateBtn = document.getElementById('download-ingredient-template-btn');
+    const downloadIngredientTemplateBtn = document.getElementById(
+        'download-ingredient-template-btn',
+    );
     const ingredientFileInput = document.getElementById('ingredient-file-input');
     const uploadIngredientsBtn = document.getElementById('upload-ingredients-btn');
     const ingredientValueFileInput = document.getElementById('ingredient-value-file-input');
     const uploadIngredientValuesBtn = document.getElementById('upload-ingredient-values-btn');
-    
+
     if (downloadTemplateBtn) {
         downloadTemplateBtn.addEventListener('click', downloadTemplate);
     }
-    
+
     if (fileInput) {
         fileInput.addEventListener('change', (event) => {
             handleFileSelection(event, getRecipeUploadConfig());
         });
     }
-    
+
     if (uploadBtn) {
         uploadBtn.addEventListener('click', () => handleBulkUpload(getRecipeUploadConfig()));
     }
-    
+
     // Ingredient upload event listeners
     if (downloadIngredientTemplateBtn) {
         downloadIngredientTemplateBtn.addEventListener('click', downloadIngredientTemplate);
     }
-    
+
     if (ingredientFileInput) {
         ingredientFileInput.addEventListener('change', (event) => {
             handleFileSelection(event, getIngredientUploadConfig());
         });
     }
-    
+
     if (uploadIngredientsBtn) {
-        uploadIngredientsBtn.addEventListener('click', () => handleBulkUpload(getIngredientUploadConfig()));
+        uploadIngredientsBtn.addEventListener('click', () =>
+            handleBulkUpload(getIngredientUploadConfig()),
+        );
     }
 
     const ingredientValueConfig = getIngredientValueUploadConfig();
@@ -63,16 +67,16 @@ function setupAdminPage() {
             handleBulkValueUpload(ingredientValueConfig);
         });
     }
-    
+
     // Tag management elements
     const refreshTagsBtn = document.getElementById('refresh-tags-btn');
     if (refreshTagsBtn) {
         refreshTagsBtn.addEventListener('click', loadPublicTags);
     }
-    
+
     // Check authentication and show/hide admin tools accordingly
     updateUIBasedOnAuth();
-    
+
     // Load initial data if user has editor permissions
     if (api.isEditor()) {
         loadPublicTags();
@@ -103,13 +107,12 @@ function updateUIBasedOnAuth() {
     }
 }
 
-
 function showMessage(message, type = 'info') {
     // Create message element using existing notification styles
     const messageDiv = document.createElement('div');
     messageDiv.className = `notification ${type}`;
     messageDiv.textContent = message;
-    
+
     // Insert at top of main section
     const mainSection = document.querySelector('main section') || document.body;
     if (mainSection.firstChild) {
@@ -117,7 +120,7 @@ function showMessage(message, type = 'info') {
     } else {
         mainSection.appendChild(messageDiv);
     }
-    
+
     // Remove message after 5 seconds
     setTimeout(() => {
         if (messageDiv.parentNode) {
@@ -131,63 +134,64 @@ function downloadTemplate() {
     const template = {
         recipes: [
             {
-                name: "Example Cocktail",
-                description: "A delicious example cocktail",
-                instructions: "1. Add ingredients to shaker\n2. Shake well with ice\n3. Strain into glass\n4. Garnish and serve",
-                source: "Classic Cocktail Book",
-                source_url: "https://example.com/cocktail-recipes",
+                name: 'Example Cocktail',
+                description: 'A delicious example cocktail',
+                instructions:
+                    '1. Add ingredients to shaker\n2. Shake well with ice\n3. Strain into glass\n4. Garnish and serve',
+                source: 'Classic Cocktail Book',
+                source_url: 'https://example.com/cocktail-recipes',
                 ingredients: [
                     {
-                        ingredient_name: "Vodka",
+                        ingredient_name: 'Vodka',
                         amount: 2,
-                        unit_name: "oz"
+                        unit_name: 'oz',
                     },
                     {
-                        ingredient_name: "Lime Juice",
+                        ingredient_name: 'Lime Juice',
                         amount: 0.5,
-                        unit_name: "oz"
+                        unit_name: 'oz',
                     },
                     {
-                        ingredient_name: "Simple Syrup",
+                        ingredient_name: 'Simple Syrup',
                         amount: 0.25,
-                        unit_name: "oz"
-                    }
-                ]
+                        unit_name: 'oz',
+                    },
+                ],
             },
             {
-                name: "Second Example",
-                description: "Another example recipe",
-                instructions: "1. Build ingredients in glass\n2. Stir gently\n3. Serve",
+                name: 'Second Example',
+                description: 'Another example recipe',
+                instructions: '1. Build ingredients in glass\n2. Stir gently\n3. Serve',
                 source: "Bartender's Guide",
-                source_url: "https://example.com/gin-tonic",
+                source_url: 'https://example.com/gin-tonic',
                 ingredients: [
                     {
-                        ingredient_name: "Gin",
+                        ingredient_name: 'Gin',
                         amount: 2,
-                        unit_name: "oz"
+                        unit_name: 'oz',
                     },
                     {
-                        ingredient_name: "Tonic Water",
+                        ingredient_name: 'Tonic Water',
                         amount: 4,
-                        unit_name: "oz"
-                    }
-                ]
-            }
-        ]
+                        unit_name: 'oz',
+                    },
+                ],
+            },
+        ],
     };
-    
+
     // Create and download the template
     const blob = new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'cocktail-recipes-template.json';
-    
+
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
-    
+
     showMessage('Template downloaded successfully!', 'success');
 }
 
@@ -204,9 +208,8 @@ function getRecipeUploadConfig() {
         validateStructure: validateJsonStructure,
         successKey: 'uploaded_recipes',
         buildSuccessText: (recipe) => recipe.name,
-        buildErrorText: (error) => (
-            `${error.recipe_name} (Recipe ${error.recipe_index + 1}): ${error.error_message}`
-        )
+        buildErrorText: (error) =>
+            `${error.recipe_name} (Recipe ${error.recipe_index + 1}): ${error.error_message}`,
     };
 }
 
@@ -222,12 +225,10 @@ function getIngredientUploadConfig() {
         apiCall: (payload) => api.bulkUploadIngredients(payload),
         validateStructure: validateIngredientJsonStructure,
         successKey: 'uploaded_ingredients',
-        buildSuccessText: (ingredient) => (
-            `${ingredient.name}${ingredient.description ? ` - ${ingredient.description}` : ''}`
-        ),
-        buildErrorText: (error) => (
-            `${error.ingredient_name} (Ingredient ${error.ingredient_index + 1}): ${error.error_message}`
-        )
+        buildSuccessText: (ingredient) =>
+            `${ingredient.name}${ingredient.description ? ` - ${ingredient.description}` : ''}`,
+        buildErrorText: (error) =>
+            `${error.ingredient_name} (Ingredient ${error.ingredient_index + 1}): ${error.error_message}`,
     };
 }
 
@@ -236,7 +237,7 @@ function handleFileSelection(event, config) {
     const uploadBtn = document.getElementById(config.uploadBtnId);
     const fileExtension = config.fileExtension || '.json';
     const fileLabel = config.fileLabel || 'JSON';
-    
+
     if (file) {
         // Validate file type
         if (!file.name.toLowerCase().endsWith(fileExtension)) {
@@ -245,15 +246,18 @@ function handleFileSelection(event, config) {
             uploadBtn.disabled = true;
             return;
         }
-        
+
         // Validate file size (limit to 5MB)
         if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
-            showMessage(`File too large. Please select a file smaller than ${MAX_UPLOAD_MB}MB`, 'error');
+            showMessage(
+                `File too large. Please select a file smaller than ${MAX_UPLOAD_MB}MB`,
+                'error',
+            );
             event.target.value = '';
             uploadBtn.disabled = true;
             return;
         }
-        
+
         uploadBtn.disabled = false;
     } else {
         uploadBtn.disabled = true;
@@ -294,13 +298,17 @@ async function handleBulkUpload(config) {
         if (items.length > config.maxItems) {
             showMessage(
                 `Upload limit is ${config.maxItems} ${pluralize(config.maxItems, config.itemLabel)} per file.`,
-                'error'
+                'error',
             );
             return;
         }
 
         // Show progress
-        showUploadProgress(true, `Uploading ${items.length} ${pluralize(items.length, config.itemLabel)}...`, config);
+        showUploadProgress(
+            true,
+            `Uploading ${items.length} ${pluralize(items.length, config.itemLabel)}...`,
+            config,
+        );
 
         const result = await config.apiCall({ [config.itemsKey]: items });
 
@@ -316,7 +324,6 @@ async function handleBulkUpload(config) {
         if (uploadBtn) {
             uploadBtn.disabled = true;
         }
-
     } catch (error) {
         showUploadProgress(false, '', config);
         console.error(`Error uploading ${config.itemLabel}s:`, error);
@@ -342,7 +349,7 @@ function getIngredientValueUploadConfig() {
         itemLabel: 'ingredient value',
         buttonText: 'Upload Ingredient Values',
         fileExtension: '.csv',
-        fileLabel: 'CSV'
+        fileLabel: 'CSV',
     };
 }
 
@@ -378,52 +385,68 @@ function validateJsonStructure(data) {
         showMessage('JSON file must contain a "recipes" array', 'error');
         return false;
     }
-    
+
     if (data.recipes.length === 0) {
         showMessage('Recipes array cannot be empty', 'error');
         return false;
     }
-    
+
     // Check each recipe has required fields
     for (let i = 0; i < data.recipes.length; i++) {
         const recipe = data.recipes[i];
-        
+
         if (!recipe.name || typeof recipe.name !== 'string') {
             showMessage(`Recipe ${i + 1} must have a "name" field`, 'error');
             return false;
         }
-        
+
         if (!Array.isArray(recipe.ingredients)) {
             showMessage(`Recipe "${recipe.name}" must have an "ingredients" array`, 'error');
             return false;
         }
-        
+
         if (recipe.ingredients.length === 0) {
             showMessage(`Recipe "${recipe.name}" must have at least one ingredient`, 'error');
             return false;
         }
-        
+
         // Check each ingredient
         for (let j = 0; j < recipe.ingredients.length; j++) {
             const ingredient = recipe.ingredients[j];
 
             if (!ingredient.ingredient_name || typeof ingredient.ingredient_name !== 'string') {
-                showMessage(`Recipe "${recipe.name}" ingredient ${j + 1} must have an "ingredient_name" field`, 'error');
+                showMessage(
+                    `Recipe "${recipe.name}" ingredient ${j + 1} must have an "ingredient_name" field`,
+                    'error',
+                );
                 return false;
             }
 
-            if (ingredient.amount === undefined || ingredient.amount === null || ingredient.amount === '') {
-                showMessage(`Recipe "${recipe.name}" ingredient "${ingredient.ingredient_name}" is missing an "amount" field`, 'error');
+            if (
+                ingredient.amount === undefined ||
+                ingredient.amount === null ||
+                ingredient.amount === ''
+            ) {
+                showMessage(
+                    `Recipe "${recipe.name}" ingredient "${ingredient.ingredient_name}" is missing an "amount" field`,
+                    'error',
+                );
                 return false;
             }
 
             if (typeof ingredient.amount !== 'number' || isNaN(ingredient.amount)) {
-                showMessage(`Recipe "${recipe.name}" ingredient "${ingredient.ingredient_name}" must have a numeric "amount" value`, 'error');
+                showMessage(
+                    `Recipe "${recipe.name}" ingredient "${ingredient.ingredient_name}" must have a numeric "amount" value`,
+                    'error',
+                );
                 return false;
             }
 
             if (!ingredient.unit_name || typeof ingredient.unit_name !== 'string') {
-                showMessage(`Recipe "${recipe.name}" ingredient "${ingredient.ingredient_name}" is missing a "unit_name" field`, 'error');
+                showMessage(
+                    `Recipe "${recipe.name}" ingredient "${ingredient.ingredient_name}" is missing a "unit_name" field`,
+                    'error',
+                );
                 return false;
             }
         }
@@ -442,12 +465,12 @@ function validateJsonStructure(data) {
         if (duplicates.size > 0) {
             showMessage(
                 `Recipe "${recipe.name}" has duplicate ingredients: ${Array.from(duplicates).join(', ')}`,
-                'error'
+                'error',
             );
             return false;
         }
     }
-    
+
     return true;
 }
 
@@ -473,7 +496,9 @@ function showUploadProgress(show, message, config) {
         }
         if (uploadBtn) {
             uploadBtn.disabled = false;
-            uploadBtn.textContent = config.buttonText || (config.itemLabel === 'recipe' ? 'Upload Recipes' : 'Upload Ingredients');
+            uploadBtn.textContent =
+                config.buttonText ||
+                (config.itemLabel === 'recipe' ? 'Upload Recipes' : 'Upload Ingredients');
         }
     }
 }
@@ -499,9 +524,7 @@ function displayUploadResults(result, config) {
     const successLabel = document.createElement('strong');
     successLabel.textContent = 'Successfully uploaded:';
     successSummary.appendChild(successLabel);
-    successSummary.append(
-        ` ${uploadedCount} ${pluralize(uploadedCount, config.itemLabel)}`
-    );
+    successSummary.append(` ${uploadedCount} ${pluralize(uploadedCount, config.itemLabel)}`);
     wrapper.appendChild(successSummary);
 
     if (failedCount > 0) {
@@ -561,14 +584,14 @@ function displayUploadResults(result, config) {
     if (uploadedCount > 0) {
         showMessage(
             `Successfully uploaded ${uploadedCount} ${pluralize(uploadedCount, config.itemLabel)}!`,
-            'success'
+            'success',
         );
     }
 
     if (failedCount > 0) {
         showMessage(
             `${failedCount} ${pluralize(failedCount, config.itemLabel)} failed validation. See details below.`,
-            'error'
+            'error',
         );
     }
 }
@@ -577,37 +600,37 @@ function downloadIngredientTemplate() {
     const template = {
         ingredients: [
             {
-                name: "Vodka",
-                description: "A clear distilled spirit with a neutral taste",
-                parent_name: "Spirits",
-                allow_substitution: false
+                name: 'Vodka',
+                description: 'A clear distilled spirit with a neutral taste',
+                parent_name: 'Spirits',
+                allow_substitution: false,
             },
             {
-                name: "Lime Juice",
-                description: "Fresh lime juice for cocktails",
-                allow_substitution: true
+                name: 'Lime Juice',
+                description: 'Fresh lime juice for cocktails',
+                allow_substitution: true,
             },
             {
-                name: "Premium Vodka",
-                description: "High-quality vodka with exceptional purity",
-                parent_name: "Vodka",
-                allow_substitution: true
-            }
-        ]
+                name: 'Premium Vodka',
+                description: 'High-quality vodka with exceptional purity',
+                parent_name: 'Vodka',
+                allow_substitution: true,
+            },
+        ],
     };
-    
+
     // Create and download the template
     const blob = new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'cocktail-ingredients-template.json';
-    
+
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
-    
+
     showMessage('Ingredient template downloaded successfully!', 'success');
 }
 
@@ -617,40 +640,43 @@ function validateIngredientJsonStructure(data) {
         showMessage('JSON file must contain an "ingredients" array', 'error');
         return false;
     }
-    
+
     if (data.ingredients.length === 0) {
         showMessage('Ingredients array cannot be empty', 'error');
         return false;
     }
-    
+
     // Check each ingredient has required fields
     for (let i = 0; i < data.ingredients.length; i++) {
         const ingredient = data.ingredients[i];
-        
+
         if (!ingredient.name || typeof ingredient.name !== 'string') {
             showMessage(`Ingredient ${i + 1} must have a "name" field`, 'error');
             return false;
         }
-        
+
         // Optional fields validation
         if (ingredient.description && typeof ingredient.description !== 'string') {
             showMessage(`Ingredient "${ingredient.name}" description must be a string`, 'error');
             return false;
         }
-        
+
         if (ingredient.parent_name && typeof ingredient.parent_name !== 'string') {
             showMessage(`Ingredient "${ingredient.name}" parent_name must be a string`, 'error');
             return false;
         }
-        
+
         if (ingredient.allow_substitution !== undefined && ingredient.allow_substitution !== null) {
             if (typeof ingredient.allow_substitution !== 'boolean') {
-                showMessage(`Ingredient "${ingredient.name}" allow_substitution must be a boolean (true or false)`, 'error');
+                showMessage(
+                    `Ingredient "${ingredient.name}" allow_substitution must be a boolean (true or false)`,
+                    'error',
+                );
                 return false;
             }
         }
     }
-    
+
     return true;
 }
 
@@ -674,9 +700,9 @@ function renderPublicTagStatus(tagsList, className, message) {
 async function loadPublicTags() {
     const tagsList = document.getElementById('public-tags-list');
     const refreshBtn = document.getElementById('refresh-tags-btn');
-    
+
     if (!tagsList) return;
-    
+
     try {
         // Show loading state
         renderPublicTagStatus(tagsList, 'loading-message', 'Loading public tags...');
@@ -684,15 +710,15 @@ async function loadPublicTags() {
             refreshBtn.disabled = true;
             refreshBtn.textContent = 'Loading...';
         }
-        
+
         const tags = await api.getPublicTags();
         if (tags.length === 0) {
             renderPublicTagStatus(tagsList, 'empty-message', 'No public tags found.');
             return;
         }
-        
+
         tagsList.textContent = '';
-        tags.forEach(tag => {
+        tags.forEach((tag) => {
             const tagItem = document.createElement('div');
             tagItem.className = 'tag-management-item';
             tagItem.dataset.tagId = tag.id;
@@ -725,7 +751,6 @@ async function loadPublicTags() {
             tagItem.appendChild(actions);
             tagsList.appendChild(tagItem);
         });
-        
     } catch (error) {
         console.error('Error loading public tags:', error);
         renderPublicTagStatus(tagsList, 'error-message', 'Error loading tags. Please try again.');
@@ -742,40 +767,42 @@ async function handleDeletePublicTag(event) {
     const button = event.target;
     const tagId = parseInt(button.dataset.tagId);
     const tagName = button.dataset.tagName;
-    
+
     // Confirm deletion
     const confirmMessage = `Are you sure you want to delete the public tag "${tagName}"?\n\nThis will remove it from ALL recipes that use this tag. This action cannot be undone.`;
     if (!confirm(confirmMessage)) {
         return;
     }
-    
+
     const originalText = button.textContent;
-    
+
     try {
         // Show loading state
         button.disabled = true;
         button.textContent = 'Deleting...';
-        
+
         await api.deletePublicTag(tagId);
-        
+
         // Remove the tag item from the UI
         const tagItem = button.closest('.tag-management-item');
         if (tagItem) {
             tagItem.remove();
         }
-        
+
         showMessage(`Public tag "${tagName}" deleted successfully`, 'success');
-        
+
         // Check if list is now empty
         const tagsList = document.getElementById('public-tags-list');
         if (tagsList && tagsList.children.length === 0) {
             renderPublicTagStatus(tagsList, 'empty-message', 'No public tags found.');
         }
-        
     } catch (error) {
         console.error('Error deleting public tag:', error);
-        showMessage(`Error deleting tag "${tagName}": ${error.message || 'Please try again'}`, 'error');
-        
+        showMessage(
+            `Error deleting tag "${tagName}": ${error.message || 'Please try again'}`,
+            'error',
+        );
+
         // Restore button state
         button.disabled = false;
         button.textContent = originalText;

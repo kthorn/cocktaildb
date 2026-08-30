@@ -21,9 +21,14 @@ JWKS_CACHE_DURATION = 3600  # 1 hour
 class UserInfo:
     """User information extracted from Cognito JWT token"""
 
-    def __init__(self, user_id: str, username: Optional[str] = None,
-                 email: Optional[str] = None, groups: Optional[list] = None,
-                 claims: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        user_id: str,
+        username: Optional[str] = None,
+        email: Optional[str] = None,
+        groups: Optional[list] = None,
+        claims: Optional[Dict[str, Any]] = None,
+    ):
         self.user_id = user_id
         self.username = username
         self.email = email
@@ -102,13 +107,15 @@ def validate_jwt_token(token: str) -> Optional[Dict[str, Any]]:
             options={
                 "verify_aud": False,  # Cognito uses client_id in different claim
                 "verify_exp": True,
-            }
+            },
         )
 
         # Verify client_id (Cognito puts it in 'aud' for id_token or 'client_id' for access_token)
         token_client_id = claims.get("aud") or claims.get("client_id")
         if token_client_id != client_id:
-            logger.warning(f"Token client_id mismatch: {token_client_id} != {client_id}")
+            logger.warning(
+                f"Token client_id mismatch: {token_client_id} != {client_id}"
+            )
             return None
 
         return claims
@@ -124,7 +131,9 @@ def validate_jwt_token(token: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def get_user_from_jwt(request: Request, credentials: Optional[HTTPAuthorizationCredentials]) -> Optional[UserInfo]:
+def get_user_from_jwt(
+    request: Request, credentials: Optional[HTTPAuthorizationCredentials]
+) -> Optional[UserInfo]:
     """Extract user information from JWT Bearer token"""
     if not credentials:
         logger.debug("No authorization credentials provided")
@@ -144,22 +153,24 @@ def get_user_from_jwt(request: Request, credentials: Optional[HTTPAuthorizationC
     username = claims.get("username") or claims.get("cognito:username")
     email = claims.get("email")
     groups_claim = claims.get("cognito:groups", [])
-    groups = groups_claim if isinstance(groups_claim, list) else groups_claim.split(",") if groups_claim else []
+    groups = (
+        groups_claim
+        if isinstance(groups_claim, list)
+        else groups_claim.split(",")
+        if groups_claim
+        else []
+    )
 
     logger.debug(f"Authenticated user: {user_id}, groups: {groups}")
 
     return UserInfo(
-        user_id=user_id,
-        username=username,
-        email=email,
-        groups=groups,
-        claims=claims
+        user_id=user_id, username=username, email=email, groups=groups, claims=claims
     )
 
 
 async def get_current_user_optional(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> Optional[UserInfo]:
     """Get current user information if available (optional authentication)
 
@@ -170,7 +181,7 @@ async def get_current_user_optional(
 
 async def get_current_user(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> UserInfo:
     """Get current user information (required authentication)"""
     user = await get_current_user_optional(request, credentials)
@@ -185,7 +196,7 @@ async def get_current_user(
 
 async def require_authentication(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> UserInfo:
     """Require authentication - raises exception if user is not authenticated"""
     return await get_current_user(request, credentials)
@@ -208,7 +219,7 @@ def is_editor_or_admin(user: UserInfo) -> bool:
 
 async def require_editor_access(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> UserInfo:
     """Require editor or admin access - raises exception if user is not authorized"""
     user = await get_current_user(request, credentials)

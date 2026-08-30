@@ -62,7 +62,9 @@ async def test_get_recipe_similar_returns_entry(set_pg_env):
 
     transport = ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/analytics/recipe-similar", params={"recipe_id": 1})
+        response = await client.get(
+            "/analytics/recipe-similar", params={"recipe_id": 1}
+        )
 
     assert response.status_code == 200
     body = response.json()
@@ -99,7 +101,9 @@ async def test_get_recipe_similar_includes_transport_names(set_pg_env):
 
     transport = ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/analytics/recipe-similar", params={"recipe_id": 1})
+        response = await client.get(
+            "/analytics/recipe-similar", params={"recipe_id": 1}
+        )
 
     assert response.status_code == 200
     body = response.json()
@@ -116,7 +120,9 @@ async def test_get_recipe_similar_returns_404_for_missing_recipe(set_pg_env):
 
     transport = ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/analytics/recipe-similar", params={"recipe_id": 2})
+        response = await client.get(
+            "/analytics/recipe-similar", params={"recipe_id": 2}
+        )
 
     assert response.status_code == 404
 

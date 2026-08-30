@@ -141,13 +141,17 @@ def build_recipe_similarity(
                     transport_plan = [
                         {
                             "from_ingredient_id": int(
-                                ingredient_registry.get_id(index=int(to_idx if swap_direction else from_idx))
+                                ingredient_registry.get_id(
+                                    index=int(to_idx if swap_direction else from_idx)
+                                )
                             ),
                             "from_ingredient_name": ingredient_registry.get_name(
                                 index=int(to_idx if swap_direction else from_idx)
                             ),
                             "to_ingredient_id": int(
-                                ingredient_registry.get_id(index=int(from_idx if swap_direction else to_idx))
+                                ingredient_registry.get_id(
+                                    index=int(from_idx if swap_direction else to_idx)
+                                )
                             ),
                             "to_ingredient_name": ingredient_registry.get_name(
                                 index=int(from_idx if swap_direction else to_idx)
@@ -185,13 +189,17 @@ def build_recipe_similarity(
                 transport_plan = [
                     {
                         "from_ingredient_id": int(
-                            ingredient_registry.get_id(index=int(to_idx if swap_direction else from_idx))
+                            ingredient_registry.get_id(
+                                index=int(to_idx if swap_direction else from_idx)
+                            )
                         ),
                         "from_ingredient_name": ingredient_registry.get_name(
                             index=int(to_idx if swap_direction else from_idx)
                         ),
                         "to_ingredient_id": int(
-                            ingredient_registry.get_id(index=int(from_idx if swap_direction else to_idx))
+                            ingredient_registry.get_id(
+                                index=int(from_idx if swap_direction else to_idx)
+                            )
                         ),
                         "to_ingredient_name": ingredient_registry.get_name(
                             index=int(from_idx if swap_direction else to_idx)

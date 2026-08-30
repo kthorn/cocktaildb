@@ -36,7 +36,9 @@ class AnalyticsStorage:
             return data
 
         except Exception as e:
-            logger.error(f"Error retrieving analytics data for {analytics_type}: {str(e)}")
+            logger.error(
+                f"Error retrieving analytics data for {analytics_type}: {str(e)}"
+            )
             return None
 
     def put_analytics(self, analytics_type: str, data: Dict[Any, Any]) -> bool:
@@ -48,8 +50,8 @@ class AnalyticsStorage:
                 "metadata": {
                     "generated_at": datetime.utcnow().isoformat() + "Z",
                     "storage_version": self.storage_version,
-                    "analytics_type": analytics_type
-                }
+                    "analytics_type": analytics_type,
+                },
             }
 
             with open(file_path, "w", encoding="utf-8") as file_handle:

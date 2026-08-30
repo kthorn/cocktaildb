@@ -235,6 +235,7 @@ class TestQueryErrorHandling:
                 ("Name", "Description"),  # Missing third parameter
             )
 
+
 class TestEdgeCaseDataValues:
     """Test edge case data values and boundary conditions"""
 

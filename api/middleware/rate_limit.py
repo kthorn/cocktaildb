@@ -47,9 +47,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def _get_client_ip(self, request: Request) -> str:
         """Client IP from X-Real-IP (set by Caddy) or direct connection."""
-        return (
-            request.headers.get("x-real-ip")
-            or (request.client.host if request.client else "unknown")
+        return request.headers.get("x-real-ip") or (
+            request.client.host if request.client else "unknown"
         )
 
     def _cleanup_stale(self, now: float):

@@ -6,7 +6,11 @@ from fastapi import APIRouter, Depends, status, HTTPException
 from dependencies.auth import UserInfo, require_authentication
 from db.database import get_database as get_db
 from db.db_core import Database
-from models.requests import UserIngredientAdd, UserIngredientBulkAdd, UserIngredientBulkRemove
+from models.requests import (
+    UserIngredientAdd,
+    UserIngredientBulkAdd,
+    UserIngredientBulkRemove,
+)
 from models.responses import (
     UserIngredientResponse,
     UserIngredientListResponse,
@@ -22,7 +26,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/user-ingredients", tags=["user-ingredients"])
 
 
-@router.post("", response_model=UserIngredientResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=UserIngredientResponse, status_code=status.HTTP_201_CREATED
+)
 async def add_user_ingredient(
     ingredient_data: UserIngredientAdd,
     db: Database = Depends(get_db),
@@ -30,17 +36,19 @@ async def add_user_ingredient(
 ):
     """Add an ingredient to user's inventory (requires authentication)"""
     try:
-        logger.info(f"Adding ingredient {ingredient_data.ingredient_id} to user {user.user_id}")
+        logger.info(
+            f"Adding ingredient {ingredient_data.ingredient_id} to user {user.user_id}"
+        )
 
         result = db.add_user_ingredient(user.user_id, ingredient_data.ingredient_id)
-        
+
         return UserIngredientResponse(
             ingredient_id=result["ingredient_id"],
             name=result["ingredient_name"],
             description=None,  # Not included in basic add response
-            parent_id=None,    # Not included in basic add response
-            path=None,         # Not included in basic add response
-            added_at=result["added_at"]
+            parent_id=None,  # Not included in basic add response
+            path=None,  # Not included in basic add response
+            added_at=result["added_at"],
         )
 
     except ValueError as e:
@@ -60,22 +68,28 @@ async def remove_user_ingredients_bulk(
 ):
     """Remove multiple ingredients from user's inventory (requires authentication)"""
     try:
-        logger.info(f"Bulk removing {len(bulk_data.ingredient_ids)} ingredients from user {user.user_id}")
+        logger.info(
+            f"Bulk removing {len(bulk_data.ingredient_ids)} ingredients from user {user.user_id}"
+        )
 
         result = db.remove_user_ingredients_bulk(user.user_id, bulk_data.ingredient_ids)
-        
+
         return UserIngredientBulkResponse(
             removed_count=result["removed_count"],
-            not_found_count=result["not_found_count"]
+            not_found_count=result["not_found_count"],
         )
 
     except ValueError as e:
         # This is a validation error (e.g., parent-child constraint violation)
-        logger.warning(f"Validation error during bulk remove for user {user.user_id}: {str(e)}")
+        logger.warning(
+            f"Validation error during bulk remove for user {user.user_id}: {str(e)}"
+        )
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error bulk removing ingredients from user inventory: {str(e)}")
-        raise DatabaseException("Failed to bulk remove ingredients from inventory", detail=str(e))
+        raise DatabaseException(
+            "Failed to bulk remove ingredients from inventory", detail=str(e)
+        )
 
 
 @router.delete("/{ingredient_id}", response_model=MessageResponse)
@@ -89,9 +103,11 @@ async def remove_user_ingredient(
         logger.info(f"Removing ingredient {ingredient_id} from user {user.user_id}")
 
         success = db.remove_user_ingredient(user.user_id, ingredient_id)
-        
+
         if not success:
-            raise NotFoundException(f"Ingredient {ingredient_id} not found in user's inventory")
+            raise NotFoundException(
+                f"Ingredient {ingredient_id} not found in user's inventory"
+            )
 
         return MessageResponse(
             message=f"Ingredient {ingredient_id} removed from inventory successfully"
@@ -101,7 +117,9 @@ async def remove_user_ingredient(
         raise
     except Exception as e:
         logger.error(f"Error removing ingredient from user inventory: {str(e)}")
-        raise DatabaseException("Failed to remove ingredient from inventory", detail=str(e))
+        raise DatabaseException(
+            "Failed to remove ingredient from inventory", detail=str(e)
+        )
 
 
 @router.get("", response_model=UserIngredientListResponse)
@@ -114,7 +132,7 @@ async def get_user_ingredients(
         logger.info(f"Getting ingredients for user {user.user_id}")
 
         ingredients = db.get_user_ingredients(user.user_id)
-        
+
         ingredient_responses = []
         for ingredient in ingredients:
             ingredient_responses.append(
@@ -124,13 +142,12 @@ async def get_user_ingredients(
                     description=ingredient.get("description"),
                     parent_id=ingredient.get("parent_id"),
                     path=ingredient.get("path"),
-                    added_at=ingredient["added_at"]
+                    added_at=ingredient["added_at"],
                 )
             )
 
         return UserIngredientListResponse(
-            ingredients=ingredient_responses,
-            total_count=len(ingredient_responses)
+            ingredients=ingredient_responses, total_count=len(ingredient_responses)
         )
 
     except Exception as e:
@@ -138,7 +155,11 @@ async def get_user_ingredients(
         raise DatabaseException("Failed to retrieve user ingredients", detail=str(e))
 
 
-@router.post("/bulk", response_model=UserIngredientBulkResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/bulk",
+    response_model=UserIngredientBulkResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def add_user_ingredients_bulk(
     bulk_data: UserIngredientBulkAdd,
     db: Database = Depends(get_db),
@@ -146,7 +167,9 @@ async def add_user_ingredients_bulk(
 ):
     """Add multiple ingredients to user's inventory (requires authentication)"""
     try:
-        logger.info(f"Bulk adding {len(bulk_data.ingredient_ids)} ingredients to user {user.user_id}")
+        logger.info(
+            f"Bulk adding {len(bulk_data.ingredient_ids)} ingredients to user {user.user_id}"
+        )
 
         result = db.add_user_ingredients_bulk(user.user_id, bulk_data.ingredient_ids)
 
@@ -154,12 +177,14 @@ async def add_user_ingredients_bulk(
             added_count=result["added_count"],
             already_exists_count=result["already_exists_count"],
             failed_count=result["failed_count"],
-            errors=result["errors"]
+            errors=result["errors"],
         )
 
     except Exception as e:
         logger.error(f"Error bulk adding ingredients to user inventory: {str(e)}")
-        raise DatabaseException("Failed to bulk add ingredients to inventory", detail=str(e))
+        raise DatabaseException(
+            "Failed to bulk add ingredients to inventory", detail=str(e)
+        )
 
 
 @router.get("/recommendations", response_model=IngredientRecommendationListResponse)
@@ -170,7 +195,9 @@ async def get_ingredient_recommendations(
 ):
     """Get ingredient recommendations that would unlock the most new recipes (requires authentication)"""
     try:
-        logger.info(f"Getting ingredient recommendations for user {user.user_id} with limit {limit}")
+        logger.info(
+            f"Getting ingredient recommendations for user {user.user_id} with limit {limit}"
+        )
 
         recommendations = db.get_ingredient_recommendations(user.user_id, limit)
 
@@ -185,15 +212,17 @@ async def get_ingredient_recommendations(
                     path=rec.get("path"),
                     allow_substitution=rec.get("allow_substitution", False),
                     recipes_unlocked=rec["recipes_unlocked"],
-                    recipe_names=rec["recipe_names"]
+                    recipe_names=rec["recipe_names"],
                 )
             )
 
         return IngredientRecommendationListResponse(
             recommendations=recommendation_responses,
-            total_count=len(recommendation_responses)
+            total_count=len(recommendation_responses),
         )
 
     except Exception as e:
         logger.error(f"Error getting ingredient recommendations: {str(e)}")
-        raise DatabaseException("Failed to retrieve ingredient recommendations", detail=str(e))
+        raise DatabaseException(
+            "Failed to retrieve ingredient recommendations", detail=str(e)
+        )

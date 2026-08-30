@@ -140,11 +140,13 @@ class AnalyticsQueries:
 
             # Convert amounts to ml where possible
             df["amount_ml"] = df.apply(
-                lambda row: row["amount"] * row["conversion_to_ml"]
-                if pd.notna(row["conversion_to_ml"]) and pd.notna(row["amount"])
-                else row["amount"]
-                if pd.notna(row["amount"])
-                else 1.0,  # Default to 1 if no amount
+                lambda row: (
+                    row["amount"] * row["conversion_to_ml"]
+                    if pd.notna(row["conversion_to_ml"]) and pd.notna(row["amount"])
+                    else row["amount"]
+                    if pd.notna(row["amount"])
+                    else 1.0
+                ),  # Default to 1 if no amount
                 axis=1,
             )
 
@@ -390,14 +392,16 @@ class AnalyticsQueries:
             df = pd.DataFrame(rows)
 
             # Normalize volumes per recipe to sum to 1.0 (volume fractions)
-            df['volume_fraction'] = df.groupby('recipe_id')['volume_ml'].transform(
+            df["volume_fraction"] = df.groupby("recipe_id")["volume_ml"].transform(
                 lambda x: x / x.sum()
             )
 
             # Drop the intermediate volume_ml and unit columns
-            df = df.drop(columns=['amount', 'unit_id', 'conversion_to_ml', 'volume_ml'])
+            df = df.drop(columns=["amount", "unit_id", "conversion_to_ml", "volume_ml"])
 
-            logger.info(f"Retrieved {len(df)} recipe-ingredient pairs for {df['recipe_id'].nunique()} recipes")
+            logger.info(
+                f"Retrieved {len(df)} recipe-ingredient pairs for {df['recipe_id'].nunique()} recipes"
+            )
             return df
 
         except Exception as e:
@@ -447,58 +451,72 @@ class AnalyticsQueries:
                 logger.warning("Empty data, returning empty UMAP")
                 return []
 
-            logger.info(f"Loaded {len(ingredients_df)} ingredients and {len(recipes_df)} recipe-ingredient pairs")
+            logger.info(
+                f"Loaded {len(ingredients_df)} ingredients and {len(recipes_df)} recipe-ingredient pairs"
+            )
 
             # Step 2: Build ingredient tree
             logger.info("Building ingredient tree")
             tree_dict, parent_map = build_ingredient_tree(
                 ingredients_df,
-                id_col='ingredient_id',
-                name_col='ingredient_name',
-                path_col='ingredient_path',
-                weight_col='substitution_level',
-                root_id='root',
-                root_name='All Ingredients',
-                default_edge_weight=1.0
+                id_col="ingredient_id",
+                name_col="ingredient_name",
+                path_col="ingredient_path",
+                weight_col="substitution_level",
+                root_id="root",
+                root_name="All Ingredients",
+                default_edge_weight=1.0,
             )
 
             # Step 3: Create rollup mapping and apply to recipes
             logger.info("Creating rollup mapping")
             # Rename ingredient_id to id for rollup function compatibility
-            ingredients_df = ingredients_df.rename(columns={'ingredient_id': 'id'})
+            ingredients_df = ingredients_df.rename(columns={"ingredient_id": "id"})
 
-            rollup_map = create_rollup_mapping(ingredients_df, parent_map, allow_substitution_col='allow_substitution')
-            logger.info(f"Created rollup mapping with {len(rollup_map)} substitutable leaves")
+            rollup_map = create_rollup_mapping(
+                ingredients_df, parent_map, allow_substitution_col="allow_substitution"
+            )
+            logger.info(
+                f"Created rollup mapping with {len(rollup_map)} substitutable leaves"
+            )
 
             logger.info("Applying rollup to recipes")
             recipes_rolled_df = apply_rollup_to_recipes(
                 recipes_df,
                 rollup_map,
-                ingredient_id_col='ingredient_id',
-                volume_col='volume_fraction'
+                ingredient_id_col="ingredient_id",
+                volume_col="volume_fraction",
             )
-            logger.info(f"Recipes rolled up: {len(recipes_df)} -> {len(recipes_rolled_df)} rows")
+            logger.info(
+                f"Recipes rolled up: {len(recipes_df)} -> {len(recipes_rolled_df)} rows"
+            )
 
             # Get unique ingredients after rollup
-            unique_ingredients_after_rollup = set(recipes_rolled_df['ingredient_id'].unique())
-            logger.info(f"Unique ingredients after rollup: {len(unique_ingredients_after_rollup)}")
+            unique_ingredients_after_rollup = set(
+                recipes_rolled_df["ingredient_id"].unique()
+            )
+            logger.info(
+                f"Unique ingredients after rollup: {len(unique_ingredients_after_rollup)}"
+            )
 
             # Step 4: Build ingredient distance matrix (filtered to ingredients in rolled recipes + ancestors)
             logger.info("Building ingredient distance matrix")
 
             # Find all ancestors of ingredients in rolled recipes to preserve tree connectivity
-            ingredients_with_ancestors = set(['root'])
+            ingredients_with_ancestors = set(["root"])
             for ing_id in unique_ingredients_after_rollup:
                 current_id = str(ing_id)
                 # Walk up the tree to root, adding all ancestors
-                while current_id in parent_map and current_id != 'root':
+                while current_id in parent_map and current_id != "root":
                     ingredients_with_ancestors.add(current_id)
                     parent_id, _ = parent_map[current_id]
-                    if parent_id is None or parent_id == 'root':
+                    if parent_id is None or parent_id == "root":
                         break
                     current_id = parent_id
 
-            logger.info(f"Ingredients including ancestors: {len(ingredients_with_ancestors) - 1}")  # -1 for root
+            logger.info(
+                f"Ingredients including ancestors: {len(ingredients_with_ancestors) - 1}"
+            )  # -1 for root
 
             # Filter parent_map to only include these ingredients
             filtered_parent_map = {
@@ -510,8 +528,11 @@ class AnalyticsQueries:
             # Filter id_to_name to match
             id_to_name = {
                 str(ing_id): name
-                for ing_id, name in zip(ingredients_df['id'], ingredients_df['ingredient_name'])
-                if str(ing_id) in ingredients_with_ancestors or ing_id in unique_ingredients_after_rollup
+                for ing_id, name in zip(
+                    ingredients_df["id"], ingredients_df["ingredient_name"]
+                )
+                if str(ing_id) in ingredients_with_ancestors
+                or ing_id in unique_ingredients_after_rollup
             }
 
             cost_matrix, ingredient_registry = build_ingredient_distance_matrix(
@@ -524,16 +545,18 @@ class AnalyticsQueries:
             if storage_path:
                 save_em_ingredient_distance_matrix(storage_path, cost_matrix)
             else:
-                logger.warning("ANALYTICS_PATH not set; skipping EM ingredient distance write")
+                logger.warning(
+                    "ANALYTICS_PATH not set; skipping EM ingredient distance write"
+                )
 
             # Step 5: Build recipe volume matrix with rolled-up ingredients
             logger.info("Building recipe volume matrix")
             volume_matrix, recipe_registry = build_recipe_volume_matrix(
                 recipes_rolled_df,
                 ingredient_registry,
-                recipe_id_col='recipe_id',
-                ingredient_id_col='ingredient_id',
-                volume_col='volume_fraction',
+                recipe_id_col="recipe_id",
+                ingredient_id_col="ingredient_id",
+                volume_col="volume_fraction",
                 sparse=True,
                 dtype=np.float32,
             )
@@ -586,15 +609,14 @@ class AnalyticsQueries:
             if storage_path:
                 save_em_distance_matrix(storage_path, final_dist)
             else:
-                logger.warning("ANALYTICS_PATH not set; skipping EM distance matrix persistence")
+                logger.warning(
+                    "ANALYTICS_PATH not set; skipping EM distance matrix persistence"
+                )
 
             # Step 7: Compute UMAP embedding
             logger.info("Computing UMAP embedding")
             embedding = compute_umap_embedding(
-                final_dist,
-                n_neighbors=10,
-                min_dist=0.05,
-                random_state=42
+                final_dist, n_neighbors=10, min_dist=0.05, random_state=42
             )
             logger.info(f"UMAP embedding shape: {embedding.shape}")
 
@@ -608,17 +630,19 @@ class AnalyticsQueries:
                 recipe_name = recipe_registry.get_name(index=idx)
                 recipe_ids.append(int(recipe_id))
 
-                result.append({
-                    'recipe_id': int(recipe_id),
-                    'recipe_name': recipe_name,
-                    'x': float(embedding[idx, 0]),
-                    'y': float(embedding[idx, 1]),
-                    'ingredients': []  # Will populate below
-                })
+                result.append(
+                    {
+                        "recipe_id": int(recipe_id),
+                        "recipe_name": recipe_name,
+                        "x": float(embedding[idx, 0]),
+                        "y": float(embedding[idx, 1]),
+                        "ingredients": [],  # Will populate below
+                    }
+                )
 
             # Step 9: Query ingredients for all recipes in one go
             if recipe_ids:
-                placeholders = ','.join(['%s'] * len(recipe_ids))
+                placeholders = ",".join(["%s"] * len(recipe_ids))
                 ingredient_query = f"""
                     SELECT
                         ri.recipe_id,
@@ -639,30 +663,31 @@ class AnalyticsQueries:
                     ORDER BY ri.recipe_id
                 """
 
-                ingredient_rows = self.db.execute_query(ingredient_query, tuple(recipe_ids))
+                ingredient_rows = self.db.execute_query(
+                    ingredient_query, tuple(recipe_ids)
+                )
 
                 # Group ingredients by recipe and sort by volume
                 recipe_ingredients = {}
                 for row in ingredient_rows:
-                    recipe_id = row['recipe_id']
+                    recipe_id = row["recipe_id"]
                     if recipe_id not in recipe_ingredients:
                         recipe_ingredients[recipe_id] = []
 
-                    recipe_ingredients[recipe_id].append({
-                        'name': row['ingredient_name'],
-                        'amount_ml': row['volume_ml']
-                    })
+                    recipe_ingredients[recipe_id].append(
+                        {"name": row["ingredient_name"], "amount_ml": row["volume_ml"]}
+                    )
 
                 # Sort ingredients by volume and add to results
                 for item in result:
-                    recipe_id = item['recipe_id']
+                    recipe_id = item["recipe_id"]
                     if recipe_id in recipe_ingredients:
                         sorted_ings = sorted(
                             recipe_ingredients[recipe_id],
-                            key=lambda x: x['amount_ml'],
-                            reverse=True
+                            key=lambda x: x["amount_ml"],
+                            reverse=True,
                         )
-                        item['ingredients'] = [ing['name'] for ing in sorted_ings]
+                        item["ingredients"] = [ing["name"] for ing in sorted_ings]
 
             logger.info(f"EM-based UMAP computation complete: {len(result)} recipes")
             if return_similarity:

@@ -31,20 +31,22 @@ export function createCocktailSpaceChart(container, data, options = {}) {
 
     const isTouch = isTouchDevice();
     const ratingSource = options.ratingSource === 'user' ? 'user' : 'average';
-    const ratingColor = d3.scaleSequential([1, 5], t => d3.interpolateBlues(0.2 + t * 0.7));
+    const ratingColor = d3.scaleSequential([1, 5], (t) => d3.interpolateBlues(0.2 + t * 0.7));
 
-    const ratingControls = d3.select(container)
+    const ratingControls = d3
+        .select(container)
         .append('div')
         .attr('class', 'cocktail-space-rating-controls');
     const ratingLabel = ratingControls.append('label');
-    const ratingToggle = ratingLabel.append('input')
-        .attr('type', 'checkbox');
-    ratingLabel.append('span')
+    const ratingToggle = ratingLabel.append('input').attr('type', 'checkbox');
+    ratingLabel
+        .append('span')
         .text(ratingSource === 'user' ? 'Color by my rating' : 'Color by average rating');
-    const ratingLegend = ratingControls.append('div')
+    const ratingLegend = ratingControls
+        .append('div')
         .attr('class', 'cocktail-space-rating-legend hidden')
         .attr('aria-hidden', 'true');
-    [1, 2, 3, 4, 5].forEach(rating => {
+    [1, 2, 3, 4, 5].forEach((rating) => {
         const item = ratingLegend.append('span');
         item.append('i').style('background-color', ratingColor(rating));
         item.append('span').text(rating);
@@ -59,26 +61,28 @@ export function createCocktailSpaceChart(container, data, options = {}) {
     const height = 600 - margin.top - margin.bottom;
 
     // Create SVG
-    const svg = d3.select(container)
+    const svg = d3
+        .select(container)
         .append('svg')
         .attr('width', width + margin.left + margin.right)
         .attr('height', height + margin.top + margin.bottom);
 
-    const g = svg.append('g')
-        .attr('transform', `translate(${margin.left},${margin.top})`);
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
 
     // Get data extents with padding
-    const xExtent = d3.extent(data, d => d.x);
-    const yExtent = d3.extent(data, d => d.y);
+    const xExtent = d3.extent(data, (d) => d.x);
+    const yExtent = d3.extent(data, (d) => d.y);
     const xPadding = (xExtent[1] - xExtent[0]) * 0.1;
     const yPadding = (yExtent[1] - yExtent[0]) * 0.1;
 
     // Create scales
-    const xScale = d3.scaleLinear()
+    const xScale = d3
+        .scaleLinear()
         .domain([xExtent[0] - xPadding, xExtent[1] + xPadding])
         .range([0, width]);
 
-    const yScale = d3.scaleLinear()
+    const yScale = d3
+        .scaleLinear()
         .domain([yExtent[0] - yPadding, yExtent[1] + yPadding])
         .range([height, 0]);
 
@@ -94,7 +98,8 @@ export function createCocktailSpaceChart(container, data, options = {}) {
     const previewCard = createRecipePreviewCard(document.body);
 
     // Add circles for data points
-    const circles = g.append('g')
+    const circles = g
+        .append('g')
         .attr('clip-path', 'url(#clip)')
         .selectAll('circle')
         .data(data)
@@ -102,8 +107,8 @@ export function createCocktailSpaceChart(container, data, options = {}) {
         .append('circle');
 
     circles
-        .attr('cx', d => xScale(d.x))
-        .attr('cy', d => yScale(d.y))
+        .attr('cx', (d) => xScale(d.x))
+        .attr('cy', (d) => yScale(d.y))
         .attr('r', DOT_RADIUS)
         .attr('fill', DOT_FILL)
         .attr('stroke', DOT_STROKE)
@@ -111,18 +116,16 @@ export function createCocktailSpaceChart(container, data, options = {}) {
         .attr('opacity', DOT_OPACITY)
         .style('cursor', 'pointer');
 
-    ratingToggle.on('change', function() {
+    ratingToggle.on('change', function () {
         const enabled = this.checked;
-        circles.attr('fill', d => enabled
-            ? (d.rating == null ? UNRATED_COLOR : ratingColor(d.rating))
-            : DOT_FILL
+        circles.attr('fill', (d) =>
+            enabled ? (d.rating == null ? UNRATED_COLOR : ratingColor(d.rating)) : DOT_FILL,
         );
-        ratingLegend
-            .classed('hidden', !enabled)
-            .attr('aria-hidden', String(!enabled));
+        ratingLegend.classed('hidden', !enabled).attr('aria-hidden', String(!enabled));
     });
 
-    const calloutLayer = g.append('g')
+    const calloutLayer = g
+        .append('g')
         .attr('class', 'recipe-callouts')
         .attr('clip-path', 'url(#clip)');
 
@@ -138,22 +141,20 @@ export function createCocktailSpaceChart(container, data, options = {}) {
 
             // Highlight the circle
             circles.attr('opacity', DOT_OPACITY);
-            d3.select(event.target)
-                .attr('r', DOT_RADIUS_HOVER)
-                .attr('opacity', DOT_OPACITY_HOVER);
+            d3.select(event.target).attr('r', DOT_RADIUS_HOVER).attr('opacity', DOT_OPACITY_HOVER);
         },
         onDoubleTap: (_event, d) => {
             previewCard.hide();
             if (options.onRecipeClick) {
                 options.onRecipeClick(d.recipe_id, d.recipe_name);
             }
-        }
+        },
     });
 
     if (!isTouch) {
         // Mouse events (desktop)
         circles
-            .on('mouseenter', function(event, d) {
+            .on('mouseenter', function (event, d) {
                 d3.select(this)
                     .transition()
                     .duration(200)
@@ -162,7 +163,7 @@ export function createCocktailSpaceChart(container, data, options = {}) {
 
                 previewCard.startHover(d, event.pageX, event.pageY);
             })
-            .on('mouseleave', function() {
+            .on('mouseleave', function () {
                 d3.select(this)
                     .transition()
                     .duration(200)
@@ -171,7 +172,7 @@ export function createCocktailSpaceChart(container, data, options = {}) {
 
                 previewCard.cancelHover();
             })
-            .on('click', function(_event, d) {
+            .on('click', function (_event, d) {
                 previewCard.hide();
                 if (options.onRecipeClick) {
                     options.onRecipeClick(d.recipe_id, d.recipe_name);
@@ -180,14 +181,14 @@ export function createCocktailSpaceChart(container, data, options = {}) {
     } else {
         // Touch events (mobile)
         circles
-            .on('touchstart', function(event, d) {
+            .on('touchstart', function (event, d) {
                 // Only handle single-finger touch for tap detection
                 if (event.touches.length === 1) {
                     event.preventDefault(); // Prevent scroll on single tap
                     touchHandlers.touchstart(event, d);
                 }
             })
-            .on('touchend', function(event, d) {
+            .on('touchend', function (event, d) {
                 touchHandlers.touchend(event, d);
             });
     }
@@ -197,61 +198,70 @@ export function createCocktailSpaceChart(container, data, options = {}) {
      * Only shown when the number of visible points is at most MAX_VISIBLE_CALLOUTS.
      */
     function updateCallouts(transform) {
-        const visiblePoints = data.map(d => ({
-            ...d,
-            calloutX: transform.applyX(xScale(d.x)),
-            calloutY: transform.applyY(yScale(d.y))
-        })).filter(d =>
-            d.calloutX >= 0 && d.calloutX <= width &&
-            d.calloutY >= 0 && d.calloutY <= height
-        );
+        const visiblePoints = data
+            .map((d) => ({
+                ...d,
+                calloutX: transform.applyX(xScale(d.x)),
+                calloutY: transform.applyY(yScale(d.y)),
+            }))
+            .filter(
+                (d) =>
+                    d.calloutX >= 0 &&
+                    d.calloutX <= width &&
+                    d.calloutY >= 0 &&
+                    d.calloutY <= height,
+            );
 
         const labels = visiblePoints.length <= MAX_VISIBLE_CALLOUTS ? visiblePoints : [];
-        const text = calloutLayer.selectAll('text')
-            .data(labels, d => d.recipe_id)
+        const text = calloutLayer
+            .selectAll('text')
+            .data(labels, (d) => d.recipe_id)
             .join(
-                enter => enter.append('text').attr('class', 'recipe-callout'),
-                update => update,
-                exit => exit.remove()
+                (enter) => enter.append('text').attr('class', 'recipe-callout'),
+                (update) => update,
+                (exit) => exit.remove(),
             )
-            .text(d => d.recipe_name);
+            .text((d) => d.recipe_name);
 
         const textWidths = new Map();
-        text.each(function(d) {
+        text.each(function (d) {
             textWidths.set(d.recipe_name, this.getComputedTextLength());
         });
-        const positioned = placeCallouts(
-            labels,
-            width,
-            height,
-            recipeName => textWidths.get(recipeName)
+        const positioned = placeCallouts(labels, width, height, (recipeName) =>
+            textWidths.get(recipeName),
         );
 
-        calloutLayer.selectAll('text')
-            .data(positioned, d => d.recipe_id)
+        calloutLayer
+            .selectAll('text')
+            .data(positioned, (d) => d.recipe_id)
             .join(
-                enter => enter.append('text').attr('class', 'recipe-callout'),
-                update => update,
-                exit => exit.remove()
+                (enter) => enter.append('text').attr('class', 'recipe-callout'),
+                (update) => update,
+                (exit) => exit.remove(),
             )
-            .attr('x', d => d.labelX)
-            .attr('y', d => d.labelY)
-            .attr('text-anchor', d => d.anchor)
-            .text(d => d.recipe_name);
+            .attr('x', (d) => d.labelX)
+            .attr('y', (d) => d.labelY)
+            .attr('text-anchor', (d) => d.anchor)
+            .text((d) => d.recipe_name);
 
-        calloutLayer.selectAll('line')
-            .data(positioned.filter(d => d.distance > 10), d => d.recipe_id)
+        calloutLayer
+            .selectAll('line')
+            .data(
+                positioned.filter((d) => d.distance > 10),
+                (d) => d.recipe_id,
+            )
             .join('line')
             .attr('class', 'recipe-callout-line')
-            .attr('x1', d => d.calloutX)
-            .attr('y1', d => d.calloutY)
-            .attr('x2', d => d.labelX)
-            .attr('y2', d => d.labelY - 4)
+            .attr('x1', (d) => d.calloutX)
+            .attr('y1', (d) => d.calloutY)
+            .attr('x2', (d) => d.labelX)
+            .attr('y2', (d) => d.labelY - 4)
             .lower();
     }
 
     // Add zoom behavior with two-finger filter for touch
-    const zoom = d3.zoom()
+    const zoom = d3
+        .zoom()
         .scaleExtent([0.5, 50])
         .filter((event) => {
             // On touch devices, only allow zoom with 2+ fingers
@@ -266,8 +276,8 @@ export function createCocktailSpaceChart(container, data, options = {}) {
             currentTransform = event.transform;
 
             circles
-                .attr('cx', d => currentTransform.applyX(xScale(d.x)))
-                .attr('cy', d => currentTransform.applyY(yScale(d.y)));
+                .attr('cx', (d) => currentTransform.applyX(xScale(d.x)))
+                .attr('cy', (d) => currentTransform.applyY(yScale(d.y)));
 
             updateCallouts(currentTransform);
 
@@ -283,15 +293,15 @@ export function createCocktailSpaceChart(container, data, options = {}) {
     updateCallouts(currentTransform);
 
     // --- Highlight state (closed over by returned API) ---
-    let highlightRings = null;      // d3 selection of ring <circle> elements
-    let highlightData = null;       // the {x, y} data point being highlighted
-    let highlightTimeoutIds = [];   // setTimeout IDs for cleanup
+    let highlightRings = null; // d3 selection of ring <circle> elements
+    let highlightData = null; // the {x, y} data point being highlighted
+    let highlightTimeoutIds = []; // setTimeout IDs for cleanup
     let highlightOnComplete = null; // callback when highlight finishes
     let highlightCompleted = false; // ensures onComplete called exactly once
 
     function dispose() {
         // Clear all pending timeouts
-        highlightTimeoutIds.forEach(id => clearTimeout(id));
+        highlightTimeoutIds.forEach((id) => clearTimeout(id));
         highlightTimeoutIds = [];
 
         // Remove ring elements
@@ -320,7 +330,7 @@ export function createCocktailSpaceChart(container, data, options = {}) {
         }
 
         // Find the data point
-        const point = data.find(d => d.recipe_id === recipeId);
+        const point = data.find((d) => d.recipe_id === recipeId);
         if (!point) {
             callOnCompleteOnce();
             return;
@@ -334,9 +344,7 @@ export function createCocktailSpaceChart(container, data, options = {}) {
         const newTransform = d3.zoomIdentity.translate(tx, ty).scale(k);
 
         // Animate zoom
-        const transition = svg.transition()
-            .duration(750)
-            .call(zoom.transform, newTransform);
+        const transition = svg.transition().duration(750).call(zoom.transform, newTransform);
 
         // After zoom completes (or is interrupted), show rings
         let zoomFinished = false;
@@ -358,7 +366,8 @@ export function createCocktailSpaceChart(container, data, options = {}) {
         const clipGroup = g.select('g[clip-path]');
 
         // Two concentric rings with offset animation delays
-        highlightRings = clipGroup.selectAll('.highlight-ring')
+        highlightRings = clipGroup
+            .selectAll('.highlight-ring')
             .data([0, 1])
             .enter()
             .append('circle')
@@ -370,8 +379,9 @@ export function createCocktailSpaceChart(container, data, options = {}) {
             .attr('stroke', '#e8a030')
             .attr('stroke-width', 2)
             .attr('pointer-events', 'none')
-            .style('animation', (_d, i) =>
-                `cocktail-space-pulse 1.5s ease-out ${i * 0.5}s infinite`
+            .style(
+                'animation',
+                (_d, i) => `cocktail-space-pulse 1.5s ease-out ${i * 0.5}s infinite`,
             );
 
         // After 10 seconds, fade out and clean up
@@ -381,7 +391,7 @@ export function createCocktailSpaceChart(container, data, options = {}) {
                     .transition()
                     .duration(500)
                     .style('opacity', 0)
-                    .on('end', function() {
+                    .on('end', function () {
                         if (!highlightRings) return;
                         callOnCompleteOnce();
                         dispose();
@@ -409,12 +419,16 @@ export function createCocktailSpaceChart(container, data, options = {}) {
     }
 
     // Hide preview when tapping outside
-    document.addEventListener('touchstart', (event) => {
-        if (!container.contains(event.target)) {
-            previewCard.hide();
-            circles.attr('r', DOT_RADIUS).attr('opacity', DOT_OPACITY);
-        }
-    }, { passive: true });
+    document.addEventListener(
+        'touchstart',
+        (event) => {
+            if (!container.contains(event.target)) {
+                previewCard.hide();
+                circles.attr('r', DOT_RADIUS).attr('opacity', DOT_OPACITY);
+            }
+        },
+        { passive: true },
+    );
 
     return { highlightRecipe, dispose };
 }

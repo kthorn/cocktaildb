@@ -379,9 +379,7 @@ def build_recipe_volume_matrix(
     row_sums = volume_matrix.sum(axis=1)
     row_sums = np.asarray(row_sums).ravel()
     if not np.allclose(row_sums, 1.0, atol=volume_error_tolerance):
-        bad_rows = np.where(
-            ~np.isclose(row_sums, 1.0, atol=volume_error_tolerance)
-        )[0]
+        bad_rows = np.where(~np.isclose(row_sums, 1.0, atol=volume_error_tolerance))[0]
         bad_recipe_ids = [str(recipe_ids[i]) for i in bad_rows]
         raise ValueError(
             f"Not all rows of volume_matrix sum to 1. "
@@ -642,7 +640,7 @@ def manhattan_candidates(
         dense_matrix = np.asarray(volume_matrix)
 
     # Compute full Manhattan distance matrix (cheap - just L1 norm)
-    manhattan_dist = cdist(dense_matrix, dense_matrix, metric='cityblock')
+    manhattan_dist = cdist(dense_matrix, dense_matrix, metric="cityblock")
 
     # For each recipe, find top-k nearest (excluding self)
     n_recipes = volume_matrix.shape[0]
@@ -760,14 +758,12 @@ def emd_matrix_constrained(
 
             if return_plans:
                 distance, plan = compute_emd(
-                    row_i, row_j, cost_matrix,
-                    return_plan=True, support_idx=union_idx
+                    row_i, row_j, cost_matrix, return_plan=True, support_idx=union_idx
                 )
                 plans[pair] = plan
             else:
                 distance = compute_emd(
-                    row_i, row_j, cost_matrix,
-                    return_plan=False, support_idx=union_idx
+                    row_i, row_j, cost_matrix, return_plan=False, support_idx=union_idx
                 )
 
             emd_mat[i, j] = emd_dtype.type(distance)

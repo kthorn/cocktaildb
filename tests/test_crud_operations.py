@@ -72,7 +72,9 @@ class TestComplexIngredientCRUD:
                 assert delete_child_response.status_code in [200, 204]
 
                 # Delete parent (should succeed now that child is gone)
-                delete_parent_response = await client.delete(f"/ingredients/{parent_id}")
+                delete_parent_response = await client.delete(
+                    f"/ingredients/{parent_id}"
+                )
                 assert delete_parent_response.status_code in [200, 204]
 
 
@@ -151,7 +153,9 @@ class TestComplexRecipeCRUD:
                 update_data = {
                     "instructions": "Updated: Stir gently with ice, double strain, express lemon peel"
                 }
-                update_response = await client.put(f"/recipes/{recipe_id}", json=update_data)
+                update_response = await client.put(
+                    f"/recipes/{recipe_id}", json=update_data
+                )
 
                 if update_response.status_code == 200:
                     updated_recipe = update_response.json()
@@ -169,7 +173,9 @@ class TestComplexRecipeCRUD:
 class TestConcurrencyAndLocking:
     """Test concurrent operations and data consistency"""
 
-    async def test_concurrent_recipe_updates(self, test_client_with_data, mock_user, mocker):
+    async def test_concurrent_recipe_updates(
+        self, test_client_with_data, mock_user, mocker
+    ):
         """Test handling of concurrent recipe updates"""
         mock_auth = mocker.patch("api.dependencies.auth.get_user_from_jwt")
         from api.dependencies.auth import UserInfo

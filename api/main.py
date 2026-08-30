@@ -27,7 +27,19 @@ from core.exception_handlers import (
     general_exception_handler,
 )
 from middleware.rate_limit import RateLimitMiddleware
-from routes import ingredients, recipes, ratings, units, tags, auth, admin, user_ingredients, stats, analytics, pages
+from routes import (
+    ingredients,
+    recipes,
+    ratings,
+    units,
+    tags,
+    auth,
+    admin,
+    user_ingredients,
+    stats,
+    analytics,
+    pages,
+)
 from routes.tags import recipe_tags_router
 
 # Configure logging
@@ -112,8 +124,8 @@ async def root():
     return {
         "name": "Mixology Tools API",
         "description": "Public API for the Mixology Tools cocktail recipe database. "
-                       "Search cocktails by name, ingredient, or category. "
-                       "Hierarchical ingredient taxonomy with analytics.",
+        "Search cocktails by name, ingredient, or category. "
+        "Hierarchical ingredient taxonomy with analytics.",
         "version": settings.api_version,
         "docs": "/api/v1/docs",
         "redoc": "/api/v1/redoc",

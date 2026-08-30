@@ -49,9 +49,7 @@ class TestIngredientEndpoints:
         self, editor_client, sample_ingredient_data
     ):
         """Test creating ingredient with authentication"""
-        response = await editor_client.post(
-            "/ingredients", json=sample_ingredient_data
-        )
+        response = await editor_client.post("/ingredients", json=sample_ingredient_data)
         # May fail due to database constraints in memory DB, but should not be unauthorized
         assert response.status_code != status.HTTP_401_UNAUTHORIZED
 
@@ -239,13 +237,17 @@ class TestTagAPIEndpoints:
     async def test_add_public_tag_to_recipe_unauthorized(self, test_client_memory):
         """Test adding public tag to recipe without authentication"""
         tag_data = {"tag_id": 1}
-        response = await test_client_memory.post("/recipes/1/public_tags", json=tag_data)
+        response = await test_client_memory.post(
+            "/recipes/1/public_tags", json=tag_data
+        )
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     async def test_add_private_tag_to_recipe_unauthorized(self, test_client_memory):
         """Test adding private tag to recipe without authentication"""
         tag_data = {"tag_id": 1}
-        response = await test_client_memory.post("/recipes/1/private_tags", json=tag_data)
+        response = await test_client_memory.post(
+            "/recipes/1/private_tags", json=tag_data
+        )
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     async def test_remove_public_tag_from_recipe_unauthorized(self, test_client_memory):
@@ -253,7 +255,9 @@ class TestTagAPIEndpoints:
         response = await test_client_memory.delete("/recipes/1/public_tags/1")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    async def test_remove_private_tag_from_recipe_unauthorized(self, test_client_memory):
+    async def test_remove_private_tag_from_recipe_unauthorized(
+        self, test_client_memory
+    ):
         """Test removing private tag from recipe without authentication"""
         response = await test_client_memory.delete("/recipes/1/private_tags/1")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -267,7 +271,9 @@ class TestTagAPIEndpoints:
     async def test_recipe_tag_validation_missing_tag_id(self, authenticated_client):
         """Test recipe tag association with missing tag_id"""
         tag_data = {"invalid_field": "value"}
-        response = await authenticated_client.post("/recipes/1/public_tags", json=tag_data)
+        response = await authenticated_client.post(
+            "/recipes/1/public_tags", json=tag_data
+        )
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 

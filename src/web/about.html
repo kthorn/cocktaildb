@@ -1,10 +1,12 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
     <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="description" content="About Mixology Tools - a cocktail recipe database with hierarchical ingredients and analytics.">
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta
+            name="description"
+            content="About Mixology Tools - a cocktail recipe database with hierarchical ingredients and analytics."
+        />
         <title>About - Mixology Tools</title>
         <!-- Prevent FOUC (Flash of Unstyled Content) with common.js fallback -->
     </head>
@@ -15,34 +17,70 @@
         <main>
             <section class="about-content">
                 <h2>About Mixology Tools</h2>
-                
+
                 <div class="about-text">
-                    <p>Welcome to my cocktail database - a hobby project to track cocktails and ingredients.</p>
-                    
+                    <p>
+                        Welcome to my cocktail database - a hobby project to track cocktails and
+                        ingredients.
+                    </p>
+
                     <h3>Why I Built This</h3>
-                    <p>Most cocktail databases treat ingredients as flat lists—but that misses how cocktails actually work. 
-                       A Margarita and a Daiquiri are structurally similar (spirit + citrus + sweetener), even though they 
-                       use different specific ingredients. I wanted a database that captures these relationships.</p>
-                    
-                    <p>A core component of this project is a hierarchical ingredient schema. Ingredients are organized 
-                       into a tree structure: "Four Roses Bourbon" is a child of "Bourbon" which in turn is a child of "Whiskey".
-                       This hierarchy enables analytics and search capabilities that a 
-                       flat database can't match.</p>
-                    
+                    <p>
+                        Most cocktail databases treat ingredients as flat lists—but that misses how
+                        cocktails actually work. A Margarita and a Daiquiri are structurally similar
+                        (spirit + citrus + sweetener), even though they use different specific
+                        ingredients. I wanted a database that captures these relationships.
+                    </p>
+
+                    <p>
+                        A core component of this project is a hierarchical ingredient schema.
+                        Ingredients are organized into a tree structure: "Four Roses Bourbon" is a
+                        child of "Bourbon" which in turn is a child of "Whiskey". This hierarchy
+                        enables analytics and search capabilities that a flat database can't match.
+                    </p>
+
                     <h3>Analytics & Data Science</h3>
-                    <p>The hierarchical structure unlocks interesting data analysis. Check out the <a href="analytics.html">Analytics page</a> to explore:</p>
+                    <p>
+                        The hierarchical structure unlocks interesting data analysis. Check out the
+                        <a href="analytics.html">Analytics page</a> to explore:
+                    </p>
                     <ul>
-                        <li><a href="analytics.html#ingredients"><strong>Ingredient usage patterns</strong></a> - See which ingredient categories appear most frequently, 
-                            with drill-down into specific items</li>
-                        <li><a href="analytics.html#ingredient-tree"><strong>Ingredient hierarchy tree</strong></a> - Interactive visualization of the 
-                            ingredient taxonomy with recipe counts</li>
-                        <li><a href="analytics.html#complexity"><strong>Recipe complexity analysis</strong></a> - Understand the distribution of cocktail complexity 
-                            across the database</li>
-                        <li><a href="analytics.html#cocktail-space"><strong>Cocktail similarity mapping</strong></a> - Using UMAP embeddings based on ingredient overlap, 
-                            visualize "cocktail space" and see which drinks are structurally similar</li>
-                        <li><a href="analytics.html#cocktail-space-em"><strong>EM-learned embeddings</strong></a> - By rolling up ingredients to their parent categories and 
-                            using expectation-maximization to learn ingredient distances, we get even richer similarity metrics 
-                            that reveal the underlying structure of cocktail families</li>
+                        <li>
+                            <a href="analytics.html#ingredients"
+                                ><strong>Ingredient usage patterns</strong></a
+                            >
+                            - See which ingredient categories appear most frequently, with
+                            drill-down into specific items
+                        </li>
+                        <li>
+                            <a href="analytics.html#ingredient-tree"
+                                ><strong>Ingredient hierarchy tree</strong></a
+                            >
+                            - Interactive visualization of the ingredient taxonomy with recipe
+                            counts
+                        </li>
+                        <li>
+                            <a href="analytics.html#complexity"
+                                ><strong>Recipe complexity analysis</strong></a
+                            >
+                            - Understand the distribution of cocktail complexity across the database
+                        </li>
+                        <li>
+                            <a href="analytics.html#cocktail-space"
+                                ><strong>Cocktail similarity mapping</strong></a
+                            >
+                            - Using UMAP embeddings based on ingredient overlap, visualize "cocktail
+                            space" and see which drinks are structurally similar
+                        </li>
+                        <li>
+                            <a href="analytics.html#cocktail-space-em"
+                                ><strong>EM-learned embeddings</strong></a
+                            >
+                            - By rolling up ingredients to their parent categories and using
+                            expectation-maximization to learn ingredient distances, we get even
+                            richer similarity metrics that reveal the underlying structure of
+                            cocktail families
+                        </li>
                     </ul>
 
                     <h3>What You Can Do</h3>
@@ -53,34 +91,50 @@
                         <li>Track your ingredient inventory</li>
                         <li>Search for cocktails you can make with ingredients on hand</li>
                     </ul>
-                    <p>Signing up for an account requires an email address. This is solely to allow you to reset your password if you forget it
-                       and because the AWS Cognito authorization flow expects an email address. I do not use your email for any other purpose and will 
-                       not share it with anyone or send any emails other than the ones you receive from Cognito.</p>
+                    <p>
+                        Signing up for an account requires an email address. This is solely to allow
+                        you to reset your password if you forget it and because the AWS Cognito
+                        authorization flow expects an email address. I do not use your email for any
+                        other purpose and will not share it with anyone or send any emails other
+                        than the ones you receive from Cognito.
+                    </p>
 
                     <h3>Contributing Recipes & Ingredients</h3>
-                    <p>To maintain data quality for the analytics features described above, only editors can add new recipes and ingredients. 
-                    If you'd like to become an editor or have recipes to contribute, please contact me at 
-                    <a href="mailto:kurt.thorn@gmail.com">kurt.thorn@gmail.com</a>.</p>
-                    
+                    <p>
+                        To maintain data quality for the analytics features described above, only
+                        editors can add new recipes and ingredients. If you'd like to become an
+                        editor or have recipes to contribute, please contact me at
+                        <a href="mailto:kurt.thorn@gmail.com">kurt.thorn@gmail.com</a>.
+                    </p>
+
                     <h3>Support & Issues</h3>
-                    <p>Found a bug or have a suggestion? Please open an issue on 
-                    <a href="https://github.com/kthorn/cocktaildb">GitHub</a>. As this is a hobby project, 
-                    I may not be able to fix them immediately, but I appreciate your feedback.</p>
+                    <p>
+                        Found a bug or have a suggestion? Please open an issue on
+                        <a href="https://github.com/kthorn/cocktaildb">GitHub</a>. As this is a
+                        hobby project, I may not be able to fix them immediately, but I appreciate
+                        your feedback.
+                    </p>
 
                     <h3>Open Source & Open Data</h3>
-                    <p>This is both an open source and open data project. The code is available on 
-                        <a href="https://github.com/kthorn/cocktaildb">GitHub</a>, and the full database of recipes and 
-                        ingredients is freely available for download. Feel free to fork it, use the data for your own 
-                        projects, or contribute improvements.</p>
+                    <p>
+                        This is both an open source and open data project. The code is available on
+                        <a href="https://github.com/kthorn/cocktaildb">GitHub</a>, and the full
+                        database of recipes and ingredients is freely available for download. Feel
+                        free to fork it, use the data for your own projects, or contribute
+                        improvements.
+                    </p>
                     <p>
                         <a id="backup-download-link" href="#" aria-disabled="true">
                             Download latest database backup
                         </a>
                         <span id="backup-download-status">Loading latest backup...</span>
                     </p>
-                    <p>It was largely vibe coded with Claude, so the code may be a bit messy. The database is PostgreSQL, 
-                        and the API runs via FastAPI on AWS EC2. It's quite cheap to run.</p>
-                    
+                    <p>
+                        It was largely vibe coded with Claude, so the code may be a bit messy. The
+                        database is PostgreSQL, and the API runs via FastAPI on AWS EC2. It's quite
+                        cheap to run.
+                    </p>
+
                     <p><strong>Cheers and enjoy exploring!</strong></p>
                 </div>
             </section>
@@ -91,5 +145,4 @@
         <script type="module" src="js/common.js"></script>
         <script type="module" src="js/about.js"></script>
     </body>
-
 </html>

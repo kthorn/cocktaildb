@@ -44,7 +44,9 @@ async def test_bulk_values_conflict_rolls_back_every_value(editor_client, db_ins
     ingredients = db_instance.execute_query(
         "SELECT id, name FROM ingredients ORDER BY name"
     )
-    ingredient_ids = {ingredient["name"]: ingredient["id"] for ingredient in ingredients}
+    ingredient_ids = {
+        ingredient["name"]: ingredient["id"] for ingredient in ingredients
+    }
     csv_text = (
         "ingredient_id,ingredient_name,field,value\n"
         f"{ingredient_ids['Blank Ingredient']},Blank Ingredient,percent_abv,20\n"
@@ -64,7 +66,9 @@ async def test_bulk_values_conflict_rolls_back_every_value(editor_client, db_ins
 
 
 @pytest.mark.asyncio
-async def test_bulk_values_rejects_mismatched_ingredient_name(editor_client, db_instance):
+async def test_bulk_values_rejects_mismatched_ingredient_name(
+    editor_client, db_instance
+):
     db_instance.execute_query(
         "INSERT INTO ingredients (name, path) VALUES ('Lime Juice', '/1/')"
     )

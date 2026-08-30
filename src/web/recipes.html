@@ -1,10 +1,12 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
     <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="description" content="Browse all cocktail recipes in the Mixology Tools database.">
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta
+            name="description"
+            content="Browse all cocktail recipes in the Mixology Tools database."
+        />
         <title>Add Recipe - Mixology Tools</title>
     </head>
 
@@ -22,7 +24,12 @@
                         <div class="main-form-fields">
                             <div class="form-group form-group-inline">
                                 <label for="recipe-name">Name</label>
-                                <input type="text" id="recipe-name" placeholder="Recipe name" required>
+                                <input
+                                    type="text"
+                                    id="recipe-name"
+                                    placeholder="Recipe name"
+                                    required
+                                />
                             </div>
 
                             <div class="form-group">
@@ -31,33 +38,58 @@
                                     <!-- Dynamic ingredient inputs will be added here -->
                                 </div>
                                 <div class="add-row-wrapper">
-                                    <button type="button" id="add-ingredient" class="btn-success btn-circle"><span class="btn-icon">+</span></button>
+                                    <button
+                                        type="button"
+                                        id="add-ingredient"
+                                        class="btn-success btn-circle"
+                                    >
+                                        <span class="btn-icon">+</span>
+                                    </button>
                                 </div>
                             </div>
 
                             <div class="form-group form-group-inline">
                                 <label for="recipe-instructions">Instructions</label>
-                                <textarea id="recipe-instructions" rows="5" placeholder="Step-by-step instructions" required></textarea>
+                                <textarea
+                                    id="recipe-instructions"
+                                    rows="5"
+                                    placeholder="Step-by-step instructions"
+                                    required
+                                ></textarea>
                             </div>
 
                             <div class="form-group form-group-inline">
                                 <label for="recipe-description">Description</label>
-                                <textarea id="recipe-description" rows="3" placeholder="Optional description"></textarea>
+                                <textarea
+                                    id="recipe-description"
+                                    rows="3"
+                                    placeholder="Optional description"
+                                ></textarea>
                             </div>
 
                             <div class="form-group form-group-inline">
                                 <label for="recipe-source">Source</label>
-                                <input type="text" id="recipe-source" placeholder="Optional source">
+                                <input
+                                    type="text"
+                                    id="recipe-source"
+                                    placeholder="Optional source"
+                                />
                             </div>
 
                             <div class="form-group form-group-inline">
                                 <label for="recipe-source-url">Source URL</label>
-                                <input type="text" id="recipe-source-url" placeholder="https://example.com/recipe">
+                                <input
+                                    type="text"
+                                    id="recipe-source-url"
+                                    placeholder="https://example.com/recipe"
+                                />
                             </div>
                         </div>
 
                         <div class="form-actions">
-                            <button type="submit" id="submit-button" class="btn-primary">Add Recipe</button>
+                            <button type="submit" id="submit-button" class="btn-primary">
+                                Add Recipe
+                            </button>
                         </div>
                     </div>
                 </form>
@@ -68,5 +100,4 @@
         <script type="module" src="js/api.js"></script>
         <script type="module" src="js/recipes.js"></script>
     </body>
-
 </html>

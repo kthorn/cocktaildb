@@ -45,6 +45,7 @@ def _get_optimal_n_jobs() -> int:
 
 class _DisabledTqdm:
     """A no-op tqdm replacement that disables progress bars."""
+
     def __init__(self, iterable, *args, **kwargs):
         self.iterable = iterable
 
@@ -156,6 +157,7 @@ def em_fit(
 
     # Log parallelization configuration for diagnostics
     import logging
+
     logger = logging.getLogger(__name__)
     cpu_count = os.cpu_count() or 1
     n_recipes = volume_matrix.shape[0]
@@ -169,8 +171,12 @@ def em_fit(
             f"~{100 * (1 - constrained_pairs / full_pairs):.0f}% reduction)"
         )
     else:
-        logger.info(f"EM fit: {n_recipes} recipes, full O(N²) mode ({full_pairs:,} pairs)")
-    logger.info(f"EM fit parallelization: detected {cpu_count} CPUs, using n_jobs={n_jobs}")
+        logger.info(
+            f"EM fit: {n_recipes} recipes, full O(N²) mode ({full_pairs:,} pairs)"
+        )
+    logger.info(
+        f"EM fit parallelization: detected {cpu_count} CPUs, using n_jobs={n_jobs}"
+    )
 
     log = {"delta": []}
     outer_bar = tqdm(
@@ -186,11 +192,18 @@ def em_fit(
             # Constrained mode: compute EMD only for candidate pairs
             if t == 0:
                 # First iteration: use Manhattan distance to select candidates
-                logger.info("EM iter 1: selecting candidates via Manhattan distance (k=%d)", candidate_k)
+                logger.info(
+                    "EM iter 1: selecting candidates via Manhattan distance (k=%d)",
+                    candidate_k,
+                )
                 candidates = manhattan_candidates(volume_matrix, candidate_k)
             else:
                 # Subsequent iterations: use previous EMD distances
-                logger.info("EM iter %d: selecting candidates via previous EMD (k=%d)", t + 1, candidate_k)
+                logger.info(
+                    "EM iter %d: selecting candidates via previous EMD (k=%d)",
+                    t + 1,
+                    candidate_k,
+                )
                 candidates = emd_candidates(distance_matrix, candidate_k)
 
             distance_matrix, plans = emd_matrix_constrained(
@@ -242,6 +255,7 @@ def em_fit(
             del plans
         del T_sum
         import gc
+
         gc.collect()
         logger.info("EM iter %s RSS after gc: %.1f MB", t + 1, _rss_mb())
 

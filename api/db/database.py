@@ -19,8 +19,8 @@ def get_database() -> Database:
             return _DB_INSTANCE
 
         # Initialize database connection
-        db_host = os.environ.get('DB_HOST', 'localhost')
-        db_name = os.environ.get('DB_NAME', 'cocktaildb')
+        db_host = os.environ.get("DB_HOST", "localhost")
+        db_name = os.environ.get("DB_NAME", "cocktaildb")
         logger.info(f"Creating PostgreSQL connection to {db_host}/{db_name}")
 
         _DB_INSTANCE = Database()

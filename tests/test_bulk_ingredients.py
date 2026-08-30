@@ -114,7 +114,9 @@ class TestBulkIngredientUploadDatabaseLayer:
 class TestBulkIngredientUploadIntegration:
     """Test the bulk ingredient upload endpoint integration"""
 
-    async def test_bulk_ingredient_upload_requires_authentication(self, test_client_memory):
+    async def test_bulk_ingredient_upload_requires_authentication(
+        self, test_client_memory
+    ):
         """Test that bulk ingredient upload requires authentication"""
         ingredients_data = {
             "ingredients": [
@@ -122,7 +124,9 @@ class TestBulkIngredientUploadIntegration:
             ]
         }
 
-        response = await test_client_memory.post("/ingredients/bulk", json=ingredients_data)
+        response = await test_client_memory.post(
+            "/ingredients/bulk", json=ingredients_data
+        )
         assert response.status_code == 401
 
     async def test_bulk_ingredient_upload_validation_errors(self, admin_client):
@@ -141,7 +145,9 @@ class TestBulkIngredientUploadIntegration:
         )
         assert response.status_code == 422
 
-    async def test_bulk_ingredient_upload_duplicate_names(self, admin_client, db_instance):
+    async def test_bulk_ingredient_upload_duplicate_names(
+        self, admin_client, db_instance
+    ):
         """Test bulk ingredient upload with duplicate names"""
         # Add an existing ingredient
         db_instance.execute_query(
@@ -194,7 +200,9 @@ class TestBulkIngredientUploadIntegration:
         assert len(data["validation_errors"]) == 1
         assert data["validation_errors"][0]["error_type"] == "parent_not_found"
 
-    async def test_bulk_ingredient_upload_success_simple(self, admin_client, db_instance):
+    async def test_bulk_ingredient_upload_success_simple(
+        self, admin_client, db_instance
+    ):
         """Test successful bulk ingredient upload without parent relationships"""
         ingredients_data = {
             "ingredients": [
@@ -275,7 +283,9 @@ class TestBulkIngredientUploadIntegration:
                 "Bulk Test Premium Vodka",
             ]
 
-    async def test_bulk_ingredient_upload_legacy_parent_id(self, admin_client, db_instance):
+    async def test_bulk_ingredient_upload_legacy_parent_id(
+        self, admin_client, db_instance
+    ):
         """Test bulk ingredient upload with legacy parent_id field"""
         # First create a parent ingredient
         db_instance.execute_query(

@@ -198,7 +198,9 @@ class TestSearchPagination:
                 assert data["pagination"]["page"] == 1
                 assert data["pagination"]["limit"] == 5
 
-    async def test_search_recipes_maintains_filters_across_pages(self, test_client_memory):
+    async def test_search_recipes_maintains_filters_across_pages(
+        self, test_client_memory
+    ):
         """Test that search filters are maintained across paginated requests"""
         # This test ensures that search criteria don't get lost when paginating
 

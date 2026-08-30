@@ -26,7 +26,9 @@ class TestResponseStructureValidation:
         assert "query" in data, "Response must include 'query' field"
         assert data["query"] == "gin", "Query field must match request parameter"
 
-    async def test_search_response_query_field_empty_search(self, test_client_with_data):
+    async def test_search_response_query_field_empty_search(
+        self, test_client_with_data
+    ):
         """Test query field is present when no query provided"""
         client, app = test_client_with_data
         response = await client.get("/recipes/search?page=1&limit=10")
@@ -49,7 +51,9 @@ class TestResponseStructureValidation:
 
         special_query = "gin & tonic"
         encoded_query = quote(special_query)
-        response = await client.get(f"/recipes/search?q={encoded_query}&page=1&limit=10")
+        response = await client.get(
+            f"/recipes/search?q={encoded_query}&page=1&limit=10"
+        )
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -208,7 +212,9 @@ class TestPaginationConsistency:
                 f"Filtered search missing pagination field: {field}"
             )
 
-    async def test_pagination_metadata_mathematical_consistency(self, test_client_with_data):
+    async def test_pagination_metadata_mathematical_consistency(
+        self, test_client_with_data
+    ):
         """Verify mathematical consistency of pagination metadata across search types"""
         client, app = test_client_with_data
         response = await client.get("/recipes/search?page=2&limit=5")

@@ -17,9 +17,18 @@
 - `python -m pytest tests/ -v` runs API and integration tests.
 - `pytest packages/barcart/tests/` runs analytics package tests.
 
+## Formatting
+
+- Requires Node 22.7 or newer; Node 22.22.2 is the tested version. The floor is required so `node --check` detects ESM syntax without a root `package.json`.
+- Install hooks with `~/miniforge3/envs/cocktaildb/bin/python -m pip install pre-commit==4.6.2 && ~/miniforge3/envs/cocktaildb/bin/python -m pre_commit install`.
+- Run every formatter check with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run --all-files`.
+- Format/check Python only with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run ruff-format --all-files`.
+- Format/check static frontend JS/MJS/HTML only with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run prettier --all-files`.
+- Ruff and Prettier editor extensions use `ruff.toml` and `.prettierrc`; CI is authoritative.
+
 ## Coding Style & Naming Conventions
-- Python: 4-space indentation, `snake_case` for functions/variables, `PascalCase` for classes.
-- JavaScript: follow existing vanilla JS style and naming in `src/web/js/`.
+- Python: Ruff formats code with 4-space indentation; use `snake_case` for functions/variables and `PascalCase` for classes.
+- JavaScript: Prettier formats static frontend code; follow existing vanilla JS style and naming in `src/web/js/`.
 - Barcart uses `ruff` for lint/format (`packages/barcart/pyproject.toml`).
 - Prefer small, focused modules and keep API responses in `api/models/`.
 

@@ -66,6 +66,7 @@ def reset_rate_limiter():
     yield
     try:
         from middleware.rate_limit import RateLimitMiddleware
+
         RateLimitMiddleware.reset_all()
     except (ImportError, AttributeError):
         pass  # Middleware not yet created
@@ -112,7 +113,9 @@ def postgres_connection_params(postgres_container):
 @pytest.fixture(scope="session")
 def schema_sql():
     """Load the PostgreSQL schema SQL"""
-    schema_path = Path(__file__).parent.parent / "infrastructure" / "postgres" / "schema.sql"
+    schema_path = (
+        Path(__file__).parent.parent / "infrastructure" / "postgres" / "schema.sql"
+    )
     if not schema_path.exists():
         pytest.fail(f"Schema file not found at {schema_path}")
     return schema_path.read_text()
@@ -217,7 +220,7 @@ def pg_db_with_prod_data(postgres_container, postgres_connection_params):
     port = postgres_connection_params["port"]
 
     # Decompress and pipe to psql
-    with gzip.open(PROD_BACKUP_PATH, 'rt') as f:
+    with gzip.open(PROD_BACKUP_PATH, "rt") as f:
         sql_content = f.read()
 
     conn = psycopg2.connect(**postgres_connection_params)
@@ -267,6 +270,7 @@ def set_pg_env_with_data(pg_db_with_data, monkeypatch):
 # Legacy fixture aliases for backward compatibility
 # These map old SQLite-based fixtures to new PostgreSQL-based ones
 # ============================================================================
+
 
 @pytest.fixture(scope="function")
 def memory_db_with_schema(pg_db_with_schema, monkeypatch):
@@ -444,7 +448,11 @@ async def authenticated_client(test_client_memory_with_app, mock_user):
 @pytest_asyncio.fixture(scope="function")
 async def editor_client(test_client_memory_with_app, mock_editor_user):
     """Test client with mocked editor authentication using FastAPI dependency override"""
-    from dependencies.auth import UserInfo, require_authentication, require_editor_access
+    from dependencies.auth import (
+        UserInfo,
+        require_authentication,
+        require_editor_access,
+    )
 
     client, app = test_client_memory_with_app
 
@@ -479,7 +487,11 @@ async def editor_client(test_client_memory_with_app, mock_editor_user):
 @pytest_asyncio.fixture(scope="function")
 async def editor_client_with_data(test_client_with_data, mock_editor_user):
     """Test client with mocked editor authentication AND test data"""
-    from dependencies.auth import UserInfo, require_authentication, require_editor_access
+    from dependencies.auth import (
+        UserInfo,
+        require_authentication,
+        require_editor_access,
+    )
 
     client, app = test_client_with_data
 
@@ -514,7 +526,11 @@ async def editor_client_with_data(test_client_with_data, mock_editor_user):
 @pytest_asyncio.fixture(scope="function")
 async def admin_client(test_client_memory_with_app, mock_admin_user):
     """Test client with mocked admin authentication using FastAPI dependency override"""
-    from dependencies.auth import UserInfo, require_authentication, require_editor_access
+    from dependencies.auth import (
+        UserInfo,
+        require_authentication,
+        require_editor_access,
+    )
 
     client, app = test_client_memory_with_app
 
@@ -585,6 +601,7 @@ def sample_recipe_data():
 # ============================================================================
 # Utility functions for tests
 # ============================================================================
+
 
 def assert_valid_response_structure(response_data: Dict[str, Any], expected_keys: list):
     """Assert that response has expected structure"""
@@ -818,25 +835,26 @@ def _populate_test_data_pg(cursor):
 
     # Add recipe ingredients using dynamic IDs
     if ingredients and units and recipes:
-        bourbon_id = ingredients.get('Bourbon', 8)
-        lemon_id = ingredients.get('Lemon Juice', 10)
-        lime_id = ingredients.get('Lime Juice', 11)
-        syrup_id = ingredients.get('Simple Syrup', 12)
-        bitters_id = ingredients.get('Angostura Bitters', 13)
-        rum_id = ingredients.get('Rum', 2)
-        gin_id = ingredients.get('Gin', 4)
-        whiskey_id = ingredients.get('Whiskey', 1)
+        bourbon_id = ingredients.get("Bourbon", 8)
+        lemon_id = ingredients.get("Lemon Juice", 10)
+        lime_id = ingredients.get("Lime Juice", 11)
+        syrup_id = ingredients.get("Simple Syrup", 12)
+        bitters_id = ingredients.get("Angostura Bitters", 13)
+        rum_id = ingredients.get("Rum", 2)
+        gin_id = ingredients.get("Gin", 4)
+        whiskey_id = ingredients.get("Whiskey", 1)
 
-        oz_id = units.get('ounce', 1)
-        dash_id = units.get('dash', 5)
-        tsp_id = units.get('teaspoon', 3)
+        oz_id = units.get("ounce", 1)
+        dash_id = units.get("dash", 5)
+        tsp_id = units.get("teaspoon", 3)
 
-        old_fashioned_id = recipes.get('Test Old Fashioned', 1)
-        whiskey_sour_id = recipes.get('Test Whiskey Sour', 2)
-        daiquiri_id = recipes.get('Test Daiquiri', 3)
-        martini_id = recipes.get('Test Gin Martini', 4)
+        old_fashioned_id = recipes.get("Test Old Fashioned", 1)
+        whiskey_sour_id = recipes.get("Test Whiskey Sour", 2)
+        daiquiri_id = recipes.get("Test Daiquiri", 3)
+        martini_id = recipes.get("Test Gin Martini", 4)
 
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO recipe_ingredients (recipe_id, ingredient_id, unit_id, amount) VALUES
             (%s, %s, %s, 2.0),
             (%s, %s, %s, 2),
@@ -850,19 +868,43 @@ def _populate_test_data_pg(cursor):
             (%s, %s, %s, 2.5),
             (%s, %s, %s, 0.5)
             ON CONFLICT DO NOTHING
-        """, (
-            old_fashioned_id, bourbon_id, oz_id,  # Old Fashioned: Bourbon
-            old_fashioned_id, bitters_id, dash_id,  # Old Fashioned: Bitters
-            old_fashioned_id, syrup_id, tsp_id,  # Old Fashioned: Syrup
-            whiskey_sour_id, bourbon_id, oz_id,  # Whiskey Sour: Bourbon
-            whiskey_sour_id, lemon_id, oz_id,  # Whiskey Sour: Lemon
-            whiskey_sour_id, syrup_id, oz_id,  # Whiskey Sour: Syrup
-            daiquiri_id, rum_id, oz_id,  # Daiquiri: Rum
-            daiquiri_id, lime_id, oz_id,  # Daiquiri: Lime
-            daiquiri_id, syrup_id, oz_id,  # Daiquiri: Syrup
-            martini_id, gin_id, oz_id,  # Martini: Gin
-            martini_id, whiskey_id, oz_id,  # Martini: Vermouth placeholder
-        ))
+        """,
+            (
+                old_fashioned_id,
+                bourbon_id,
+                oz_id,  # Old Fashioned: Bourbon
+                old_fashioned_id,
+                bitters_id,
+                dash_id,  # Old Fashioned: Bitters
+                old_fashioned_id,
+                syrup_id,
+                tsp_id,  # Old Fashioned: Syrup
+                whiskey_sour_id,
+                bourbon_id,
+                oz_id,  # Whiskey Sour: Bourbon
+                whiskey_sour_id,
+                lemon_id,
+                oz_id,  # Whiskey Sour: Lemon
+                whiskey_sour_id,
+                syrup_id,
+                oz_id,  # Whiskey Sour: Syrup
+                daiquiri_id,
+                rum_id,
+                oz_id,  # Daiquiri: Rum
+                daiquiri_id,
+                lime_id,
+                oz_id,  # Daiquiri: Lime
+                daiquiri_id,
+                syrup_id,
+                oz_id,  # Daiquiri: Syrup
+                martini_id,
+                gin_id,
+                oz_id,  # Martini: Gin
+                martini_id,
+                whiskey_id,
+                oz_id,  # Martini: Vermouth placeholder
+            ),
+        )
 
     # Add test ratings
     cursor.execute("""

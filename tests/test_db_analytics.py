@@ -1,10 +1,11 @@
 """Tests for analytics database queries"""
+
 import pytest
 import sys
 import os
 
 # Add api directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'api'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "api"))
 
 from db.db_analytics import AnalyticsQueries
 

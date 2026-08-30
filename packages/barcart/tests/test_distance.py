@@ -339,7 +339,9 @@ class TestComputeUmapEmbedding:
         )
 
         # Compute UMAP embedding
-        embedding = compute_umap_embedding(distance_matrix, n_components=2, random_state=42)
+        embedding = compute_umap_embedding(
+            distance_matrix, n_components=2, random_state=42
+        )
 
         # Verify shape: (n_samples, n_components)
         assert embedding.shape == (5, 2)
@@ -365,11 +367,15 @@ class TestComputeUmapEmbedding:
         )
 
         # Test with 1D embedding
-        embedding_1d = compute_umap_embedding(distance_matrix, n_components=1, random_state=42)
+        embedding_1d = compute_umap_embedding(
+            distance_matrix, n_components=1, random_state=42
+        )
         assert embedding_1d.shape == (5, 1)
 
         # Test with 3D embedding
-        embedding_3d = compute_umap_embedding(distance_matrix, n_components=3, random_state=42)
+        embedding_3d = compute_umap_embedding(
+            distance_matrix, n_components=3, random_state=42
+        )
         assert embedding_3d.shape == (5, 3)
 
     def test_random_state_gives_reproducible_results(self):
