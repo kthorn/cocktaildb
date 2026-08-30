@@ -10,124 +10,103 @@ class TestExpectedIngredientMatchMatrix:
 
     def test_simple_two_recipes_two_ingredients(self):
         """Test with minimal case: 2 recipes, 2 ingredients."""
-        # Recipe 1: 100% ingredient 0
-        # Recipe 2: 100% ingredient 1
-        volume_matrix = np.array(
-            [
-                [1.0, 0.0],
-                [0.0, 1.0],
-            ]
-        )
-
-        # Cost matrix: off-diagonal = 1.0
-        cost_matrix = np.array(
+        distance_matrix = np.array(
             [
                 [0.0, 1.0],
                 [1.0, 0.0],
             ]
         )
+        plans = {(0, 1): [(0, 1, 1.0, 1.0)]}
 
-        # With k=1, each recipe's nearest neighbor is the other
-        # beta=1.0 for simple exponential weighting
         T_sum, N_pairs = expected_ingredient_match_matrix(
-            volume_matrix, cost_matrix, k=1, beta=1.0
+            distance_matrix, plans, n_ingredients=2, k=1, beta=1.0
         )
 
-        # Basic shape check
         assert T_sum.shape == (2, 2)
-        assert N_pairs == 2  # 2 recipes * 1 neighbor each
-
-        # Symmetry check
+        assert N_pairs == 2
         np.testing.assert_allclose(T_sum, T_sum.T, rtol=1e-10)
-
-        # Non-negativity
         assert np.all(T_sum >= 0)
 
     def test_identical_recipes_zero_distance(self):
-        """Test that identical recipes have zero EMD distance."""
-        # Two identical recipes
-        volume_matrix = np.array(
+        """Test that identical recipes aggregate diagonal transport."""
+        distance_matrix = np.array(
             [
-                [0.5, 0.5],
-                [0.5, 0.5],
+                [0.0, 0.0],
+                [0.0, 0.0],
             ]
         )
-
-        cost_matrix = np.array(
-            [
-                [0.0, 1.0],
-                [1.0, 0.0],
-            ]
-        )
+        plans = {(0, 1): [(0, 0, 0.5, 0.0), (1, 1, 0.5, 0.0)]}
 
         T_sum, N_pairs = expected_ingredient_match_matrix(
-            volume_matrix, cost_matrix, k=1, beta=1.0
+            distance_matrix, plans, n_ingredients=2, k=1, beta=1.0
         )
 
-        # When recipes are identical, the transport plan should be diagonal
-        # (ingredient i in recipe 1 maps to ingredient i in recipe 2)
         assert T_sum.shape == (2, 2)
-        # Diagonal should have positive values
+        assert N_pairs == 2
         assert T_sum[0, 0] > 0
         assert T_sum[1, 1] > 0
+        np.testing.assert_allclose(T_sum, T_sum.T, rtol=1e-10)
 
     def test_three_recipes_symmetry(self):
         """Test symmetry with 3 recipes."""
-        volume_matrix = np.array(
-            [
-                [1.0, 0.0, 0.0],  # Recipe 0: pure ingredient 0
-                [0.0, 1.0, 0.0],  # Recipe 1: pure ingredient 1
-                [0.0, 0.0, 1.0],  # Recipe 2: pure ingredient 2
-            ]
-        )
-
-        cost_matrix = np.array(
+        distance_matrix = np.array(
             [
                 [0.0, 1.0, 2.0],
                 [1.0, 0.0, 1.0],
                 [2.0, 1.0, 0.0],
             ]
         )
+        plans = {
+            (0, 1): [(0, 1, 1.0, 1.0)],
+            (0, 2): [(0, 2, 1.0, 2.0)],
+            (1, 2): [(1, 2, 1.0, 1.0)],
+        }
 
         T_sum, N_pairs = expected_ingredient_match_matrix(
-            volume_matrix, cost_matrix, k=2, beta=1.0
+            distance_matrix, plans, n_ingredients=3, k=2, beta=1.0
         )
 
-        # Check symmetry
         np.testing.assert_allclose(T_sum, T_sum.T, rtol=1e-10)
-
-        # Check shape
         assert T_sum.shape == (3, 3)
-        assert N_pairs == 6  # 3 recipes * 2 neighbors
+        assert N_pairs == 6
 
     def test_plan_sparsification(self):
-        """Test that plan_topk and plan_minfrac work."""
-        volume_matrix = np.array(
+        """Test that plan_topk and plan_minfrac filter flows."""
+        distance_matrix = np.array(
             [
-                [0.7, 0.3, 0.0],
-                [0.0, 0.4, 0.6],
+                [0.0, 1.0],
+                [1.0, 0.0],
             ]
         )
+        plans = {(0, 1): [(0, 1, 0.6, 1.0), (0, 2, 0.3, 1.0), (1, 2, 0.1, 1.0)]}
 
-        cost_matrix = np.array(
-            [
-                [0.0, 1.0, 1.0],
-                [1.0, 0.0, 1.0],
-                [1.0, 1.0, 0.0],
-            ]
-        )
-
-        # Should not raise errors
         T_sum_topk, _ = expected_ingredient_match_matrix(
-            volume_matrix, cost_matrix, k=1, beta=1.0, plan_topk=2
+            distance_matrix, plans, n_ingredients=3, k=1, beta=1.0, plan_topk=2
         )
-
         T_sum_minfrac, _ = expected_ingredient_match_matrix(
-            volume_matrix, cost_matrix, k=1, beta=1.0, plan_minfrac=0.1
+            distance_matrix, plans, n_ingredients=3, k=1, beta=1.0, plan_minfrac=0.5
+        )
+        T_sum_full, _ = expected_ingredient_match_matrix(
+            distance_matrix, plans, n_ingredients=3, k=1, beta=1.0
         )
 
         assert T_sum_topk.shape == (3, 3)
         assert T_sum_minfrac.shape == (3, 3)
+        assert np.count_nonzero(T_sum_full) == 6
+        assert np.count_nonzero(T_sum_topk) == 4
+        assert np.count_nonzero(T_sum_minfrac) == 4
+        # smallest flow (1,2) is dropped by both filters
+        assert T_sum_topk[1, 2] == 0.0
+        assert T_sum_topk[2, 1] == 0.0
+        assert T_sum_minfrac[1, 2] == 0.0
+        assert T_sum_minfrac[2, 1] == 0.0
+        # retained flows remain
+        assert T_sum_topk[0, 1] > 0
+        assert T_sum_topk[0, 2] > 0
+        assert T_sum_minfrac[0, 1] > 0
+        assert T_sum_minfrac[0, 2] > 0
+        assert T_sum_full.sum() > T_sum_topk.sum()
+        assert T_sum_full.sum() > T_sum_minfrac.sum()
 
 
 class TestMStepBlosum:
@@ -421,8 +400,8 @@ class TestReportNeighbors:
         """Test report_neighbors works for recipe entities."""
         import numpy as np
 
-        from barcart.distance import report_neighbors
         from barcart.registry import Registry
+        from barcart.reporting import report_neighbors
 
         # Create recipe registry
         recipe_registry = Registry(
@@ -466,8 +445,8 @@ class TestReportNeighbors:
         """Test report_neighbors works for ingredient entities."""
         import numpy as np
 
-        from barcart.distance import report_neighbors
         from barcart.registry import Registry
+        from barcart.reporting import report_neighbors
 
         # Create ingredient registry
         ingredient_registry = Registry(
