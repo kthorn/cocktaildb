@@ -69,7 +69,10 @@ def test_compute_cocktail_space_umap_em_handles_sparse_volume(
         dist = np.zeros((n_recipes, n_recipes), dtype=np.float32)
         return dist, cost_matrix, {"delta": [0.0]}
 
-    def fake_umap_embedding(distance_matrix, **_kwargs):
+    umap_kwargs = {}
+
+    def fake_umap_embedding(distance_matrix, **kwargs):
+        umap_kwargs.update(kwargs)
         return np.zeros((distance_matrix.shape[0], 2), dtype=np.float32)
 
     monkeypatch.setattr(barcart, "em_fit", fake_em_fit)
@@ -87,6 +90,7 @@ def test_compute_cocktail_space_umap_em_handles_sparse_volume(
     assert result
     assert "x" in result[0]
     assert "y" in result[0]
+    assert umap_kwargs["n_neighbors"] == 10
 
 
 def test_compute_cocktail_space_umap_em_replaces_infinite_distances(

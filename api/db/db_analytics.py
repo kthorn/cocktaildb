@@ -592,7 +592,7 @@ class AnalyticsQueries:
             logger.info("Computing UMAP embedding")
             embedding = compute_umap_embedding(
                 final_dist,
-                n_neighbors=5,
+                n_neighbors=10,
                 min_dist=0.05,
                 random_state=42
             )
