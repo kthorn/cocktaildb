@@ -1004,7 +1004,7 @@ def _median_rescale(cost_matrix: np.ndarray, target: float = 1.0) -> np.ndarray:
 
 def m_step_blosum(
     T_sum: np.ndarray,
-    blosum_alpha: float = 1.0,
+    blosum_alpha: float = 0.2,
     median_target: float = 1.0,
 ) -> np.ndarray:
     """

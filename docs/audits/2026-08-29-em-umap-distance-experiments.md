@@ -6,11 +6,11 @@ Date: 2026-08-29
 
 Experiments used 1,955 production recipes and 406 ingredients after hierarchy rollup. The selected production configuration is:
 
-- constrained EM with `candidate_k` equal to 10% of recipe count (195 in this dataset)
+- constrained EM with `candidate_k` equal to 15% of recipe count (293 in this dataset)
 - BLOSUM smoothing `alpha=0.2`
 - UMAP `n_neighbors=10`, `min_dist=0.05`, and `random_state=42`
 
-EM produced more compact native-space clusters than Manhattan distance. Increasing `candidate_k` did not materially improve learned costs, neighbors, or clusters. Lowering BLOSUM smoothing from 1.0 to 0.2 improved both HDBSCAN coverage and silhouette, although it did not improve the intended rum/whiskey or gin/vodka substitutions.
+EM produced more compact native-space clusters than Manhattan distance. After lowering BLOSUM smoothing from 1.0 to 0.2, candidate width mattered slightly more; 15% retained nearly all wider-run structure without the runtime cost of 20% or 40%. Lower smoothing improved both HDBSCAN coverage and silhouette at fixed candidate width, although it did not improve the intended rum/whiskey or gin/vodka substitutions.
 
 Two attempts to learn functional substitutions were rejected:
 
@@ -35,7 +35,7 @@ The experiments addressed:
 - Source ingredient records: 672
 - Recipe-ingredient rows: 8,797
 - Ingredients represented after rollup: 406
-- HDBSCAN: `min_cluster_size=10`, `min_samples=1`, precomputed native-space distances
+- HDBSCAN: `min_cluster_size=10`, `min_samples=1`, `cluster_selection_method="leaf"`, precomputed native-space distances
 - Exact EM: not run
 
 Cluster quality was measured in the original distance space, not in the displayed two-dimensional UMAP space. UMAP was evaluated separately as a visualization-preservation problem.
@@ -65,22 +65,28 @@ Manhattan and EM largely agreed on assignments when both methods confidently clu
 
 ## Constrained-EM candidate width
 
+### Initial alpha-1 evaluation
+
 | `candidate_k` | Runtime | EMD evaluations | Result |
 |---:|---:|---:|---|
-| 195 | 228 s | 720,566 | selected |
+| 195 | 228 s | 720,566 | initial production setting |
 | 391 | 355 s | 1,422,780 | no assignment improvement |
 | 780 | 737 s | 2,756,729 | negligible structural change |
 
-Compared with the `k=780` proxy, `k=195` retained approximately:
+At `alpha=1.0`, `k=195` retained 99.4% of the `k=780` proxy's top-10 neighbors, cost-matrix correlation 0.99997, and approximately 0.996 all-recipe cluster ARI/AMI. This originally supported the 10% fraction.
 
-- 99.4% of top-10 neighbors
-- 99.2% of top-20 neighbors
-- 98.9% of top-50 neighbors
-- cost-matrix correlation 0.99997
-- all-recipe cluster ARI/AMI approximately 0.996/0.996
-- jointly clustered ARI/AMI 1.0/1.0
+### Re-evaluation after selecting alpha 0.2
 
-`k=780` was a wider approximation, not exact EM ground truth. The evidence supports retaining the cheaper 10% candidate fraction.
+Lower smoothing made the learned matrix more sensitive to which pairs were evaluated, so candidate width was rerun before finalizing production settings.
+
+| `candidate_k` | Fraction | Runtime | Top-10 overlap vs 780 | Cost correlation vs 780 | Cluster ARI vs 780 |
+|---:|---:|---:|---:|---:|---:|
+| 195 | 10% | 248 s | 98.72% | 0.99950 | 0.9879 |
+| **293** | **15%** | **371 s** | **98.96%** | **0.99964** | **0.9960** |
+| 391 | 20% | 512 s | 99.00% | 0.99967 | 1.0000 |
+| 780 | 40% | 1,071 s | reference | reference | reference |
+
+`k=293` saved 27.5% runtime versus `k=391` while losing only 0.046 percentage points of top-10 overlap and changing one clustered recipe. The cost matrices were effectively identical. `k=780` remains a wider approximation, not exact EM ground truth. The final production choice is the 15% fraction.
 
 ## BLOSUM smoothing
 
@@ -137,14 +143,16 @@ The grid covered:
 
 The primary objective combined k-neighbor recall, trustworthiness, and continuity at neighborhood sizes 5, 10, and 20. Cluster preservation was secondary.
 
+The final grid used the selected `alpha=0.2`, `candidate_k=293` matrix and explicitly removed self-neighbors before ranking tied distances.
+
 | Setting | Median local preservation | Worst seed | Median source-cluster silhouette in 2D | Median all-recipe AMI |
 |---|---:|---:|---:|---:|
-| Current: 5 / 0.05 | 0.7920 | 0.7908 | 0.5297 | 0.3762 |
-| **Selected: 10 / 0.05** | **0.8004** | **0.7999** | **0.6085** | **0.3872** |
-| 10 / 0 | 0.8003 | 0.7989 | 0.6218 | 0.3921 |
-| 10 / 0.10 | 0.7996 | 0.7996 | 0.5946 | 0.3895 |
+| Current: 5 / 0.05 | 0.8036 | 0.8018 | 0.5537 | 0.3993 |
+| **Selected: 10 / 0.05** | **0.8084** | **0.8082** | **0.6035** | 0.3913 |
+| 10 / 0.01 | 0.8092 | 0.8076 | 0.6223 | 0.4015 |
+| 10 / 0.10 | 0.8082 | 0.8080 | 0.5648 | 0.4046 |
 
-`n_neighbors=10`, `min_dist=0.05` was selected as the stable, minimal change. `min_dist=0` made clusters slightly more compact in two dimensions but risked unnecessary visual crowding.
+`n_neighbors=10`, `min_dist=0.05` ranked first by worst-seed stability, then median preservation. It also retained stronger two-dimensional source-cluster separation than 0.10. `min_dist=0.01` had a slightly higher median but a lower worst seed.
 
 ## Functional-substitution investigation
 
@@ -200,7 +208,7 @@ At the ingredient level, the hierarchy-aware representation placed generic rum/w
 
 ### Recipe-level results
 
-The selected `alpha=0.2` EM matrix is the reference.
+The historical `alpha=0.2`, `candidate_k=195` EM matrix was the reference for this rejected experiment; candidate width was retuned afterward.
 
 | Context weight | Clusters | Clustered | Coverage | Silhouette | Top-10 overlap with EM |
 |---:|---:|---:|---:|---:|---:|
@@ -225,7 +233,7 @@ Although some absolute analogue distances decreased, their ranks worsened becaus
 ## What was learned
 
 1. EM adds meaningful cluster compactness over Manhattan distance.
-2. The current 10% candidate fraction is sufficient; wider candidate graphs are expensive and nearly identical.
+2. At alpha 0.2, a 15% candidate fraction is the best runtime/fidelity balance; wider graphs are nearly identical.
 3. The original smoothing overwhelms observed match evidence and flattens the learned cost matrix.
 4. `alpha=0.2` improves clustering but not functional substitutions.
 5. Functional substitution is not reliably recoverable from the current nearest-neighbor loop.
@@ -256,7 +264,7 @@ Data requirements and cautions:
 
 Adopted in PR #31:
 
-- keep `candidate_k` at 10% of recipe count
+- set `candidate_k` to 15% of recipe count
 - set BLOSUM `alpha=0.2`
 - set UMAP `n_neighbors=10`
 - retain UMAP `min_dist=0.05` and `random_state=42`
@@ -264,13 +272,13 @@ Adopted in PR #31:
 Not adopted:
 
 - exact EM
-- wider candidate defaults
+- candidate fractions of 20% or greater
 - dominant-ingredient template neighbors
 - hierarchy-aware ingredient-context distance
 - `min_dist=0`
 
 ## Reproducibility and limitations
 
-The committed `scripts/test_constrained_em.py` supports candidate-width, Manhattan, clustering, artifact, and UMAP-grid evaluation. Smoothing, template-neighbor, and context-distance variants were isolated throwaway experiments; their durable results are recorded here, but their experimental code and large matrices were not committed.
+The committed `scripts/test_constrained_em.py` uses the production alpha and supports candidate-width, Manhattan, clustering, artifact, grouped UMAP-grid ranking, and raw per-seed output. The smoothing grid, template-neighbor, and context-distance variants were isolated throwaway experiments; their durable results are recorded here, but their experimental code and large matrices were not committed.
 
 The six pre-existing stale Barcart distance-test failures encountered during setup are tracked in GitHub issue #29.

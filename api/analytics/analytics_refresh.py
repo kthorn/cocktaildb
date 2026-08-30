@@ -15,7 +15,7 @@ from utils.analytics_cache import AnalyticsStorage
 
 # Configure logging
 logger = logging.getLogger(__name__)
-EM_CANDIDATE_K_FRACTION = 0.10
+EM_CANDIDATE_K_FRACTION = 0.15
 
 
 def log_memory(stage: str) -> None:
@@ -127,8 +127,8 @@ def regenerate_analytics() -> Dict[str, Any]:
     log_memory("cocktail space manhattan stored")
 
     logger.info("Generating EM-based cocktail space with rollup")
-    # Compute candidate_k based on recipe count: k = 0.10 * n_recipes
-    # This provides ~94% speedup with minimal accuracy loss
+    # Compute candidate_k based on recipe count: k = 0.15 * n_recipes
+    # This is the benchmarked runtime/fidelity balance for the current dataset.
     n_recipes = len(set(r["recipe_id"] for r in analytics_queries.db.execute_query(
         "SELECT DISTINCT recipe_id FROM recipe_ingredients"
     )))

@@ -10,7 +10,9 @@ from scripts.test_constrained_em import (
     build_parser,
     cluster_distance_matrix,
     complete_distance_matrix,
+    constrained_em_fit,
     neighborhood_preservation,
+    rank_umap_grid,
     run_full_em,
     run_umap_grid,
     summarize_clusters,
@@ -21,7 +23,7 @@ def test_exact_em_is_opt_in_and_candidate_grid_uses_current_wider_proxy():
     args = build_parser().parse_args([])
 
     assert args.include_full is False
-    assert args.k_values == "195,391,780"
+    assert args.k_values == "293,391,780"
     assert args.cluster_min_size == 10
     assert args.cluster_min_samples == 1
     assert args.output_dir is None
@@ -77,6 +79,22 @@ def test_build_manhattan_distance_uses_recipe_registry_order():
     assert result.tolist() == [[0.0, 1.0], [1.0, 0.0]]
 
 
+def test_constrained_full_candidate_matches_exact_em_smoothing():
+    volume = np.array([
+        [0.8, 0.2],
+        [0.3, 0.7],
+        [0.5, 0.5],
+    ], dtype=np.float32)
+    cost = np.array([[0.0, 1.0], [1.0, 0.0]], dtype=np.float32)
+
+    exact = run_full_em(volume, cost, n_ingredients=2, iters=1)
+    _distance, constrained_cost, _log, _pairs = constrained_em_fit(
+        volume, cost, n_ingredients=2, k=2, iters=1
+    )
+
+    assert constrained_cost == pytest.approx(exact.cost_matrix)
+
+
 def test_run_full_em_disables_candidate_filtering(monkeypatch):
     def fake_em_fit(volume, cost, n_ingredients, **kwargs):
         assert kwargs["candidate_k"] is None
@@ -129,6 +147,57 @@ def test_neighborhood_preservation_is_perfect_for_unchanged_geometry():
     assert result["knn_recall"] == pytest.approx(1.0)
     assert result["trustworthiness"] == pytest.approx(1.0)
     assert result["continuity"] == pytest.approx(1.0)
+
+
+def test_neighborhood_preservation_excludes_self_when_distances_tie():
+    source = np.array([[0.0], [0.0], [1.0], [2.0], [4.0], [8.0]])
+    embedding = np.array([
+        [-0.28128742, -0.66804635],
+        [-1.05515055, -0.39080098],
+        [0.48194539, -0.23855361],
+        [0.95775870, -0.19980213],
+        [0.02425957, 1.54582085],
+        [0.54510552, -0.50522874],
+    ])
+
+    result = neighborhood_preservation(
+        np.abs(source - source.T), embedding, k=2
+    )
+
+    assert result == pytest.approx({
+        "knn_recall": 7 / 12,
+        "trustworthiness": 19 / 30,
+        "continuity": 22 / 30,
+    })
+
+
+def test_rank_umap_grid_prioritizes_worst_seed_then_median():
+    agreement = {"ari_all": 0.4, "ami_all": 0.5}
+    results = [
+        {"n_neighbors": 5, "min_dist": 0.05, "seed": 0,
+         "local_preservation_score": 0.70,
+         "reference_cluster_silhouette_in_embedding": 0.6,
+         "cluster_agreement": agreement},
+        {"n_neighbors": 5, "min_dist": 0.05, "seed": 1,
+         "local_preservation_score": 0.90,
+         "reference_cluster_silhouette_in_embedding": 0.6,
+         "cluster_agreement": agreement},
+        {"n_neighbors": 10, "min_dist": 0.05, "seed": 0,
+         "local_preservation_score": 0.78,
+         "reference_cluster_silhouette_in_embedding": 0.5,
+         "cluster_agreement": agreement},
+        {"n_neighbors": 10, "min_dist": 0.05, "seed": 1,
+         "local_preservation_score": 0.80,
+         "reference_cluster_silhouette_in_embedding": 0.5,
+         "cluster_agreement": agreement},
+    ]
+
+    ranked = rank_umap_grid(results)
+
+    assert ranked[0]["n_neighbors"] == 10
+    assert ranked[0]["seed_count"] == 2
+    assert ranked[0]["worst_local_preservation_score"] == 0.78
+    assert ranked[0]["median_local_preservation_score"] == 0.79
 
 
 def test_run_umap_grid_reports_neighborhood_and_cluster_preservation(monkeypatch):

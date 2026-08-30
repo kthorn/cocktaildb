@@ -231,7 +231,7 @@ def em_fit(
             symmetrize=True,
         )
 
-        new_cost_matrix = m_step_blosum(T_sum, blosum_alpha=0.2)
+        new_cost_matrix = m_step_blosum(T_sum)
         new_cost_matrix = new_cost_matrix.astype(np.float32, copy=False)
 
         if return_plans:

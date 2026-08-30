@@ -27,6 +27,7 @@ import json
 import logging
 import os
 import resource
+import statistics
 import sys
 import time
 from dataclasses import dataclass
@@ -340,16 +341,19 @@ def neighborhood_preservation(
         raise ValueError("trustworthiness requires 0 < k < n / 2")
 
     embedding_distances = pairwise_distances(embedding)
+    source_distances = source_distances.copy()
+    np.fill_diagonal(source_distances, np.inf)
+    np.fill_diagonal(embedding_distances, np.inf)
     source_order = np.argsort(source_distances, axis=1, kind="stable")
     embedding_order = np.argsort(embedding_distances, axis=1, kind="stable")
-    source_neighbors = source_order[:, 1:k + 1]
-    embedding_neighbors = embedding_order[:, 1:k + 1]
+    source_neighbors = source_order[:, :k]
+    embedding_neighbors = embedding_order[:, :k]
 
     source_ranks = np.empty_like(source_order)
     embedding_ranks = np.empty_like(embedding_order)
     rows = np.arange(n)[:, None]
-    source_ranks[rows, source_order] = np.arange(n)
-    embedding_ranks[rows, embedding_order] = np.arange(n)
+    source_ranks[rows, source_order] = np.arange(1, n + 1)
+    embedding_ranks[rows, embedding_order] = np.arange(1, n + 1)
 
     recalls = []
     trust_penalty = 0
@@ -455,6 +459,54 @@ def run_umap_grid(
                 })
 
     return results
+
+
+def rank_umap_grid(results: list[dict]) -> list[dict]:
+    """Rank UMAP settings by worst-seed stability, then median quality."""
+    grouped: dict[tuple[int, float], list[dict]] = {}
+    for result in results:
+        key = (result["n_neighbors"], result["min_dist"])
+        grouped.setdefault(key, []).append(result)
+
+    summaries = []
+    for (n_neighbors, min_dist), runs in grouped.items():
+        silhouettes = [
+            run["reference_cluster_silhouette_in_embedding"]
+            for run in runs
+            if run["reference_cluster_silhouette_in_embedding"] is not None
+        ]
+        summaries.append({
+            "n_neighbors": n_neighbors,
+            "min_dist": min_dist,
+            "seed_count": len(runs),
+            "seeds": sorted(run["seed"] for run in runs),
+            "worst_local_preservation_score": min(
+                run["local_preservation_score"] for run in runs
+            ),
+            "median_local_preservation_score": statistics.median(
+                run["local_preservation_score"] for run in runs
+            ),
+            "median_reference_cluster_silhouette_in_embedding": (
+                statistics.median(silhouettes) if silhouettes else None
+            ),
+            "median_ari_all": statistics.median(
+                run["cluster_agreement"]["ari_all"] for run in runs
+            ),
+            "median_ami_all": statistics.median(
+                run["cluster_agreement"]["ami_all"] for run in runs
+            ),
+        })
+
+    return sorted(
+        summaries,
+        key=lambda result: (
+            result["worst_local_preservation_score"],
+            result["median_local_preservation_score"],
+            result["median_reference_cluster_silhouette_in_embedding"] or -1,
+            result["median_ami_all"],
+        ),
+        reverse=True,
+    )
 
 
 def compare_neighbor_accuracy(
@@ -787,7 +839,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--use-cache", action="store_true",
                         help="Use cached data from previous run")
     parser.add_argument("--iters", type=int, default=5, help="Maximum EM iterations")
-    parser.add_argument("--k-values", type=str, default="195,391,780",
+    parser.add_argument("--k-values", type=str, default="293,391,780",
                         help="Comma-separated candidate counts to compare")
     parser.add_argument("--include-full", action="store_true",
                         help="Also run exact O(N²) EM (slow and memory intensive)")
@@ -826,23 +878,20 @@ def main():
             cluster_min_size=args.cluster_min_size,
             cluster_min_samples=args.cluster_min_samples,
         )
-        ranked = sorted(
-            umap_results,
-            key=lambda result: (
-                result["local_preservation_score"],
-                result["cluster_agreement"]["ami_all"],
-            ),
-            reverse=True,
-        )
+        ranked = rank_umap_grid(umap_results)
         for result in ranked[:10]:
             logger.info(
-                "neighbors=%d min_dist=%.2f seed=%d local=%.3f ARI=%.3f AMI=%.3f",
+                "neighbors=%d min_dist=%.2f worst=%.3f median=%.3f silhouette=%s AMI=%.3f",
                 result["n_neighbors"],
                 result["min_dist"],
-                result["seed"],
-                result["local_preservation_score"],
-                result["cluster_agreement"]["ari_all"],
-                result["cluster_agreement"]["ami_all"],
+                result["worst_local_preservation_score"],
+                result["median_local_preservation_score"],
+                (
+                    f'{result["median_reference_cluster_silhouette_in_embedding"]:.3f}'
+                    if result["median_reference_cluster_silhouette_in_embedding"] is not None
+                    else "n/a"
+                ),
+                result["median_ami_all"],
             )
         if args.output_dir:
             args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -857,7 +906,8 @@ def main():
                         package: importlib.metadata.version(package)
                         for package in ("numpy", "scikit-learn", "umap-learn")
                     },
-                    "results": ranked,
+                    "ranked_settings": ranked,
+                    "results": umap_results,
                 }, indent=2),
                 encoding="utf-8",
             )

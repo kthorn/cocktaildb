@@ -412,7 +412,7 @@ class AnalyticsQueries:
         Args:
             return_similarity: If True, also return recipe similarity data.
             candidate_k: Number of candidate neighbors for constrained EM.
-                Use 0.0625 * n_recipes for optimal balance of speed/accuracy.
+                Use 0.15 * n_recipes for the benchmarked speed/accuracy balance.
                 Set to None for full O(N²) computation.
 
         Returns:
