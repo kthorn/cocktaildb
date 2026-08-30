@@ -198,7 +198,9 @@ class TestDataConsistencyAndIntegrity:
             f"Found invalid unit references: {invalid_unit_refs}"
         )
 
-    async def test_data_quality_constraints(self, test_client_with_data, db_with_test_data):
+    async def test_data_quality_constraints(
+        self, test_client_with_data, db_with_test_data
+    ):
         """Test data quality and business rule constraints"""
         cursor = db_with_test_data.cursor()
 
@@ -253,7 +255,9 @@ class TestDataConsistencyAndIntegrity:
 class TestComplexIntegrationScenarios:
     """Test complex integration scenarios that span multiple endpoints"""
 
-    async def test_recipe_with_ingredients_and_ratings_flow(self, test_client_with_data):
+    async def test_recipe_with_ingredients_and_ratings_flow(
+        self, test_client_with_data
+    ):
         """Test complete recipe workflow with ingredients and ratings"""
         client, app = test_client_with_data
 
@@ -356,7 +360,9 @@ class TestComplexIntegrationScenarios:
 class TestSpecialUnitsIntegration:
     """Integration tests for special units in recipe creation and retrieval"""
 
-    async def test_create_and_retrieve_recipe_with_to_top(self, editor_client_with_data):
+    async def test_create_and_retrieve_recipe_with_to_top(
+        self, editor_client_with_data
+    ):
         """Test creating and retrieving recipe with 'to top' unit"""
         client = editor_client_with_data
 
@@ -407,7 +413,9 @@ class TestSpecialUnitsIntegration:
         assert ingredient["unit_name"] == "to top"
         assert ingredient["ingredient_id"] == test_ingredient["id"]
 
-    async def test_create_and_retrieve_recipe_with_to_rinse(self, editor_client_with_data):
+    async def test_create_and_retrieve_recipe_with_to_rinse(
+        self, editor_client_with_data
+    ):
         """Test creating and retrieving recipe with 'to rinse' unit"""
         client = editor_client_with_data
 
@@ -459,7 +467,9 @@ class TestSpecialUnitsIntegration:
         assert ingredient["unit_name"] == "to rinse"
         assert ingredient["ingredient_id"] == test_ingredient["id"]
 
-    async def test_create_and_retrieve_recipe_with_each_unit(self, editor_client_with_data):
+    async def test_create_and_retrieve_recipe_with_each_unit(
+        self, editor_client_with_data
+    ):
         """Test creating and retrieving recipe with 'each' unit"""
         client = editor_client_with_data
 

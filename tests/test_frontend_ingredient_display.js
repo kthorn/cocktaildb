@@ -1,7 +1,7 @@
 /**
  * Frontend Ingredient Display Tests
  * Tests for formatAmount function and ingredient display logic
- * 
+ *
  * To run these tests, you'll need Node.js and a testing framework like Jest.
  * You can run them with: node test_frontend_ingredient_display.js
  */
@@ -11,7 +11,7 @@ if (typeof document === 'undefined') {
     global.document = {
         createElement: () => ({ className: '', innerHTML: '', style: {}, appendChild: () => {} }),
         querySelector: () => null,
-        addEventListener: () => {}
+        addEventListener: () => {},
     };
     global.console = { log: () => {}, error: () => {} };
 }
@@ -34,8 +34,15 @@ function formatAmount(amount) {
     }
 
     const fractions = {
-        '1/8': 1/8, '1/4': 1/4, '1/3': 1/3, '3/8': 3/8, '1/2': 1/2, 
-        '5/8': 5/8, '2/3': 2/3, '3/4': 3/4, '7/8': 7/8
+        '1/8': 1 / 8,
+        '1/4': 1 / 4,
+        '1/3': 1 / 3,
+        '3/8': 3 / 8,
+        '1/2': 1 / 2,
+        '5/8': 5 / 8,
+        '2/3': 2 / 3,
+        '3/4': 3 / 4,
+        '7/8': 7 / 8,
     };
 
     let bestMatch = null;
@@ -48,7 +55,7 @@ function formatAmount(amount) {
             bestMatch = fractionStr;
         }
     }
-    
+
     // Check if the remainder is close to 1 (e.g. 0.995 should be next integer)
     if (1 - fractionalPart < tolerance) {
         return String(integerPart + 1);
@@ -68,13 +75,23 @@ function formatAmount(amount) {
 
 // Test function to format ingredients like the recipeCard.js logic
 function formatIngredientDisplay(ingredient) {
-    const ingredientName = ingredient.full_name || ingredient.ingredient_name || ingredient.name || 'Unknown ingredient';
-    
+    const ingredientName =
+        ingredient.full_name ||
+        ingredient.ingredient_name ||
+        ingredient.name ||
+        'Unknown ingredient';
+
     // Special handling for specific units
-    if (ingredient.unit_name === 'to top' && (ingredient.amount === null || ingredient.amount === undefined)) {
+    if (
+        ingredient.unit_name === 'to top' &&
+        (ingredient.amount === null || ingredient.amount === undefined)
+    ) {
         return `${ingredientName}, to top`;
     }
-    if (ingredient.unit_name === 'to rinse' && (ingredient.amount === null || ingredient.amount === undefined)) {
+    if (
+        ingredient.unit_name === 'to rinse' &&
+        (ingredient.amount === null || ingredient.amount === undefined)
+    ) {
         return `${ingredientName}, to rinse`;
     }
     if (ingredient.unit_name === 'each') {
@@ -82,11 +99,11 @@ function formatIngredientDisplay(ingredient) {
         const formattedAmount = formatAmount(ingredient.amount);
         return `${formattedAmount ? formattedAmount + ' ' : ''}${ingredientName}`;
     }
-    
+
     // Default handling for all other units
     const formattedAmount = formatAmount(ingredient.amount);
     const unitDisplay = ingredient.unit_name ? ` ${ingredient.unit_name}` : '';
-    
+
     return `${formattedAmount}${unitDisplay} ${ingredientName}`;
 }
 
@@ -110,13 +127,15 @@ class TestRunner {
 
     assertEqual(actual, expected, message) {
         if (actual !== expected) {
-            throw new Error(`${message || 'Values not equal'}: expected "${expected}", got "${actual}"`);
+            throw new Error(
+                `${message || 'Values not equal'}: expected "${expected}", got "${actual}"`,
+            );
         }
     }
 
     run() {
         console.log(`Running ${this.tests.length} tests...\\n`);
-        
+
         for (const { name, testFn } of this.tests) {
             try {
                 testFn.call(this);
@@ -127,7 +146,7 @@ class TestRunner {
                 this.failed++;
             }
         }
-        
+
         console.log(`\\nResults: ${this.passed} passed, ${this.failed} failed`);
         return this.failed === 0;
     }
@@ -137,167 +156,167 @@ class TestRunner {
 const runner = new TestRunner();
 
 // Tests for formatAmount function
-runner.test('formatAmount handles null', function() {
+runner.test('formatAmount handles null', function () {
     this.assertEqual(formatAmount(null), '');
 });
 
-runner.test('formatAmount handles undefined', function() {
+runner.test('formatAmount handles undefined', function () {
     this.assertEqual(formatAmount(undefined), '');
 });
 
-runner.test('formatAmount handles zero', function() {
+runner.test('formatAmount handles zero', function () {
     this.assertEqual(formatAmount(0), '0');
 });
 
-runner.test('formatAmount handles whole numbers', function() {
+runner.test('formatAmount handles whole numbers', function () {
     this.assertEqual(formatAmount(1), '1');
     this.assertEqual(formatAmount(2), '2');
     this.assertEqual(formatAmount(10), '10');
 });
 
-runner.test('formatAmount handles common fractions', function() {
+runner.test('formatAmount handles common fractions', function () {
     this.assertEqual(formatAmount(0.25), '1/4');
     this.assertEqual(formatAmount(0.5), '1/2');
     this.assertEqual(formatAmount(0.75), '3/4');
     this.assertEqual(formatAmount(0.33), '1/3');
 });
 
-runner.test('formatAmount handles mixed numbers', function() {
+runner.test('formatAmount handles mixed numbers', function () {
     this.assertEqual(formatAmount(1.5), '1 1/2');
     this.assertEqual(formatAmount(2.25), '2 1/4');
     this.assertEqual(formatAmount(3.75), '3 3/4');
 });
 
-runner.test('formatAmount handles non-numeric inputs', function() {
+runner.test('formatAmount handles non-numeric inputs', function () {
     this.assertEqual(formatAmount('abc'), 'abc');
     this.assertEqual(formatAmount(NaN), 'NaN');
 });
 
 // Tests for ingredient display formatting
-runner.test('to top unit with null amount', function() {
+runner.test('to top unit with null amount', function () {
     const ingredient = {
         name: 'Champagne',
         unit_name: 'to top',
-        amount: null
+        amount: null,
     };
     this.assertEqual(formatIngredientDisplay(ingredient), 'Champagne, to top');
 });
 
-runner.test('to rinse unit with null amount', function() {
+runner.test('to rinse unit with null amount', function () {
     const ingredient = {
         name: 'Absinthe',
         unit_name: 'to rinse',
-        amount: null
+        amount: null,
     };
     this.assertEqual(formatIngredientDisplay(ingredient), 'Absinthe, to rinse');
 });
 
-runner.test('each unit with numeric amount', function() {
+runner.test('each unit with numeric amount', function () {
     const ingredient = {
         name: 'Maraschino Cherry',
         unit_name: 'each',
-        amount: 1
+        amount: 1,
     };
     this.assertEqual(formatIngredientDisplay(ingredient), '1 Maraschino Cherry');
 });
 
-runner.test('each unit with multiple items', function() {
+runner.test('each unit with multiple items', function () {
     const ingredient = {
         name: 'Olives',
         unit_name: 'each',
-        amount: 3
+        amount: 3,
     };
     this.assertEqual(formatIngredientDisplay(ingredient), '3 Olives');
 });
 
-runner.test('each unit with fractional amount', function() {
+runner.test('each unit with fractional amount', function () {
     const ingredient = {
         name: 'Lime',
         unit_name: 'each',
-        amount: 0.5
+        amount: 0.5,
     };
     this.assertEqual(formatIngredientDisplay(ingredient), '1/2 Lime');
 });
 
-runner.test('normal unit with amount', function() {
+runner.test('normal unit with amount', function () {
     const ingredient = {
         name: 'Gin',
         unit_name: 'Ounce',
-        amount: 2
+        amount: 2,
     };
     this.assertEqual(formatIngredientDisplay(ingredient), '2 Ounce Gin');
 });
 
-runner.test('normal unit with fractional amount', function() {
+runner.test('normal unit with fractional amount', function () {
     const ingredient = {
         name: 'Simple Syrup',
         unit_name: 'Ounce',
-        amount: 0.5
+        amount: 0.5,
     };
     this.assertEqual(formatIngredientDisplay(ingredient), '1/2 Ounce Simple Syrup');
 });
 
-runner.test('ingredient with no unit', function() {
+runner.test('ingredient with no unit', function () {
     const ingredient = {
         name: 'Salt',
         unit_name: null,
-        amount: 1
+        amount: 1,
     };
     this.assertEqual(formatIngredientDisplay(ingredient), '1 Salt');
 });
 
-runner.test('ingredient with no amount and no unit', function() {
+runner.test('ingredient with no amount and no unit', function () {
     const ingredient = {
         name: 'Garnish',
         unit_name: null,
-        amount: null
+        amount: null,
     };
     this.assertEqual(formatIngredientDisplay(ingredient), ' Garnish');
 });
 
-runner.test('ingredient uses full_name when available', function() {
+runner.test('ingredient uses full_name when available', function () {
     const ingredient = {
         name: 'Gin',
         full_name: 'London Dry Gin',
         unit_name: 'Ounce',
-        amount: 2
+        amount: 2,
     };
     this.assertEqual(formatIngredientDisplay(ingredient), '2 Ounce London Dry Gin');
 });
 
-runner.test('to top with undefined amount', function() {
+runner.test('to top with undefined amount', function () {
     const ingredient = {
         name: 'Soda Water',
         unit_name: 'to top',
-        amount: undefined
+        amount: undefined,
     };
     this.assertEqual(formatIngredientDisplay(ingredient), 'Soda Water, to top');
 });
 
-runner.test('to rinse with undefined amount', function() {
+runner.test('to rinse with undefined amount', function () {
     const ingredient = {
         name: 'Vermouth',
         unit_name: 'to rinse',
-        amount: undefined
+        amount: undefined,
     };
     this.assertEqual(formatIngredientDisplay(ingredient), 'Vermouth, to rinse');
 });
 
 // Edge cases
-runner.test('each unit with null amount', function() {
+runner.test('each unit with null amount', function () {
     const ingredient = {
         name: 'Cherry',
         unit_name: 'each',
-        amount: null
+        amount: null,
     };
     this.assertEqual(formatIngredientDisplay(ingredient), 'Cherry');
 });
 
-runner.test('to top with numeric amount (should still show comma format)', function() {
+runner.test('to top with numeric amount (should still show comma format)', function () {
     const ingredient = {
         name: 'Club Soda',
         unit_name: 'to top',
-        amount: 2
+        amount: 2,
     };
     // When amount is not null/undefined, should use default formatting
     this.assertEqual(formatIngredientDisplay(ingredient), '2 to top Club Soda');

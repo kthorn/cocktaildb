@@ -1,4 +1,5 @@
 """Rating enrichment for cocktail-space analytics."""
+
 import os
 import sys
 
@@ -23,10 +24,12 @@ class FakeDatabase:
 
 
 def test_adds_average_ratings_for_anonymous_visitors():
-    db = FakeDatabase([
-        {"recipe_id": 1, "rating": 4.25},
-        {"recipe_id": 2, "rating": None},
-    ])
+    db = FakeDatabase(
+        [
+            {"recipe_id": 1, "rating": 4.25},
+            {"recipe_id": 2, "rating": None},
+        ]
+    )
     stored = {
         "data": [{"recipe_id": 1}, {"recipe_id": 2}],
         "metadata": {"generated_at": "today"},

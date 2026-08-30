@@ -37,7 +37,7 @@ class TestRecipePage:
         """Recipe page includes JSON-LD structured data"""
         client, app = test_client_with_data
         response = await client.get("/recipe/1")
-        assert 'application/ld+json' in response.text
+        assert "application/ld+json" in response.text
         assert '"@type": "Recipe"' in response.text
 
     async def test_recipe_page_contains_meta_description(self, test_client_with_data):
@@ -97,7 +97,7 @@ class TestIngredientPage:
         """Ingredient page includes JSON-LD structured data"""
         client, app = test_client_with_data
         response = await client.get("/ingredient/1")
-        assert 'application/ld+json' in response.text
+        assert "application/ld+json" in response.text
 
     async def test_ingredient_page_contains_search_link(self, test_client_with_data):
         """Ingredient page links to search filtered by this ingredient"""
@@ -120,7 +120,8 @@ class TestNameRedirect:
         """GET /recipe/by-name?name=X redirects to /recipe/{id}"""
         client, app = test_client_with_data
         response = await client.get(
-            "/recipe/by-name", params={"name": "Test Old Fashioned"},
+            "/recipe/by-name",
+            params={"name": "Test Old Fashioned"},
             follow_redirects=False,
         )
         assert response.status_code == 302
@@ -130,7 +131,8 @@ class TestNameRedirect:
         """GET /recipe/by-name?name=X returns 404 HTML for unknown name"""
         client, app = test_client_with_data
         response = await client.get(
-            "/recipe/by-name", params={"name": "Nonexistent Recipe"},
+            "/recipe/by-name",
+            params={"name": "Nonexistent Recipe"},
             follow_redirects=False,
         )
         assert response.status_code == 404

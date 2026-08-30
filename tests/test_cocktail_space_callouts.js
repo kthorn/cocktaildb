@@ -7,14 +7,21 @@ const chartSource = fs.readFileSync(chartPath, 'utf8');
 const stylesPath = path.join(__dirname, '..', 'src', 'web', 'styles.css');
 const stylesSource = fs.readFileSync(stylesPath, 'utf8');
 const apiSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'web', 'js', 'api.js'), 'utf8');
-const analyticsSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'web', 'js', 'analytics.js'), 'utf8');
-const layoutSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'web', 'js', 'charts', 'calloutLayout.mjs'), 'utf8');
+const analyticsSource = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'web', 'js', 'analytics.js'),
+    'utf8',
+);
+const layoutSource = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'web', 'js', 'charts', 'calloutLayout.mjs'),
+    'utf8',
+);
 
 assert.match(apiSource, /getCocktailSpaceAnalytics[\s\S]*this\.isAuthenticated\(\)/);
 assert.match(apiSource, /getCocktailSpaceEmAnalytics[\s\S]*this\.isAuthenticated\(\)/);
 assert.ok(
-    (analyticsSource.match(/ratingSource:\s*response\.metadata\?\.rating_source/g) || []).length === 2,
-    'both UMAP charts must receive the server-selected rating source'
+    (analyticsSource.match(/ratingSource:\s*response\.metadata\?\.rating_source/g) || []).length ===
+        2,
+    'both UMAP charts must receive the server-selected rating source',
 );
 assert.match(chartSource, /const MAX_VISIBLE_CALLOUTS\s*=\s*50/);
 assert.match(chartSource, /\.scaleExtent\(\[0\.5,\s*50\]\)/);
@@ -23,7 +30,7 @@ assert.match(chartSource, /class['"],\s*['"]recipe-callouts/);
 assert.match(chartSource, /class['"],\s*['"]recipe-callout/);
 assert.ok(
     (chartSource.match(/updateCallouts\(currentTransform\)/g) || []).length >= 2,
-    'callouts must update on initial render and zoom'
+    'callouts must update on initial render and zoom',
 );
 assert.match(chartSource, /\.text\(\(?d\)?\s*=>\s*d\.recipe_name\)/);
 assert.match(chartSource, /Color by.*rating/);
@@ -31,7 +38,7 @@ assert.match(chartSource, /interpolateBlues/);
 assert.match(chartSource, /const UNRATED_COLOR\s*=\s*['"]#cbd5e1['"]/);
 assert.ok(
     (chartSource.match(/UNRATED_COLOR/g) || []).length >= 3,
-    'unrated points and their legend marker must share the lighter gray constant'
+    'unrated points and their legend marker must share the lighter gray constant',
 );
 assert.match(layoutSource, /CALLOUT_CANDIDATES/);
 assert.match(chartSource, /recipe-callout-line/);

@@ -30,19 +30,19 @@ function getCSSVariable(varName, fallback) {
 function getColors() {
     return {
         // Node fill colors
-        leafFill: getCSSVariable('--primary-color', '#2c3e50'),     // Primary color for leaf nodes
-        internalFill: getCSSVariable('--accent-color', '#A61816'),  // Accent color for nodes with children
-        hoverFill: 'rgba(166, 24, 22, 0.8)',                        // Slightly transparent accent on hover
+        leafFill: getCSSVariable('--primary-color', '#2c3e50'), // Primary color for leaf nodes
+        internalFill: getCSSVariable('--accent-color', '#A61816'), // Accent color for nodes with children
+        hoverFill: 'rgba(166, 24, 22, 0.8)', // Slightly transparent accent on hover
 
         // Stroke colors - same for all nodes
-        stroke: getCSSVariable('--secondary-color', '#7f8c8d'),     // Gray stroke for all nodes
-        hoverStroke: '#5a6163',                                      // Darker gray on hover
+        stroke: getCSSVariable('--secondary-color', '#7f8c8d'), // Gray stroke for all nodes
+        hoverStroke: '#5a6163', // Darker gray on hover
 
         // Other colors
         linkStroke: getCSSVariable('--secondary-color', '#7f8c8d'), // Gray for links
-        textFill: getCSSVariable('--text-dark', '#333'),     // Dark text for visibility on light background
-        tooltipBg: 'rgba(44, 62, 80, 0.95)',                        // Dark tooltip background
-        svgBg: getCSSVariable('--bg-light', '#f5f5f5')                                         // Light gray background
+        textFill: getCSSVariable('--text-dark', '#333'), // Dark text for visibility on light background
+        tooltipBg: 'rgba(44, 62, 80, 0.95)', // Dark tooltip background
+        svgBg: getCSSVariable('--bg-light', '#f5f5f5'), // Light gray background
     };
 }
 
@@ -82,7 +82,8 @@ export function createIngredientTreeChart(container, data, options = {}) {
     const radius = Math.min(width, height) / 2 - 120;
 
     // Create SVG
-    const svg = d3.select(container)
+    const svg = d3
+        .select(container)
         .append('svg')
         .attr('width', width)
         .attr('height', height)
@@ -94,7 +95,8 @@ export function createIngredientTreeChart(container, data, options = {}) {
     container.style.position = 'relative';
 
     // Create tooltip
-    const tooltip = d3.select(container)
+    const tooltip = d3
+        .select(container)
         .append('div')
         .attr('class', 'tree-tooltip')
         .style('position', 'absolute')
@@ -112,7 +114,8 @@ export function createIngredientTreeChart(container, data, options = {}) {
         .style('border', '1px solid rgba(166, 24, 22, 0.3)');
 
     // Create tree layout
-    const tree = d3.tree()
+    const tree = d3
+        .tree()
         .size([2 * Math.PI, radius])
         .separation((a, b) => {
             const baseSep = a.parent == b.parent ? 1.5 : 3;
@@ -142,14 +145,20 @@ export function createIngredientTreeChart(container, data, options = {}) {
         const links = nodes.links();
 
         // Update nodes
-        const node = g.selectAll('.node')
-            .data(nodes.descendants(), d => d.data.id || d.data.name);
+        const node = g
+            .selectAll('.node')
+            .data(nodes.descendants(), (d) => d.data.id || d.data.name);
 
         // Enter new nodes
-        const nodeEnter = node.enter().append('g')
-            .attr('class', d => 'node' + (d.children || d._children ? ' node--internal' : ' node--leaf'))
-            .attr('transform', d => `translate(${radialPoint(d.x, d.y)})`)
-            .on('click', function(event, d) {
+        const nodeEnter = node
+            .enter()
+            .append('g')
+            .attr(
+                'class',
+                (d) => 'node' + (d.children || d._children ? ' node--internal' : ' node--leaf'),
+            )
+            .attr('transform', (d) => `translate(${radialPoint(d.x, d.y)})`)
+            .on('click', function (event, d) {
                 // Desktop click - expand/collapse
                 if (!isTouch) {
                     clicked(event, d);
@@ -195,20 +204,19 @@ export function createIngredientTreeChart(container, data, options = {}) {
                 onDoubleTap: (event, d) => {
                     tooltip.style('opacity', '0');
                     clicked(event, d);
-                }
+                },
             });
 
-            nodeEnter
-                .on('touchstart', function(event, d) {
-                    if (event.touches.length === 1) {
-                        event.preventDefault();
-                        touchHandlers.touchstart(event, d);
-                    }
-                });
+            nodeEnter.on('touchstart', function (event, d) {
+                if (event.touches.length === 1) {
+                    event.preventDefault();
+                    touchHandlers.touchstart(event, d);
+                }
+            });
         } else {
             // Mouse hover handlers for desktop
             nodeEnter
-                .on('mouseover', function(event, d) {
+                .on('mouseover', function (event, d) {
                     const directCount = d.data.recipe_count || 0;
                     const hierarchicalCount = d.data.hierarchical_recipe_count || 0;
                     const hasChildren = d.children || d._children;
@@ -222,169 +230,178 @@ export function createIngredientTreeChart(container, data, options = {}) {
                     const rect = container.getBoundingClientRect();
                     tooltip
                         .html(tooltipHtml)
-                        .style('left', (event.clientX - rect.left + 10) + 'px')
-                        .style('top', (event.clientY - rect.top - 10) + 'px')
+                        .style('left', event.clientX - rect.left + 10 + 'px')
+                        .style('top', event.clientY - rect.top - 10 + 'px')
                         .style('opacity', '1');
                 })
-                .on('mouseout', function() {
+                .on('mouseout', function () {
                     tooltip.style('opacity', '0');
                 })
-                .on('mousemove', function(event) {
+                .on('mousemove', function (event) {
                     const rect = container.getBoundingClientRect();
                     tooltip
-                        .style('left', (event.clientX - rect.left + 10) + 'px')
-                        .style('top', (event.clientY - rect.top - 10) + 'px');
+                        .style('left', event.clientX - rect.left + 10 + 'px')
+                        .style('top', event.clientY - rect.top - 10 + 'px');
                 });
         }
 
-        nodeEnter.append('circle')
-            .attr('r', 0);
+        nodeEnter.append('circle').attr('r', 0);
 
-        const textEnter = nodeEnter.append('text')
+        const textEnter = nodeEnter
+            .append('text')
             .attr('dy', '0.31em')
-            .attr('x', d => d.x < Math.PI === !d.children ? 6 : -6)
-            .attr('text-anchor', d => d.x < Math.PI === !d.children ? 'start' : 'end')
-            .attr('transform', d => `rotate(${(d.x < Math.PI ? d.x - Math.PI / 2 : d.x + Math.PI / 2) * 180 / Math.PI})`)
-            .text(d => truncateText(d))
-            .style('font-size', d => getFontSize(d))
+            .attr('x', (d) => (d.x < Math.PI === !d.children ? 6 : -6))
+            .attr('text-anchor', (d) => (d.x < Math.PI === !d.children ? 'start' : 'end'))
+            .attr(
+                'transform',
+                (d) =>
+                    `rotate(${((d.x < Math.PI ? d.x - Math.PI / 2 : d.x + Math.PI / 2) * 180) / Math.PI})`,
+            )
+            .text((d) => truncateText(d))
+            .style('font-size', (d) => getFontSize(d))
             .style('opacity', 0)
-            .style('display', d => shouldShowLabel(d) ? 'block' : 'none');
+            .style('display', (d) => (shouldShowLabel(d) ? 'block' : 'none'));
 
         // Update existing nodes with tooltip handlers (desktop only)
         if (!isTouch) {
-            node.on('mouseover', function(event, d) {
-                    const directCount = d.data.recipe_count || 0;
-                    const hierarchicalCount = d.data.hierarchical_recipe_count || 0;
-                    const hasChildren = d.children || d._children;
+            node.on('mouseover', function (event, d) {
+                const directCount = d.data.recipe_count || 0;
+                const hierarchicalCount = d.data.hierarchical_recipe_count || 0;
+                const hasChildren = d.children || d._children;
 
-                    let tooltipHtml = `<strong>${d.data.name}</strong><br/>`;
-                    tooltipHtml += `Direct: ${directCount} recipe${directCount !== 1 ? 's' : ''}`;
+                let tooltipHtml = `<strong>${d.data.name}</strong><br/>`;
+                tooltipHtml += `Direct: ${directCount} recipe${directCount !== 1 ? 's' : ''}`;
 
-                    if (hasChildren) {
-                        tooltipHtml += `<br/>With children: ${hierarchicalCount} recipe${hierarchicalCount !== 1 ? 's' : ''}`;
-                    }
+                if (hasChildren) {
+                    tooltipHtml += `<br/>With children: ${hierarchicalCount} recipe${hierarchicalCount !== 1 ? 's' : ''}`;
+                }
 
-                    const rect = container.getBoundingClientRect();
-                    tooltip
-                        .html(tooltipHtml)
-                        .style('left', (event.clientX - rect.left + 10) + 'px')
-                        .style('top', (event.clientY - rect.top - 10) + 'px')
-                        .style('opacity', '1');
-                })
-                .on('mouseout', function() {
+                const rect = container.getBoundingClientRect();
+                tooltip
+                    .html(tooltipHtml)
+                    .style('left', event.clientX - rect.left + 10 + 'px')
+                    .style('top', event.clientY - rect.top - 10 + 'px')
+                    .style('opacity', '1');
+            })
+                .on('mouseout', function () {
                     tooltip.style('opacity', '0');
                 })
-                .on('mousemove', function(event) {
+                .on('mousemove', function (event) {
                     const rect = container.getBoundingClientRect();
                     tooltip
-                        .style('left', (event.clientX - rect.left + 10) + 'px')
-                        .style('top', (event.clientY - rect.top - 10) + 'px');
+                        .style('left', event.clientX - rect.left + 10 + 'px')
+                        .style('top', event.clientY - rect.top - 10 + 'px');
                 });
         }
 
         // Transition existing nodes
         node.transition()
             .duration(duration)
-            .attr('transform', d => `translate(${radialPoint(d.x, d.y)})`);
+            .attr('transform', (d) => `translate(${radialPoint(d.x, d.y)})`);
 
-        node.select('circle')
-            .transition()
-            .duration(duration)
-            .attr('r', CIRCLE_RADIUS);
+        node.select('circle').transition().duration(duration).attr('r', CIRCLE_RADIUS);
 
         node.select('text')
-            .text(d => truncateText(d))
-            .style('font-size', d => getFontSize(d))
-            .style('display', d => shouldShowLabel(d) ? 'block' : 'none')
+            .text((d) => truncateText(d))
+            .style('font-size', (d) => getFontSize(d))
+            .style('display', (d) => (shouldShowLabel(d) ? 'block' : 'none'))
             .transition()
             .duration(duration)
             .style('opacity', 1)
-            .attr('x', d => d.x < Math.PI === !d.children ? 6 : -6)
-            .attr('text-anchor', d => d.x < Math.PI === !d.children ? 'start' : 'end')
-            .attr('transform', d => `rotate(${(d.x < Math.PI ? d.x - Math.PI / 2 : d.x + Math.PI / 2) * 180 / Math.PI})`);
+            .attr('x', (d) => (d.x < Math.PI === !d.children ? 6 : -6))
+            .attr('text-anchor', (d) => (d.x < Math.PI === !d.children ? 'start' : 'end'))
+            .attr(
+                'transform',
+                (d) =>
+                    `rotate(${((d.x < Math.PI ? d.x - Math.PI / 2 : d.x + Math.PI / 2) * 180) / Math.PI})`,
+            );
 
         // Transition new nodes with delay
-        nodeEnter.transition()
+        nodeEnter
+            .transition()
             .delay(duration)
             .duration(duration)
-            .attr('transform', d => `translate(${radialPoint(d.x, d.y)})`);
+            .attr('transform', (d) => `translate(${radialPoint(d.x, d.y)})`);
 
-        nodeEnter.select('circle')
+        nodeEnter
+            .select('circle')
             .transition()
             .delay(duration)
             .duration(duration)
             .attr('r', CIRCLE_RADIUS);
 
-        nodeEnter.select('text')
+        nodeEnter
+            .select('text')
             .transition()
             .delay(duration)
             .duration(duration)
             .style('opacity', 1);
 
         // Exit old nodes
-        const nodeExit = node.exit().transition()
-            .duration(duration)
-            .remove();
+        const nodeExit = node.exit().transition().duration(duration).remove();
 
-        nodeExit.select('circle')
-            .attr('r', 0);
+        nodeExit.select('circle').attr('r', 0);
 
-        nodeExit.select('text')
-            .style('opacity', 0);
+        nodeExit.select('text').style('opacity', 0);
 
         // Update links
-        const link = g.selectAll('.link')
-            .data(links, d => d.target.data.id || d.target.data.name);
+        const link = g
+            .selectAll('.link')
+            .data(links, (d) => d.target.data.id || d.target.data.name);
 
         // Enter new links
-        const linkEnter = link.enter().insert('path', 'g')
+        const linkEnter = link
+            .enter()
+            .insert('path', 'g')
             .attr('class', 'link')
             .attr('d', linkRadial)
             .style('opacity', 0);
 
         // Transition existing links
-        link.transition()
-            .duration(duration)
-            .attr('d', linkRadial);
+        link.transition().duration(duration).attr('d', linkRadial);
 
         // Transition new links
-        linkEnter.transition()
+        linkEnter
+            .transition()
             .delay(duration)
             .duration(duration)
             .style('opacity', 0.6)
             .attr('d', linkRadial);
 
         // Exit old links
-        link.exit().transition()
-            .duration(duration)
-            .style('opacity', 0)
-            .remove();
+        link.exit().transition().duration(duration).style('opacity', 0).remove();
     }
 
     // Helper functions
     function radialPoint(x, y) {
-        y = (+y) * RING_SPACING;
-        return [y * Math.cos(x -= Math.PI / 2), y * Math.sin(x)];
+        y = +y * RING_SPACING;
+        return [y * Math.cos((x -= Math.PI / 2)), y * Math.sin(x)];
     }
 
     function linkRadial(d) {
-        return d3.linkRadial()
-            .angle(d => d.x)
-            .radius(d => d.y * RING_SPACING)
-            (d);
+        return d3
+            .linkRadial()
+            .angle((d) => d.x)
+            .radius((d) => d.y * RING_SPACING)(d);
     }
 
     function truncateText(d) {
-        const hasSiblingWithExpandedChildren = d.parent && d.parent.children &&
-            d.parent.children.some(sibling => sibling.children && sibling.children.length > 0);
+        const hasSiblingWithExpandedChildren =
+            d.parent &&
+            d.parent.children &&
+            d.parent.children.some((sibling) => sibling.children && sibling.children.length > 0);
         const shouldBeSmall = hasSiblingWithExpandedChildren;
         const maxLength = shouldBeSmall ? MAX_LENGTH_PARENT : MAX_LENGTH_OUTERMOST;
-        return d.data.name.length > maxLength ? d.data.name.substring(0, maxLength) + '...' : d.data.name;
+        return d.data.name.length > maxLength
+            ? d.data.name.substring(0, maxLength) + '...'
+            : d.data.name;
     }
 
     function getFontSize(d) {
-        const hasSiblingWithExpandedChildren = d.parent && d.parent.children &&
-            d.parent.children.some(sibling => sibling.children && sibling.children.length > 0);
+        const hasSiblingWithExpandedChildren =
+            d.parent &&
+            d.parent.children &&
+            d.parent.children.some((sibling) => sibling.children && sibling.children.length > 0);
         return hasSiblingWithExpandedChildren ? FONT_SIZE_PARENT : FONT_SIZE_OUTERMOST;
     }
 
@@ -408,7 +425,8 @@ export function createIngredientTreeChart(container, data, options = {}) {
     update(root);
 
     // Add zoom behavior with two-finger filter for touch
-    const zoom = d3.zoom()
+    const zoom = d3
+        .zoom()
         .scaleExtent([0.5, 3])
         .filter((event) => {
             // On touch devices, only allow zoom with 2+ fingers
@@ -423,8 +441,7 @@ export function createIngredientTreeChart(container, data, options = {}) {
         });
 
     // Initialize zoom with center translation
-    svg.call(zoom)
-        .call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2));
+    svg.call(zoom).call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2));
 
     // Show touch hint on mobile (first time only)
     if (isTouch && !localStorage.getItem(TOUCH_HINT_KEY)) {

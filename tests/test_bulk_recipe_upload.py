@@ -212,7 +212,9 @@ class TestBulkUploadValidation:
 
         # Create ingredients (Lime Juice already exists in test data)
         for ingredient in ingredient_data:
-            response = await editor_client_with_data.post("/ingredients", json=ingredient)
+            response = await editor_client_with_data.post(
+                "/ingredients", json=ingredient
+            )
             assert response.status_code == 201
 
         # Test bulk upload with valid data
@@ -296,11 +298,15 @@ class TestBulkUploadValidation:
                 {
                     "name": "Existing Recipe",
                     "instructions": "Mix ingredients",
-                    "ingredients": [{"ingredient_name": "Vodka", "amount": 2.0, "unit_name": "oz"}],
+                    "ingredients": [
+                        {"ingredient_name": "Vodka", "amount": 2.0, "unit_name": "oz"}
+                    ],
                 }
             ]
         }
-        create_response = await editor_client_with_data.post("/recipes/bulk", json=create_data)
+        create_response = await editor_client_with_data.post(
+            "/recipes/bulk", json=create_data
+        )
         assert create_response.status_code == 201
         assert create_response.json()["uploaded_count"] == 1
 
@@ -385,7 +391,10 @@ class TestBulkUploadValidation:
     async def test_bulk_upload_duplicate_ingredients(self, editor_client):
         """Test bulk upload validation for duplicate ingredients in a recipe"""
         # Create the Lime Juice ingredient first so the only validation error is the duplicate
-        await editor_client.post("/ingredients", json={"name": "Lime Juice", "description": "Fresh lime juice"})
+        await editor_client.post(
+            "/ingredients",
+            json={"name": "Lime Juice", "description": "Fresh lime juice"},
+        )
 
         bulk_data = {
             "recipes": [
@@ -423,7 +432,8 @@ class TestBulkUploadValidation:
         # Check that the duplicate ingredient error is present
         assert len(response_data["validation_errors"]) >= 1
         duplicate_errors = [
-            err for err in response_data["validation_errors"]
+            err
+            for err in response_data["validation_errors"]
             if err["error_type"] == "duplicate_ingredient"
         ]
         assert len(duplicate_errors) == 1
@@ -497,7 +507,9 @@ class TestBulkUploadValidation:
             "does not exist" in response_data["validation_errors"][0]["error_message"]
         )
 
-    async def test_bulk_upload_multiple_validation_errors(self, editor_client_with_data):
+    async def test_bulk_upload_multiple_validation_errors(
+        self, editor_client_with_data
+    ):
         """Test bulk upload with multiple validation errors"""
         bulk_data = {
             "recipes": [
@@ -593,7 +605,9 @@ class TestBulkUploadValidation:
         assert "Good Recipe" not in recipe_names
         assert "Bad Recipe" not in recipe_names
 
-    async def test_bulk_upload_case_insensitive_duplicate_check(self, editor_client_with_data):
+    async def test_bulk_upload_case_insensitive_duplicate_check(
+        self, editor_client_with_data
+    ):
         """Test that duplicate recipe name check is case insensitive"""
         # Create a recipe first using the bulk endpoint (which supports ingredient_name)
         create_data = {
@@ -601,11 +615,15 @@ class TestBulkUploadValidation:
                 {
                     "name": "Test Recipe",
                     "instructions": "Mix ingredients",
-                    "ingredients": [{"ingredient_name": "Vodka", "amount": 2.0, "unit_name": "oz"}],
+                    "ingredients": [
+                        {"ingredient_name": "Vodka", "amount": 2.0, "unit_name": "oz"}
+                    ],
                 }
             ]
         }
-        create_response = await editor_client_with_data.post("/recipes/bulk", json=create_data)
+        create_response = await editor_client_with_data.post(
+            "/recipes/bulk", json=create_data
+        )
         assert create_response.status_code == 201
         assert create_response.json()["uploaded_count"] == 1
 
@@ -687,7 +705,9 @@ class TestBulkUploadIngredientSearch:
         ]
 
         for ingredient in ingredients:
-            response = await editor_client_with_data.post("/ingredients", json=ingredient)
+            response = await editor_client_with_data.post(
+                "/ingredients", json=ingredient
+            )
             assert response.status_code == 201
 
         # Test bulk upload with exact match

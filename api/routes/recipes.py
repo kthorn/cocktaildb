@@ -46,7 +46,9 @@ def check_duplicate_ingredients(ingredients: list) -> list[int]:
     for ingredient in ingredients:
         ingredient_id = ingredient.get("ingredient_id")
         if ingredient_id is not None:
-            ingredient_id_counts[ingredient_id] = ingredient_id_counts.get(ingredient_id, 0) + 1
+            ingredient_id_counts[ingredient_id] = (
+                ingredient_id_counts.get(ingredient_id, 0) + 1
+            )
 
     # Return list of ingredient_ids that appear more than once
     duplicates = [ing_id for ing_id, count in ingredient_id_counts.items() if count > 1]
@@ -59,7 +61,8 @@ async def search_recipes(
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     limit: int = Query(20, ge=1, le=1000, description="Number of items per page"),
     sort_by: str = Query(
-        "name", description="Sort field: name, created_at, avg_rating, rating_count, random"
+        "name",
+        description="Sort field: name, created_at, avg_rating, rating_count, random",
     ),
     sort_order: str = Query("asc", description="Sort order: asc, desc"),
     cursor: Optional[str] = Query(None, description="Cursor for pagination"),
@@ -70,7 +73,8 @@ async def search_recipes(
         None, description="Maximum rating (type depends on rating_type)", ge=0, le=5
     ),
     rating_type: str = Query(
-        "average", description="Rating filter type: 'average' (avg_rating) or 'user' (user's personal rating)"
+        "average",
+        description="Rating filter type: 'average' (avg_rating) or 'user' (user's personal rating)",
     ),
     tags: Optional[str] = Query(None, description="Comma-separated list of tags"),
     ingredients: Optional[str] = Query(
@@ -92,7 +96,13 @@ async def search_recipes(
         )
 
         # Validate sort parameters
-        valid_sort_fields = ["name", "created_at", "avg_rating", "rating_count", "random"]
+        valid_sort_fields = [
+            "name",
+            "created_at",
+            "avg_rating",
+            "rating_count",
+            "random",
+        ]
         valid_sort_orders = ["asc", "desc"]
         valid_rating_types = ["average", "user"]
 
@@ -148,7 +158,7 @@ async def search_recipes(
         logger.info(
             f"Database search will be called with limit={limit}, offset={offset}"
         )
-        
+
         # Debug: Log the exact search query being passed to database
         if search_params.get("q"):
             logger.info(f"Search query 'q' parameter: '{search_params['q']}'")
@@ -199,7 +209,8 @@ async def search_recipes_authenticated(
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     limit: int = Query(20, ge=1, le=1000, description="Number of items per page"),
     sort_by: str = Query(
-        "name", description="Sort field: name, created_at, avg_rating, rating_count, random"
+        "name",
+        description="Sort field: name, created_at, avg_rating, rating_count, random",
     ),
     sort_order: str = Query("asc", description="Sort order: asc, desc"),
     cursor: Optional[str] = Query(None, description="Cursor for pagination"),
@@ -210,7 +221,8 @@ async def search_recipes_authenticated(
         None, description="Maximum rating (type depends on rating_type)", ge=0, le=5
     ),
     rating_type: str = Query(
-        "average", description="Rating filter type: 'average' (avg_rating) or 'user' (user's personal rating)"
+        "average",
+        description="Rating filter type: 'average' (avg_rating) or 'user' (user's personal rating)",
     ),
     tags: Optional[str] = Query(None, description="Comma-separated list of tags"),
     ingredients: Optional[str] = Query(
@@ -443,24 +455,36 @@ async def bulk_upload_recipes(
 
         # Defensive check: ensure duplicate_names is a dict
         if not isinstance(duplicate_names, dict):
-            logger.error(f"check_recipe_names_batch returned {type(duplicate_names)} instead of dict: {duplicate_names}")
-            raise DatabaseException(f"Internal error: batch recipe name validation returned invalid type {type(duplicate_names)}")
+            logger.error(
+                f"check_recipe_names_batch returned {type(duplicate_names)} instead of dict: {duplicate_names}"
+            )
+            raise DatabaseException(
+                f"Internal error: batch recipe name validation returned invalid type {type(duplicate_names)}"
+            )
 
         # Batch validate ingredients
         valid_ingredients = db.search_ingredients_batch(all_ingredient_names)
 
         # Defensive check: ensure valid_ingredients is a dict
         if not isinstance(valid_ingredients, dict):
-            logger.error(f"search_ingredients_batch returned {type(valid_ingredients)} instead of dict: {valid_ingredients}")
-            raise DatabaseException(f"Internal error: batch ingredient validation returned invalid type {type(valid_ingredients)}")
+            logger.error(
+                f"search_ingredients_batch returned {type(valid_ingredients)} instead of dict: {valid_ingredients}"
+            )
+            raise DatabaseException(
+                f"Internal error: batch ingredient validation returned invalid type {type(valid_ingredients)}"
+            )
 
         # Batch validate units
         valid_units = db.validate_units_batch(all_unit_names)
 
         # Defensive check: ensure valid_units is a dict
         if not isinstance(valid_units, dict):
-            logger.error(f"validate_units_batch returned {type(valid_units)} instead of dict: {valid_units}")
-            raise DatabaseException(f"Internal error: batch unit validation returned invalid type {type(valid_units)}")
+            logger.error(
+                f"validate_units_batch returned {type(valid_units)} instead of dict: {valid_units}"
+            )
+            raise DatabaseException(
+                f"Internal error: batch unit validation returned invalid type {type(valid_units)}"
+            )
 
         batch_validation_duration = time.time() - batch_validation_start
         logger.info(f"Batch validation completed in {batch_validation_duration:.3f}s")
@@ -482,7 +506,10 @@ async def bulk_upload_recipes(
                 recipe_validation_start = time.time()
                 logger.debug(f"Validating recipe {idx}: {recipe_data.name}")
 
-                if recipe_data.name and recipe_data.name.lower().strip() in duplicate_payload_names:
+                if (
+                    recipe_data.name
+                    and recipe_data.name.lower().strip() in duplicate_payload_names
+                ):
                     validation_errors.append(
                         BulkUploadValidationError(
                             recipe_index=idx,
@@ -547,7 +574,10 @@ async def bulk_upload_recipes(
                             break
 
                 # Check for duplicate ingredients in this recipe (by ingredient_name)
-                ingredient_names = [ing.ingredient_name.lower().strip() for ing in recipe_data.ingredients]
+                ingredient_names = [
+                    ing.ingredient_name.lower().strip()
+                    for ing in recipe_data.ingredients
+                ]
                 seen_names = set()
                 duplicate_ingredient_names = []
                 for name in ingredient_names:
@@ -578,7 +608,7 @@ async def bulk_upload_recipes(
                 # Log detailed error for debugging
                 logger.error(
                     f"Validation error for recipe {idx} ('{recipe_data.name}'): {type(e).__name__}: {str(e)}",
-                    exc_info=True
+                    exc_info=True,
                 )
                 validation_errors.append(
                     BulkUploadValidationError(
@@ -678,7 +708,9 @@ async def bulk_upload_recipes(
             for created_recipe in created_recipes:
                 uploaded_recipes.append(RecipeResponse(**created_recipe))
 
-            logger.info(f"Successfully created {len(created_recipes)} recipes in bulk transaction")
+            logger.info(
+                f"Successfully created {len(created_recipes)} recipes in bulk transaction"
+            )
 
         except Exception as e:
             logger.error(f"Error in bulk recipe creation: {str(e)}")

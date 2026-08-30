@@ -2,7 +2,7 @@ import { api } from './api.js';
 import { isAuthenticated } from './auth.js';
 
 // Define these functions in the global scope so they can be accessed from HTML
-window.editIngredient = async function(id) {
+window.editIngredient = async function (id) {
     // Check editor permissions first
     if (!api.isEditor()) {
         alert('Editor access required. Only editors and admins can edit ingredients.');
@@ -25,14 +25,15 @@ window.editIngredient = async function(id) {
         document.getElementById('ingredient-url').value = ingredient.url || '';
         document.getElementById('ingredient-percent-abv').value = ingredient.percent_abv ?? '';
         document.getElementById('ingredient-sugar-g-per-l').value = ingredient.sugar_g_per_l ?? '';
-        document.getElementById('ingredient-acid-g-per-l').value = ingredient.titratable_acidity_g_per_l ?? '';
-        
+        document.getElementById('ingredient-acid-g-per-l').value =
+            ingredient.titratable_acidity_g_per_l ?? '';
+
         // Set allow_substitution checkbox
         const allowSubstitutionCheckbox = document.getElementById('ingredient-allow-substitution');
         if (allowSubstitutionCheckbox) {
             allowSubstitutionCheckbox.checked = ingredient.allow_substitution || false;
         }
-        
+
         // Set parent ingredient if it exists
         if (ingredient.parent_id) {
             try {
@@ -62,7 +63,7 @@ window.editIngredient = async function(id) {
     }
 };
 
-window.deleteIngredient = async function(id) {
+window.deleteIngredient = async function (id) {
     // Check editor permissions first
     if (!api.isEditor()) {
         alert('Editor access required. Only editors and admins can delete ingredients.');
@@ -83,18 +84,18 @@ window.deleteIngredient = async function(id) {
 };
 
 // Make loadIngredients accessible globally
-window.loadIngredients = async function() {
+window.loadIngredients = async function () {
     const ingredientsContainer = document.getElementById('ingredients-container');
     const loadingIndicator = document.getElementById('parent-loading-indicator');
     const searchStatus = document.getElementById('parent-search-status');
-    
+
     try {
         // Show loading state
         if (loadingIndicator) loadingIndicator.classList.add('active');
         if (searchStatus) searchStatus.classList.add('active');
-        
+
         window.availableIngredients = await api.getIngredients();
-        
+
         // Call displayIngredients if it exists in window or current scope
         if (typeof window.displayIngredients === 'function') {
             window.displayIngredients(window.availableIngredients);
@@ -107,8 +108,8 @@ window.loadIngredients = async function() {
                 ingredientsContainer.innerHTML = '<p>No ingredients found.</p>';
                 return;
             }
-            
-            window.availableIngredients.forEach(ingredient => {
+
+            window.availableIngredients.forEach((ingredient) => {
                 const card = document.createElement('div');
                 card.className = 'ingredient-card';
                 card.innerHTML = `
@@ -122,7 +123,7 @@ window.loadIngredients = async function() {
                 ingredientsContainer.appendChild(card);
             });
         }
-        
+
         // Update parent options if the function exists
         if (typeof window.updateParentOptions === 'function') {
             window.updateParentOptions(window.availableIngredients);
@@ -130,7 +131,8 @@ window.loadIngredients = async function() {
     } catch (error) {
         console.error('Error loading ingredients:', error);
         if (ingredientsContainer) {
-            ingredientsContainer.innerHTML = '<p>Error loading ingredients. Please try again later.</p>';
+            ingredientsContainer.innerHTML =
+                '<p>Error loading ingredients. Please try again later.</p>';
         }
     } finally {
         // Hide loading state
@@ -143,7 +145,7 @@ window.loadIngredients = async function() {
 function updatePageBasedOnAuth() {
     const titleElement = document.getElementById('ingredients-title');
     const formSection = document.querySelector('.ingredient-form');
-    
+
     if (api.isEditor()) {
         if (titleElement) titleElement.textContent = 'Manage Ingredients';
         if (formSection) formSection.style.display = 'block';
@@ -158,11 +160,11 @@ function showNotification(message, type = 'info') {
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
     notification.textContent = message;
-    
+
     // Add to the DOM
     const container = document.querySelector('.container') || document.body;
     container.insertBefore(notification, container.firstChild);
-    
+
     // Auto-remove after 5 seconds
     setTimeout(() => {
         notification.classList.add('fade-out');
@@ -173,10 +175,10 @@ function showNotification(message, type = 'info') {
 document.addEventListener('DOMContentLoaded', () => {
     // Authentication is now initialized in common.js
     // initAuth(); // Remove this line
-    
+
     // Update page title and form visibility based on authentication
     updatePageBasedOnAuth();
-    
+
     const ingredientForm = document.getElementById('ingredient-form');
     const ingredientsContainer = document.getElementById('ingredients-container');
     const searchInput = document.getElementById('ingredient-search');
@@ -185,7 +187,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const parentAutocompleteDropdown = document.getElementById('parent-autocomplete-dropdown');
     const searchStatus = document.getElementById('parent-search-status');
 
-    if (!ingredientForm || !ingredientsContainer || !searchInput || !parentSearchInput || !parentSelect || !parentAutocompleteDropdown) {
+    if (
+        !ingredientForm ||
+        !ingredientsContainer ||
+        !searchInput ||
+        !parentSearchInput ||
+        !parentSelect ||
+        !parentAutocompleteDropdown
+    ) {
         console.error('Required elements not found in the DOM');
         return;
     }
@@ -199,30 +208,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Check editor permissions first
         if (!api.isEditor()) {
-            alert('Editor access required. Only editors and admins can create or edit ingredients.');
+            alert(
+                'Editor access required. Only editors and admins can create or edit ingredients.',
+            );
             return;
         }
 
         const name = document.getElementById('ingredient-name').value.trim();
         const description = document.getElementById('ingredient-description').value.trim();
         const url = document.getElementById('ingredient-url').value.trim();
-        const percentAbv = parseNumberInput(document.getElementById('ingredient-percent-abv').value);
-        const sugarGPerL = parseNumberInput(document.getElementById('ingredient-sugar-g-per-l').value);
-        const acidGPerL = parseNumberInput(document.getElementById('ingredient-acid-g-per-l').value);
+        const percentAbv = parseNumberInput(
+            document.getElementById('ingredient-percent-abv').value,
+        );
+        const sugarGPerL = parseNumberInput(
+            document.getElementById('ingredient-sugar-g-per-l').value,
+        );
+        const acidGPerL = parseNumberInput(
+            document.getElementById('ingredient-acid-g-per-l').value,
+        );
 
         // Get allow_substitution checkbox value
         const allowSubstitutionCheckbox = document.getElementById('ingredient-allow-substitution');
-        const allowSubstitution = allowSubstitutionCheckbox ? allowSubstitutionCheckbox.checked : false;
+        const allowSubstitution = allowSubstitutionCheckbox
+            ? allowSubstitutionCheckbox.checked
+            : false;
 
         // Find parent ingredient id based on the search input value
         let parentId = null;
         const parentName = parentSearchInput.value.trim();
-        
+
         if (parentName) {
             const parentIngredient = window.availableIngredients.find(
-                ing => ing.name.toLowerCase() === parentName.toLowerCase()
+                (ing) => ing.name.toLowerCase() === parentName.toLowerCase(),
             );
-            
+
             if (parentIngredient) {
                 parentId = parentIngredient.id;
             }
@@ -236,7 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
             url: url || null,
             percent_abv: percentAbv,
             sugar_g_per_l: sugarGPerL,
-            titratable_acidity_g_per_l: acidGPerL
+            titratable_acidity_g_per_l: acidGPerL,
         };
 
         try {
@@ -282,19 +301,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!searchTerm.trim()) {
             // Show all items when search is empty
-            hierarchyItems.forEach(item => {
+            hierarchyItems.forEach((item) => {
                 item.style.display = 'block';
             });
             return;
         }
 
         // Filter hierarchy items based on search term
-        hierarchyItems.forEach(item => {
+        hierarchyItems.forEach((item) => {
             const nameElement = item.querySelector('.tree-name');
             const descriptionElement = item.querySelector('.tree-description');
-            
+
             const name = nameElement ? nameElement.textContent.toLowerCase() : '';
-            const description = descriptionElement ? descriptionElement.textContent.toLowerCase() : '';
+            const description = descriptionElement
+                ? descriptionElement.textContent.toLowerCase()
+                : '';
 
             if (name.includes(searchTerm) || description.includes(searchTerm)) {
                 item.style.display = 'block';
@@ -322,9 +343,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setupParentAutocomplete();
 
     // Function to update parent ingredient options in the select
-    window.updateParentOptions = function(ingredients) {
+    window.updateParentOptions = function (ingredients) {
         parentSelect.innerHTML = '<option value="">None</option>';
-        ingredients.forEach(ingredient => {
+        ingredients.forEach((ingredient) => {
             const option = document.createElement('option');
             option.value = ingredient.id;
             option.textContent = ingredient.name;
@@ -333,7 +354,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Display ingredients in hierarchical tree view
-    window.displayIngredients = function(ingredients) {
+    window.displayIngredients = function (ingredients) {
         ingredientsContainer.innerHTML = '';
 
         if (ingredients.length === 0) {
@@ -344,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Build hierarchy structure
         const hierarchy = buildHierarchy(ingredients);
         ingredientsContainer.innerHTML = renderHierarchyHTML(hierarchy, 0);
-        
+
         // Add click listeners for expand/collapse
         bindToggleEvents();
     };
@@ -355,17 +376,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const rootIngredients = [];
 
         // First pass: create map of all ingredients
-        ingredients.forEach(ingredient => {
+        ingredients.forEach((ingredient) => {
             ingredientMap.set(ingredient.id, {
                 ...ingredient,
-                children: []
+                children: [],
             });
         });
 
         // Second pass: build parent-child relationships
-        ingredients.forEach(ingredient => {
+        ingredients.forEach((ingredient) => {
             const parentId = ingredient.parent_id;
-            
+
             if (parentId && ingredientMap.has(parentId)) {
                 ingredientMap.get(parentId).children.push(ingredientMap.get(ingredient.id));
             } else {
@@ -376,7 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Sort each level by name
         const sortHierarchy = (items) => {
             items.sort((a, b) => a.name.localeCompare(b.name));
-            items.forEach(item => {
+            items.forEach((item) => {
                 if (item.children.length > 0) {
                     sortHierarchy(item.children);
                 }
@@ -393,20 +414,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const isRoot = level === 0;
         const listClass = isRoot ? 'hierarchy-root' : 'hierarchy-children';
-        
+
         let html = `<ul class="${listClass}" style="margin-left: ${level * 20}px;">`;
-        
-        hierarchy.forEach(ingredient => {
+
+        hierarchy.forEach((ingredient) => {
             const hasChildren = ingredient.children && ingredient.children.length > 0;
-            
+
             // Only show action buttons if user is an editor/admin
-            const actionButtons = api.isEditor() ? `
+            const actionButtons = api.isEditor()
+                ? `
                 <div class="tree-actions">
                     <button class="btn-small btn-outline" onclick="editIngredient(${ingredient.id})">Edit</button>
                     <button class="btn-small btn-outline-danger" onclick="deleteIngredient(${ingredient.id})">Delete</button>
                 </div>
-            ` : '';
-            
+            `
+                : '';
+
             html += `
                 <li class="hierarchy-item ${hasChildren ? 'has-children' : ''}">
                     <div class="ingredient-tree-row">
@@ -424,7 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </li>
             `;
         });
-        
+
         html += '</ul>';
         return html;
     }
@@ -432,15 +455,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Bind toggle events for expand/collapse
     function bindToggleEvents() {
         // Make toggle function globally accessible
-        window.toggleHierarchyItem = function(button) {
+        window.toggleHierarchyItem = function (button) {
             const item = button.closest('.hierarchy-item');
             const children = item.querySelector('.tree-children');
-            
+
             if (children) {
                 const isExpanded = children.style.display !== 'none';
                 children.style.display = isExpanded ? 'none' : 'block';
                 button.textContent = isExpanded ? '▶' : '▼';
-                
+
                 // Update has-children class for styling
                 item.classList.toggle('expanded', !isExpanded);
             }
@@ -452,15 +475,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // Function to update the autocomplete dropdown for parent
         function updateParentAutocomplete() {
             const searchTerm = parentSearchInput.value.toLowerCase();
-            
+
             // Clear the dropdown
             parentAutocompleteDropdown.innerHTML = '';
-            
+
             if (searchTerm.length === 0) {
                 parentAutocompleteDropdown.style.display = 'none';
                 return;
             }
-            
+
             // Ensure we have access to the ingredients
             if (!window.availableIngredients || !Array.isArray(window.availableIngredients)) {
                 console.log('Waiting for ingredients to load...');
@@ -470,63 +493,63 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 return;
             }
-            
+
             // Hide loading status if ingredients are loaded
             if (searchStatus) {
                 searchStatus.classList.remove('active');
             }
-            
+
             console.log('Searching for:', searchTerm, 'in', window.availableIngredients);
-            
+
             // Find matching ingredients
-            const matches = window.availableIngredients.filter(ingredient => 
-                ingredient.name.toLowerCase().includes(searchTerm)
+            const matches = window.availableIngredients.filter((ingredient) =>
+                ingredient.name.toLowerCase().includes(searchTerm),
             );
-            
+
             console.log('Matches found:', matches.length, matches);
-            
+
             if (matches.length === 0) {
                 parentAutocompleteDropdown.style.display = 'none';
                 return;
             }
-            
+
             // Add matches to dropdown
             matches.forEach((ingredient, index) => {
                 const item = document.createElement('div');
                 item.className = 'autocomplete-item';
-                
+
                 // Highlight the matching part
                 const highlightedText = ingredient.name.replace(
                     new RegExp(searchTerm, 'gi'),
-                    match => `<strong>${match}</strong>`
+                    (match) => `<strong>${match}</strong>`,
                 );
                 item.innerHTML = highlightedText;
-                
+
                 item.addEventListener('click', () => {
                     parentSearchInput.value = ingredient.name;
                     parentSelect.value = ingredient.id;
                     parentAutocompleteDropdown.style.display = 'none';
                 });
-                
+
                 item.addEventListener('mouseenter', () => {
                     setActiveParentItem(index);
                 });
-                
+
                 parentAutocompleteDropdown.appendChild(item);
             });
-            
+
             // Show the dropdown
             parentAutocompleteDropdown.style.display = 'block';
             activeParentIndex = -1;
         }
-        
+
         // Function to set the active parent item
         function setActiveParentItem(index) {
             const items = parentAutocompleteDropdown.querySelectorAll('.autocomplete-item');
-            
+
             // Remove active class from all items
-            items.forEach(item => item.classList.remove('active'));
-            
+            items.forEach((item) => item.classList.remove('active'));
+
             // Set active class on the selected item
             if (index >= 0 && index < items.length) {
                 activeParentIndex = index;
@@ -535,33 +558,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 items[index].scrollIntoView({ block: 'nearest' });
             }
         }
-        
+
         // Function to select the current active parent item
         function selectActiveParentItem() {
             const items = parentAutocompleteDropdown.querySelectorAll('.autocomplete-item');
             if (activeParentIndex >= 0 && activeParentIndex < items.length) {
                 const selectedValue = items[activeParentIndex].textContent;
                 parentSearchInput.value = selectedValue;
-                
+
                 // Find and set the corresponding parent ID
-                const parent = window.availableIngredients.find(ing => ing.name === selectedValue);
+                const parent = window.availableIngredients.find(
+                    (ing) => ing.name === selectedValue,
+                );
                 if (parent) {
                     parentSelect.value = parent.id;
                 }
-                
+
                 parentAutocompleteDropdown.style.display = 'none';
             }
         }
-        
+
         // Input event listener for parent search
-        parentSearchInput.addEventListener('input', function() {
+        parentSearchInput.addEventListener('input', function () {
             console.log('Parent search input changed:', this.value);
             updateParentAutocomplete();
         });
-        
+
         // Focus event listener for parent search
         parentSearchInput.addEventListener('focus', updateParentAutocomplete);
-        
+
         // Blur event listener for parent search
         parentSearchInput.addEventListener('blur', () => {
             // Delay hiding to allow click events on dropdown items
@@ -569,11 +594,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 parentAutocompleteDropdown.style.display = 'none';
             }, 200);
         });
-        
+
         // Keyboard navigation for parent search
         parentSearchInput.addEventListener('keydown', (e) => {
             const items = parentAutocompleteDropdown.querySelectorAll('.autocomplete-item');
-            
+
             // Down arrow
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
@@ -623,4 +648,4 @@ document.addEventListener('DOMContentLoaded', () => {
         const parsed = Number(value);
         return Number.isFinite(parsed) ? parsed : null;
     }
-}); 
+});

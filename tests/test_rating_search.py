@@ -236,7 +236,9 @@ class TestRatingSearch:
         # Should return 400 error for invalid parameter type
         assert response.status_code in [200, 400, 422]
 
-    async def test_search_recipes_rating_filter_vs_no_filter(self, test_client_with_data):
+    async def test_search_recipes_rating_filter_vs_no_filter(
+        self, test_client_with_data
+    ):
         """Test that rating filtering actually filters results"""
         client, app = test_client_with_data
         # Get all recipes (no filter)
@@ -255,7 +257,9 @@ class TestRatingSearch:
             <= all_data["pagination"]["total_count"]
         )
 
-    async def test_search_recipes_multiple_rating_parameters(self, test_client_with_data):
+    async def test_search_recipes_multiple_rating_parameters(
+        self, test_client_with_data
+    ):
         """Test with multiple min_rating or max_rating parameters"""
         client, app = test_client_with_data
         # This tests how the API handles duplicate parameters

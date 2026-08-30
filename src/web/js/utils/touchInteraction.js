@@ -70,7 +70,7 @@ export function createTouchHandlers(options = {}) {
 
     return {
         touchstart: handleTouchStart,
-        touchend: handleTouchEnd
+        touchend: handleTouchEnd,
     };
 }
 
@@ -122,11 +122,15 @@ export function createMobileTooltipManager(tooltipElement) {
 
     // Hide tooltip when tapping elsewhere
     function setupDismissHandler() {
-        document.addEventListener('touchstart', (event) => {
-            if (!tooltipElement.contains(event.target)) {
-                hide();
-            }
-        }, { passive: true });
+        document.addEventListener(
+            'touchstart',
+            (event) => {
+                if (!tooltipElement.contains(event.target)) {
+                    hide();
+                }
+            },
+            { passive: true },
+        );
     }
 
     return { show, hide, setupDismissHandler };

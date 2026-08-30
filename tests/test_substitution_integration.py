@@ -26,116 +26,149 @@ class TestSubstitutionIntegration:
         3. Add user ingredients (specific brands)
         4. Verify search finds appropriate recipes
         """
-        
+
         # Step 1: Create bourbon ingredient hierarchy
         print("\n=== Creating bourbon hierarchy ===")
-        
+
         # Base whiskey category - allows substitution
-        whiskey = db.create_ingredient({
-            "name": "Test Whiskey Category",
-            "description": "Base whiskey category for testing",
-            "parent_id": None,
-            "allow_substitution": True,  # Allow brand substitution
-            "created_by": "test-user"
-        })
-        print(f"Created Test Whiskey Category: ID={whiskey['id']}, allow_sub={whiskey['allow_substitution']}")
+        whiskey = db.create_ingredient(
+            {
+                "name": "Test Whiskey Category",
+                "description": "Base whiskey category for testing",
+                "parent_id": None,
+                "allow_substitution": True,  # Allow brand substitution
+                "created_by": "test-user",
+            }
+        )
+        print(
+            f"Created Test Whiskey Category: ID={whiskey['id']}, allow_sub={whiskey['allow_substitution']}"
+        )
 
         # Bourbon subcategory - allows substitution
-        bourbon = db.create_ingredient({
-            "name": "Test Bourbon Category",
-            "description": "American bourbon whiskey for testing",
-            "parent_id": whiskey["id"],
-            "allow_substitution": True,
-            "created_by": "test-user"
-        })
-        print(f"Created Test Bourbon Category: ID={bourbon['id']}, allow_sub={bourbon['allow_substitution']}, parent_id={bourbon['parent_id']}")
+        bourbon = db.create_ingredient(
+            {
+                "name": "Test Bourbon Category",
+                "description": "American bourbon whiskey for testing",
+                "parent_id": whiskey["id"],
+                "allow_substitution": True,
+                "created_by": "test-user",
+            }
+        )
+        print(
+            f"Created Test Bourbon Category: ID={bourbon['id']}, allow_sub={bourbon['allow_substitution']}, parent_id={bourbon['parent_id']}"
+        )
 
         # Specific bourbon brands
-        makers = db.create_ingredient({
-            "name": "Test Maker's Mark",
-            "description": "Premium wheated bourbon for testing",
-            "parent_id": bourbon["id"],
-            "allow_substitution": True,
-            "created_by": "test-user"
-        })
-        print(f"Created Test Maker's Mark: ID={makers['id']}, allow_sub={makers['allow_substitution']}, parent_id={makers['parent_id']}")
+        makers = db.create_ingredient(
+            {
+                "name": "Test Maker's Mark",
+                "description": "Premium wheated bourbon for testing",
+                "parent_id": bourbon["id"],
+                "allow_substitution": True,
+                "created_by": "test-user",
+            }
+        )
+        print(
+            f"Created Test Maker's Mark: ID={makers['id']}, allow_sub={makers['allow_substitution']}, parent_id={makers['parent_id']}"
+        )
 
-        buffalo = db.create_ingredient({
-            "name": "Test Buffalo Trace",
-            "description": "Classic bourbon whiskey for testing",
-            "parent_id": bourbon["id"],
-            "allow_substitution": True,
-            "created_by": "test-user"
-        })
-        print(f"Created Test Buffalo Trace: ID={buffalo['id']}, allow_sub={buffalo['allow_substitution']}, parent_id={buffalo['parent_id']}")
-        
+        buffalo = db.create_ingredient(
+            {
+                "name": "Test Buffalo Trace",
+                "description": "Classic bourbon whiskey for testing",
+                "parent_id": bourbon["id"],
+                "allow_substitution": True,
+                "created_by": "test-user",
+            }
+        )
+        print(
+            f"Created Test Buffalo Trace: ID={buffalo['id']}, allow_sub={buffalo['allow_substitution']}, parent_id={buffalo['parent_id']}"
+        )
+
         # Step 2: Create recipes with different bourbon specificity
         print("\n=== Creating recipes ===")
-        
+
         # Recipe 1: Calls for general "Bourbon" category
-        old_fashioned = db.create_recipe({
-            "name": "Old Fashioned",
-            "instructions": "Muddle sugar with bitters, add bourbon, stir with ice",
-            "description": "Classic whiskey cocktail - any bourbon works",
-            "created_by": "test-user",
-            "ingredients": [
-                {"ingredient_id": bourbon["id"], "amount": 2.0, "unit_id": 1}
-            ]
-        })
-        print(f"Created Old Fashioned recipe calling for Test Bourbon Category (ID={bourbon['id']})")
-        
+        old_fashioned = db.create_recipe(
+            {
+                "name": "Old Fashioned",
+                "instructions": "Muddle sugar with bitters, add bourbon, stir with ice",
+                "description": "Classic whiskey cocktail - any bourbon works",
+                "created_by": "test-user",
+                "ingredients": [
+                    {"ingredient_id": bourbon["id"], "amount": 2.0, "unit_id": 1}
+                ],
+            }
+        )
+        print(
+            f"Created Old Fashioned recipe calling for Test Bourbon Category (ID={bourbon['id']})"
+        )
+
         # Recipe 2: Calls for specific "Maker's Mark"
-        makers_manhattan = db.create_recipe({
-            "name": "Test Maker's Manhattan", 
-            "instructions": "Stir Test Maker's Mark with sweet vermouth and bitters",
-            "description": "Manhattan made specifically with Test Maker's Mark",
-            "created_by": "test-user",
-            "ingredients": [
-                {"ingredient_id": makers["id"], "amount": 2.0, "unit_id": 1}
-            ]
-        })
-        print(f"Created Test Maker's Manhattan recipe calling for Test Maker's Mark (ID={makers['id']})")
-        
+        makers_manhattan = db.create_recipe(
+            {
+                "name": "Test Maker's Manhattan",
+                "instructions": "Stir Test Maker's Mark with sweet vermouth and bitters",
+                "description": "Manhattan made specifically with Test Maker's Mark",
+                "created_by": "test-user",
+                "ingredients": [
+                    {"ingredient_id": makers["id"], "amount": 2.0, "unit_id": 1}
+                ],
+            }
+        )
+        print(
+            f"Created Test Maker's Manhattan recipe calling for Test Maker's Mark (ID={makers['id']})"
+        )
+
         # Step 3: Set up user inventory
         print("\n=== Setting up user inventory ===")
-        
+
         user_id = "test-bourbon-user"
-        
+
         # User only has Buffalo Trace bourbon
         db.add_user_ingredient(user_id, buffalo["id"])
         print(f"Added Test Buffalo Trace to user inventory")
-        
+
         # Step 4: Test recipe search with substitution
         print("\n=== Testing recipe search ===")
-        
+
         # Search for recipes user can make
         search_results = db.search_recipes_paginated(
-            search_params={"inventory": True},
-            limit=10,
-            offset=0,
-            user_id=user_id
+            search_params={"inventory": True}, limit=10, offset=0, user_id=user_id
         )
-        
+
         print(f"Found {len(search_results)} recipes")
         for recipe in search_results:
             print(f"  - {recipe['name']}")
-        
+
         # Verify results
-        recipe_names = [r['name'] for r in search_results]
-        
+        recipe_names = [r["name"] for r in search_results]
+
         # NOTE: This test currently may not work as expected because substitution logic is not yet implemented in recipe search
         # TODO: Implement substitution logic in search_recipes_paginated
-        
+
         # Should find Old Fashioned (calls for Bourbon category, user has Buffalo Trace brand)
-        if "Old Fashioned" not in recipe_names or "Test Maker's Manhattan" not in recipe_names or len(search_results) != 2:
-            pytest.skip("Substitution logic not yet implemented in recipe search - this test documents expected behavior")
-            
-        assert "Old Fashioned" in recipe_names, "Should find Old Fashioned - recipe wants bourbon category, user has bourbon brand"
-        
+        if (
+            "Old Fashioned" not in recipe_names
+            or "Test Maker's Manhattan" not in recipe_names
+            or len(search_results) != 2
+        ):
+            pytest.skip(
+                "Substitution logic not yet implemented in recipe search - this test documents expected behavior"
+            )
+
+        assert "Old Fashioned" in recipe_names, (
+            "Should find Old Fashioned - recipe wants bourbon category, user has bourbon brand"
+        )
+
         # Should find Maker's Manhattan (calls for Maker's Mark, user has Buffalo Trace - both are bourbon brands with substitution_level 1)
-        assert "Test Maker's Manhattan" in recipe_names, "Should find Test Maker's Manhattan - substitution allows bourbon brands to substitute for each other"
-        
-        assert len(search_results) == 2, f"Should find exactly 2 recipes, found {len(search_results)}"
+        assert "Test Maker's Manhattan" in recipe_names, (
+            "Should find Test Maker's Manhattan - substitution allows bourbon brands to substitute for each other"
+        )
+
+        assert len(search_results) == 2, (
+            f"Should find exactly 2 recipes, found {len(search_results)}"
+        )
 
     def test_amaro_no_substitution_workflow(self, db: Database):
         """
@@ -145,95 +178,109 @@ class TestSubstitutionIntegration:
         3. User has different amaro
         4. Verify recipe is NOT found
         """
-        
+
         print("\n=== Creating amaro hierarchy (no substitution) ===")
-        
+
         # Amaro category - no substitution allowed
-        amaro = db.create_ingredient({
-            "name": "Amaro",
-            "description": "Italian herbal liqueurs - each unique",
-            "parent_id": None,
-            "allow_substitution": False,  # No substitution
-            "created_by": "test-user"
-        })
-        print(f"Created Amaro: ID={amaro['id']}, allow_sub={amaro['allow_substitution']}")
+        amaro = db.create_ingredient(
+            {
+                "name": "Amaro",
+                "description": "Italian herbal liqueurs - each unique",
+                "parent_id": None,
+                "allow_substitution": False,  # No substitution
+                "created_by": "test-user",
+            }
+        )
+        print(
+            f"Created Amaro: ID={amaro['id']}, allow_sub={amaro['allow_substitution']}"
+        )
 
         # Specific amaro types
-        nonino = db.create_ingredient({
-            "name": "Amaro Nonino",
-            "description": "Light, elegant amaro with grape brandy base",
-            "parent_id": amaro["id"],
-            "allow_substitution": False,
-            "created_by": "test-user"
-        })
+        nonino = db.create_ingredient(
+            {
+                "name": "Amaro Nonino",
+                "description": "Light, elegant amaro with grape brandy base",
+                "parent_id": amaro["id"],
+                "allow_substitution": False,
+                "created_by": "test-user",
+            }
+        )
 
-        montenegro = db.create_ingredient({
-            "name": "Amaro Montenegro",
-            "description": "Medium-bodied, herbal amaro",
-            "parent_id": amaro["id"],
-            "allow_substitution": False,
-            "created_by": "test-user"
-        })
+        montenegro = db.create_ingredient(
+            {
+                "name": "Amaro Montenegro",
+                "description": "Medium-bodied, herbal amaro",
+                "parent_id": amaro["id"],
+                "allow_substitution": False,
+                "created_by": "test-user",
+            }
+        )
 
-        print(f"Created Amaro Nonino: ID={nonino['id']}, allow_sub={nonino['allow_substitution']}")
-        print(f"Created Amaro Montenegro: ID={montenegro['id']}, allow_sub={montenegro['allow_substitution']}")
-        
+        print(
+            f"Created Amaro Nonino: ID={nonino['id']}, allow_sub={nonino['allow_substitution']}"
+        )
+        print(
+            f"Created Amaro Montenegro: ID={montenegro['id']}, allow_sub={montenegro['allow_substitution']}"
+        )
+
         # Create recipe requiring specific Amaro Nonino
-        paper_plane = db.create_recipe({
-            "name": "Paper Plane",
-            "instructions": "Shake equal parts bourbon, Aperol, Amaro Nonino, lemon juice",
-            "description": "Modern classic - requires Amaro Nonino specifically",
-            "created_by": "test-user",
-            "ingredients": [
-                {"ingredient_id": nonino["id"], "amount": 0.75, "unit_id": 1}
-            ]
-        })
+        paper_plane = db.create_recipe(
+            {
+                "name": "Paper Plane",
+                "instructions": "Shake equal parts bourbon, Aperol, Amaro Nonino, lemon juice",
+                "description": "Modern classic - requires Amaro Nonino specifically",
+                "created_by": "test-user",
+                "ingredients": [
+                    {"ingredient_id": nonino["id"], "amount": 0.75, "unit_id": 1}
+                ],
+            }
+        )
         print(f"Created Paper Plane recipe requiring Amaro Nonino (ID={nonino['id']})")
-        
+
         # User has different amaro
         user_id = "test-amaro-user"
         db.add_user_ingredient(user_id, montenegro["id"])
         print(f"User has Amaro Montenegro (ID={montenegro['id']})")
-        
+
         # Search for recipes
         search_results = db.search_recipes_paginated(
-            search_params={"inventory": True},
-            limit=10,
-            offset=0,
-            user_id=user_id
+            search_params={"inventory": True}, limit=10, offset=0, user_id=user_id
         )
-        
+
         print(f"Found {len(search_results)} recipes")
-        
+
         # Should NOT find Paper Plane because no substitution allowed
         # NOTE: This test currently FAILS because substitution logic is not yet implemented in recipe search
         # TODO: Implement substitution logic in search_recipes_paginated
         if len(search_results) != 0:
-            pytest.skip("Substitution logic not yet implemented in recipe search - this test documents expected behavior")
-        assert len(search_results) == 0, f"Should find 0 recipes (no substitution), but found {len(search_results)}"
-        
+            pytest.skip(
+                "Substitution logic not yet implemented in recipe search - this test documents expected behavior"
+            )
+        assert len(search_results) == 0, (
+            f"Should find 0 recipes (no substitution), but found {len(search_results)}"
+        )
+
         # Now test that exact match works
         print("\n=== Testing exact match ===")
-        
+
         # Give user the exact amaro needed
         db.add_user_ingredient(user_id, nonino["id"])
         print(f"Added Amaro Nonino to user inventory")
-        
+
         # Search again
         search_results = db.search_recipes_paginated(
-            search_params={"inventory": True},
-            limit=10,
-            offset=0,
-            user_id=user_id
+            search_params={"inventory": True}, limit=10, offset=0, user_id=user_id
         )
-        
+
         print(f"Found {len(search_results)} recipes")
         for recipe in search_results:
             print(f"  - {recipe['name']}")
-        
+
         # Should now find Paper Plane
-        assert len(search_results) == 1, f"Should find 1 recipe (exact match), found {len(search_results)}"
-        assert search_results[0]['name'] == "Paper Plane"
+        assert len(search_results) == 1, (
+            f"Should find 1 recipe (exact match), found {len(search_results)}"
+        )
+        assert search_results[0]["name"] == "Paper Plane"
 
     def test_mixed_substitution_recipe(self, db: Database):
         """
@@ -242,93 +289,125 @@ class TestSubstitutionIntegration:
         - Specific amaro (not substitutable)
         User must have compatible bourbon AND exact amaro
         """
-        
+
         print("\n=== Creating mixed substitution test ===")
-        
+
         # Create bourbon hierarchy (substitutable)
-        whiskey_mixed = db.create_ingredient({
-            "name": "Mixed Test Whiskey",
-            "allow_substitution": True,
-            "created_by": "test-user"
-        })
+        whiskey_mixed = db.create_ingredient(
+            {
+                "name": "Mixed Test Whiskey",
+                "allow_substitution": True,
+                "created_by": "test-user",
+            }
+        )
 
-        bourbon_mixed = db.create_ingredient({
-            "name": "Mixed Test Bourbon",
-            "parent_id": whiskey_mixed["id"],
-            "allow_substitution": True,
-            "created_by": "test-user"
-        })
+        bourbon_mixed = db.create_ingredient(
+            {
+                "name": "Mixed Test Bourbon",
+                "parent_id": whiskey_mixed["id"],
+                "allow_substitution": True,
+                "created_by": "test-user",
+            }
+        )
 
-        makers_mixed = db.create_ingredient({
-            "name": "Mixed Test Maker's Mark",
-            "parent_id": bourbon_mixed["id"],
-            "allow_substitution": True,
-            "created_by": "test-user"
-        })
+        makers_mixed = db.create_ingredient(
+            {
+                "name": "Mixed Test Maker's Mark",
+                "parent_id": bourbon_mixed["id"],
+                "allow_substitution": True,
+                "created_by": "test-user",
+            }
+        )
 
-        buffalo_mixed = db.create_ingredient({
-            "name": "Mixed Test Buffalo Trace",
-            "parent_id": bourbon_mixed["id"],
-            "allow_substitution": True,
-            "created_by": "test-user"
-        })
+        buffalo_mixed = db.create_ingredient(
+            {
+                "name": "Mixed Test Buffalo Trace",
+                "parent_id": bourbon_mixed["id"],
+                "allow_substitution": True,
+                "created_by": "test-user",
+            }
+        )
 
         # Create amaro hierarchy (not substitutable)
-        amaro_mixed = db.create_ingredient({
-            "name": "Mixed Test Amaro",
-            "allow_substitution": False,  # No substitution
-            "created_by": "test-user"
-        })
+        amaro_mixed = db.create_ingredient(
+            {
+                "name": "Mixed Test Amaro",
+                "allow_substitution": False,  # No substitution
+                "created_by": "test-user",
+            }
+        )
 
-        nonino_mixed = db.create_ingredient({
-            "name": "Mixed Test Amaro Nonino",
-            "parent_id": amaro_mixed["id"],
-            "allow_substitution": False,
-            "created_by": "test-user"
-        })
+        nonino_mixed = db.create_ingredient(
+            {
+                "name": "Mixed Test Amaro Nonino",
+                "parent_id": amaro_mixed["id"],
+                "allow_substitution": False,
+                "created_by": "test-user",
+            }
+        )
 
-        montenegro_mixed = db.create_ingredient({
-            "name": "Mixed Test Amaro Montenegro",
-            "parent_id": amaro_mixed["id"],
-            "allow_substitution": False,
-            "created_by": "test-user"
-        })
-        
+        montenegro_mixed = db.create_ingredient(
+            {
+                "name": "Mixed Test Amaro Montenegro",
+                "parent_id": amaro_mixed["id"],
+                "allow_substitution": False,
+                "created_by": "test-user",
+            }
+        )
+
         # Create recipe requiring both
-        boulevardier = db.create_recipe({
-            "name": "Boulevardier Variation",
-            "instructions": "Stir bourbon with sweet vermouth and Amaro Nonino",
-            "description": "Bourbon cocktail with specific amaro",
-            "created_by": "test-user",
-            "ingredients": [
-                {"ingredient_id": bourbon_mixed["id"], "amount": 1.5, "unit_id": 1},  # Any bourbon OK
-                {"ingredient_id": nonino_mixed["id"], "amount": 0.5, "unit_id": 1}    # Exact amaro required
-            ]
-        })
-        
+        boulevardier = db.create_recipe(
+            {
+                "name": "Boulevardier Variation",
+                "instructions": "Stir bourbon with sweet vermouth and Amaro Nonino",
+                "description": "Bourbon cocktail with specific amaro",
+                "created_by": "test-user",
+                "ingredients": [
+                    {
+                        "ingredient_id": bourbon_mixed["id"],
+                        "amount": 1.5,
+                        "unit_id": 1,
+                    },  # Any bourbon OK
+                    {
+                        "ingredient_id": nonino_mixed["id"],
+                        "amount": 0.5,
+                        "unit_id": 1,
+                    },  # Exact amaro required
+                ],
+            }
+        )
+
         print(f"Created Boulevardier requiring Bourbon + Amaro Nonino")
-        
+
         # Test 1: User has wrong combination
-        user_id = "test-mixed-user" 
-        
-        db.add_user_ingredient(user_id, buffalo_mixed["id"])     # Different bourbon (should work)
-        db.add_user_ingredient(user_id, montenegro_mixed["id"])  # Wrong amaro (won't work)
-        
-        search_results = db.search_recipes_paginated(search_params={"inventory": True}, limit=10, offset=0, user_id=user_id)
+        user_id = "test-mixed-user"
+
+        db.add_user_ingredient(
+            user_id, buffalo_mixed["id"]
+        )  # Different bourbon (should work)
+        db.add_user_ingredient(
+            user_id, montenegro_mixed["id"]
+        )  # Wrong amaro (won't work)
+
+        search_results = db.search_recipes_paginated(
+            search_params={"inventory": True}, limit=10, offset=0, user_id=user_id
+        )
         print(f"With Buffalo Trace + Montenegro: found {len(search_results)} recipes")
-        
+
         # Should NOT find recipe (wrong amaro)
         assert len(search_results) == 0
-        
+
         # Test 2: Give user correct amaro
-        db.add_user_ingredient(user_id, nonino_mixed["id"])      # Add correct amaro
-        
-        search_results = db.search_recipes_paginated(search_params={"inventory": True}, limit=10, offset=0, user_id=user_id)
+        db.add_user_ingredient(user_id, nonino_mixed["id"])  # Add correct amaro
+
+        search_results = db.search_recipes_paginated(
+            search_params={"inventory": True}, limit=10, offset=0, user_id=user_id
+        )
         print(f"With Buffalo Trace + Nonino: found {len(search_results)} recipes")
-        
+
         # Should NOW find recipe (bourbon substitution works, exact amaro match)
         assert len(search_results) == 1
-        assert search_results[0]['name'] == "Boulevardier Variation"
+        assert search_results[0]["name"] == "Boulevardier Variation"
 
     def test_explicit_allow_substitution(self, db: Database):
         """Test that allow_substitution can be set explicitly for each ingredient"""
@@ -336,36 +415,44 @@ class TestSubstitutionIntegration:
         print("\n=== Testing explicit allow_substitution ===")
 
         # Create parent with allow_substitution=True
-        parent = db.create_ingredient({
-            "name": "Parent Category",
-            "allow_substitution": True,
-            "created_by": "test-user"
-        })
+        parent = db.create_ingredient(
+            {
+                "name": "Parent Category",
+                "allow_substitution": True,
+                "created_by": "test-user",
+            }
+        )
 
         # Create child with allow_substitution=True
-        child = db.create_ingredient({
-            "name": "Child Brand",
-            "parent_id": parent["id"],
-            "allow_substitution": True,
-            "created_by": "test-user"
-        })
+        child = db.create_ingredient(
+            {
+                "name": "Child Brand",
+                "parent_id": parent["id"],
+                "allow_substitution": True,
+                "created_by": "test-user",
+            }
+        )
 
         # Create another child with explicit False
-        child_no_sub = db.create_ingredient({
-            "name": "Child No Substitution",
-            "parent_id": parent["id"],
-            "allow_substitution": False,  # Explicit no substitution
-            "created_by": "test-user"
-        })
+        child_no_sub = db.create_ingredient(
+            {
+                "name": "Child No Substitution",
+                "parent_id": parent["id"],
+                "allow_substitution": False,  # Explicit no substitution
+                "created_by": "test-user",
+            }
+        )
 
         print(f"Parent: allow_substitution = {parent['allow_substitution']}")
         print(f"Child (True): allow_substitution = {child['allow_substitution']}")
-        print(f"Child (explicit False): allow_substitution = {child_no_sub['allow_substitution']}")
+        print(
+            f"Child (explicit False): allow_substitution = {child_no_sub['allow_substitution']}"
+        )
 
         # Verify values are stored correctly
-        assert parent['allow_substitution'] is True
-        assert child['allow_substitution'] is True
-        assert child_no_sub['allow_substitution'] is False
+        assert parent["allow_substitution"] is True
+        assert child["allow_substitution"] is True
+        assert child_no_sub["allow_substitution"] is False
 
 
 if __name__ == "__main__":

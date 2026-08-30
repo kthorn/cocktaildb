@@ -216,7 +216,7 @@ def build_search_recipes_paginated_sql(
             ur.rating"""
 
     # Handle random sorting separately
-    if sort_by == 'random':
+    if sort_by == "random":
         base_sql += """
         ORDER BY RANDOM()
         LIMIT %(limit)s OFFSET %(offset)s
@@ -248,7 +248,7 @@ def build_search_recipes_paginated_sql(
             units u ON ri.unit_id = u.id"""
 
     # Handle random sorting for ingredient ordering
-    if sort_by == 'random':
+    if sort_by == "random":
         base_sql += """
         ORDER BY
             sr.id ASC,
@@ -411,22 +411,17 @@ def get_ingredient_recommendations_sql() -> str:
     # We'll create a modified version of the substitution match for this context
     # IMPORTANT: Replace more specific patterns FIRST to avoid partial matches
 
-    substitution_match_adapted = INGREDIENT_SUBSTITUTION_MATCH.replace(
-        'i_user.allow_substitution', 'ui.user_allow_substitution'
-    ).replace(
-        'i_user.parent_id', 'ui.parent_id'
-    ).replace(
-        'i_user.path', 'ui.path'
-    ).replace(
-        'i_user.id', 'ui.ingredient_id'
-    ).replace(
-        'i_recipe.allow_substitution', 'rr.required_allow_substitution'
-    ).replace(
-        'i_recipe.parent_id', 'rr.required_parent_id'
-    ).replace(
-        'i_recipe.path', 'rr.required_ingredient_path'
-    ).replace(
-        'i_recipe.id', 'rr.required_ingredient_id'
+    substitution_match_adapted = (
+        INGREDIENT_SUBSTITUTION_MATCH.replace(
+            "i_user.allow_substitution", "ui.user_allow_substitution"
+        )
+        .replace("i_user.parent_id", "ui.parent_id")
+        .replace("i_user.path", "ui.path")
+        .replace("i_user.id", "ui.ingredient_id")
+        .replace("i_recipe.allow_substitution", "rr.required_allow_substitution")
+        .replace("i_recipe.parent_id", "rr.required_parent_id")
+        .replace("i_recipe.path", "rr.required_ingredient_path")
+        .replace("i_recipe.id", "rr.required_ingredient_id")
     )
 
     query = f"""

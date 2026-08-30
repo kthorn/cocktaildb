@@ -1,4 +1,5 @@
 """Caddy must not publicly cache personalized cocktail-space responses."""
+
 from pathlib import Path
 
 import pytest

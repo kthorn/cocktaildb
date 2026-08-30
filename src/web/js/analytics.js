@@ -13,7 +13,7 @@ const state = {
     lastUpdated: null,
     highlightRecipeId: null,
     cocktailSpaceChart: null,
-    cocktailSpaceEmChart: null
+    cocktailSpaceEmChart: null,
 };
 
 /**
@@ -47,14 +47,19 @@ async function initAnalytics() {
 
     // Load initial data for active tab
     await loadTabData(state.currentTab);
-
 }
 
 /**
  * Check if a tab name is valid
  */
 function isValidTab(tabName) {
-    const validTabs = ['ingredients', 'ingredient-tree', 'complexity', 'cocktail-space', 'cocktail-space-em'];
+    const validTabs = [
+        'ingredients',
+        'ingredient-tree',
+        'complexity',
+        'cocktail-space',
+        'cocktail-space-em',
+    ];
     return validTabs.includes(tabName);
 }
 
@@ -65,8 +70,8 @@ function activateTab(tabName) {
     const tabButtons = document.querySelectorAll('.tab-button');
     const tabContents = document.querySelectorAll('.tab-content');
 
-    tabButtons.forEach(btn => btn.classList.remove('active'));
-    tabContents.forEach(content => content.classList.remove('active'));
+    tabButtons.forEach((btn) => btn.classList.remove('active'));
+    tabContents.forEach((content) => content.classList.remove('active'));
 
     const targetButton = document.querySelector(`.tab-button[data-tab="${tabName}"]`);
     const targetContent = document.getElementById(`tab-${tabName}`);
@@ -84,13 +89,13 @@ function setupTabNavigation() {
     const tabButtons = document.querySelectorAll('.tab-button');
     const tabContents = document.querySelectorAll('.tab-content');
 
-    tabButtons.forEach(button => {
+    tabButtons.forEach((button) => {
         button.addEventListener('click', async () => {
             const tabName = button.dataset.tab;
 
             // Update active states
-            tabButtons.forEach(btn => btn.classList.remove('active'));
-            tabContents.forEach(content => content.classList.remove('active'));
+            tabButtons.forEach((btn) => btn.classList.remove('active'));
+            tabContents.forEach((content) => content.classList.remove('active'));
 
             button.classList.add('active');
             document.getElementById(`tab-${tabName}`).classList.add('active');
@@ -131,8 +136,8 @@ function setupMobileViewSelector(tabButtons, tabContents) {
         const selectedTab = e.target.value;
 
         // Update active states
-        tabButtons.forEach(btn => btn.classList.remove('active'));
-        tabContents.forEach(content => content.classList.remove('active'));
+        tabButtons.forEach((btn) => btn.classList.remove('active'));
+        tabContents.forEach((content) => content.classList.remove('active'));
 
         // Find and activate the corresponding tab button and content
         const tabButton = document.querySelector(`.tab-button[data-tab="${selectedTab}"]`);
@@ -233,19 +238,19 @@ async function loadIngredientUsageData() {
 
         // Check for empty data
         if (!response.data || response.data.length === 0) {
-            chartContainer.innerHTML = '<div class="no-data"><p>No ingredient usage data available.</p></div>';
+            chartContainer.innerHTML =
+                '<div class="no-data"><p>No ingredient usage data available.</p></div>';
             document.getElementById('ingredients-shown-count').textContent = '0';
             return;
         }
 
         // Render chart
         createIngredientUsageChart(chartContainer, response.data, {
-            onIngredientClick: handleIngredientClick
+            onIngredientClick: handleIngredientClick,
         });
 
         // Update stats
         document.getElementById('ingredients-shown-count').textContent = response.data.length;
-
     } catch (error) {
         console.error('Error loading ingredient usage data:', error);
         loadingState.classList.add('hidden');
@@ -272,7 +277,7 @@ async function handleIngredientClick(ingredientData) {
     // Add to breadcrumb navigation
     state.ingredientHierarchy.push({
         id: ingredientData.ingredient_id,
-        name: ingredientData.ingredient_name
+        name: ingredientData.ingredient_name,
     });
 
     // Update current parent
@@ -309,7 +314,7 @@ function updateBreadcrumb() {
     breadcrumb.innerHTML = html;
 
     // Add click handlers
-    breadcrumb.querySelectorAll('.breadcrumb-item').forEach(button => {
+    breadcrumb.querySelectorAll('.breadcrumb-item').forEach((button) => {
         button.addEventListener('click', () => {
             const level = button.dataset.level;
             navigateToBreadcrumbLevel(level);
@@ -365,7 +370,8 @@ async function loadIngredientTreeData() {
 
         // Check for empty data
         if (!treeData || !treeData.id) {
-            chartContainer.innerHTML = '<div class="no-data"><p>No ingredient tree data available.</p></div>';
+            chartContainer.innerHTML =
+                '<div class="no-data"><p>No ingredient tree data available.</p></div>';
             document.getElementById('ingredient-tree-count').textContent = '0';
             return;
         }
@@ -374,7 +380,7 @@ async function loadIngredientTreeData() {
         function countIngredients(node) {
             let count = node.id === 'root' ? 0 : 1;
             if (node.children) {
-                node.children.forEach(child => {
+                node.children.forEach((child) => {
                     count += countIngredients(child);
                 });
             }
@@ -388,7 +394,6 @@ async function loadIngredientTreeData() {
 
         // Update stats
         document.getElementById('ingredient-tree-count').textContent = totalIngredients;
-
     } catch (error) {
         console.error('Error loading ingredient tree data:', error);
         loadingState.classList.add('hidden');
@@ -428,7 +433,8 @@ async function loadRecipeComplexityData() {
 
         // Check for empty data
         if (!response.data || response.data.length === 0) {
-            chartContainer.innerHTML = '<div class="no-data"><p>No recipe complexity data available.</p></div>';
+            chartContainer.innerHTML =
+                '<div class="no-data"><p>No recipe complexity data available.</p></div>';
             document.getElementById('avg-ingredients').textContent = '-';
             document.getElementById('mode-ingredients').textContent = '-';
             return;
@@ -444,7 +450,6 @@ async function loadRecipeComplexityData() {
         document.getElementById('avg-ingredients').textContent = avg.toFixed(1);
         document.getElementById('mode-ingredients').textContent =
             `${mode.ingredient_count} ingredients (${mode.recipe_count} recipes)`;
-
     } catch (error) {
         console.error('Error loading complexity data:', error);
         loadingState.classList.add('hidden');
@@ -481,7 +486,8 @@ async function loadCocktailSpaceData() {
 
         // Check for empty data
         if (!response.data || response.data.length === 0) {
-            chartContainer.innerHTML = '<div class="no-data"><p>No cocktail space data available.</p></div>';
+            chartContainer.innerHTML =
+                '<div class="no-data"><p>No cocktail space data available.</p></div>';
             document.getElementById('cocktail-space-count').textContent = '0';
             return;
         }
@@ -489,7 +495,7 @@ async function loadCocktailSpaceData() {
         // Render chart
         state.cocktailSpaceChart = createCocktailSpaceChart(chartContainer, response.data, {
             onRecipeClick: handleRecipeClick,
-            ratingSource: response.metadata?.rating_source
+            ratingSource: response.metadata?.rating_source,
         });
 
         // Trigger highlight if requested via URL hash
@@ -503,7 +509,6 @@ async function loadCocktailSpaceData() {
 
         // Update stats
         document.getElementById('cocktail-space-count').textContent = response.data.length;
-
     } catch (error) {
         console.error('Error loading cocktail space data:', error);
         loadingState.classList.add('hidden');
@@ -542,7 +547,8 @@ async function loadCocktailSpaceEmData() {
 
         // Check for empty data
         if (!response.data || response.data.length === 0) {
-            chartContainer.innerHTML = '<div class="no-data"><p>No cocktail space data available.</p></div>';
+            chartContainer.innerHTML =
+                '<div class="no-data"><p>No cocktail space data available.</p></div>';
             document.getElementById('cocktail-space-em-count').textContent = '0';
             return;
         }
@@ -550,7 +556,7 @@ async function loadCocktailSpaceEmData() {
         // Render chart
         state.cocktailSpaceEmChart = createCocktailSpaceChart(chartContainer, response.data, {
             onRecipeClick: handleRecipeClick,
-            ratingSource: response.metadata?.rating_source
+            ratingSource: response.metadata?.rating_source,
         });
 
         // Trigger highlight if requested via URL hash
@@ -564,7 +570,6 @@ async function loadCocktailSpaceEmData() {
 
         // Update stats
         document.getElementById('cocktail-space-em-count').textContent = response.data.length;
-
     } catch (error) {
         console.error('Error loading EM cocktail space data:', error);
         loadingState.classList.add('hidden');
@@ -589,7 +594,7 @@ function calculateAverage(data) {
     let totalIngredients = 0;
     let totalRecipes = 0;
 
-    data.forEach(item => {
+    data.forEach((item) => {
         totalIngredients += item.ingredient_count * item.recipe_count;
         totalRecipes += item.recipe_count;
     });
@@ -600,9 +605,7 @@ function calculateAverage(data) {
 function findMode(data) {
     if (data.length === 0) return { ingredient_count: 0, recipe_count: 0 };
 
-    return data.reduce((max, item) =>
-        item.recipe_count > max.recipe_count ? item : max
-    );
+    return data.reduce((max, item) => (item.recipe_count > max.recipe_count ? item : max));
 }
 
 /**
@@ -634,7 +637,6 @@ async function handleRecipeClick(recipeId, recipeName) {
 
         // Set up link to full recipe page
         modalLink.href = `/recipe/${encodeURIComponent(recipeId)}`;
-
     } catch (error) {
         console.error('Error loading recipe:', error);
         modalLoading.classList.add('hidden');
@@ -651,7 +653,7 @@ function closeRecipeModal() {
 
     // Clean up any lingering ingredient hierarchy tooltips
     const tooltips = document.querySelectorAll('.ingredient-hierarchy-tooltip');
-    tooltips.forEach(tooltip => tooltip.remove());
+    tooltips.forEach((tooltip) => tooltip.remove());
 }
 
 // Initialize when DOM is ready

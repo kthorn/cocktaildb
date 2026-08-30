@@ -34,11 +34,13 @@ def test_exact_em_is_opt_in_and_candidate_grid_uses_current_wider_proxy():
 
 
 def test_complete_distance_matrix_replaces_unknown_pairs():
-    distances = np.array([
-        [0.0, 1.0, np.inf],
-        [1.0, 0.0, 2.0],
-        [np.inf, 2.0, 0.0],
-    ])
+    distances = np.array(
+        [
+            [0.0, 1.0, np.inf],
+            [1.0, 0.0, 2.0],
+            [np.inf, 2.0, 0.0],
+        ]
+    )
 
     completed = complete_distance_matrix(distances)
 
@@ -60,11 +62,13 @@ def test_cluster_distance_matrix_finds_separated_compact_groups():
 
 
 def test_build_manhattan_distance_uses_recipe_registry_order():
-    recipes = pd.DataFrame([
-        {"recipe_id": 2, "ingredient_id": 10, "volume_fraction": 0.5},
-        {"recipe_id": 2, "ingredient_id": 11, "volume_fraction": 0.5},
-        {"recipe_id": 1, "ingredient_id": 10, "volume_fraction": 1.0},
-    ])
+    recipes = pd.DataFrame(
+        [
+            {"recipe_id": 2, "ingredient_id": 10, "volume_fraction": 0.5},
+            {"recipe_id": 2, "ingredient_id": 11, "volume_fraction": 0.5},
+            {"recipe_id": 1, "ingredient_id": 10, "volume_fraction": 1.0},
+        ]
+    )
 
     class Registry:
         def __len__(self):
@@ -80,11 +84,14 @@ def test_build_manhattan_distance_uses_recipe_registry_order():
 
 
 def test_constrained_full_candidate_matches_exact_em_smoothing():
-    volume = np.array([
-        [0.8, 0.2],
-        [0.3, 0.7],
-        [0.5, 0.5],
-    ], dtype=np.float32)
+    volume = np.array(
+        [
+            [0.8, 0.2],
+            [0.3, 0.7],
+            [0.5, 0.5],
+        ],
+        dtype=np.float32,
+    )
     cost = np.array([[0.0, 1.0], [1.0, 0.0]], dtype=np.float32)
 
     exact = run_full_em(volume, cost, n_ingredients=2, iters=1)
@@ -151,45 +158,63 @@ def test_neighborhood_preservation_is_perfect_for_unchanged_geometry():
 
 def test_neighborhood_preservation_excludes_self_when_distances_tie():
     source = np.array([[0.0], [0.0], [1.0], [2.0], [4.0], [8.0]])
-    embedding = np.array([
-        [-0.28128742, -0.66804635],
-        [-1.05515055, -0.39080098],
-        [0.48194539, -0.23855361],
-        [0.95775870, -0.19980213],
-        [0.02425957, 1.54582085],
-        [0.54510552, -0.50522874],
-    ])
-
-    result = neighborhood_preservation(
-        np.abs(source - source.T), embedding, k=2
+    embedding = np.array(
+        [
+            [-0.28128742, -0.66804635],
+            [-1.05515055, -0.39080098],
+            [0.48194539, -0.23855361],
+            [0.95775870, -0.19980213],
+            [0.02425957, 1.54582085],
+            [0.54510552, -0.50522874],
+        ]
     )
 
-    assert result == pytest.approx({
-        "knn_recall": 7 / 12,
-        "trustworthiness": 19 / 30,
-        "continuity": 22 / 30,
-    })
+    result = neighborhood_preservation(np.abs(source - source.T), embedding, k=2)
+
+    assert result == pytest.approx(
+        {
+            "knn_recall": 7 / 12,
+            "trustworthiness": 19 / 30,
+            "continuity": 22 / 30,
+        }
+    )
 
 
 def test_rank_umap_grid_prioritizes_worst_seed_then_median():
     agreement = {"ari_all": 0.4, "ami_all": 0.5}
     results = [
-        {"n_neighbors": 5, "min_dist": 0.05, "seed": 0,
-         "local_preservation_score": 0.70,
-         "reference_cluster_silhouette_in_embedding": 0.6,
-         "cluster_agreement": agreement},
-        {"n_neighbors": 5, "min_dist": 0.05, "seed": 1,
-         "local_preservation_score": 0.90,
-         "reference_cluster_silhouette_in_embedding": 0.6,
-         "cluster_agreement": agreement},
-        {"n_neighbors": 10, "min_dist": 0.05, "seed": 0,
-         "local_preservation_score": 0.78,
-         "reference_cluster_silhouette_in_embedding": 0.5,
-         "cluster_agreement": agreement},
-        {"n_neighbors": 10, "min_dist": 0.05, "seed": 1,
-         "local_preservation_score": 0.80,
-         "reference_cluster_silhouette_in_embedding": 0.5,
-         "cluster_agreement": agreement},
+        {
+            "n_neighbors": 5,
+            "min_dist": 0.05,
+            "seed": 0,
+            "local_preservation_score": 0.70,
+            "reference_cluster_silhouette_in_embedding": 0.6,
+            "cluster_agreement": agreement,
+        },
+        {
+            "n_neighbors": 5,
+            "min_dist": 0.05,
+            "seed": 1,
+            "local_preservation_score": 0.90,
+            "reference_cluster_silhouette_in_embedding": 0.6,
+            "cluster_agreement": agreement,
+        },
+        {
+            "n_neighbors": 10,
+            "min_dist": 0.05,
+            "seed": 0,
+            "local_preservation_score": 0.78,
+            "reference_cluster_silhouette_in_embedding": 0.5,
+            "cluster_agreement": agreement,
+        },
+        {
+            "n_neighbors": 10,
+            "min_dist": 0.05,
+            "seed": 1,
+            "local_preservation_score": 0.80,
+            "reference_cluster_silhouette_in_embedding": 0.5,
+            "cluster_agreement": agreement,
+        },
     ]
 
     ranked = rank_umap_grid(results)
@@ -201,10 +226,12 @@ def test_rank_umap_grid_prioritizes_worst_seed_then_median():
 
 
 def test_run_umap_grid_reports_neighborhood_and_cluster_preservation(monkeypatch):
-    embedding = np.concatenate([
-        np.arange(6, dtype=float)[:, None] / 100,
-        10 + np.arange(6, dtype=float)[:, None] / 100,
-    ])
+    embedding = np.concatenate(
+        [
+            np.arange(6, dtype=float)[:, None] / 100,
+            10 + np.arange(6, dtype=float)[:, None] / 100,
+        ]
+    )
     distances = np.abs(embedding - embedding.T)
 
     monkeypatch.setattr(

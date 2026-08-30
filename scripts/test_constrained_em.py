@@ -45,8 +45,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "packages", "ba
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -56,6 +55,7 @@ CACHE_DIR = Path(__file__).parent / ".cache"
 @dataclass
 class EMResult:
     """Results from an EM run."""
+
     distance_matrix: np.ndarray
     cost_matrix: np.ndarray
     elapsed_seconds: float
@@ -85,7 +85,7 @@ def compute_manhattan_candidates(
     # Compute full Manhattan distance matrix (cheap - just L1 norm)
     logger.info("Computing Manhattan distance matrix...")
     t0 = time.time()
-    manhattan_dist = cdist(dense_matrix, dense_matrix, metric='cityblock')
+    manhattan_dist = cdist(dense_matrix, dense_matrix, metric="cityblock")
     logger.info(f"Manhattan distances computed in {time.time() - t0:.2f}s")
 
     # For each recipe, find top-k nearest (excluding self)
@@ -165,21 +165,21 @@ def constrained_emd_matrix(
 
             if return_plans:
                 distance, plan = compute_emd(
-                    row_i, row_j, cost_matrix,
-                    return_plan=True, support_idx=union_idx
+                    row_i, row_j, cost_matrix, return_plan=True, support_idx=union_idx
                 )
                 assert plans is not None
                 plans[pair] = plan
             else:
                 distance = compute_emd(
-                    row_i, row_j, cost_matrix,
-                    return_plan=False, support_idx=union_idx
+                    row_i, row_j, cost_matrix, return_plan=False, support_idx=union_idx
                 )
 
             emd_mat[i, j] = emd_dtype.type(distance)
             emd_mat[j, i] = emd_dtype.type(distance)
 
-    logger.info(f"Computed {len(pairs_computed)} EMD pairs (vs {n_recipes * (n_recipes - 1) // 2} full)")
+    logger.info(
+        f"Computed {len(pairs_computed)} EMD pairs (vs {n_recipes * (n_recipes - 1) // 2} full)"
+    )
 
     if return_plans:
         return emd_mat, plans
@@ -225,12 +225,20 @@ def constrained_em_fit(
 
     # M-step
     T_sum, n_pairs = expected_ingredient_match_matrix(
-        distance_matrix, plans, n_ingredients,
-        k=10, beta=1.0, plan_topk=3, plan_minfrac=0.05, symmetrize=True
+        distance_matrix,
+        plans,
+        n_ingredients,
+        k=10,
+        beta=1.0,
+        plan_topk=3,
+        plan_minfrac=0.05,
+        symmetrize=True,
     )
     new_cost_matrix = m_step_blosum(T_sum).astype(np.float32)
 
-    delta = np.linalg.norm(new_cost_matrix - cost_matrix) / (np.linalg.norm(cost_matrix) + 1e-12)
+    delta = np.linalg.norm(new_cost_matrix - cost_matrix) / (
+        np.linalg.norm(cost_matrix) + 1e-12
+    )
     log["delta"].append(float(delta))
     logger.info(f"[iter 1] delta={delta:.4e}")
     cost_matrix = new_cost_matrix.copy()
@@ -241,7 +249,7 @@ def constrained_em_fit(
             logger.info("Converged early.")
             break
 
-        logger.info(f"Iteration {t+1}: EMD-based candidate selection (k={k})")
+        logger.info(f"Iteration {t + 1}: EMD-based candidate selection (k={k})")
         candidates = compute_emd_candidates(distance_matrix, k)
 
         distance_matrix, plans = constrained_emd_matrix(
@@ -251,14 +259,22 @@ def constrained_em_fit(
 
         # M-step
         T_sum, n_pairs = expected_ingredient_match_matrix(
-            distance_matrix, plans, n_ingredients,
-            k=10, beta=1.0, plan_topk=3, plan_minfrac=0.05, symmetrize=True
+            distance_matrix,
+            plans,
+            n_ingredients,
+            k=10,
+            beta=1.0,
+            plan_topk=3,
+            plan_minfrac=0.05,
+            symmetrize=True,
         )
         new_cost_matrix = m_step_blosum(T_sum).astype(np.float32)
 
-        delta = np.linalg.norm(new_cost_matrix - cost_matrix) / (np.linalg.norm(cost_matrix) + 1e-12)
+        delta = np.linalg.norm(new_cost_matrix - cost_matrix) / (
+            np.linalg.norm(cost_matrix) + 1e-12
+        )
         log["delta"].append(float(delta))
-        logger.info(f"[iter {t+1}] delta={delta:.4e}")
+        logger.info(f"[iter {t + 1}] delta={delta:.4e}")
         cost_matrix = new_cost_matrix.copy()
 
     return distance_matrix, cost_matrix, log, total_pairs
@@ -304,11 +320,15 @@ def summarize_clusters(distance_matrix: np.ndarray, labels: np.ndarray) -> dict:
         "minimum_size": int(cluster_sizes.min()) if cluster_sizes.size else None,
         "median_size": float(np.median(cluster_sizes)) if cluster_sizes.size else None,
         "maximum_size": int(cluster_sizes.max()) if cluster_sizes.size else None,
-        "silhouette": float(silhouette_score(
-            distance_matrix[np.ix_(clustered, clustered)],
-            labels[clustered],
-            metric="precomputed",
-        )) if len(cluster_ids) > 1 else None,
+        "silhouette": float(
+            silhouette_score(
+                distance_matrix[np.ix_(clustered, clustered)],
+                labels[clustered],
+                metric="precomputed",
+            )
+        )
+        if len(cluster_ids) > 1
+        else None,
     }
 
 
@@ -422,41 +442,47 @@ def run_umap_grid(
                 cluster_agreement = adjusted_cluster_agreement(
                     reference_labels, embedding_labels
                 )
-                local_score = float(np.mean([
-                    metric
-                    for values in neighborhoods.values()
-                    for metric in (
-                        values["knn_recall"],
-                        values["trustworthiness"],
-                        values["continuity"],
+                local_score = float(
+                    np.mean(
+                        [
+                            metric
+                            for values in neighborhoods.values()
+                            for metric in (
+                                values["knn_recall"],
+                                values["trustworthiness"],
+                                values["continuity"],
+                            )
+                        ]
                     )
-                ]))
-                reference_cluster_ids = np.unique(
-                    reference_labels[reference_clustered]
                 )
+                reference_cluster_ids = np.unique(reference_labels[reference_clustered])
                 reference_silhouette = (
-                    float(silhouette_score(
-                        embedding_distances[np.ix_(
-                            reference_clustered, reference_clustered
-                        )],
-                        reference_labels[reference_clustered],
-                        metric="precomputed",
-                    ))
+                    float(
+                        silhouette_score(
+                            embedding_distances[
+                                np.ix_(reference_clustered, reference_clustered)
+                            ],
+                            reference_labels[reference_clustered],
+                            metric="precomputed",
+                        )
+                    )
                     if len(reference_cluster_ids) > 1
                     else None
                 )
-                results.append({
-                    "n_neighbors": n_neighbors,
-                    "min_dist": min_dist,
-                    "seed": seed,
-                    "embedding_seconds": embedding_seconds,
-                    "evaluation_seconds": time.time() - started - embedding_seconds,
-                    "total_seconds": time.time() - started,
-                    "local_preservation_score": local_score,
-                    "neighborhoods": neighborhoods,
-                    "cluster_agreement": cluster_agreement,
-                    "reference_cluster_silhouette_in_embedding": reference_silhouette,
-                })
+                results.append(
+                    {
+                        "n_neighbors": n_neighbors,
+                        "min_dist": min_dist,
+                        "seed": seed,
+                        "embedding_seconds": embedding_seconds,
+                        "evaluation_seconds": time.time() - started - embedding_seconds,
+                        "total_seconds": time.time() - started,
+                        "local_preservation_score": local_score,
+                        "neighborhoods": neighborhoods,
+                        "cluster_agreement": cluster_agreement,
+                        "reference_cluster_silhouette_in_embedding": reference_silhouette,
+                    }
+                )
 
     return results
 
@@ -475,27 +501,29 @@ def rank_umap_grid(results: list[dict]) -> list[dict]:
             for run in runs
             if run["reference_cluster_silhouette_in_embedding"] is not None
         ]
-        summaries.append({
-            "n_neighbors": n_neighbors,
-            "min_dist": min_dist,
-            "seed_count": len(runs),
-            "seeds": sorted(run["seed"] for run in runs),
-            "worst_local_preservation_score": min(
-                run["local_preservation_score"] for run in runs
-            ),
-            "median_local_preservation_score": statistics.median(
-                run["local_preservation_score"] for run in runs
-            ),
-            "median_reference_cluster_silhouette_in_embedding": (
-                statistics.median(silhouettes) if silhouettes else None
-            ),
-            "median_ari_all": statistics.median(
-                run["cluster_agreement"]["ari_all"] for run in runs
-            ),
-            "median_ami_all": statistics.median(
-                run["cluster_agreement"]["ami_all"] for run in runs
-            ),
-        })
+        summaries.append(
+            {
+                "n_neighbors": n_neighbors,
+                "min_dist": min_dist,
+                "seed_count": len(runs),
+                "seeds": sorted(run["seed"] for run in runs),
+                "worst_local_preservation_score": min(
+                    run["local_preservation_score"] for run in runs
+                ),
+                "median_local_preservation_score": statistics.median(
+                    run["local_preservation_score"] for run in runs
+                ),
+                "median_reference_cluster_silhouette_in_embedding": (
+                    statistics.median(silhouettes) if silhouettes else None
+                ),
+                "median_ari_all": statistics.median(
+                    run["cluster_agreement"]["ari_all"] for run in runs
+                ),
+                "median_ami_all": statistics.median(
+                    run["cluster_agreement"]["ami_all"] for run in runs
+                ),
+            }
+        )
 
     return sorted(
         summaries,
@@ -568,7 +596,9 @@ def fetch_recipes_paginated(base_url: str, limit: int = 100) -> list:
         if cursor:
             url += f"&cursor={cursor}"
 
-        logger.info(f"Fetching recipes (cursor={'...' + cursor[-20:] if cursor else 'None'})...")
+        logger.info(
+            f"Fetching recipes (cursor={'...' + cursor[-20:] if cursor else 'None'})..."
+        )
         resp = requests.get(url, timeout=60)
         resp.raise_for_status()
         data = resp.json()
@@ -623,16 +653,18 @@ def load_data_from_api(api_base: str, use_cache: bool = False):
         logger.info(f"Cached data to {CACHE_DIR}")
 
     # Convert to DataFrames matching expected format
-    ingredients_df = pd.DataFrame([
-        {
-            "ingredient_id": ing["id"],
-            "ingredient_name": ing["name"],
-            "ingredient_path": ing["path"],
-            "substitution_level": 1.0,
-            "allow_substitution": 1 if ing.get("allow_substitution") else 0,
-        }
-        for ing in ingredients_raw
-    ])
+    ingredients_df = pd.DataFrame(
+        [
+            {
+                "ingredient_id": ing["id"],
+                "ingredient_name": ing["name"],
+                "ingredient_path": ing["path"],
+                "substitution_level": 1.0,
+                "allow_substitution": 1 if ing.get("allow_substitution") else 0,
+            }
+            for ing in ingredients_raw
+        ]
+    )
 
     # Build recipe-ingredient rows with volume fractions
     recipe_rows = []
@@ -666,28 +698,38 @@ def load_data_from_api(api_base: str, use_cache: bool = False):
             else:
                 volume_ml = amount  # Assume ml or count
 
-            ingredient_volumes.append({
-                "ingredient_id": ing["ingredient_id"],
-                "ingredient_name": ing["ingredient_name"],
-                "ingredient_path": ing.get("ingredient_path", f"/{ing['ingredient_id']}/"),
-                "volume_ml": volume_ml,
-            })
+            ingredient_volumes.append(
+                {
+                    "ingredient_id": ing["ingredient_id"],
+                    "ingredient_name": ing["ingredient_name"],
+                    "ingredient_path": ing.get(
+                        "ingredient_path", f"/{ing['ingredient_id']}/"
+                    ),
+                    "volume_ml": volume_ml,
+                }
+            )
             total_volume += volume_ml
 
         # Normalize to fractions
         for iv in ingredient_volumes:
-            recipe_rows.append({
-                "recipe_id": recipe_id,
-                "recipe_name": recipe_name,
-                "ingredient_id": iv["ingredient_id"],
-                "ingredient_name": iv["ingredient_name"],
-                "ingredient_path": iv["ingredient_path"],
-                "volume_fraction": iv["volume_ml"] / total_volume if total_volume > 0 else 0.0,
-            })
+            recipe_rows.append(
+                {
+                    "recipe_id": recipe_id,
+                    "recipe_name": recipe_name,
+                    "ingredient_id": iv["ingredient_id"],
+                    "ingredient_name": iv["ingredient_name"],
+                    "ingredient_path": iv["ingredient_path"],
+                    "volume_fraction": iv["volume_ml"] / total_volume
+                    if total_volume > 0
+                    else 0.0,
+                }
+            )
 
     recipes_df = pd.DataFrame(recipe_rows)
 
-    logger.info(f"Loaded {len(ingredients_df)} ingredients, {recipes_df['recipe_id'].nunique()} recipes")
+    logger.info(
+        f"Loaded {len(ingredients_df)} ingredients, {recipes_df['recipe_id'].nunique()} recipes"
+    )
     return ingredients_df, recipes_df
 
 
@@ -721,34 +763,35 @@ def prepare_matrices(ingredients_df, recipes_df):
     # Build ingredient tree
     tree_dict, parent_map = build_ingredient_tree(
         ingredients_df,
-        id_col='ingredient_id',
-        name_col='ingredient_name',
-        path_col='ingredient_path',
-        weight_col='substitution_level',
+        id_col="ingredient_id",
+        name_col="ingredient_name",
+        path_col="ingredient_path",
+        weight_col="substitution_level",
     )
 
     # Rollup
-    ingredients_df = ingredients_df.rename(columns={'ingredient_id': 'id'})
+    ingredients_df = ingredients_df.rename(columns={"ingredient_id": "id"})
     rollup_map = create_rollup_mapping(
-        ingredients_df, parent_map, allow_substitution_col='allow_substitution'
+        ingredients_df, parent_map, allow_substitution_col="allow_substitution"
     )
     recipes_rolled_df = apply_rollup_to_recipes(
-        recipes_df, rollup_map,
-        ingredient_id_col='ingredient_id',
-        volume_col='volume_fraction'
+        recipes_df,
+        rollup_map,
+        ingredient_id_col="ingredient_id",
+        volume_col="volume_fraction",
     )
 
     # Get unique ingredients after rollup
-    unique_ingredients = set(recipes_rolled_df['ingredient_id'].unique())
+    unique_ingredients = set(recipes_rolled_df["ingredient_id"].unique())
 
     # Find ancestors
-    ingredients_with_ancestors = set(['root'])
+    ingredients_with_ancestors = set(["root"])
     for ing_id in unique_ingredients:
         current_id = str(ing_id)
-        while current_id in parent_map and current_id != 'root':
+        while current_id in parent_map and current_id != "root":
             ingredients_with_ancestors.add(current_id)
             parent_id, _ = parent_map[current_id]
-            if parent_id is None or parent_id == 'root':
+            if parent_id is None or parent_id == "root":
                 break
             current_id = parent_id
 
@@ -760,7 +803,7 @@ def prepare_matrices(ingredients_df, recipes_df):
 
     id_to_name = {
         str(ing_id): name
-        for ing_id, name in zip(ingredients_df['id'], ingredients_df['ingredient_name'])
+        for ing_id, name in zip(ingredients_df["id"], ingredients_df["ingredient_name"])
         if str(ing_id) in ingredients_with_ancestors or ing_id in unique_ingredients
     }
 
@@ -772,14 +815,16 @@ def prepare_matrices(ingredients_df, recipes_df):
     volume_matrix, recipe_registry = build_recipe_volume_matrix(
         recipes_rolled_df,
         ingredient_registry,
-        recipe_id_col='recipe_id',
-        ingredient_id_col='ingredient_id',
-        volume_col='volume_fraction',
+        recipe_id_col="recipe_id",
+        ingredient_id_col="ingredient_id",
+        volume_col="volume_fraction",
         sparse=True,
         dtype=np.float32,
     )
 
-    logger.info(f"Cost matrix: {cost_matrix.shape}, Volume matrix: {volume_matrix.shape}")
+    logger.info(
+        f"Cost matrix: {cost_matrix.shape}, Volume matrix: {volume_matrix.shape}"
+    )
     return cost_matrix, volume_matrix, ingredient_registry, recipe_registry
 
 
@@ -794,8 +839,12 @@ def run_full_em(volume_matrix, cost_matrix, n_ingredients, iters=5) -> EMResult:
     t0 = time.time()
 
     dist, cost, log = em_fit(
-        volume_matrix, cost_matrix, n_ingredients,
-        iters=iters, verbose=True, candidate_k=None
+        volume_matrix,
+        cost_matrix,
+        n_ingredients,
+        iters=iters,
+        verbose=True,
+        candidate_k=None,
     )
 
     elapsed = time.time() - t0
@@ -810,14 +859,15 @@ def run_full_em(volume_matrix, cost_matrix, n_ingredients, iters=5) -> EMResult:
     )
 
 
-def run_constrained_em(volume_matrix, cost_matrix, n_ingredients, k, iters=5) -> EMResult:
+def run_constrained_em(
+    volume_matrix, cost_matrix, n_ingredients, k, iters=5
+) -> EMResult:
     """Run constrained EM with top-k candidate selection."""
     logger.info(f"Running CONSTRAINED EM (k={k})...")
     t0 = time.time()
 
     dist, cost, log, total_pairs = constrained_em_fit(
-        volume_matrix, cost_matrix, n_ingredients,
-        k=k, iters=iters
+        volume_matrix, cost_matrix, n_ingredients, k=k, iters=iters
     )
 
     elapsed = time.time() - t0
@@ -834,21 +884,39 @@ def run_constrained_em(volume_matrix, cost_matrix, n_ingredients, k, iters=5) ->
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Test constrained EM performance")
-    parser.add_argument("--api", type=str, default="https://mixology.tools",
-                        help="API base URL (default: https://mixology.tools)")
-    parser.add_argument("--use-cache", action="store_true",
-                        help="Use cached data from previous run")
+    parser.add_argument(
+        "--api",
+        type=str,
+        default="https://mixology.tools",
+        help="API base URL (default: https://mixology.tools)",
+    )
+    parser.add_argument(
+        "--use-cache", action="store_true", help="Use cached data from previous run"
+    )
     parser.add_argument("--iters", type=int, default=5, help="Maximum EM iterations")
-    parser.add_argument("--k-values", type=str, default="293,391,780",
-                        help="Comma-separated candidate counts to compare")
-    parser.add_argument("--include-full", action="store_true",
-                        help="Also run exact O(N²) EM (slow and memory intensive)")
+    parser.add_argument(
+        "--k-values",
+        type=str,
+        default="293,391,780",
+        help="Comma-separated candidate counts to compare",
+    )
+    parser.add_argument(
+        "--include-full",
+        action="store_true",
+        help="Also run exact O(N²) EM (slow and memory intensive)",
+    )
     parser.add_argument("--cluster-min-size", type=int, default=10)
     parser.add_argument("--cluster-min-samples", type=int, default=1)
-    parser.add_argument("--output-dir", type=Path,
-                        help="Optional directory for matrices and JSON results")
-    parser.add_argument("--tune-umap-matrix", type=Path,
-                        help="Tune UMAP from a saved .npy or benchmark .npz matrix")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Optional directory for matrices and JSON results",
+    )
+    parser.add_argument(
+        "--tune-umap-matrix",
+        type=Path,
+        help="Tune UMAP from a saved .npy or benchmark .npz matrix",
+    )
     parser.add_argument("--umap-neighbors", default="5,10,15,30,50")
     parser.add_argument("--umap-min-dists", default="0,0.01,0.05,0.1,0.25")
     parser.add_argument("--umap-seeds", default="0,1,42")
@@ -887,8 +955,9 @@ def main():
                 result["worst_local_preservation_score"],
                 result["median_local_preservation_score"],
                 (
-                    f'{result["median_reference_cluster_silhouette_in_embedding"]:.3f}'
-                    if result["median_reference_cluster_silhouette_in_embedding"] is not None
+                    f"{result['median_reference_cluster_silhouette_in_embedding']:.3f}"
+                    if result["median_reference_cluster_silhouette_in_embedding"]
+                    is not None
                     else "n/a"
                 ),
                 result["median_ami_all"],
@@ -896,19 +965,22 @@ def main():
         if args.output_dir:
             args.output_dir.mkdir(parents=True, exist_ok=True)
             (args.output_dir / "umap-summary.json").write_text(
-                json.dumps({
-                    "source_matrix": str(args.tune_umap_matrix),
-                    "source_sha256": hashlib.sha256(
-                        args.tune_umap_matrix.read_bytes()
-                    ).hexdigest(),
-                    "completion_policy": "production-compatible imputed proxy: unknown distances become 2x the source matrix's maximum computed distance",
-                    "software": {
-                        package: importlib.metadata.version(package)
-                        for package in ("numpy", "scikit-learn", "umap-learn")
+                json.dumps(
+                    {
+                        "source_matrix": str(args.tune_umap_matrix),
+                        "source_sha256": hashlib.sha256(
+                            args.tune_umap_matrix.read_bytes()
+                        ).hexdigest(),
+                        "completion_policy": "production-compatible imputed proxy: unknown distances become 2x the source matrix's maximum computed distance",
+                        "software": {
+                            package: importlib.metadata.version(package)
+                            for package in ("numpy", "scikit-learn", "umap-learn")
+                        },
+                        "ranked_settings": ranked,
+                        "results": umap_results,
                     },
-                    "ranked_settings": ranked,
-                    "results": umap_results,
-                }, indent=2),
+                    indent=2,
+                ),
                 encoding="utf-8",
             )
         return
@@ -925,17 +997,15 @@ def main():
     n_ingredients = len(ingredient_registry)
     full_pairs = n_recipes * (n_recipes - 1) // 2
 
-    logger.info(f"\n{'='*60}")
+    logger.info(f"\n{'=' * 60}")
     logger.info(f"DATASET: {n_recipes} recipes, {n_ingredients} ingredients")
     logger.info(f"FULL PAIRS: {full_pairs:,} per iteration")
-    logger.info(f"{'='*60}\n")
+    logger.info(f"{'=' * 60}\n")
 
     manhattan_started = time.time()
     manhattan_distances = build_manhattan_distance(recipes_df, recipe_registry)
     manhattan_seconds = time.time() - manhattan_started
-    manhattan_peak_rss_mb = (
-        resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
-    )
+    manhattan_peak_rss_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
 
     results: dict[str, EMResult] = {}
 
@@ -981,16 +1051,20 @@ def main():
     summary = {
         "reference": reference_name,
         "reference_kind": "exact" if args.include_full else "widest_candidate_proxy",
-        "reference_warning": None if args.include_full else "Agreement with the widest candidate run is sensitivity analysis, not accuracy against ground truth.",
+        "reference_warning": None
+        if args.include_full
+        else "Agreement with the widest candidate run is sensitivity analysis, not accuracy against ground truth.",
         "completion_policy": "production-compatible imputed proxy: unknown distances become 2x each matrix's maximum computed distance",
         "input": {
             "api": args.api,
             "used_cache": args.use_cache,
             "recipes": n_recipes,
             "ingredients_after_rollup": n_ingredients,
-            "recipe_ids_sha256": hashlib.sha256("\n".join(
-                recipe_registry.get_id(index=i) for i in range(len(recipe_registry))
-            ).encode()).hexdigest(),
+            "recipe_ids_sha256": hashlib.sha256(
+                "\n".join(
+                    recipe_registry.get_id(index=i) for i in range(len(recipe_registry))
+                ).encode()
+            ).hexdigest(),
         },
         "software": {
             package: importlib.metadata.version(package)
@@ -1025,21 +1099,25 @@ def main():
         }
         if name in results:
             result = results[name]
-            result_summary.update({
-                "elapsed_seconds": result.elapsed_seconds,
-                "pairs_computed": result.pairs_computed,
-                "iterations_requested": args.iters,
-                "iterations_run": result.iterations_run,
-                "candidate_k": result.k_value,
-                "process_peak_rss_mb_cumulative": result.process_peak_rss_mb,
-            })
+            result_summary.update(
+                {
+                    "elapsed_seconds": result.elapsed_seconds,
+                    "pairs_computed": result.pairs_computed,
+                    "iterations_requested": args.iters,
+                    "iterations_run": result.iterations_run,
+                    "candidate_k": result.k_value,
+                    "process_peak_rss_mb_cumulative": result.process_peak_rss_mb,
+                }
+            )
             cost_delta = np.linalg.norm(result.cost_matrix - reference.cost_matrix)
             result_summary["cost_relative_difference"] = float(
                 cost_delta / (np.linalg.norm(reference.cost_matrix) + 1e-12)
             )
-            result_summary["cost_correlation"] = float(np.corrcoef(
-                result.cost_matrix.ravel(), reference.cost_matrix.ravel()
-            )[0, 1])
+            result_summary["cost_correlation"] = float(
+                np.corrcoef(result.cost_matrix.ravel(), reference.cost_matrix.ravel())[
+                    0, 1
+                ]
+            )
         else:
             result_summary["elapsed_seconds"] = manhattan_seconds
             result_summary["pairs_computed"] = full_pairs
@@ -1059,13 +1137,15 @@ def main():
 
     if args.output_dir:
         args.output_dir.mkdir(parents=True, exist_ok=True)
-        recipe_ids = np.array([
-            recipe_registry.get_id(index=i) for i in range(len(recipe_registry))
-        ])
-        ingredient_ids = np.array([
-            ingredient_registry.get_id(index=i)
-            for i in range(len(ingredient_registry))
-        ])
+        recipe_ids = np.array(
+            [recipe_registry.get_id(index=i) for i in range(len(recipe_registry))]
+        )
+        ingredient_ids = np.array(
+            [
+                ingredient_registry.get_id(index=i)
+                for i in range(len(ingredient_registry))
+            ]
+        )
         for name, result in results.items():
             np.savez_compressed(
                 args.output_dir / f"{name.replace('=', '-')}.npz",

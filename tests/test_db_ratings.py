@@ -66,9 +66,7 @@ class TestRatingCRUD:
         db = db_instance
 
         # Create recipe
-        recipe = db.create_recipe(
-            {"name": "Popular Recipe", "instructions": "Test"}
-        )
+        recipe = db.create_recipe({"name": "Popular Recipe", "instructions": "Test"})
 
         # User 1 rates 4
         rating1_data = {
@@ -188,6 +186,7 @@ class TestRatingCRUD:
 
         result = db.get_user_rating(recipe["id"], "nonexistent_user")
         assert result is None
+
 
 class TestRatingDeletion:
     """Test rating deletion operations"""
@@ -360,9 +359,7 @@ class TestRatingAggregation:
 
         recipe_after_update = db.get_recipe(recipe["id"])
         assert recipe_after_update["avg_rating"] == 5.0
-        assert (
-            recipe_after_update["rating_count"] == 1
-        )  # Still 1 rating, just updated
+        assert recipe_after_update["rating_count"] == 1  # Still 1 rating, just updated
 
     def test_rating_aggregation_after_deletion(self, db_instance):
         """Test aggregation after rating deletion"""
@@ -559,9 +556,7 @@ class TestRatingEdgeCases:
         """Test aggregation with many ratings"""
         db = db_instance
 
-        recipe = db.create_recipe(
-            {"name": "Popular Recipe", "instructions": "Test"}
-        )
+        recipe = db.create_recipe({"name": "Popular Recipe", "instructions": "Test"})
 
         # Add 100 ratings (50 fives, 50 ones) - should average to 3.0
         for i in range(100):

@@ -37,7 +37,7 @@ class UserIngredientsManager {
     showAuthRequired() {
         document.querySelector('.auth-required-content').style.display = 'none';
         document.querySelector('.auth-required-message').classList.remove('hidden');
-        
+
         // Bind login prompt
         document.getElementById('login-prompt-btn').addEventListener('click', () => {
             // Trigger login (this would be handled by auth.js)
@@ -81,13 +81,15 @@ class UserIngredientsManager {
             // Load both user ingredients and all available ingredients
             const [userIngredientsData, allIngredientsData] = await Promise.all([
                 api.getUserIngredients(),
-                api.getIngredients()
+                api.getIngredients(),
             ]);
 
             this.userIngredients = userIngredientsData.ingredients || [];
-            this.userIngredientIds = new Set(this.userIngredients.map(ing => ing.ingredient_id));
+            this.userIngredientIds = new Set(this.userIngredients.map((ing) => ing.ingredient_id));
             this.allIngredients = allIngredientsData || [];
-            this.filteredIngredients = this.allIngredients.filter(ing => !this.userIngredientIds.has(ing.id));
+            this.filteredIngredients = this.allIngredients.filter(
+                (ing) => !this.userIngredientIds.has(ing.id),
+            );
 
             this.renderCurrentIngredients();
             this.renderAvailableIngredients();
@@ -100,32 +102,34 @@ class UserIngredientsManager {
 
     renderCurrentIngredients() {
         const container = document.getElementById('current-ingredients-list');
-        
+
         if (this.userIngredients.length === 0) {
-            container.innerHTML = '<p class="empty-state">No ingredients in your inventory yet.</p>';
+            container.innerHTML =
+                '<p class="empty-state">No ingredients in your inventory yet.</p>';
             return;
         }
 
         // Build hierarchy structure
         const hierarchy = this.buildHierarchy(this.userIngredients);
         container.innerHTML = this.renderHierarchyHTML(hierarchy, 'current');
-        
+
         // Bind checkbox events for removal
         this.bindCheckboxEvents(container, 'current');
     }
 
     renderAvailableIngredients() {
         const container = document.getElementById('available-ingredients-list');
-        
+
         if (this.filteredIngredients.length === 0) {
-            container.innerHTML = '<p class="empty-state">All ingredients are already in your inventory.</p>';
+            container.innerHTML =
+                '<p class="empty-state">All ingredients are already in your inventory.</p>';
             return;
         }
 
         // Build hierarchy structure
         const hierarchy = this.buildHierarchy(this.filteredIngredients);
         container.innerHTML = this.renderHierarchyHTML(hierarchy, 'available');
-        
+
         // Bind checkbox events for adding
         this.bindCheckboxEvents(container, 'available');
     }
@@ -135,18 +139,18 @@ class UserIngredientsManager {
         const rootIngredients = [];
 
         // First pass: create map of all ingredients
-        ingredients.forEach(ingredient => {
+        ingredients.forEach((ingredient) => {
             ingredientMap.set(ingredient.ingredient_id || ingredient.id, {
                 ...ingredient,
-                children: []
+                children: [],
             });
         });
 
         // Second pass: build parent-child relationships
-        ingredients.forEach(ingredient => {
+        ingredients.forEach((ingredient) => {
             const id = ingredient.ingredient_id || ingredient.id;
             const parentId = ingredient.parent_id;
-            
+
             if (parentId && ingredientMap.has(parentId)) {
                 ingredientMap.get(parentId).children.push(ingredientMap.get(id));
             } else {
@@ -157,7 +161,7 @@ class UserIngredientsManager {
         // Sort each level by name
         const sortHierarchy = (items) => {
             items.sort((a, b) => a.name.localeCompare(b.name));
-            items.forEach(item => {
+            items.forEach((item) => {
                 if (item.children.length > 0) {
                     sortHierarchy(item.children);
                 }
@@ -173,14 +177,14 @@ class UserIngredientsManager {
 
         const isRoot = level === 0;
         const listClass = isRoot ? 'hierarchy-root' : 'hierarchy-children';
-        
+
         let html = `<ul class="${listClass}" style="margin-left: ${level * 20}px;">`;
-        
-        hierarchy.forEach(ingredient => {
+
+        hierarchy.forEach((ingredient) => {
             const id = ingredient.ingredient_id || ingredient.id;
             const hasChildren = ingredient.children && ingredient.children.length > 0;
             const checkboxId = `${type}-${id}`;
-            
+
             html += `
                 <li class="hierarchy-item ${hasChildren ? 'has-children' : ''}">
                     <div class="ingredient-row">
@@ -193,18 +197,18 @@ class UserIngredientsManager {
                 </li>
             `;
         });
-        
+
         html += '</ul>';
         return html;
     }
 
     bindCheckboxEvents(container, type) {
         const checkboxes = container.querySelectorAll('.ingredient-checkbox');
-        
-        checkboxes.forEach(checkbox => {
+
+        checkboxes.forEach((checkbox) => {
             checkbox.addEventListener('change', (e) => {
                 const ingredientId = parseInt(e.target.value);
-                
+
                 if (type === 'available') {
                     if (e.target.checked) {
                         this.selectedToAdd.add(ingredientId);
@@ -251,17 +255,17 @@ class UserIngredientsManager {
 
         const parentId = ingredient.parent_id;
         const parentCheckbox = container.querySelector(`#${type}-${parentId}`);
-        
+
         if (parentCheckbox && !parentCheckbox.checked) {
             parentCheckbox.checked = true;
-            
+
             // Add parent to selected set
             if (type === 'available') {
                 this.selectedToAdd.add(parentId);
             } else if (type === 'current') {
                 this.selectedToRemove.add(parentId);
             }
-            
+
             // Recursively select parent's parents
             this.selectParentIngredients(parentId, container, type);
         }
@@ -270,19 +274,19 @@ class UserIngredientsManager {
     deselectChildIngredients(ingredientId, container, type) {
         // Find all child ingredients and deselect them
         const childIds = this.findChildIngredientIds(ingredientId);
-        
-        childIds.forEach(childId => {
+
+        childIds.forEach((childId) => {
             const childCheckbox = container.querySelector(`#${type}-${childId}`);
             if (childCheckbox && childCheckbox.checked) {
                 childCheckbox.checked = false;
-                
+
                 // Remove child from selected set
                 if (type === 'available') {
                     this.selectedToAdd.delete(childId);
                 } else if (type === 'current') {
                     this.selectedToRemove.delete(childId);
                 }
-                
+
                 // Recursively deselect child's children
                 this.deselectChildIngredients(childId, container, type);
             }
@@ -291,28 +295,30 @@ class UserIngredientsManager {
 
     findIngredientById(ingredientId) {
         // Search in both filtered and all ingredients
-        return this.allIngredients.find(ing => ing.id === ingredientId) || 
-               this.userIngredients.find(ing => (ing.ingredient_id || ing.id) === ingredientId);
+        return (
+            this.allIngredients.find((ing) => ing.id === ingredientId) ||
+            this.userIngredients.find((ing) => (ing.ingredient_id || ing.id) === ingredientId)
+        );
     }
 
     findChildIngredientIds(parentId) {
         // Find all ingredients that have this ingredient as parent
         const childIds = [];
-        
+
         // Check in all available ingredients
-        this.allIngredients.forEach(ing => {
+        this.allIngredients.forEach((ing) => {
             if (ing.parent_id === parentId) {
                 childIds.push(ing.id);
             }
         });
-        
+
         // Check in user ingredients
-        this.userIngredients.forEach(ing => {
+        this.userIngredients.forEach((ing) => {
             if (ing.parent_id === parentId) {
                 childIds.push(ing.ingredient_id || ing.id);
             }
         });
-        
+
         return childIds;
     }
 
@@ -322,11 +328,11 @@ class UserIngredientsManager {
         try {
             const ingredientIds = Array.from(this.selectedToAdd);
             await api.bulkAddUserIngredients(ingredientIds);
-            
+
             // Reset selection
             this.selectedToAdd.clear();
             this.updateAddButton();
-            
+
             // Reload data and recommendations
             await this.loadData();
             await this.loadRecommendations();
@@ -345,11 +351,11 @@ class UserIngredientsManager {
         try {
             const ingredientIds = Array.from(this.selectedToRemove);
             await api.bulkRemoveUserIngredients(ingredientIds);
-            
+
             // Reset selection
             this.selectedToRemove.clear();
             this.updateRemoveButton();
-            
+
             // Reload data and recommendations
             await this.loadData();
             await this.loadRecommendations();
@@ -357,12 +363,15 @@ class UserIngredientsManager {
             this.showSuccess(`Removed ${ingredientIds.length} ingredient(s) from your inventory`);
         } catch (error) {
             console.error('Error removing ingredients:', error);
-            
+
             // Extract specific error message from the response
             let errorMessage = error.message || 'Failed to remove ingredients from inventory';
-            
+
             // Check if this is a parent-child validation error
-            if (errorMessage.includes('Cannot remove ingredient') && errorMessage.includes('child ingredients')) {
+            if (
+                errorMessage.includes('Cannot remove ingredient') &&
+                errorMessage.includes('child ingredients')
+            ) {
                 // This is already a specific parent-child error message, use it as-is
                 this.showError(errorMessage);
             } else if (errorMessage.includes('Validation failed')) {
@@ -377,12 +386,14 @@ class UserIngredientsManager {
 
     filterIngredients(searchTerm) {
         if (!searchTerm.trim()) {
-            this.filteredIngredients = this.allIngredients.filter(ing => !this.userIngredientIds.has(ing.id));
+            this.filteredIngredients = this.allIngredients.filter(
+                (ing) => !this.userIngredientIds.has(ing.id),
+            );
         } else {
             const term = searchTerm.toLowerCase();
-            this.filteredIngredients = this.allIngredients.filter(ing => 
-                !this.userIngredientIds.has(ing.id) && 
-                ing.name.toLowerCase().includes(term)
+            this.filteredIngredients = this.allIngredients.filter(
+                (ing) =>
+                    !this.userIngredientIds.has(ing.id) && ing.name.toLowerCase().includes(term),
             );
         }
         this.renderAvailableIngredients();
@@ -394,7 +405,7 @@ class UserIngredientsManager {
         toast.className = 'toast toast-success';
         toast.textContent = message;
         document.body.appendChild(toast);
-        
+
         setTimeout(() => {
             toast.remove();
         }, 3000);
@@ -406,7 +417,7 @@ class UserIngredientsManager {
         toast.className = 'toast toast-error';
         toast.textContent = message;
         document.body.appendChild(toast);
-        
+
         setTimeout(() => {
             toast.remove();
         }, 5000);
@@ -416,27 +427,29 @@ class UserIngredientsManager {
     async loadPrivateTags() {
         const tagsList = document.getElementById('private-tags-list');
         const refreshBtn = document.getElementById('refresh-private-tags-btn');
-        
+
         if (!tagsList) return;
-        
+
         try {
             // Show loading state
-            tagsList.innerHTML = '<div class="loading-message"><p>Loading your private tags...</p></div>';
+            tagsList.innerHTML =
+                '<div class="loading-message"><p>Loading your private tags...</p></div>';
             if (refreshBtn) {
                 refreshBtn.disabled = true;
                 refreshBtn.textContent = 'Loading...';
             }
-            
+
             this.privateTags = await api.getPrivateTags();
-            
+
             if (this.privateTags.length === 0) {
-                tagsList.innerHTML = '<div class="empty-message"><p>No private tags found. Create tags when adding them to recipes.</p></div>';
+                tagsList.innerHTML =
+                    '<div class="empty-message"><p>No private tags found. Create tags when adding them to recipes.</p></div>';
                 return;
             }
-            
+
             // Generate tag list HTML
             let html = '';
-            this.privateTags.forEach(tag => {
+            this.privateTags.forEach((tag) => {
                 html += `
                     <div class="tag-management-item" data-tag-id="${tag.id}">
                         <div class="tag-management-info">
@@ -451,18 +464,18 @@ class UserIngredientsManager {
                     </div>
                 `;
             });
-            
+
             tagsList.innerHTML = html;
-            
+
             // Add event listeners for delete buttons
             const deleteButtons = tagsList.querySelectorAll('.delete-tag-btn');
-            deleteButtons.forEach(btn => {
+            deleteButtons.forEach((btn) => {
                 btn.addEventListener('click', (e) => this.handleDeletePrivateTag(e));
             });
-            
         } catch (error) {
             console.error('Error loading private tags:', error);
-            tagsList.innerHTML = '<div class="error-message"><p>Error loading tags. Please try again.</p></div>';
+            tagsList.innerHTML =
+                '<div class="error-message"><p>Error loading tags. Please try again.</p></div>';
             this.showError('Error loading private tags');
         } finally {
             if (refreshBtn) {
@@ -476,43 +489,45 @@ class UserIngredientsManager {
         const button = event.target;
         const tagId = parseInt(button.dataset.tagId);
         const tagName = button.dataset.tagName;
-        
+
         // Confirm deletion
         const confirmMessage = `Are you sure you want to delete your private tag "${tagName}"?\n\nThis will remove it from all your recipes that use this tag. This action cannot be undone.`;
         if (!confirm(confirmMessage)) {
             return;
         }
-        
+
         const originalText = button.textContent;
-        
+
         try {
             // Show loading state
             button.disabled = true;
             button.textContent = 'Deleting...';
-            
+
             await api.deletePrivateTag(tagId);
-            
+
             // Remove the tag item from the UI
             const tagItem = button.closest('.tag-management-item');
             if (tagItem) {
                 tagItem.remove();
             }
-            
+
             // Update local data
-            this.privateTags = this.privateTags.filter(tag => tag.id !== tagId);
-            
+            this.privateTags = this.privateTags.filter((tag) => tag.id !== tagId);
+
             this.showSuccess(`Private tag "${tagName}" deleted successfully`);
-            
+
             // Check if list is now empty
             const tagsList = document.getElementById('private-tags-list');
             if (tagsList && tagsList.children.length === 0) {
-                tagsList.innerHTML = '<div class="empty-message"><p>No private tags found. Create tags when adding them to recipes.</p></div>';
+                tagsList.innerHTML =
+                    '<div class="empty-message"><p>No private tags found. Create tags when adding them to recipes.</p></div>';
             }
-            
         } catch (error) {
             console.error('Error deleting private tag:', error);
-            this.showError(`Error deleting tag "${tagName}": ${error.message || 'Please try again'}`);
-            
+            this.showError(
+                `Error deleting tag "${tagName}": ${error.message || 'Please try again'}`,
+            );
+
             // Restore button state
             button.disabled = false;
             button.textContent = originalText;
@@ -528,7 +543,8 @@ class UserIngredientsManager {
 
         try {
             // Show loading state
-            recommendationsList.innerHTML = '<div class="loading-message"><p>Loading recommendations...</p></div>';
+            recommendationsList.innerHTML =
+                '<div class="loading-message"><p>Loading recommendations...</p></div>';
             if (refreshBtn) {
                 refreshBtn.disabled = true;
                 refreshBtn.textContent = 'Loading...';
@@ -538,15 +554,16 @@ class UserIngredientsManager {
             this.recommendations = response.recommendations || [];
 
             if (this.recommendations.length === 0) {
-                recommendationsList.innerHTML = '<div class="empty-message"><p>No recommendations available. You may already be able to make most recipes!</p></div>';
+                recommendationsList.innerHTML =
+                    '<div class="empty-message"><p>No recommendations available. You may already be able to make most recipes!</p></div>';
                 return;
             }
 
             this.renderRecommendations();
-
         } catch (error) {
             console.error('Error loading ingredient recommendations:', error);
-            recommendationsList.innerHTML = '<div class="error-message"><p>Error loading recommendations. Please try again.</p></div>';
+            recommendationsList.innerHTML =
+                '<div class="error-message"><p>Error loading recommendations. Please try again.</p></div>';
             this.showError('Error loading ingredient recommendations');
         } finally {
             if (refreshBtn) {
@@ -563,8 +580,8 @@ class UserIngredientsManager {
 
         let html = '<div class="recommendations-container">';
 
-        this.recommendations.forEach(rec => {
-            const recipeList = rec.recipe_names.map(name => `<li>${name}</li>`).join('');
+        this.recommendations.forEach((rec) => {
+            const recipeList = rec.recipe_names.map((name) => `<li>${name}</li>`).join('');
 
             html += `
                 <div class="recommendation-item" data-ingredient-id="${rec.id}">
@@ -600,10 +617,12 @@ class UserIngredientsManager {
     bindRecommendationEvents(container) {
         // Expand/collapse buttons
         const expandButtons = container.querySelectorAll('.expand-btn');
-        expandButtons.forEach(btn => {
+        expandButtons.forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 const ingredientId = e.currentTarget.dataset.ingredientId;
-                const recipesDiv = container.querySelector(`.recommendation-recipes[data-ingredient-id="${ingredientId}"]`);
+                const recipesDiv = container.querySelector(
+                    `.recommendation-recipes[data-ingredient-id="${ingredientId}"]`,
+                );
                 const icon = e.currentTarget.querySelector('.expand-icon');
 
                 if (recipesDiv) {
@@ -615,7 +634,7 @@ class UserIngredientsManager {
 
         // Quick-add buttons
         const quickAddButtons = container.querySelectorAll('.quick-add-btn');
-        quickAddButtons.forEach(btn => {
+        quickAddButtons.forEach((btn) => {
             btn.addEventListener('click', async (e) => {
                 const ingredientId = parseInt(e.currentTarget.dataset.ingredientId);
                 const originalText = e.currentTarget.textContent;

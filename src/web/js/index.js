@@ -24,23 +24,23 @@ async function loadInitialRecipes() {
     try {
         // Show loading message
         document.getElementById('recipe-display').innerHTML = '<p>Loading recipes...</p>';
-        
+
         // Reset state
         recipes = [];
         currentPage = 1;
         hasMoreRecipes = true;
         isLoadingRecipes = false;
-        
+
         // Load first page
         await loadMoreRecipes();
-        
+
         // Display the first recipe if we have any
         if (recipes.length > 0) {
             displayRecipe(currentRecipeIndex);
         } else {
             document.getElementById('recipe-display').innerHTML = '<p>No recipes found.</p>';
         }
-        
+
         updateStats();
     } catch (error) {
         console.error('Error loading initial recipes:', error);
@@ -53,18 +53,18 @@ async function loadMoreRecipes() {
     if (isLoadingRecipes || !hasMoreRecipes) {
         return;
     }
-    
+
     isLoadingRecipes = true;
-    
+
     try {
         console.log(`Loading page ${currentPage}...`);
         const result = await api.searchRecipes({}, currentPage, recipesPerPage, 'random', 'asc'); // Empty search returns all recipes in random order
         console.log(`Page ${currentPage} result:`, result);
-        
+
         if (result && result.recipes && result.recipes.length > 0) {
             recipes = recipes.concat(result.recipes);
             console.log(`Added ${result.recipes.length} recipes. Total: ${recipes.length}`);
-            
+
             // Check if there are more pages
             console.log('Pagination object:', result.pagination);
             hasMoreRecipes = result.pagination.has_next;
@@ -85,7 +85,7 @@ async function loadMoreRecipes() {
 // Display a specific recipe by index
 async function displayRecipe(index) {
     if (recipes.length === 0) return;
-    
+
     // Ensure index is within bounds, but handle lazy loading
     if (index < 0) index = recipes.length - 1;
     if (index >= recipes.length) {
@@ -100,15 +100,15 @@ async function displayRecipe(index) {
             index = 0; // Wrap to beginning
         }
     }
-    
+
     currentRecipeIndex = index;
-    
+
     try {
         // Use the already loaded full recipe data
         const recipe = recipes[index];
         if (recipe) {
             const recipeCard = createRecipeCard(recipe, true, null, { showSimilar: true });
-            
+
             document.getElementById('recipe-display').innerHTML = '';
             document.getElementById('recipe-display').appendChild(recipeCard);
         }
@@ -130,4 +130,4 @@ document.getElementById('next-recipe').addEventListener('click', async () => {
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     loadInitialRecipes();
-}); 
+});

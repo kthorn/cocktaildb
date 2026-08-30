@@ -12,7 +12,7 @@ class IngredientCreate(BaseModel):
     )
     allow_substitution: bool = Field(
         default=False,
-        description="Whether this ingredient can be substituted with siblings/ancestors"
+        description="Whether this ingredient can be substituted with siblings/ancestors",
     )
     percent_abv: Optional[float] = Field(None, ge=0, le=100)
     sugar_g_per_l: Optional[float] = Field(None, ge=0, le=1000)
@@ -46,7 +46,7 @@ class IngredientUpdate(BaseModel):
     )
     allow_substitution: Optional[bool] = Field(
         None,
-        description="Whether this ingredient can be substituted with siblings/ancestors"
+        description="Whether this ingredient can be substituted with siblings/ancestors",
     )
     percent_abv: Optional[float] = Field(None, ge=0, le=100)
     sugar_g_per_l: Optional[float] = Field(None, ge=0, le=1000)
@@ -77,9 +77,13 @@ class BulkRecipeIngredient(BaseModel):
         ..., description="Ingredient name (will be looked up by exact match)"
     )
     amount: Optional[float] = Field(None, description="Quantity amount")
-    unit_name: Optional[str] = Field(None, description="Unit name (will be looked up by exact match)")
+    unit_name: Optional[str] = Field(
+        None, description="Unit name (will be looked up by exact match)"
+    )
     # Kept for backward compatibility - deprecated in favor of unit_name
-    unit_id: Optional[int] = Field(None, description="Unit ID (deprecated, use unit_name)")
+    unit_id: Optional[int] = Field(
+        None, description="Unit ID (deprecated, use unit_name)"
+    )
 
     @field_validator("ingredient_name", "unit_name")
     @classmethod
@@ -91,7 +95,13 @@ class BulkRecipeIngredient(BaseModel):
 
     def get_unit_identifier(self) -> Optional[str]:
         """Get the unit identifier - prioritize unit_name over unit_id"""
-        return self.unit_name if self.unit_name is not None else str(self.unit_id) if self.unit_id is not None else None
+        return (
+            self.unit_name
+            if self.unit_name is not None
+            else str(self.unit_id)
+            if self.unit_id is not None
+            else None
+        )
 
 
 class RecipeCreate(BaseModel):
@@ -185,19 +195,21 @@ class RecipeTagAssociation(BaseModel):
     tag_id: int = Field(..., description="Tag ID to associate")
 
 
-
-
 class BulkIngredientCreate(BaseModel):
     """Ingredient specification for bulk upload"""
 
     name: str = Field(..., min_length=1, description="Ingredient name")
     description: Optional[str] = Field(None, description="Ingredient description")
-    parent_name: Optional[str] = Field(None, description="Parent ingredient name (will be looked up by exact match)")
+    parent_name: Optional[str] = Field(
+        None, description="Parent ingredient name (will be looked up by exact match)"
+    )
     # Kept for backward compatibility - deprecated in favor of parent_name
-    parent_id: Optional[int] = Field(None, description="Parent ingredient ID (deprecated, use parent_name)")
+    parent_id: Optional[int] = Field(
+        None, description="Parent ingredient ID (deprecated, use parent_name)"
+    )
     allow_substitution: Optional[bool] = Field(
         default=False,
-        description="Whether this ingredient can be substituted with siblings/ancestors"
+        description="Whether this ingredient can be substituted with siblings/ancestors",
     )
 
     @field_validator("name", "description", "parent_name")

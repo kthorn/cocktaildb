@@ -158,7 +158,9 @@ class TestTagSearch:
             data = response.json()
 
             # Should handle duplicates gracefully (same as single tag search)
-            single_response = await client.get(f"/recipes/search?tags={tag_to_duplicate}")
+            single_response = await client.get(
+                f"/recipes/search?tags={tag_to_duplicate}"
+            )
             assert single_response.status_code == 200
             single_data = single_response.json()
 

@@ -61,9 +61,7 @@ class TestSearchIngredientHierarchy:
         db.create_recipe(recipe_data)
 
         # Search for recipes
-        results = db.search_recipes_paginated(
-            search_params={}, limit=10, offset=0
-        )
+        results = db.search_recipes_paginated(search_params={}, limit=10, offset=0)
 
         assert len(results) >= 1
 
@@ -127,7 +125,11 @@ class TestSearchIngredientHierarchy:
             {"name": "TestSpirits004", "description": "Spirits", "parent_id": None}
         )
         whiskey = db.create_ingredient(
-            {"name": "TestWhiskey004", "description": "Whiskey", "parent_id": spirits["id"]}
+            {
+                "name": "TestWhiskey004",
+                "description": "Whiskey",
+                "parent_id": spirits["id"],
+            }
         )
         bourbon = db.create_ingredient(
             {
@@ -146,9 +148,7 @@ class TestSearchIngredientHierarchy:
         db.create_recipe(recipe_data)
 
         # Search for recipes
-        results = db.search_recipes_paginated(
-            search_params={}, limit=10, offset=0
-        )
+        results = db.search_recipes_paginated(search_params={}, limit=10, offset=0)
 
         # Find our recipe
         recipe = next(r for r in results if r["name"] == "Test Old Fashioned 004")
@@ -156,7 +156,11 @@ class TestSearchIngredientHierarchy:
 
         # Verify hierarchy array is in root-to-leaf order
         assert "hierarchy" in ingredient
-        assert ingredient["hierarchy"] == ["TestSpirits004", "TestWhiskey004", "TestBourbon004"]
+        assert ingredient["hierarchy"] == [
+            "TestSpirits004",
+            "TestWhiskey004",
+            "TestBourbon004",
+        ]
 
     def test_search_returns_hierarchy_for_deep_nesting(self, db_instance):
         """Test hierarchy fields for deeply nested ingredients (4 levels)"""
@@ -167,10 +171,18 @@ class TestSearchIngredientHierarchy:
             {"name": "TestSpirits005", "description": "Spirits", "parent_id": None}
         )
         whiskey = db.create_ingredient(
-            {"name": "TestWhiskey005", "description": "Whiskey", "parent_id": spirits["id"]}
+            {
+                "name": "TestWhiskey005",
+                "description": "Whiskey",
+                "parent_id": spirits["id"],
+            }
         )
         bourbon = db.create_ingredient(
-            {"name": "TestBourbon005", "description": "Bourbon", "parent_id": whiskey["id"]}
+            {
+                "name": "TestBourbon005",
+                "description": "Bourbon",
+                "parent_id": whiskey["id"],
+            }
         )
         makers = db.create_ingredient(
             {
@@ -198,11 +210,19 @@ class TestSearchIngredientHierarchy:
 
         # Verify full_name
         assert "full_name" in ingredient
-        assert ingredient["full_name"] == "TestMakers005 [TestBourbon005;TestWhiskey005;TestSpirits005]"
+        assert (
+            ingredient["full_name"]
+            == "TestMakers005 [TestBourbon005;TestWhiskey005;TestSpirits005]"
+        )
 
         # Verify hierarchy array
         assert "hierarchy" in ingredient
-        assert ingredient["hierarchy"] == ["TestSpirits005", "TestWhiskey005", "TestBourbon005", "TestMakers005"]
+        assert ingredient["hierarchy"] == [
+            "TestSpirits005",
+            "TestWhiskey005",
+            "TestBourbon005",
+            "TestMakers005",
+        ]
 
     def test_search_multiple_ingredients_with_mixed_hierarchy(self, db_instance):
         """Test that search handles recipes with multiple ingredients at different hierarchy levels"""
@@ -282,7 +302,11 @@ class TestSearchIngredientHierarchy:
             {"name": "TestRum007", "description": "Rum", "parent_id": spirits["id"]}
         )
         dark_rum = db.create_ingredient(
-            {"name": "TestDarkRum007", "description": "Dark Rum", "parent_id": rum["id"]}
+            {
+                "name": "TestDarkRum007",
+                "description": "Dark Rum",
+                "parent_id": rum["id"],
+            }
         )
 
         # Create recipe
@@ -308,7 +332,11 @@ class TestSearchIngredientHierarchy:
         assert "full_name" in ingredient
         assert ingredient["full_name"] == "TestDarkRum007 [TestRum007;TestSpirits007]"
         assert "hierarchy" in ingredient
-        assert ingredient["hierarchy"] == ["TestSpirits007", "TestRum007", "TestDarkRum007"]
+        assert ingredient["hierarchy"] == [
+            "TestSpirits007",
+            "TestRum007",
+            "TestDarkRum007",
+        ]
 
     def test_search_pagination_preserves_hierarchy(self, db_instance):
         """Test that pagination doesn't affect hierarchy field generation"""
@@ -319,7 +347,11 @@ class TestSearchIngredientHierarchy:
             {"name": "TestSpirits008", "description": "Spirits", "parent_id": None}
         )
         tequila = db.create_ingredient(
-            {"name": "TestTequila008", "description": "Tequila", "parent_id": spirits["id"]}
+            {
+                "name": "TestTequila008",
+                "description": "Tequila",
+                "parent_id": spirits["id"],
+            }
         )
 
         # Create multiple recipes

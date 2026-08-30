@@ -457,7 +457,9 @@ class TestIngredientRecommendationsAPI:
             (user_id, 100),
         )
 
-        response = await authenticated_client.get("/user-ingredients/recommendations?limit=5")
+        response = await authenticated_client.get(
+            "/user-ingredients/recommendations?limit=5"
+        )
         assert response.status_code == 200
 
         data = response.json()

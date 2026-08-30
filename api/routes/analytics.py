@@ -85,7 +85,7 @@ async def get_ingredient_usage_analytics(
             if not stored_data:
                 raise DatabaseException(
                     "Analytics not generated. Please trigger analytics refresh.",
-                    detail="ingredient-usage data not found in storage"
+                    detail="ingredient-usage data not found in storage",
                 )
 
             return stored_data
@@ -102,15 +102,17 @@ async def get_ingredient_usage_analytics(
                 "metadata": {
                     "computed_on_the_fly": True,
                     "level": level,
-                    "parent_id": parent_id
-                }
+                    "parent_id": parent_id,
+                },
             }
 
     except DatabaseException:
         raise
     except Exception as e:
         logger.error(f"Error getting ingredient usage analytics: {str(e)}")
-        raise DatabaseException("Failed to retrieve ingredient usage analytics", detail=str(e))
+        raise DatabaseException(
+            "Failed to retrieve ingredient usage analytics", detail=str(e)
+        )
 
 
 @router.get("/recipe-complexity")
@@ -129,7 +131,7 @@ async def get_recipe_complexity_analytics(
         if not stored_data:
             raise DatabaseException(
                 "Analytics not generated. Please trigger analytics refresh.",
-                detail=f"{storage_key} data not found in storage"
+                detail=f"{storage_key} data not found in storage",
             )
 
         return stored_data
@@ -138,7 +140,9 @@ async def get_recipe_complexity_analytics(
         raise
     except Exception as e:
         logger.error(f"Error getting recipe complexity analytics: {str(e)}")
-        raise DatabaseException("Failed to retrieve recipe complexity analytics", detail=str(e))
+        raise DatabaseException(
+            "Failed to retrieve recipe complexity analytics", detail=str(e)
+        )
 
 
 @router.get("/cocktail-space")
@@ -159,7 +163,7 @@ async def get_cocktail_space_analytics(
         if not stored_data:
             raise DatabaseException(
                 "Analytics not generated. Please trigger analytics refresh.",
-                detail="cocktail-space data not found in storage"
+                detail="cocktail-space data not found in storage",
             )
 
         return add_cocktail_space_ratings(stored_data, db, user)
@@ -167,7 +171,9 @@ async def get_cocktail_space_analytics(
         raise
     except Exception as e:
         logger.error(f"Error getting cocktail space analytics: {str(e)}")
-        raise DatabaseException("Failed to retrieve cocktail space analytics", detail=str(e))
+        raise DatabaseException(
+            "Failed to retrieve cocktail space analytics", detail=str(e)
+        )
 
 
 @router.get("/cocktail-space-em")
@@ -188,7 +194,7 @@ async def get_cocktail_space_em_analytics(
         if not stored_data:
             raise DatabaseException(
                 "Analytics not generated. Please trigger analytics refresh.",
-                detail="cocktail-space-em data not found in storage"
+                detail="cocktail-space-em data not found in storage",
             )
 
         return add_cocktail_space_ratings(stored_data, db, user)
@@ -196,7 +202,9 @@ async def get_cocktail_space_em_analytics(
         raise
     except Exception as e:
         logger.error(f"Error getting EM cocktail space analytics: {str(e)}")
-        raise DatabaseException("Failed to retrieve EM cocktail space analytics", detail=str(e))
+        raise DatabaseException(
+            "Failed to retrieve EM cocktail space analytics", detail=str(e)
+        )
 
 
 @router.get("/recipe-similar")
@@ -255,7 +263,7 @@ async def get_ingredient_tree_analytics(
         if not stored_data:
             raise DatabaseException(
                 "Analytics not generated. Please trigger analytics refresh.",
-                detail="ingredient-tree data not found in storage"
+                detail="ingredient-tree data not found in storage",
             )
 
         return stored_data
@@ -263,7 +271,9 @@ async def get_ingredient_tree_analytics(
         raise
     except Exception as e:
         logger.error(f"Error getting ingredient tree analytics: {str(e)}")
-        raise DatabaseException("Failed to retrieve ingredient tree analytics", detail=str(e))
+        raise DatabaseException(
+            "Failed to retrieve ingredient tree analytics", detail=str(e)
+        )
 
 
 @router.get("/recipe-distances-em/download")
@@ -278,7 +288,7 @@ async def download_recipe_distances_em():
         if not file_path.exists():
             raise DatabaseException(
                 "Analytics not generated. Please trigger analytics refresh.",
-                detail="recipe-distances-em data not found in storage"
+                detail="recipe-distances-em data not found in storage",
             )
 
         return FileResponse(
@@ -291,4 +301,3 @@ async def download_recipe_distances_em():
     except Exception as e:
         logger.error(f"Error downloading EM distance matrix: {str(e)}")
         raise DatabaseException("Failed to download EM distance matrix", detail=str(e))
-

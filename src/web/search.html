@@ -1,10 +1,12 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
     <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="description" content="Search cocktail recipes by name, ingredient, tag, or spirit category.">
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta
+            name="description"
+            content="Search cocktail recipes by name, ingredient, tag, or spirit category."
+        />
         <title>Search Recipes - Mixology Tools</title>
         <!-- Prevent FOUC (Flash of Unstyled Content) with common.js fallback -->
     </head>
@@ -24,11 +26,17 @@
                             <div class="form-group form-group-inline">
                                 <label for="name-search">Name</label>
                                 <div class="name-search-wrapper">
-                                    <input type="text" id="name-search"
+                                    <input
+                                        type="text"
+                                        id="name-search"
                                         name="name-search"
                                         placeholder="Search by recipe name"
-                                        autocomplete="off">
-                                    <div id="name-suggestions-dropdown" class="name-suggestions-dropdown hidden"></div>
+                                        autocomplete="off"
+                                    />
+                                    <div
+                                        id="name-suggestions-dropdown"
+                                        class="name-suggestions-dropdown hidden"
+                                    ></div>
                                 </div>
                             </div>
 
@@ -41,7 +49,11 @@
                                     <div class="rating-search-group">
                                         <div class="rating-type-filter">
                                             <label>
-                                                <input type="checkbox" id="use-user-rating" name="use-user-rating">
+                                                <input
+                                                    type="checkbox"
+                                                    id="use-user-rating"
+                                                    name="use-user-rating"
+                                                />
                                                 Search by my ratings
                                             </label>
                                         </div>
@@ -51,19 +63,32 @@
                                 <div class="form-group form-group-inline tag-search-container">
                                     <label for="tags-search">Tags</label>
                                     <div class="tag-input-wrapper">
-                                        <div id="selected-tags-chips" class="selected-tags-chips"></div>
-                                        <input type="text" id="tags-search"
+                                        <div
+                                            id="selected-tags-chips"
+                                            class="selected-tags-chips"
+                                        ></div>
+                                        <input
+                                            type="text"
+                                            id="tags-search"
                                             name="tags-search"
                                             placeholder="Search and add tags..."
-                                            autocomplete="off">
-                                        <div id="tag-suggestions-dropdown" class="tag-suggestions-dropdown hidden"></div>
+                                            autocomplete="off"
+                                        />
+                                        <div
+                                            id="tag-suggestions-dropdown"
+                                            class="tag-suggestions-dropdown hidden"
+                                        ></div>
                                     </div>
                                 </div>
                             </div>
 
                             <div class="form-group">
                                 <label>
-                                    <input type="checkbox" id="inventory-search" name="inventory-search">
+                                    <input
+                                        type="checkbox"
+                                        id="inventory-search"
+                                        name="inventory-search"
+                                    />
                                     Can make with my inventory
                                 </label>
                             </div>
@@ -87,19 +112,24 @@
                                     <!-- The add button will be styled to appear next to the last row or handled by JS -->
                                 </div>
                                 <div class="add-row-wrapper">
-                                    <button type="button"
+                                    <button
+                                        type="button"
                                         id="add-ingredient-row"
-                                        class="btn-success btn-circle"><span
-                                            class="btn-icon">+</span></button>
+                                        class="btn-success btn-circle"
+                                    >
+                                        <span class="btn-icon">+</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>
 
                         <div class="form-actions">
-                            <button type="reset" id="reset-button"
-                                class="btn-secondary">Reset</button>
-                            <button type="submit" id="search-button"
-                                class="btn-primary">Search</button>
+                            <button type="reset" id="reset-button" class="btn-secondary">
+                                Reset
+                            </button>
+                            <button type="submit" id="search-button" class="btn-primary">
+                                Search
+                            </button>
                         </div>
                     </div>
                 </form>
@@ -113,8 +143,7 @@
                         <p>Searching...</p>
                     </div>
                     <div class="empty-message">
-                        <p>Enter search criteria and click Search to find
-                            recipes.</p>
+                        <p>Enter search criteria and click Search to find recipes.</p>
                     </div>
                 </div>
             </section>
@@ -125,5 +154,4 @@
         <script type="module" src="js/common.js"></script>
         <script type="module" src="js/search.js"></script>
     </body>
-
 </html>

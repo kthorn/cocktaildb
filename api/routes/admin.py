@@ -58,19 +58,24 @@ async def download_database(
 
             # Set PGPASSWORD environment variable for pg_dump
             env = os.environ.copy()
-            env['PGPASSWORD'] = conn_params.get('password', '')
+            env["PGPASSWORD"] = conn_params.get("password", "")
 
             # Run pg_dump to create backup
             result = subprocess.run(
                 [
-                    'pg_dump',
-                    '-h', conn_params.get('host', 'localhost'),
-                    '-p', str(conn_params.get('port', '5432')),
-                    '-U', conn_params.get('user', 'cocktaildb'),
-                    '-d', conn_params.get('dbname', 'cocktaildb'),
-                    '-f', temp_backup_path,
-                    '--no-owner',
-                    '--no-acl',
+                    "pg_dump",
+                    "-h",
+                    conn_params.get("host", "localhost"),
+                    "-p",
+                    str(conn_params.get("port", "5432")),
+                    "-U",
+                    conn_params.get("user", "cocktaildb"),
+                    "-d",
+                    conn_params.get("dbname", "cocktaildb"),
+                    "-f",
+                    temp_backup_path,
+                    "--no-owner",
+                    "--no-acl",
                 ],
                 env=env,
                 capture_output=True,

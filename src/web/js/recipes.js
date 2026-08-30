@@ -19,7 +19,10 @@ function showFieldError(element, message) {
     element.parentElement.appendChild(errorDiv);
 
     // Scroll to first error if not visible
-    if (element === document.querySelector('.has-error input, .has-error select, .has-error textarea')) {
+    if (
+        element ===
+        document.querySelector('.has-error input, .has-error select, .has-error textarea')
+    ) {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
@@ -36,8 +39,8 @@ function clearFieldError(element) {
 }
 
 function clearAllErrors() {
-    document.querySelectorAll('.has-error').forEach(el => el.classList.remove('has-error'));
-    document.querySelectorAll('.field-error').forEach(el => el.remove());
+    document.querySelectorAll('.has-error').forEach((el) => el.classList.remove('has-error'));
+    document.querySelectorAll('.field-error').forEach((el) => el.remove());
 }
 
 // Shared utility functions for recipe management
@@ -46,14 +49,14 @@ function isSpecialUnit(unitName) {
 }
 
 function validateIngredientAmount(ingredientName, ingredientUnitName, amount) {
-    const unit = window.availableUnits?.find(u => u.name === ingredientUnitName);
+    const unit = window.availableUnits?.find((u) => u.name === ingredientUnitName);
     const isSpecial = unit && isSpecialUnit(unit.name);
-    
+
     // For special units, allow empty/null amounts, otherwise require positive numbers
     if (!isSpecial && (isNaN(amount) || amount <= 0)) {
         throw new Error(`Amount for "${ingredientName}" must be a positive number`);
     }
-    
+
     // Set amount to null for special units if empty or 0
     return isSpecial && (isNaN(amount) || amount === 0) ? null : amount;
 }
@@ -62,7 +65,7 @@ function setupAmountInputForUnit(amountInput, unitSelect) {
     const updateAmountField = () => {
         const selectedUnitName = unitSelect.value;
         const isSpecial = isSpecialUnit(selectedUnitName);
-        
+
         if (isSpecial) {
             amountInput.removeAttribute('required');
             amountInput.placeholder = 'Leave empty for special units';
@@ -73,7 +76,7 @@ function setupAmountInputForUnit(amountInput, unitSelect) {
             amountInput.title = '';
         }
     };
-    
+
     unitSelect.addEventListener('change', updateAmountField);
     return updateAmountField; // Return function so it can be called immediately for edit mode
 }
@@ -83,7 +86,7 @@ function checkDuplicateIngredients(ingredients, availableIngredients) {
     const ingredientIdCounts = {};
     const duplicates = [];
 
-    ingredients.forEach(ing => {
+    ingredients.forEach((ing) => {
         const ingredientId = ing.ingredient_id;
         if (ingredientIdCounts[ingredientId]) {
             ingredientIdCounts[ingredientId]++;
@@ -95,7 +98,9 @@ function checkDuplicateIngredients(ingredients, availableIngredients) {
     // Find ingredient names for duplicates
     for (const [ingredientId, count] of Object.entries(ingredientIdCounts)) {
         if (count > 1) {
-            const ingredient = availableIngredients.find(ing => ing.id === parseInt(ingredientId));
+            const ingredient = availableIngredients.find(
+                (ing) => ing.id === parseInt(ingredientId),
+            );
             if (ingredient) {
                 duplicates.push(ingredient.name);
             }
@@ -109,7 +114,7 @@ function checkDuplicateIngredients(ingredients, availableIngredients) {
 function clearAndRevalidateDuplicates(ingredientsList, availableIngredients) {
     // Clear all duplicate errors first
     const allIngredientInputs = ingredientsList.querySelectorAll('.ingredient-input');
-    allIngredientInputs.forEach(input => {
+    allIngredientInputs.forEach((input) => {
         const ingredientNameSelect = input.querySelector('.ingredient-name');
         if (ingredientNameSelect) {
             // Only clear if it's a duplicate error (not other validation errors)
@@ -123,12 +128,12 @@ function clearAndRevalidateDuplicates(ingredientsList, availableIngredients) {
 
     // Re-validate to check if duplicates still exist
     const currentIngredients = [];
-    allIngredientInputs.forEach(input => {
+    allIngredientInputs.forEach((input) => {
         const ingredientNameSelect = input.querySelector('.ingredient-name');
         const ingredientName = ingredientNameSelect?.value;
 
         if (ingredientName) {
-            const ingredient = availableIngredients.find(ing => ing.name === ingredientName);
+            const ingredient = availableIngredients.find((ing) => ing.name === ingredientName);
             if (ingredient) {
                 currentIngredients.push({ ingredient_id: ingredient.id, name: ingredientName });
             }
@@ -140,12 +145,15 @@ function clearAndRevalidateDuplicates(ingredientsList, availableIngredients) {
 
     // If duplicates still exist, show errors on those fields
     if (duplicateNames.length > 0) {
-        allIngredientInputs.forEach(input => {
+        allIngredientInputs.forEach((input) => {
             const ingredientNameSelect = input.querySelector('.ingredient-name');
             const ingredientName = ingredientNameSelect?.value;
 
             if (duplicateNames.includes(ingredientName)) {
-                showFieldError(ingredientNameSelect, `Duplicate ingredient: "${ingredientName}" appears multiple times`);
+                showFieldError(
+                    ingredientNameSelect,
+                    `Duplicate ingredient: "${ingredientName}" appears multiple times`,
+                );
             }
         });
     }
@@ -155,7 +163,7 @@ function processIngredientData(ingredientInputs, availableIngredients) {
     const ingredients = [];
     let firstError = null;
 
-    ingredientInputs.forEach(input => {
+    ingredientInputs.forEach((input) => {
         const ingredientNameSelect = input.querySelector('.ingredient-name');
         const ingredientUnitSelect = input.querySelector('.ingredient-unit');
         const amountInput = input.querySelector('.ingredient-amount');
@@ -177,10 +185,14 @@ function processIngredientData(ingredientInputs, availableIngredients) {
         }
 
         try {
-            const finalAmount = validateIngredientAmount(ingredientName, ingredientUnitName, amount);
+            const finalAmount = validateIngredientAmount(
+                ingredientName,
+                ingredientUnitName,
+                amount,
+            );
 
-            const ingredient = availableIngredients.find(ing => ing.name === ingredientName);
-            const unit = window.availableUnits?.find(u => u.name === ingredientUnitName);
+            const ingredient = availableIngredients.find((ing) => ing.name === ingredientName);
+            const unit = window.availableUnits?.find((u) => u.name === ingredientUnitName);
 
             if (!ingredient) {
                 showFieldError(ingredientNameSelect, `Ingredient "${ingredientName}" not found`);
@@ -196,7 +208,7 @@ function processIngredientData(ingredientInputs, availableIngredients) {
             ingredients.push({
                 ingredient_id: ingredient.id,
                 amount: finalAmount,
-                unit_id: unit.id
+                unit_id: unit.id,
             });
         } catch (error) {
             showFieldError(amountInput, error.message);
@@ -214,12 +226,15 @@ function processIngredientData(ingredientInputs, availableIngredients) {
     const duplicateNames = checkDuplicateIngredients(ingredients, availableIngredients);
     if (duplicateNames.length > 0) {
         // Show error on all inputs that have duplicate ingredients
-        ingredientInputs.forEach(input => {
+        ingredientInputs.forEach((input) => {
             const ingredientNameSelect = input.querySelector('.ingredient-name');
             const ingredientName = ingredientNameSelect.value;
 
             if (duplicateNames.includes(ingredientName)) {
-                showFieldError(ingredientNameSelect, `Duplicate ingredient: "${ingredientName}" appears multiple times`);
+                showFieldError(
+                    ingredientNameSelect,
+                    `Duplicate ingredient: "${ingredientName}" appears multiple times`,
+                );
                 if (!firstError) firstError = ingredientNameSelect;
             }
         });
@@ -236,7 +251,7 @@ function processIngredientData(ingredientInputs, availableIngredients) {
 // Declare function in global scope
 let addIngredientInput;
 
-document.addEventListener('DOMContentLoaded', () => {  
+document.addEventListener('DOMContentLoaded', () => {
     const recipeForm = document.getElementById('recipe-form');
     const addIngredientBtn = document.getElementById('add-ingredient');
     const ingredientsList = document.getElementById('ingredients-list');
@@ -251,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add event listeners to clear errors on main form fields
     const recipeNameInput = document.getElementById('recipe-name');
     const recipeInstructionsInput = document.getElementById('recipe-instructions');
-    [recipeNameInput, recipeInstructionsInput].forEach(element => {
+    [recipeNameInput, recipeInstructionsInput].forEach((element) => {
         if (element) {
             element.addEventListener('input', () => clearFieldError(element));
         }
@@ -314,8 +329,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 description: document.getElementById('recipe-description').value.trim(),
                 instructions: recipeInstructions,
                 source: document.getElementById('recipe-source').value.trim(),
-                source_url: formatSourceUrl(document.getElementById('recipe-source-url').value.trim()),
-                ingredients: ingredients
+                source_url: formatSourceUrl(
+                    document.getElementById('recipe-source-url').value.trim(),
+                ),
+                ingredients: ingredients,
             };
 
             if (recipeForm.dataset.mode === 'edit') {
@@ -347,7 +364,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error saving recipe:', error);
             // Don't show alert for validation errors since they're shown inline
-            if (!error.message.includes('Please fix') && !error.message.includes('Please complete')) {
+            if (
+                !error.message.includes('Please fix') &&
+                !error.message.includes('Please complete')
+            ) {
                 alert(`Failed to save recipe: ${error.message || 'Please try again.'}`);
             }
         }
@@ -356,12 +376,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Format source URL to ensure it has proper http/https prefix
     function formatSourceUrl(url) {
         if (!url) return '';
-        
+
         // If URL already has http/https protocol, return it as is
         if (url.match(/^https?:\/\//i)) {
             return url;
         }
-        
+
         // Otherwise, add https:// prefix
         return `https://${url}`;
     }
@@ -383,7 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Define addIngredientInput as a global function (assigned to the variable declared at the top)
-    addIngredientInput = function() {
+    addIngredientInput = function () {
         const div = document.createElement('div');
         div.className = 'ingredient-input';
         div.innerHTML = `
@@ -394,9 +414,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="form-group">
                     <select class="ingredient-unit" name="ingredient-unit">
                         <option value="">Select unit</option>
-                        ${window.availableUnits ? window.availableUnits.map(unit =>
-            `<option value="${unit.name}">${unit.name} (${unit.abbreviation})</option>`
-        ).join('') : ''}
+                        ${
+                            window.availableUnits
+                                ? window.availableUnits
+                                      .map(
+                                          (unit) =>
+                                              `<option value="${unit.name}">${unit.name} (${unit.abbreviation})</option>`,
+                                      )
+                                      .join('')
+                                : ''
+                        }
                     </select>
                 </div>
                 <div class="form-group">
@@ -405,9 +432,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="autocomplete-dropdown"></div>
                         <select class="ingredient-name" name="ingredient-name">
                             <option value="">Select ingredient</option>
-                            ${availableIngredients && availableIngredients.length > 0 ? availableIngredients.map(ingredient =>
-            `<option value="${ingredient.name}">${ingredient.name}</option>`
-        ).join('') : ''}
+                            ${
+                                availableIngredients && availableIngredients.length > 0
+                                    ? availableIngredients
+                                          .map(
+                                              (ingredient) =>
+                                                  `<option value="${ingredient.name}">${ingredient.name}</option>`,
+                                          )
+                                          .join('')
+                                    : ''
+                            }
                         </select>
                     </div>
                 </div>
@@ -426,43 +460,45 @@ document.addEventListener('DOMContentLoaded', () => {
         const searchInput = div.querySelector('.ingredient-search');
         const selectElement = div.querySelector('.ingredient-name');
         const autocompleteDropdown = div.querySelector('.autocomplete-dropdown');
-        let activeIndex = -1; 
-        
+        let activeIndex = -1;
+
         // Function to update the autocomplete dropdown
         function updateAutocomplete() {
             const searchTerm = searchInput.value.toLowerCase();
-            
+
             // Clear the dropdown
             autocompleteDropdown.innerHTML = '';
-            
+
             if (searchTerm.length === 0) {
                 autocompleteDropdown.style.display = 'none';
                 return;
             }
-            
+
             // Find matching ingredients
-            const matches = availableIngredients ? availableIngredients.filter(ingredient => 
-                ingredient.name.toLowerCase().includes(searchTerm)
-            ) : [];
-            
+            const matches = availableIngredients
+                ? availableIngredients.filter((ingredient) =>
+                      ingredient.name.toLowerCase().includes(searchTerm),
+                  )
+                : [];
+
             if (matches.length === 0) {
                 autocompleteDropdown.style.display = 'none';
                 return;
             }
-            
+
             // Add matches to dropdown
             matches.forEach((ingredient, index) => {
                 const item = document.createElement('div');
                 item.className = 'autocomplete-item';
                 item.textContent = ingredient.name;
-                
+
                 // Highlight the matching part
                 const highlightedText = ingredient.name.replace(
                     new RegExp(searchTerm, 'gi'),
-                    match => `<strong>${match}</strong>`
+                    (match) => `<strong>${match}</strong>`,
                 );
                 item.innerHTML = highlightedText;
-                
+
                 item.addEventListener('click', () => {
                     searchInput.value = ingredient.name;
                     selectElement.value = ingredient.name;
@@ -470,26 +506,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Trigger change event to validate duplicates
                     selectElement.dispatchEvent(new Event('change', { bubbles: true }));
                 });
-                
+
                 item.addEventListener('mouseenter', () => {
                     setActiveItem(index);
                 });
-                
+
                 autocompleteDropdown.appendChild(item);
             });
-            
+
             // Show the dropdown
             autocompleteDropdown.style.display = 'block';
             activeIndex = -1;
         }
-        
+
         // Function to set the active item
         function setActiveItem(index) {
             const items = autocompleteDropdown.querySelectorAll('.autocomplete-item');
-            
+
             // Remove active class from all items
-            items.forEach(item => item.classList.remove('active'));
-            
+            items.forEach((item) => item.classList.remove('active'));
+
             // Set active class on the selected item
             if (index >= 0 && index < items.length) {
                 activeIndex = index;
@@ -498,7 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 items[index].scrollIntoView({ block: 'nearest' });
             }
         }
-        
+
         // Function to select the current active item
         function selectActiveItem() {
             const items = autocompleteDropdown.querySelectorAll('.autocomplete-item');
@@ -511,13 +547,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 selectElement.dispatchEvent(new Event('change', { bubbles: true }));
             }
         }
-        
+
         // Input event listener
         searchInput.addEventListener('input', updateAutocomplete);
-        
+
         // Focus event listener
         searchInput.addEventListener('focus', updateAutocomplete);
-        
+
         // Blur event listener
         searchInput.addEventListener('blur', () => {
             // Delay hiding to allow click events on dropdown items
@@ -525,11 +561,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 autocompleteDropdown.style.display = 'none';
             }, 200);
         });
-        
+
         // Keyboard navigation
         searchInput.addEventListener('keydown', (e) => {
             const items = autocompleteDropdown.querySelectorAll('.autocomplete-item');
-            
+
             // Down arrow
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
@@ -571,7 +607,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Add event listeners to clear errors on input
         const ingredientNameSelect = div.querySelector('.ingredient-name');
-        [amountInput, unitSelect, ingredientNameSelect].forEach(element => {
+        [amountInput, unitSelect, ingredientNameSelect].forEach((element) => {
             if (element) {
                 element.addEventListener('input', () => clearFieldError(element));
                 element.addEventListener('change', () => {
@@ -593,19 +629,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (editRecipeId) {
         console.log('Edit recipe ID found:', editRecipeId);
         // Wait for ingredients and units to load, then edit the recipe
-        Promise.all([loadUnits(), loadIngredients()]).then(() => {
-            console.log('Units and ingredients loaded, calling editRecipe');
-            editRecipe(editRecipeId);
-        }).catch(error => {
-            console.error('Error loading units/ingredients:', error);
-        });
+        Promise.all([loadUnits(), loadIngredients()])
+            .then(() => {
+                console.log('Units and ingredients loaded, calling editRecipe');
+                editRecipe(editRecipeId);
+            })
+            .catch((error) => {
+                console.error('Error loading units/ingredients:', error);
+            });
     }
 });
 
 // Edit recipe
 async function editRecipe(id) {
     console.log('editRecipe called with ID:', id);
-    
+
     // Check editor permissions first
     if (!api.isEditor()) {
         alert('Editor access required. Only editors and admins can edit recipes.');
@@ -622,7 +660,7 @@ async function editRecipe(id) {
     try {
         // Show loading state
         form.classList.add('loading');
-        
+
         console.log('Fetching recipe data for ID:', id);
         const recipe = await api.getRecipe(id);
         if (!recipe) {
@@ -644,33 +682,35 @@ async function editRecipe(id) {
             // Add at least one empty ingredient row
             addIngredientInput();
         } else {
-            recipe.ingredients.forEach(ingredient => {
+            recipe.ingredients.forEach((ingredient) => {
                 addIngredientInput();
                 const lastInput = ingredientsList.lastElementChild;
-                
+
                 if (!lastInput) {
                     console.error('Failed to add ingredient input');
                     return;
                 }
-                
+
                 // Set ingredient selection
                 const nameSelect = lastInput.querySelector('.ingredient-name');
                 const searchInput = lastInput.querySelector('.ingredient-search');
-                
+
                 if (nameSelect && ingredient.ingredient_name) {
                     nameSelect.value = ingredient.ingredient_name;
                 }
-                
+
                 if (searchInput && ingredient.ingredient_name) {
                     searchInput.value = ingredient.ingredient_name;
                 }
-                
+
                 // Set the unit first, then amount (order matters for proper field setup)
                 const unitSelect = lastInput.querySelector('.ingredient-unit');
                 const amountInput = lastInput.querySelector('.ingredient-amount');
-                
+
                 if (ingredient.unit_name && window.availableUnits && unitSelect) {
-                    const matchingUnit = window.availableUnits.find(u => u.name === ingredient.unit_name);
+                    const matchingUnit = window.availableUnits.find(
+                        (u) => u.name === ingredient.unit_name,
+                    );
                     if (matchingUnit) {
                         unitSelect.value = matchingUnit.name;
                         // Trigger change event to update amount field properties
@@ -679,7 +719,7 @@ async function editRecipe(id) {
                         console.warn(`Unit "${ingredient.unit_name}" not found in available units`);
                     }
                 }
-                
+
                 // Set amount after unit is set (so special unit logic applies)
                 if (amountInput) {
                     if (ingredient.amount !== undefined && ingredient.amount !== null) {
@@ -720,4 +760,3 @@ async function editRecipe(id) {
 
 // Make the editRecipe function globally available
 window.editRecipe = editRecipe;
-

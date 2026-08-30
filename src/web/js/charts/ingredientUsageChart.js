@@ -15,14 +15,14 @@ const CONFIG = {
         marginLeft: 200,
         barHeight: 30,
         maxLabelLength: 20,
-        maxIngredients: Infinity
+        maxIngredients: Infinity,
     },
     mobile: {
         marginLeft: 120,
         barHeight: 24,
         maxLabelLength: 12,
-        maxIngredients: 15
-    }
+        maxIngredients: 15,
+    },
 };
 
 export function createIngredientUsageChart(container, data, options = {}) {
@@ -54,7 +54,8 @@ export function createIngredientUsageChart(container, data, options = {}) {
     const height = Math.max(300, sortedData.length * config.barHeight) - margin.top - margin.bottom;
 
     // Create SVG
-    const svg = d3.select(container)
+    const svg = d3
+        .select(container)
         .append('svg')
         .attr('width', width + margin.left + margin.right)
         .attr('height', height + margin.top + margin.bottom)
@@ -62,19 +63,22 @@ export function createIngredientUsageChart(container, data, options = {}) {
         .attr('transform', `translate(${margin.left},${margin.top})`);
 
     // Create scales
-    const xScale = d3.scaleLinear()
-        .domain([0, d3.max(sortedData, d => d.hierarchical_usage)])
+    const xScale = d3
+        .scaleLinear()
+        .domain([0, d3.max(sortedData, (d) => d.hierarchical_usage)])
         .range([0, width]);
 
-    const yScale = d3.scaleBand()
-        .domain(sortedData.map(d => d.ingredient_name))
+    const yScale = d3
+        .scaleBand()
+        .domain(sortedData.map((d) => d.ingredient_name))
         .range([0, height])
         .padding(0.1);
 
     // Create axes
     const xAxis = d3.axisBottom(xScale).ticks(5);
-    const yAxis = d3.axisLeft(yScale)
-        .tickFormat(name => truncateLabel(name, config.maxLabelLength));
+    const yAxis = d3
+        .axisLeft(yScale)
+        .tickFormat((name) => truncateLabel(name, config.maxLabelLength));
 
     // Add X axis
     svg.append('g')
@@ -88,11 +92,11 @@ export function createIngredientUsageChart(container, data, options = {}) {
         .text('Number of Recipes');
 
     // Add Y axis
-    svg.append('g')
-        .call(yAxis);
+    svg.append('g').call(yAxis);
 
     // Create tooltip
-    const tooltip = d3.select(container)
+    const tooltip = d3
+        .select(container)
         .append('div')
         .attr('class', 'chart-tooltip')
         .style('position', 'absolute')
@@ -120,12 +124,15 @@ export function createIngredientUsageChart(container, data, options = {}) {
             y = event.pageY - containerRect.top - 10;
         }
 
-        tooltip.style('visibility', 'visible')
-            .html(`
+        tooltip
+            .style('visibility', 'visible')
+            .html(
+                `
                 <strong>${d.ingredient_name}</strong><br/>
                 Direct usage: ${d.direct_usage}<br/>
                 Total (with subtypes): ${d.hierarchical_usage}
-            `)
+            `,
+            )
             .style('left', x + 'px')
             .style('top', y + 'px');
     }
@@ -146,54 +153,55 @@ export function createIngredientUsageChart(container, data, options = {}) {
             if (d.has_children && options.onIngredientClick) {
                 options.onIngredientClick(d);
             }
-        }
+        },
     });
 
     // Create bars
-    const bars = svg.selectAll('.bar')
+    const bars = svg
+        .selectAll('.bar')
         .data(sortedData)
         .enter()
         .append('rect')
         .attr('class', 'bar')
         .attr('x', 0)
-        .attr('y', d => yScale(d.ingredient_name))
-        .attr('width', d => xScale(d.hierarchical_usage))
+        .attr('y', (d) => yScale(d.ingredient_name))
+        .attr('width', (d) => xScale(d.hierarchical_usage))
         .attr('height', yScale.bandwidth())
-        .attr('fill', d => d.has_children ? '#1f77b4' : '#aec7e8')
-        .style('cursor', d => d.has_children ? 'pointer' : 'default');
+        .attr('fill', (d) => (d.has_children ? '#1f77b4' : '#aec7e8'))
+        .style('cursor', (d) => (d.has_children ? 'pointer' : 'default'));
 
     // Mouse events (desktop)
     if (!isTouchDevice()) {
-        bars.on('mouseover', function(event, d) {
-                d3.select(this).attr('fill', d.has_children ? '#1565c0' : '#90b8d8');
+        bars.on('mouseover', function (event, d) {
+            d3.select(this).attr('fill', d.has_children ? '#1565c0' : '#90b8d8');
+            showTooltip(event, d);
+        })
+            .on('mousemove', function (event, d) {
                 showTooltip(event, d);
             })
-            .on('mousemove', function(event, d) {
-                showTooltip(event, d);
-            })
-            .on('mouseout', function(event, d) {
+            .on('mouseout', function (event, d) {
                 d3.select(this).attr('fill', d.has_children ? '#1f77b4' : '#aec7e8');
                 hideTooltip();
             })
-            .on('click', function(event, d) {
+            .on('click', function (event, d) {
                 if (d.has_children && options.onIngredientClick) {
                     options.onIngredientClick(d);
                 }
             });
     } else {
         // Touch events (mobile)
-        bars.on('touchstart', function(event, d) {
-                d3.select(this).attr('fill', d.has_children ? '#1565c0' : '#90b8d8');
-                touchHandlers.touchstart(event, d);
-            })
-            .on('touchend', function(event, d) {
-                d3.select(this).attr('fill', d.has_children ? '#1f77b4' : '#aec7e8');
-            });
+        bars.on('touchstart', function (event, d) {
+            d3.select(this).attr('fill', d.has_children ? '#1565c0' : '#90b8d8');
+            touchHandlers.touchstart(event, d);
+        }).on('touchend', function (event, d) {
+            d3.select(this).attr('fill', d.has_children ? '#1f77b4' : '#aec7e8');
+        });
     }
 
     // Add "Show all" button if truncated
     if (isTruncated) {
-        const showAllBtn = d3.select(container)
+        const showAllBtn = d3
+            .select(container)
             .append('button')
             .attr('class', 'btn btn-secondary show-all-btn')
             .style('display', 'block')
@@ -207,11 +215,15 @@ export function createIngredientUsageChart(container, data, options = {}) {
     }
 
     // Hide tooltip when clicking elsewhere
-    document.addEventListener('touchstart', (event) => {
-        if (!container.contains(event.target)) {
-            hideTooltip();
-        }
-    }, { passive: true });
+    document.addEventListener(
+        'touchstart',
+        (event) => {
+            if (!container.contains(event.target)) {
+                hideTooltip();
+            }
+        },
+        { passive: true },
+    );
 }
 
 /**

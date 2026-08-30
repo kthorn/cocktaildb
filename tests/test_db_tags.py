@@ -231,7 +231,10 @@ class TestRecipeTagAssociations:
         assert result is True
 
         # Verify association exists
-        tags = db.execute_query("SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by IS NULL ORDER BY t.name", (recipe["id"],))
+        tags = db.execute_query(
+            "SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by IS NULL ORDER BY t.name",
+            (recipe["id"],),
+        )
         assert len(tags) == 1
         assert tags[0]["id"] == tag["id"]
         assert tags[0]["name"] == "new_tag"
@@ -252,7 +255,10 @@ class TestRecipeTagAssociations:
         assert result2 is False  # No new row created
 
         # Verify only one association exists
-        tags = db.execute_query("SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by IS NULL ORDER BY t.name", (recipe["id"],))
+        tags = db.execute_query(
+            "SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by IS NULL ORDER BY t.name",
+            (recipe["id"],),
+        )
         assert len(tags) == 1
 
     def test_add_private_tag_to_recipe(self, db_instance):
@@ -268,7 +274,10 @@ class TestRecipeTagAssociations:
         assert result is True
 
         # Verify association exists
-        tags = db.execute_query("SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by = %s ORDER BY t.name", (recipe["id"], "user123"))
+        tags = db.execute_query(
+            "SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by = %s ORDER BY t.name",
+            (recipe["id"], "user123"),
+        )
         assert len(tags) == 1
         assert tags[0]["id"] == tag["id"]
         assert tags[0]["name"] == "favorites"
@@ -289,7 +298,10 @@ class TestRecipeTagAssociations:
         assert result2 is False  # No new row created
 
         # Verify only one association exists
-        tags = db.execute_query("SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by = %s ORDER BY t.name", (recipe["id"], "user123"))
+        tags = db.execute_query(
+            "SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by = %s ORDER BY t.name",
+            (recipe["id"], "user123"),
+        )
         assert len(tags) == 1
 
     def test_add_recipe_tag_generic_public(self, db_instance):
@@ -305,7 +317,10 @@ class TestRecipeTagAssociations:
         assert result is True
 
         # Verify public tag was added
-        public_tags = db.execute_query("SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by IS NULL ORDER BY t.name", (recipe["id"],))
+        public_tags = db.execute_query(
+            "SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by IS NULL ORDER BY t.name",
+            (recipe["id"],),
+        )
         assert len(public_tags) == 1
         assert public_tags[0]["name"] == "modern"
 
@@ -322,7 +337,10 @@ class TestRecipeTagAssociations:
         assert result is True
 
         # Verify private tag was added
-        private_tags = db.execute_query("SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by = %s ORDER BY t.name", (recipe["id"], "user123"))
+        private_tags = db.execute_query(
+            "SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by = %s ORDER BY t.name",
+            (recipe["id"], "user123"),
+        )
         assert len(private_tags) == 1
         assert private_tags[0]["name"] == "personal"
 
@@ -340,7 +358,10 @@ class TestRecipeTagRemoval:
         db.add_public_tag_to_recipe(recipe["id"], tag["id"])
 
         # Verify tag is associated
-        tags_before = db.execute_query("SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by IS NULL ORDER BY t.name", (recipe["id"],))
+        tags_before = db.execute_query(
+            "SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by IS NULL ORDER BY t.name",
+            (recipe["id"],),
+        )
         assert len(tags_before) == 1
 
         # Remove tag
@@ -348,7 +369,10 @@ class TestRecipeTagRemoval:
         assert result is True
 
         # Verify tag is removed
-        tags_after = db.execute_query("SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by IS NULL ORDER BY t.name", (recipe["id"],))
+        tags_after = db.execute_query(
+            "SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by IS NULL ORDER BY t.name",
+            (recipe["id"],),
+        )
         assert len(tags_after) == 0
 
     def test_remove_public_tag_not_associated(self, db_instance):
@@ -372,17 +396,21 @@ class TestRecipeTagRemoval:
         db.add_private_tag_to_recipe(recipe["id"], tag["id"])
 
         # Verify tag is associated
-        tags_before = db.execute_query("SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by = %s ORDER BY t.name", (recipe["id"], "user123"))
+        tags_before = db.execute_query(
+            "SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by = %s ORDER BY t.name",
+            (recipe["id"], "user123"),
+        )
         assert len(tags_before) == 1
 
         # Remove tag
-        result = db.remove_private_tag_from_recipe(
-            recipe["id"], tag["id"], "user123"
-        )
+        result = db.remove_private_tag_from_recipe(recipe["id"], tag["id"], "user123")
         assert result is True
 
         # Verify tag is removed
-        tags_after = db.execute_query("SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by = %s ORDER BY t.name", (recipe["id"], "user123"))
+        tags_after = db.execute_query(
+            "SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by = %s ORDER BY t.name",
+            (recipe["id"], "user123"),
+        )
         assert len(tags_after) == 0
 
     def test_remove_private_tag_wrong_user(self, db_instance):
@@ -399,7 +427,10 @@ class TestRecipeTagRemoval:
         assert result is False
 
         # Verify tag is still associated with user1
-        tags = db.execute_query("SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by = %s ORDER BY t.name", (recipe["id"], "user1"))
+        tags = db.execute_query(
+            "SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by = %s ORDER BY t.name",
+            (recipe["id"], "user1"),
+        )
         assert len(tags) == 1
 
     def test_remove_recipe_tag_generic_public(self, db_instance):
@@ -416,7 +447,10 @@ class TestRecipeTagRemoval:
         assert result is True
 
         # Verify public tag was removed
-        public_tags = db.execute_query("SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by IS NULL ORDER BY t.name", (recipe["id"],))
+        public_tags = db.execute_query(
+            "SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by IS NULL ORDER BY t.name",
+            (recipe["id"],),
+        )
         assert len(public_tags) == 0
 
     def test_remove_recipe_tag_generic_private(self, db_instance):
@@ -433,7 +467,10 @@ class TestRecipeTagRemoval:
         assert result is True
 
         # Verify private tag was removed
-        private_tags = db.execute_query("SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by = %s ORDER BY t.name", (recipe["id"], "user123"))
+        private_tags = db.execute_query(
+            "SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by = %s ORDER BY t.name",
+            (recipe["id"], "user123"),
+        )
         assert len(private_tags) == 0
 
 
@@ -453,8 +490,24 @@ class TestTagCascadeOperations:
         db.add_private_tag_to_recipe(recipe["id"], private_tag["id"])
 
         # Verify associations exist
-        assert len(db.execute_query("SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by IS NULL ORDER BY t.name", (recipe["id"],))) == 1
-        assert len(db.execute_query("SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by = %s ORDER BY t.name", (recipe["id"], "user123"))) == 1
+        assert (
+            len(
+                db.execute_query(
+                    "SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by IS NULL ORDER BY t.name",
+                    (recipe["id"],),
+                )
+            )
+            == 1
+        )
+        assert (
+            len(
+                db.execute_query(
+                    "SELECT t.id, t.name FROM tags t JOIN recipe_tags rt ON t.id = rt.tag_id WHERE rt.recipe_id = %s AND t.created_by = %s ORDER BY t.name",
+                    (recipe["id"], "user123"),
+                )
+            )
+            == 1
+        )
 
         # Delete recipe
         db.delete_recipe(recipe["id"])
@@ -469,9 +522,7 @@ class TestTagCascadeOperations:
 
         # Verify tags themselves still exist
         assert db.get_public_tag_by_name("new_tag") is not None
-        assert (
-            db.get_private_tag_by_name_and_user("favorites", "user123") is not None
-        )
+        assert db.get_private_tag_by_name_and_user("favorites", "user123") is not None
 
 
 class TestTagConstraints:
@@ -577,9 +628,7 @@ class TestComplexTagScenarios:
         db = db_instance
 
         # Create recipe
-        recipe = db.create_recipe(
-            {"name": "Complex Recipe", "instructions": "Test"}
-        )
+        recipe = db.create_recipe({"name": "Complex Recipe", "instructions": "Test"})
 
         # Add public tags
         classic_tag = db.create_public_tag("new_tag")
@@ -674,12 +723,8 @@ class TestComplexTagScenarios:
         # Verify all tags are present
         assert len(result["tags"]) == 40
 
-        public_count = len(
-            [tag for tag in result["tags"] if tag["type"] == "public"]
-        )
-        private_count = len(
-            [tag for tag in result["tags"] if tag["type"] == "private"]
-        )
+        public_count = len([tag for tag in result["tags"] if tag["type"] == "public"])
+        private_count = len([tag for tag in result["tags"] if tag["type"] == "private"])
 
         assert public_count == 20
         assert private_count == 20

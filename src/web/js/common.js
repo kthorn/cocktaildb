@@ -42,8 +42,8 @@ export function loadCommonHead() {
  * Loads header component into the page
  */
 export function loadHeader() {
-  const header = document.createElement('header');
-  header.innerHTML = `
+    const header = document.createElement('header');
+    header.innerHTML = `
     <div class="header-container">
       <h1 class="site-title"><span class="title-line">Mixology</span><span class="title-line">Tools</span></h1>
       <div class="auth-controls">
@@ -61,142 +61,144 @@ export function loadHeader() {
     </div>
   `;
 
-  // Find the existing header and replace it
-  const existingHeader = document.querySelector('header');
-  if (existingHeader) {
-    existingHeader.replaceWith(header);
-  } else {
-    // If no header exists, insert at the beginning of the body
-    document.body.insertBefore(header, document.body.firstChild);
-  }
+    // Find the existing header and replace it
+    const existingHeader = document.querySelector('header');
+    if (existingHeader) {
+        existingHeader.replaceWith(header);
+    } else {
+        // If no header exists, insert at the beginning of the body
+        document.body.insertBefore(header, document.body.firstChild);
+    }
 }
 
 /**
  * Get user groups from ID token
  */
 function getUserGroups() {
-  const userInfo = getUserInfo();
-  if (!userInfo.idToken) return [];
+    const userInfo = getUserInfo();
+    if (!userInfo.idToken) return [];
 
-  try {
-    const parts = userInfo.idToken.split('.');
-    if (parts.length === 3) {
-      const payload = JSON.parse(atob(parts[1]));
-      return payload['cognito:groups'] || [];
+    try {
+        const parts = userInfo.idToken.split('.');
+        if (parts.length === 3) {
+            const payload = JSON.parse(atob(parts[1]));
+            return payload['cognito:groups'] || [];
+        }
+    } catch (e) {
+        console.error('Error parsing groups from token:', e);
     }
-  } catch (e) {
-    console.error('Error parsing groups from token:', e);
-  }
-  return [];
+    return [];
 }
 
 /**
  * Initialize all navigation components
  */
 export function initNavigation() {
-  // Get current auth state
-  const authenticated = isAuthenticated();
-  const groups = getUserGroups();
-  const isAdmin = groups.includes('editor') || groups.includes('admin');
+    // Get current auth state
+    const authenticated = isAuthenticated();
+    const groups = getUserGroups();
+    const isAdmin = groups.includes('editor') || groups.includes('admin');
 
-  const authState = {
-    isAuthenticated: authenticated,
-    isAdmin: isAdmin
-  };
+    const authState = {
+        isAuthenticated: authenticated,
+        isAdmin: isAdmin,
+    };
 
-  // Get header nav container for hamburger button
-  const headerNavContainer = document.querySelector('#header-nav-container');
+    // Get header nav container for hamburger button
+    const headerNavContainer = document.querySelector('#header-nav-container');
 
-  // Initialize desktop navigation
-  desktopNav = getDesktopNav(authState);
+    // Initialize desktop navigation
+    desktopNav = getDesktopNav(authState);
 
-  // Insert desktop nav into header before auth controls
-  if (headerNavContainer && desktopNav.container) {
-    const authControls = headerNavContainer.querySelector('.auth-controls');
-    headerNavContainer.insertBefore(desktopNav.container, authControls);
-  }
+    // Insert desktop nav into header before auth controls
+    if (headerNavContainer && desktopNav.container) {
+        const authControls = headerNavContainer.querySelector('.auth-controls');
+        headerNavContainer.insertBefore(desktopNav.container, authControls);
+    }
 
-  // Initialize mobile bottom navigation
-  mobileBottomNav = getMobileBottomNav(authState);
+    // Initialize mobile bottom navigation
+    mobileBottomNav = getMobileBottomNav(authState);
 
-  // Initialize mobile hamburger menu
-  mobileHamburgerMenu = getMobileHamburgerMenu({
-    ...authState,
-    hamburgerButtonContainer: headerNavContainer
-  });
+    // Initialize mobile hamburger menu
+    mobileHamburgerMenu = getMobileHamburgerMenu({
+        ...authState,
+        hamburgerButtonContainer: headerNavContainer,
+    });
 }
 
 /**
  * Update navigation when authentication state changes
  */
 export function updateNavigationAuth() {
-  const authenticated = isAuthenticated();
-  const groups = getUserGroups();
-  const isAdmin = groups.includes('editor') || groups.includes('admin');
+    const authenticated = isAuthenticated();
+    const groups = getUserGroups();
+    const isAdmin = groups.includes('editor') || groups.includes('admin');
 
-  const authState = {
-    isAuthenticated: authenticated,
-    isAdmin: isAdmin
-  };
+    const authState = {
+        isAuthenticated: authenticated,
+        isAdmin: isAdmin,
+    };
 
-  // Dispatch custom auth state change event
-  document.dispatchEvent(new CustomEvent('auth-state-changed', {
-    detail: authState
-  }));
+    // Dispatch custom auth state change event
+    document.dispatchEvent(
+        new CustomEvent('auth-state-changed', {
+            detail: authState,
+        }),
+    );
 
-  // Update all navigation components
-  if (desktopNav) {
-    desktopNav.updateAuthState(authState);
-  }
-  if (mobileBottomNav) {
-    mobileBottomNav.updateAuthState(authState);
-  }
-  if (mobileHamburgerMenu) {
-    mobileHamburgerMenu.updateAuthState(authState);
-  }
+    // Update all navigation components
+    if (desktopNav) {
+        desktopNav.updateAuthState(authState);
+    }
+    if (mobileBottomNav) {
+        mobileBottomNav.updateAuthState(authState);
+    }
+    if (mobileHamburgerMenu) {
+        mobileHamburgerMenu.updateAuthState(authState);
+    }
 }
 
 /**
  * Loads footer component into the page
  */
 export function loadFooter() {
-  const footer = document.createElement('footer');
-  footer.innerHTML = `
+    const footer = document.createElement('footer');
+    footer.innerHTML = `
     <p>&copy; ${new Date().getFullYear()} Kurt Thorn</p>
     <style>
         body { visibility: visible !important; }
     </style>
   `;
-  
-  // Find the existing footer and replace it
-  const existingFooter = document.querySelector('footer');
-  if (existingFooter) {
-    existingFooter.replaceWith(footer);
-  } else {
-    // If no footer exists, append it to the body
-    document.body.appendChild(footer);
-  }
+
+    // Find the existing footer and replace it
+    const existingFooter = document.querySelector('footer');
+    if (existingFooter) {
+        existingFooter.replaceWith(footer);
+    } else {
+        // If no footer exists, append it to the body
+        document.body.appendChild(footer);
+    }
 }
 
 // Initialize common components when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-  // Load the common head elements first
-  loadCommonHead();
+    // Load the common head elements first
+    loadCommonHead();
 
-  // Then load the header
-  loadHeader();
+    // Then load the header
+    loadHeader();
 
-  // Load the footer
-  loadFooter();
+    // Load the footer
+    loadFooter();
 
-  // Initialize authentication
-  initAuth();
+    // Initialize authentication
+    initAuth();
 
-  // Initialize navigation (after auth is set up)
-  // Delay slightly to ensure auth state is available
-  setTimeout(() => {
-    initNavigation();
-  }, 100);
+    // Initialize navigation (after auth is set up)
+    // Delay slightly to ensure auth state is available
+    setTimeout(() => {
+        initNavigation();
+    }, 100);
 });
 
 /**
@@ -206,31 +208,31 @@ document.addEventListener('DOMContentLoaded', () => {
  * @returns {string} HTML string for the star rating display
  */
 export function generateStarRating(rating, count) {
-  // Round to nearest half star
-  const roundedRating = Math.round((rating || 0) * 2) / 2;
-  
-  // Generate stars HTML
-  let starsHtml = '<div class="star-rating">';
-  
-  // Add filled and half-filled stars
-  for (let i = 1; i <= 5; i++) {
-    if (i <= roundedRating) {
-      // Full star
-      starsHtml += '<span class="star filled">★</span>';
-    } else if (i - 0.5 === roundedRating) {
-      // Half star
-      starsHtml += '<span class="star half">★</span>';
-    } else {
-      // Empty star
-      starsHtml += '<span class="star">☆</span>';
+    // Round to nearest half star
+    const roundedRating = Math.round((rating || 0) * 2) / 2;
+
+    // Generate stars HTML
+    let starsHtml = '<div class="star-rating">';
+
+    // Add filled and half-filled stars
+    for (let i = 1; i <= 5; i++) {
+        if (i <= roundedRating) {
+            // Full star
+            starsHtml += '<span class="star filled">★</span>';
+        } else if (i - 0.5 === roundedRating) {
+            // Half star
+            starsHtml += '<span class="star half">★</span>';
+        } else {
+            // Empty star
+            starsHtml += '<span class="star">☆</span>';
+        }
     }
-  }
-  
-  // Add rating count
-  starsHtml += `<span class="rating-count">(${count || 0})</span>`;
-  starsHtml += '</div>';
-  
-  return starsHtml;
+
+    // Add rating count
+    starsHtml += `<span class="rating-count">(${count || 0})</span>`;
+    starsHtml += '</div>';
+
+    return starsHtml;
 }
 
 /**
@@ -243,135 +245,137 @@ export function generateStarRating(rating, count) {
  * @returns {HTMLElement} The interactive star component
  */
 export function createInteractiveStars(options) {
-  const {
-    initialRating = 0,
-    allowToggle = false,
-    showDifferentStates = false,
-    onClick
-  } = options;
+    const {
+        initialRating = 0,
+        allowToggle = false,
+        showDifferentStates = false,
+        onClick,
+    } = options;
 
-  const container = document.createElement('div');
-  container.className = 'star-rating interactive';
-  container.dataset.rating = (initialRating ?? 0).toString();
-  
-  // Distinguish between no rating and 0-star rating for visual states
-  const hasRating = showDifferentStates ? (initialRating !== null && initialRating !== undefined) : true;
-  const ratingValue = initialRating ?? 0;
-  
-  // Create 5 stars
-  for (let i = 1; i <= 5; i++) {
-    const star = document.createElement('span');
-    star.className = 'star interactive';
-    star.dataset.value = i;
-    
-    // Set initial star appearance
-    if (showDifferentStates) {
-      // Rating mode: show different states
-      if (!hasRating) {
-        star.textContent = '☆';
-        star.classList.add('no-rating');
-      } else if (ratingValue === 0) {
-        star.textContent = '★';
-        star.classList.add('zero-rating');
-      } else {
-        star.textContent = i <= ratingValue ? '★' : '☆';
-        if (i <= ratingValue) {
-          star.classList.add('filled');
-        }
-      }
-    } else {
-      // Filter mode: use filled stars with active class
-      star.textContent = '★';
-      if (i <= ratingValue) {
-        star.classList.add('active');
-      }
-    }
-    
-    // Add hover effect
-    star.addEventListener('mouseover', () => {
-      container.querySelectorAll('.star').forEach(s => {
-        const value = parseInt(s.dataset.value);
+    const container = document.createElement('div');
+    container.className = 'star-rating interactive';
+    container.dataset.rating = (initialRating ?? 0).toString();
+
+    // Distinguish between no rating and 0-star rating for visual states
+    const hasRating = showDifferentStates
+        ? initialRating !== null && initialRating !== undefined
+        : true;
+    const ratingValue = initialRating ?? 0;
+
+    // Create 5 stars
+    for (let i = 1; i <= 5; i++) {
+        const star = document.createElement('span');
+        star.className = 'star interactive';
+        star.dataset.value = i;
+
+        // Set initial star appearance
         if (showDifferentStates) {
-          // Rating mode: change content and add hover class
-          if (value <= i) {
-            s.textContent = '★';
-            s.classList.add('hover');
-          } else {
-            s.textContent = '☆';
-            s.classList.remove('hover');
-          }
+            // Rating mode: show different states
+            if (!hasRating) {
+                star.textContent = '☆';
+                star.classList.add('no-rating');
+            } else if (ratingValue === 0) {
+                star.textContent = '★';
+                star.classList.add('zero-rating');
+            } else {
+                star.textContent = i <= ratingValue ? '★' : '☆';
+                if (i <= ratingValue) {
+                    star.classList.add('filled');
+                }
+            }
         } else {
-          // Filter mode: just add hover class
-          if (value <= i) {
-            s.classList.add('hover');
-          } else {
-            s.classList.remove('hover');
-          }
+            // Filter mode: use filled stars with active class
+            star.textContent = '★';
+            if (i <= ratingValue) {
+                star.classList.add('active');
+            }
         }
-      });
+
+        // Add hover effect
+        star.addEventListener('mouseover', () => {
+            container.querySelectorAll('.star').forEach((s) => {
+                const value = parseInt(s.dataset.value);
+                if (showDifferentStates) {
+                    // Rating mode: change content and add hover class
+                    if (value <= i) {
+                        s.textContent = '★';
+                        s.classList.add('hover');
+                    } else {
+                        s.textContent = '☆';
+                        s.classList.remove('hover');
+                    }
+                } else {
+                    // Filter mode: just add hover class
+                    if (value <= i) {
+                        s.classList.add('hover');
+                    } else {
+                        s.classList.remove('hover');
+                    }
+                }
+            });
+        });
+
+        // Click event
+        star.addEventListener('click', () => {
+            const currentRating = parseInt(container.dataset.rating) || 0;
+            let newRating = i;
+
+            // Handle toggle behavior if enabled
+            if (allowToggle && currentRating === i) {
+                newRating = 0;
+            }
+
+            // Update container state
+            container.dataset.rating = newRating.toString();
+            updateStarDisplay(container, newRating, showDifferentStates, hasRating);
+
+            // Call callback
+            if (typeof onClick === 'function') {
+                onClick(newRating);
+            }
+        });
+
+        container.appendChild(star);
+    }
+
+    // Reset hover effect on mouse leave
+    container.addEventListener('mouseleave', () => {
+        const currentRating = parseInt(container.dataset.rating) || 0;
+        updateStarDisplay(container, currentRating, showDifferentStates, hasRating);
+        container.querySelectorAll('.star').forEach((s) => s.classList.remove('hover'));
     });
-    
-    // Click event
-    star.addEventListener('click', () => {
-      const currentRating = parseInt(container.dataset.rating) || 0;
-      let newRating = i;
-      
-      // Handle toggle behavior if enabled
-      if (allowToggle && currentRating === i) {
-        newRating = 0;
-      }
-      
-      // Update container state
-      container.dataset.rating = newRating.toString();
-      updateStarDisplay(container, newRating, showDifferentStates, hasRating);
-      
-      // Call callback
-      if (typeof onClick === 'function') {
-        onClick(newRating);
-      }
-    });
-    
-    container.appendChild(star);
-  }
-  
-  // Reset hover effect on mouse leave
-  container.addEventListener('mouseleave', () => {
-    const currentRating = parseInt(container.dataset.rating) || 0;
-    updateStarDisplay(container, currentRating, showDifferentStates, hasRating);
-    container.querySelectorAll('.star').forEach(s => s.classList.remove('hover'));
-  });
-  
-  return container;
+
+    return container;
 }
 
 /**
  * Helper function to update star display
  */
 function updateStarDisplay(container, rating, showDifferentStates, hasRating) {
-  container.querySelectorAll('.star').forEach(star => {
-    const value = parseInt(star.dataset.value);
-    star.classList.remove('hover', 'active', 'filled', 'no-rating', 'zero-rating');
-    
-    if (showDifferentStates) {
-      // Rating mode: different visual states
-      if (!hasRating) {
-        star.textContent = '☆';
-        star.classList.add('no-rating');
-      } else if (rating === 0) {
-        star.textContent = '★';
-        star.classList.add('zero-rating');
-      } else {
-        star.textContent = value <= rating ? '★' : '☆';
-        if (value <= rating) {
-          star.classList.add('filled');
+    container.querySelectorAll('.star').forEach((star) => {
+        const value = parseInt(star.dataset.value);
+        star.classList.remove('hover', 'active', 'filled', 'no-rating', 'zero-rating');
+
+        if (showDifferentStates) {
+            // Rating mode: different visual states
+            if (!hasRating) {
+                star.textContent = '☆';
+                star.classList.add('no-rating');
+            } else if (rating === 0) {
+                star.textContent = '★';
+                star.classList.add('zero-rating');
+            } else {
+                star.textContent = value <= rating ? '★' : '☆';
+                if (value <= rating) {
+                    star.classList.add('filled');
+                }
+            }
+        } else {
+            // Filter mode: active class
+            star.textContent = '★';
+            if (value <= rating) {
+                star.classList.add('active');
+            }
         }
-      }
-    } else {
-      // Filter mode: active class
-      star.textContent = '★';
-      if (value <= rating) {
-        star.classList.add('active');
-      }
-    }
-  });
-} 
+    });
+}

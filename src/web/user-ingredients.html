@@ -1,6 +1,5 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
     <head>
         <title>My Ingredients & Tags - Mixology Tools</title>
         <!-- Prevent FOUC (Flash of Unstyled Content) with common.js fallback -->
@@ -19,7 +18,9 @@
                 <section class="current-ingredients">
                     <div class="section-header">
                         <h3>Your Current Ingredients</h3>
-                        <button id="remove-selected-btn" class="btn btn-danger" disabled>Remove Selected</button>
+                        <button id="remove-selected-btn" class="btn btn-danger" disabled>
+                            Remove Selected
+                        </button>
                     </div>
                     <div id="current-ingredients-list" class="ingredients-list">
                         <div class="loading-placeholder">
@@ -31,7 +32,9 @@
                 <section class="recommended-ingredients">
                     <div class="section-header">
                         <h3>Recommended Shopping List</h3>
-                        <button id="refresh-recommendations-btn" class="btn btn-primary">Refresh</button>
+                        <button id="refresh-recommendations-btn" class="btn btn-primary">
+                            Refresh
+                        </button>
                     </div>
                     <div id="recommendations-list" class="recommendations-list">
                         <div class="loading-placeholder">
@@ -44,8 +47,14 @@
                     <div class="section-header">
                         <h3>Add Ingredients</h3>
                         <div class="controls">
-                            <input type="text" id="ingredient-search" placeholder="Search ingredients..." />
-                            <button id="add-selected-btn" class="btn btn-primary" disabled>Add Selected</button>
+                            <input
+                                type="text"
+                                id="ingredient-search"
+                                placeholder="Search ingredients..."
+                            />
+                            <button id="add-selected-btn" class="btn btn-primary" disabled>
+                                Add Selected
+                            </button>
                         </div>
                     </div>
                     <div id="available-ingredients-list" class="ingredients-list hierarchy">
@@ -58,7 +67,9 @@
                 <section class="private-tags">
                     <div class="section-header">
                         <h3>Your Private Tags</h3>
-                        <button id="refresh-private-tags-btn" class="btn btn-primary">Refresh</button>
+                        <button id="refresh-private-tags-btn" class="btn btn-primary">
+                            Refresh
+                        </button>
                     </div>
                     <div id="private-tags-list" class="tags-management-list">
                         <div class="loading-message">
@@ -69,7 +80,10 @@
             </div>
 
             <div class="auth-required-message hidden">
-                <p>Please <button id="login-prompt-btn" class="btn btn-link">login</button> to manage your ingredients and tags.</p>
+                <p>
+                    Please <button id="login-prompt-btn" class="btn btn-link">login</button> to
+                    manage your ingredients and tags.
+                </p>
             </div>
         </main>
 
@@ -79,5 +93,4 @@
         <script type="module" src="js/api.js"></script>
         <script type="module" src="js/user-ingredients.js"></script>
     </body>
-
 </html>

@@ -12,7 +12,7 @@ import pandas as pd
 def create_rollup_mapping(
     ingredients: pd.DataFrame,
     parent_map: Dict[str, tuple],
-    allow_substitution_col: str = "allow_substitution"
+    allow_substitution_col: str = "allow_substitution",
 ) -> Dict[int, int]:
     """Map substitutable leaf ingredients to their parents.
 
@@ -26,7 +26,9 @@ def create_rollup_mapping(
     """
     # Validate inputs
     assert "id" in ingredients.columns, "ingredients must have 'id' column"
-    assert allow_substitution_col in ingredients.columns, f"ingredients must have '{allow_substitution_col}' column"
+    assert allow_substitution_col in ingredients.columns, (
+        f"ingredients must have '{allow_substitution_col}' column"
+    )
 
     # Get all ingredient IDs that have children (i.e., they are parents)
     parent_ids = set()
@@ -36,8 +38,8 @@ def create_rollup_mapping(
 
     # Find substitutable leaves: allow_substitution=1 AND not a parent
     substitutable_leaves = ingredients[
-        (ingredients[allow_substitution_col] == 1) &
-        (~ingredients["id"].astype(str).isin(parent_ids))
+        (ingredients[allow_substitution_col] == 1)
+        & (~ingredients["id"].astype(str).isin(parent_ids))
     ]
 
     # Map each leaf to its parent
@@ -61,7 +63,7 @@ def apply_rollup_to_recipes(
     recipes: pd.DataFrame,
     rollup_map: Dict[int, int],
     ingredient_id_col: str = "ingredient_id",
-    volume_col: str = "volume_fraction"
+    volume_col: str = "volume_fraction",
 ) -> pd.DataFrame:
     """Apply rollup mapping and aggregate duplicate ingredients.
 
@@ -75,7 +77,9 @@ def apply_rollup_to_recipes(
         New DataFrame with rolled-up ingredients and aggregated volumes
     """
     # Validate inputs
-    assert ingredient_id_col in recipes.columns, f"recipes must have '{ingredient_id_col}' column"
+    assert ingredient_id_col in recipes.columns, (
+        f"recipes must have '{ingredient_id_col}' column"
+    )
     assert volume_col in recipes.columns, f"recipes must have '{volume_col}' column"
 
     # Create a copy to avoid modifying original
@@ -88,15 +92,15 @@ def apply_rollup_to_recipes(
 
     # After rollup, we may have duplicate ingredients in the same recipe
     # Aggregate by summing volumes and keeping first value for other columns
-    agg_dict = {volume_col: 'sum'}
+    agg_dict = {volume_col: "sum"}
 
     # Add 'first' aggregation for non-numeric columns
     for col in recipes_rolled.columns:
-        if col not in ['recipe_id', ingredient_id_col, volume_col]:
-            agg_dict[col] = 'first'
+        if col not in ["recipe_id", ingredient_id_col, volume_col]:
+            agg_dict[col] = "first"
 
     recipes_rolled = recipes_rolled.groupby(
-        ['recipe_id', ingredient_id_col], as_index=False
+        ["recipe_id", ingredient_id_col], as_index=False
     ).agg(agg_dict)
 
     return recipes_rolled

@@ -62,9 +62,27 @@ def test_build_recipe_similarity_selects_top_neighbors_and_plans():
     assert neighbors[0]["distance"] == pytest.approx(0.0)
 
     expected_plan = [
-        {"from_ingredient_id": 10, "from_ingredient_name": "Ing A", "to_ingredient_id": 11, "to_ingredient_name": "Ing B", "mass": 0.5},
-        {"from_ingredient_id": 11, "from_ingredient_name": "Ing B", "to_ingredient_id": 12, "to_ingredient_name": "Ing C", "mass": 0.3},
-        {"from_ingredient_id": 12, "from_ingredient_name": "Ing C", "to_ingredient_id": 10, "to_ingredient_name": "Ing A", "mass": 0.2},
+        {
+            "from_ingredient_id": 10,
+            "from_ingredient_name": "Ing A",
+            "to_ingredient_id": 11,
+            "to_ingredient_name": "Ing B",
+            "mass": 0.5,
+        },
+        {
+            "from_ingredient_id": 11,
+            "from_ingredient_name": "Ing B",
+            "to_ingredient_id": 12,
+            "to_ingredient_name": "Ing C",
+            "mass": 0.3,
+        },
+        {
+            "from_ingredient_id": 12,
+            "from_ingredient_name": "Ing C",
+            "to_ingredient_id": 10,
+            "to_ingredient_name": "Ing A",
+            "mass": 0.2,
+        },
     ]
     assert neighbors[0]["transport_plan"] == expected_plan
 

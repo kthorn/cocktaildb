@@ -1,4 +1,5 @@
 """Analytics regeneration - core logic for local batch job."""
+
 import gc
 import json
 import logging
@@ -85,9 +86,7 @@ def regenerate_analytics() -> Dict[str, Any]:
     log_memory("ingredient stats query")
 
     # Filter to root-level ingredients for the ingredient-usage endpoint
-    ingredient_stats = [
-        ing for ing in all_ingredient_stats if ing["parent_id"] is None
-    ]
+    ingredient_stats = [ing for ing in all_ingredient_stats if ing["parent_id"] is None]
     logger.info("Filtered to %s root-level ingredients", len(ingredient_stats))
     storage.put_analytics("ingredient-usage", ingredient_stats)
     ingredient_stats_count = len(ingredient_stats)
@@ -129,15 +128,24 @@ def regenerate_analytics() -> Dict[str, Any]:
     logger.info("Generating EM-based cocktail space with rollup")
     # Compute candidate_k based on recipe count: k = 0.15 * n_recipes
     # This is the benchmarked runtime/fidelity balance for the current dataset.
-    n_recipes = len(set(r["recipe_id"] for r in analytics_queries.db.execute_query(
-        "SELECT DISTINCT recipe_id FROM recipe_ingredients"
-    )))
-    candidate_k = max(10, int(EM_CANDIDATE_K_FRACTION * n_recipes))  # Minimum k=10 for small datasets
+    n_recipes = len(
+        set(
+            r["recipe_id"]
+            for r in analytics_queries.db.execute_query(
+                "SELECT DISTINCT recipe_id FROM recipe_ingredients"
+            )
+        )
+    )
+    candidate_k = max(
+        10, int(EM_CANDIDATE_K_FRACTION * n_recipes)
+    )  # Minimum k=10 for small datasets
     logger.info(f"Using candidate_k={candidate_k} for {n_recipes} recipes")
 
-    cocktail_space_em, recipe_similarity = analytics_queries.compute_cocktail_space_umap_em(
-        return_similarity=True,
-        candidate_k=candidate_k,
+    cocktail_space_em, recipe_similarity = (
+        analytics_queries.compute_cocktail_space_umap_em(
+            return_similarity=True,
+            candidate_k=candidate_k,
+        )
     )
     storage.put_analytics("cocktail-space-em", cocktail_space_em)
     # Store recipe similarity in PostgreSQL for fast indexed lookups

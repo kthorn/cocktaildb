@@ -15,9 +15,9 @@ class TestIngredientCRUD:
         db = db_instance
 
         data = {
-                "name": "Test",
-                "description": "Juniper-flavored spirit",
-                "parent_id": None,
+            "name": "Test",
+            "description": "Juniper-flavored spirit",
+            "parent_id": None,
         }
 
         result = db.create_ingredient(data)
@@ -34,17 +34,17 @@ class TestIngredientCRUD:
 
         # Create parent ingredient
         parent_data = {
-                "name": "Spirits",
-                "description": "Alcoholic spirits",
-                "parent_id": None,
+            "name": "Spirits",
+            "description": "Alcoholic spirits",
+            "parent_id": None,
         }
         parent = db.create_ingredient(parent_data)
 
         # Create child ingredient
         child_data = {
-                "name": "Test",
-                "description": "Juniper-flavored spirit",
-                "parent_id": parent["id"],
+            "name": "Test",
+            "description": "Juniper-flavored spirit",
+            "parent_id": parent["id"],
         }
         child = db.create_ingredient(child_data)
 
@@ -79,9 +79,9 @@ class TestIngredientCRUD:
 
         # Create ingredient
         data = {
-                "name": "London Dry Gin",
-                "description": "Test gin",
-                "parent_id": None,
+            "name": "London Dry Gin",
+            "description": "Test gin",
+            "parent_id": None,
         }
         created = db.create_ingredient(data)
 
@@ -111,38 +111,35 @@ class TestIngredientHierarchy:
 
         # Level 1: Spirits
         spirits = db.create_ingredient(
-                {
-                    "name": "Spirits",
-                    "description": "Alcoholic spirits",
-                    "parent_id": None,
-                }
+            {
+                "name": "Spirits",
+                "description": "Alcoholic spirits",
+                "parent_id": None,
+            }
         )
 
         # Level 2: Gin
         gin = db.create_ingredient(
-                {
-                    "name": "Test",
-                    "description": "Juniper-flavored spirit",
-                    "parent_id": spirits["id"],
-                }
+            {
+                "name": "Test",
+                "description": "Juniper-flavored spirit",
+                "parent_id": spirits["id"],
+            }
         )
 
         # Level 3: London Dry Gin
         london_gin = db.create_ingredient(
-                {
-                    "name": "Specific Test",
-                    "description": "A specific type of gin",
-                    "parent_id": gin["id"],
-                }
+            {
+                "name": "Specific Test",
+                "description": "A specific type of gin",
+                "parent_id": gin["id"],
+            }
         )
 
         # Verify paths
         assert spirits["path"] == f"/{spirits['id']}/"
         assert gin["path"] == f"/{spirits['id']}/{gin['id']}/"
-        assert (
-                london_gin["path"]
-                == f"/{spirits['id']}/{gin['id']}/{london_gin['id']}/"
-        )
+        assert london_gin["path"] == f"/{spirits['id']}/{gin['id']}/{london_gin['id']}/"
 
     def test_get_ingredient_descendants(self, db_instance):
         """Test retrieving all descendants of an ingredient"""
@@ -150,20 +147,20 @@ class TestIngredientHierarchy:
 
         # Create hierarchy
         spirits = db.create_ingredient(
-                {"name": "Test_Base", "description": "Spirits", "parent_id": None}
+            {"name": "Test_Base", "description": "Spirits", "parent_id": None}
         )
         gin = db.create_ingredient(
-                {"name": "Test1", "description": "Gin", "parent_id": spirits["id"]}
+            {"name": "Test1", "description": "Gin", "parent_id": spirits["id"]}
         )
         vodka = db.create_ingredient(
-                {"name": "Test2", "description": "Vodka", "parent_id": spirits["id"]}
+            {"name": "Test2", "description": "Vodka", "parent_id": spirits["id"]}
         )
         london_gin = db.create_ingredient(
-                {
-                    "name": "London Dry Gin1",
-                    "description": "London Gin",
-                    "parent_id": gin["id"],
-                }
+            {
+                "name": "London Dry Gin1",
+                "description": "London Gin",
+                "parent_id": gin["id"],
+            }
         )
 
         # Get descendants of spirits
@@ -176,7 +173,7 @@ class TestIngredientHierarchy:
         # Verify level calculation
         gin_descendant = next(d for d in descendants if d["name"] == "Test1")
         london_gin_descendant = next(
-                d for d in descendants if d["name"] == "London Dry Gin1"
+            d for d in descendants if d["name"] == "London Dry Gin1"
         )
 
         assert gin_descendant["level"] == 2  # spirits -> gin
@@ -188,7 +185,7 @@ class TestIngredientHierarchy:
 
         # Create leaf ingredient
         gin = db.create_ingredient(
-                {"name": "Test", "description": "Gin", "parent_id": None}
+            {"name": "Test", "description": "Gin", "parent_id": None}
         )
 
         descendants = db.get_ingredient_descendants(gin["id"])
@@ -211,11 +208,11 @@ class TestIngredientUpdate:
 
         # Create ingredient
         original = db.create_ingredient(
-                {
-                    "name": "Test",
-                    "description": "Original description",
-                    "parent_id": None,
-                }
+            {
+                "name": "Test",
+                "description": "Original description",
+                "parent_id": None,
+            }
         )
 
         # Update ingredient
@@ -234,13 +231,13 @@ class TestIngredientUpdate:
 
         # Create hierarchy
         spirits = db.create_ingredient(
-                {"name": "Spirits", "description": "Spirits", "parent_id": None}
+            {"name": "Spirits", "description": "Spirits", "parent_id": None}
         )
         liqueurs = db.create_ingredient(
-                {"name": "Liqueurs", "description": "Liqueurs", "parent_id": None}
+            {"name": "Liqueurs", "description": "Liqueurs", "parent_id": None}
         )
         gin = db.create_ingredient(
-                {"name": "Test", "description": "Gin", "parent_id": spirits["id"]}
+            {"name": "Test", "description": "Gin", "parent_id": spirits["id"]}
         )
 
         original_path = gin["path"]
@@ -258,10 +255,10 @@ class TestIngredientUpdate:
 
         # Create hierarchy
         spirits = db.create_ingredient(
-                {"name": "Spirits", "description": "Spirits", "parent_id": None}
+            {"name": "Spirits", "description": "Spirits", "parent_id": None}
         )
         gin = db.create_ingredient(
-                {"name": "Test", "description": "Gin", "parent_id": spirits["id"]}
+            {"name": "Test", "description": "Gin", "parent_id": spirits["id"]}
         )
 
         # Move gin to root level
@@ -276,20 +273,20 @@ class TestIngredientUpdate:
 
         # Create hierarchy
         spirits = db.create_ingredient(
-                {"name": "Spirits", "description": "Spirits", "parent_id": None}
+            {"name": "Spirits", "description": "Spirits", "parent_id": None}
         )
         liqueurs = db.create_ingredient(
-                {"name": "Liqueurs", "description": "Liqueurs", "parent_id": None}
+            {"name": "Liqueurs", "description": "Liqueurs", "parent_id": None}
         )
         gin = db.create_ingredient(
-                {"name": "Test", "description": "Gin", "parent_id": spirits["id"]}
+            {"name": "Test", "description": "Gin", "parent_id": spirits["id"]}
         )
         london_gin = db.create_ingredient(
-                {
-                    "name": "London Gin",
-                    "description": "London Gin",
-                    "parent_id": gin["id"],
-                }
+            {
+                "name": "London Gin",
+                "description": "London Gin",
+                "parent_id": gin["id"],
+            }
         )
 
         # Move gin to liqueurs (this should update london_gin's path too)
@@ -298,59 +295,57 @@ class TestIngredientUpdate:
         # Verify london_gin's path was updated
         updated_london_gin = db.get_ingredient(london_gin["id"])
         assert (
-                updated_london_gin["path"]
-                == f"/{liqueurs['id']}/{gin['id']}/{london_gin['id']}/"
+            updated_london_gin["path"]
+            == f"/{liqueurs['id']}/{gin['id']}/{london_gin['id']}/"
         )
 
-    def test_update_ingredient_circular_reference_prevention(
-        self, db_instance
-    ):
+    def test_update_ingredient_circular_reference_prevention(self, db_instance):
         """Test that circular references are prevented"""
         db = db_instance
 
         # Create hierarchy
         spirits = db.create_ingredient(
-                {"name": "Spirits", "description": "Spirits", "parent_id": None}
+            {"name": "Spirits", "description": "Spirits", "parent_id": None}
         )
         gin = db.create_ingredient(
-                {"name": "Test", "description": "Gin", "parent_id": spirits["id"]}
+            {"name": "Test", "description": "Gin", "parent_id": spirits["id"]}
         )
         london_gin = db.create_ingredient(
-                {
-                    "name": "London Gin",
-                    "description": "London Gin",
-                    "parent_id": gin["id"],
-                }
+            {
+                "name": "London Gin",
+                "description": "London Gin",
+                "parent_id": gin["id"],
+            }
         )
 
         # Try to make spirits a child of london_gin (would create cycle)
         with pytest.raises(ValueError, match="Cannot create circular reference"):
-                db.update_ingredient(spirits["id"], {"parent_id": london_gin["id"]})
+            db.update_ingredient(spirits["id"], {"parent_id": london_gin["id"]})
 
     def test_update_ingredient_self_parent_prevention(self, db_instance):
         """Test that ingredient cannot be its own parent"""
         db = db_instance
 
         gin = db.create_ingredient(
-                {"name": "Test", "description": "Gin", "parent_id": None}
+            {"name": "Test", "description": "Gin", "parent_id": None}
         )
 
         # Try to make gin its own parent
         with pytest.raises(ValueError, match="Ingredient cannot be its own parent"):
-                db.update_ingredient(gin["id"], {"parent_id": gin["id"]})
+            db.update_ingredient(gin["id"], {"parent_id": gin["id"]})
 
     def test_update_ingredient_nonexistent_parent(self, db_instance):
         """Test updating with non-existent parent"""
         db = db_instance
 
         gin = db.create_ingredient(
-                {"name": "Test", "description": "Gin", "parent_id": None}
+            {"name": "Test", "description": "Gin", "parent_id": None}
         )
 
         with pytest.raises(
-                ValueError, match="Parent ingredient with ID 999 does not exist"
+            ValueError, match="Parent ingredient with ID 999 does not exist"
         ):
-                db.update_ingredient(gin["id"], {"parent_id": 999})
+            db.update_ingredient(gin["id"], {"parent_id": 999})
 
     def test_update_ingredient_nonexistent(self, db_instance):
         """Test updating non-existent ingredient"""
@@ -368,7 +363,7 @@ class TestIngredientDeletion:
         db = db_instance
 
         gin = db.create_ingredient(
-                {"name": "Test", "description": "Test", "parent_id": None}
+            {"name": "Test", "description": "Test", "parent_id": None}
         )
 
         result = db.delete_ingredient(gin["id"])
@@ -382,17 +377,17 @@ class TestIngredientDeletion:
         db = db_instance
 
         parent = db.create_ingredient(
-                {"name": "Parent", "description": "Parent", "parent_id": None}
+            {"name": "Parent", "description": "Parent", "parent_id": None}
         )
         _ = db.create_ingredient(
-                {"name": "Child", "description": "Test", "parent_id": parent["id"]}
+            {"name": "Child", "description": "Test", "parent_id": parent["id"]}
         )
 
         # Try to delete parent with children
         with pytest.raises(
-                ValueError, match="Cannot delete ingredient with child ingredients"
+            ValueError, match="Cannot delete ingredient with child ingredients"
         ):
-                db.delete_ingredient(parent["id"])
+            db.delete_ingredient(parent["id"])
 
     def test_delete_ingredient_used_in_recipe(self, db_instance):
         """Test that ingredients used in recipes cannot be deleted"""
@@ -400,22 +395,22 @@ class TestIngredientDeletion:
 
         # Create ingredient
         gin = db.create_ingredient(
-                {"name": "Test", "description": "Gin", "parent_id": None}
+            {"name": "Test", "description": "Gin", "parent_id": None}
         )
 
         # Create recipe using the ingredient
         recipe_data = {
-                "name": "Test Martini",
-                "instructions": "Stir and strain",
-                "ingredients": [{"ingredient_id": gin["id"], "amount": 2.0}],
+            "name": "Test Martini",
+            "instructions": "Stir and strain",
+            "ingredients": [{"ingredient_id": gin["id"], "amount": 2.0}],
         }
         db.create_recipe(recipe_data)
 
         # Try to delete ingredient used in recipe
         with pytest.raises(
-                ValueError, match="Cannot delete ingredient used in recipes"
+            ValueError, match="Cannot delete ingredient used in recipes"
         ):
-                db.delete_ingredient(gin["id"])
+            db.delete_ingredient(gin["id"])
 
     def test_delete_ingredient_nonexistent(self, db_instance):
         """Test deleting non-existent ingredient"""
@@ -434,15 +429,16 @@ class TestIngredientConstraints:
 
         # Create first ingredient
         db.create_ingredient(
-                {"name": "Test", "description": "First gin", "parent_id": None}
+            {"name": "Test", "description": "First gin", "parent_id": None}
         )
 
         # Try to create with same name (different case)
         from core.exceptions import ConflictException
+
         with pytest.raises(ConflictException):
-                db.create_ingredient(
-                    {"name": "Test", "description": "Second gin", "parent_id": None}
-                )
+            db.create_ingredient(
+                {"name": "Test", "description": "Second gin", "parent_id": None}
+            )
 
     def test_ingredient_parent_foreign_key(self, db_instance):
         """Test parent_id foreign key constraint"""
@@ -450,13 +446,13 @@ class TestIngredientConstraints:
 
         # Try to create ingredient with invalid parent_id
         with pytest.raises(ValueError):
-                db.create_ingredient(
-                    {
-                        "name": "Test",
-                        "description": "Gin",
-                        "parent_id": 999,  # Non-existent parent
-                    }
-                )
+            db.create_ingredient(
+                {
+                    "name": "Test",
+                    "description": "Gin",
+                    "parent_id": 999,  # Non-existent parent
+                }
+            )
 
     def test_ingredient_path_generation(self, db_instance):
         """Test that paths are correctly generated"""
@@ -464,27 +460,25 @@ class TestIngredientConstraints:
 
         # Root level ingredient
         root = db.create_ingredient(
-                {"name": "Root", "description": "Root", "parent_id": None}
+            {"name": "Root", "description": "Root", "parent_id": None}
         )
         assert root["path"] == f"/{root['id']}/"
 
         # Child ingredient
         child = db.create_ingredient(
-                {"name": "Child", "description": "Child", "parent_id": root["id"]}
+            {"name": "Child", "description": "Child", "parent_id": root["id"]}
         )
         assert child["path"] == f"/{root['id']}/{child['id']}/"
 
         # Grandchild ingredient
         grandchild = db.create_ingredient(
-                {
-                    "name": "Grandchild",
-                    "description": "Grandchild",
-                    "parent_id": child["id"],
-                }
+            {
+                "name": "Grandchild",
+                "description": "Grandchild",
+                "parent_id": child["id"],
+            }
         )
-        assert (
-                grandchild["path"] == f"/{root['id']}/{child['id']}/{grandchild['id']}/"
-        )
+        assert grandchild["path"] == f"/{root['id']}/{child['id']}/{grandchild['id']}/"
 
 
 class TestIngredientEdgeCases:
@@ -494,19 +488,19 @@ class TestIngredientEdgeCases:
         """Test creating ingredient with empty name"""
         db = db_instance
 
-        with pytest.raises(ValueError, match="empty or whitespace only"):  # Should fail due to validation
-                db.create_ingredient(
-                    {"name": "", "description": "Test", "parent_id": None}
-                )
+        with pytest.raises(
+            ValueError, match="empty or whitespace only"
+        ):  # Should fail due to validation
+            db.create_ingredient({"name": "", "description": "Test", "parent_id": None})
 
     def test_ingredient_none_name(self, db_instance):
         """Test creating ingredient with None name"""
         db = db_instance
 
         with pytest.raises(Exception):  # Should fail due to NOT NULL constraint
-                db.create_ingredient(
-                    {"name": None, "description": "Test", "parent_id": None}
-                )
+            db.create_ingredient(
+                {"name": None, "description": "Test", "parent_id": None}
+            )
 
     def test_ingredient_unicode_name(self, db_instance):
         """Test creating ingredient with unicode characters"""
@@ -514,7 +508,7 @@ class TestIngredientEdgeCases:
 
         unicode_name = "Café Liqueur 🍸"
         result = db.create_ingredient(
-                {"name": unicode_name, "description": "Unicode test", "parent_id": None}
+            {"name": unicode_name, "description": "Unicode test", "parent_id": None}
         )
 
         assert result["name"] == unicode_name
@@ -525,11 +519,11 @@ class TestIngredientEdgeCases:
 
         special_name = 'St-Germain\'s "Premium" Elderflower & Herbs (100%)'
         result = db.create_ingredient(
-                {
-                    "name": special_name,
-                    "description": "Special chars test",
-                    "parent_id": None,
-                }
+            {
+                "name": special_name,
+                "description": "Special chars test",
+                "parent_id": None,
+            }
         )
 
         assert result["name"] == special_name

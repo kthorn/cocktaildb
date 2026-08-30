@@ -60,7 +60,9 @@ class TestCombinedSearch:
         )
         name_query = "test"  # All test recipes contain "test" in their names
 
-        response = await client.get(f"/recipes/search?q={name_query}&min_rating={min_rating}")
+        response = await client.get(
+            f"/recipes/search?q={name_query}&min_rating={min_rating}"
+        )
         assert response.status_code == 200
         data = response.json()
 
@@ -97,7 +99,9 @@ class TestCombinedSearch:
             name_part = recipe_with_tags["name"][:4]
             tag_name = recipe_with_tags["tags"][0]["name"]
 
-            response = await client.get(f"/recipes/search?q={name_part}&tags={tag_name}")
+            response = await client.get(
+                f"/recipes/search?q={name_part}&tags={tag_name}"
+            )
             assert response.status_code == 200
             data = response.json()
 
@@ -226,7 +230,9 @@ class TestCombinedSearch:
         client, app = test_client_with_data
         """Test combining name, ingredient, and rating filters"""
         # Use broad filters to increase chance of matches
-        response = await client.get("/recipes/search?q=a&ingredients=Gin&min_rating=1.0")
+        response = await client.get(
+            "/recipes/search?q=a&ingredients=Gin&min_rating=1.0"
+        )
         assert response.status_code == 200
         data = response.json()
 
@@ -290,7 +296,9 @@ class TestCombinedSearch:
     async def test_search_with_pagination_combination(self, test_client_with_data):
         client, app = test_client_with_data
         """Test combining multiple search filters with pagination"""
-        response = await client.get("/recipes/search?q=old&min_rating=1.0&page=1&limit=5")
+        response = await client.get(
+            "/recipes/search?q=old&min_rating=1.0&page=1&limit=5"
+        )
         assert response.status_code == 200
         data = response.json()
 
@@ -377,7 +385,9 @@ class TestCombinedSearch:
             if recipe.get("avg_rating") is not None:
                 assert recipe["avg_rating"] >= 2.0
 
-    async def test_search_combination_with_special_characters(self, test_client_with_data):
+    async def test_search_combination_with_special_characters(
+        self, test_client_with_data
+    ):
         """Test combined search with special characters in parameters"""
         client, app = test_client_with_data
         # Test URL encoding and special characters
@@ -393,7 +403,9 @@ class TestCombinedSearch:
     async def test_search_combination_empty_parameters(self, test_client_with_data):
         client, app = test_client_with_data
         """Test combined search with some empty parameters"""
-        response = await client.get("/recipes/search?q=&ingredients=Gin&tags=&min_rating=2.0")
+        response = await client.get(
+            "/recipes/search?q=&ingredients=Gin&tags=&min_rating=2.0"
+        )
         assert response.status_code == 200
         data = response.json()
 

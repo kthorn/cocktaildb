@@ -36,10 +36,14 @@ class TestIngredientSearch:
         ]
         assert len(rum_ingredients) > 0, "Recipe should contain Rum ingredient"
 
-    async def test_search_recipes_with_nonexistent_ingredient(self, test_client_with_data):
+    async def test_search_recipes_with_nonexistent_ingredient(
+        self, test_client_with_data
+    ):
         """Test searching recipes by nonexistent ingredient"""
         client, app = test_client_with_data
-        response = await client.get("/recipes/search?ingredients=NonexistentIngredient123")
+        response = await client.get(
+            "/recipes/search?ingredients=NonexistentIngredient123"
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -48,12 +52,16 @@ class TestIngredientSearch:
         assert data["pagination"]["total_count"] == 0
         assert len(data["recipes"]) == 0
 
-    async def test_search_recipes_with_multiple_ingredients(self, test_client_with_data):
+    async def test_search_recipes_with_multiple_ingredients(
+        self, test_client_with_data
+    ):
         """Test searching recipes with multiple ingredient filters"""
         # Test with two ingredients that are likely to appear together in cocktails
         # Using Aperol and Prosecco which should appear in some Italian cocktails
         client, app = test_client_with_data
-        response = await client.get("/recipes/search?ingredients=Lime Juice,Simple Syrup")
+        response = await client.get(
+            "/recipes/search?ingredients=Lime Juice,Simple Syrup"
+        )
         assert response.status_code == 200
         data = response.json()
 
@@ -126,7 +134,9 @@ class TestIngredientSearch:
             aperol_data["pagination"]["total_count"] <= 1
         )  # We know there's only 1 Aperol recipe
 
-    async def test_search_recipes_multiple_ingredients_and_logic(self, test_client_with_data):
+    async def test_search_recipes_multiple_ingredients_and_logic(
+        self, test_client_with_data
+    ):
         """Test that multiple ingredients use AND logic (recipe must contain ALL ingredients)"""
         # Find two ingredients that might appear together
         client, app = test_client_with_data
@@ -196,14 +206,18 @@ class TestIngredientSearch:
                 "Recipe with Bourbon should also match Whiskey search"
             )
 
-    async def test_search_recipes_case_insensitive_ingredients(self, test_client_with_data):
+    async def test_search_recipes_case_insensitive_ingredients(
+        self, test_client_with_data
+    ):
         """Test that ingredient search is case-insensitive"""
         # Test different cases of the same ingredient
         test_cases = ["aperol", "Aperol", "APEROL", "ApErOl"]
         client, app = test_client_with_data
         expected_count = None
         for ingredient_case in test_cases:
-            response = await client.get(f"/recipes/search?ingredients={ingredient_case}")
+            response = await client.get(
+                f"/recipes/search?ingredients={ingredient_case}"
+            )
             assert response.status_code == 200
             data = response.json()
 
@@ -215,7 +229,9 @@ class TestIngredientSearch:
                     f"{data['pagination']['total_count']} recipes, expected {expected_count}"
                 )
 
-    async def test_search_recipes_ingredient_name_with_spaces(self, test_client_with_data):
+    async def test_search_recipes_ingredient_name_with_spaces(
+        self, test_client_with_data
+    ):
         """Test searching for ingredients with spaces in their names"""
         # Test with "Simple Syrup" which has a space
         client, app = test_client_with_data
@@ -239,7 +255,9 @@ class TestIngredientSearch:
                 f"Recipe should contain simple syrup. Found: {ingredient_names}"
             )
 
-    async def test_search_recipes_must_not_contain_ingredient(self, test_client_with_data):
+    async def test_search_recipes_must_not_contain_ingredient(
+        self, test_client_with_data
+    ):
         """Test MUST_NOT logic - exclude recipes containing specific ingredients"""
         # First, get all recipes to establish baseline
         client, app = test_client_with_data

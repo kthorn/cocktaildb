@@ -20,11 +20,12 @@ export function createRecipeComplexityChart(container, data) {
 
     // Find mode (most common)
     const mode = sortedData.reduce((max, item) =>
-        item.recipe_count > max.recipe_count ? item : max
+        item.recipe_count > max.recipe_count ? item : max,
     );
 
     // Create SVG
-    const svg = d3.select(container)
+    const svg = d3
+        .select(container)
         .append('svg')
         .attr('width', width + margin.left + margin.right)
         .attr('height', height + margin.top + margin.bottom)
@@ -32,13 +33,15 @@ export function createRecipeComplexityChart(container, data) {
         .attr('transform', `translate(${margin.left},${margin.top})`);
 
     // Create scales
-    const xScale = d3.scaleBand()
-        .domain(sortedData.map(d => d.ingredient_count))
+    const xScale = d3
+        .scaleBand()
+        .domain(sortedData.map((d) => d.ingredient_count))
         .range([0, width])
         .padding(0.2);
 
-    const yScale = d3.scaleLinear()
-        .domain([0, d3.max(sortedData, d => d.recipe_count)])
+    const yScale = d3
+        .scaleLinear()
+        .domain([0, d3.max(sortedData, (d) => d.recipe_count)])
         .range([height, 0]);
 
     // Create axes
@@ -68,7 +71,8 @@ export function createRecipeComplexityChart(container, data) {
         .text('Number of Recipes');
 
     // Create tooltip
-    const tooltip = d3.select(container)
+    const tooltip = d3
+        .select(container)
         .append('div')
         .style('position', 'absolute')
         .style('visibility', 'hidden')
@@ -86,24 +90,22 @@ export function createRecipeComplexityChart(container, data) {
         .enter()
         .append('rect')
         .attr('class', 'bar')
-        .attr('x', d => xScale(d.ingredient_count))
-        .attr('y', d => yScale(d.recipe_count))
+        .attr('x', (d) => xScale(d.ingredient_count))
+        .attr('y', (d) => yScale(d.recipe_count))
         .attr('width', xScale.bandwidth())
-        .attr('height', d => height - yScale(d.recipe_count))
-        .attr('fill', d => d.ingredient_count === mode.ingredient_count ? '#ff7f0e' : '#1f77b4')
-        .on('mouseover', function(event, d) {
+        .attr('height', (d) => height - yScale(d.recipe_count))
+        .attr('fill', (d) => (d.ingredient_count === mode.ingredient_count ? '#ff7f0e' : '#1f77b4'))
+        .on('mouseover', function (event, d) {
             d3.select(this).attr('opacity', 0.7);
-            tooltip.style('visibility', 'visible')
-                .html(`
+            tooltip.style('visibility', 'visible').html(`
                     <strong>${d.ingredient_count} ingredients</strong><br/>
                     ${d.recipe_count} recipes
                 `);
         })
-        .on('mousemove', function(event) {
-            tooltip.style('top', (event.pageY - 10) + 'px')
-                .style('left', (event.pageX + 10) + 'px');
+        .on('mousemove', function (event) {
+            tooltip.style('top', event.pageY - 10 + 'px').style('left', event.pageX + 10 + 'px');
         })
-        .on('mouseout', function() {
+        .on('mouseout', function () {
             d3.select(this).attr('opacity', 1);
             tooltip.style('visibility', 'hidden');
         });
@@ -114,10 +116,10 @@ export function createRecipeComplexityChart(container, data) {
         .enter()
         .append('text')
         .attr('class', 'label')
-        .attr('x', d => xScale(d.ingredient_count) + xScale.bandwidth() / 2)
-        .attr('y', d => yScale(d.recipe_count) - 5)
+        .attr('x', (d) => xScale(d.ingredient_count) + xScale.bandwidth() / 2)
+        .attr('y', (d) => yScale(d.recipe_count) - 5)
         .attr('text-anchor', 'middle')
         .attr('font-size', '12px')
         .attr('fill', '#666')
-        .text(d => d.recipe_count);
+        .text((d) => d.recipe_count);
 }

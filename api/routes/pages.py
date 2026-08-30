@@ -181,9 +181,7 @@ async def ingredient_page(
     breadcrumb = []
     if ingredient.get("path"):
         # Path is like /1/8/ — each number is an ingredient ID
-        path_ids = [
-            int(p) for p in ingredient["path"].strip("/").split("/") if p
-        ]
+        path_ids = [int(p) for p in ingredient["path"].strip("/").split("/") if p]
         for pid in path_ids:
             parent = db.get_ingredient(pid)
             if parent:
@@ -191,9 +189,7 @@ async def ingredient_page(
 
     # Get child ingredients
     all_ingredients = db.get_ingredients()
-    children = [
-        ing for ing in all_ingredients if ing.get("parent_id") == ingredient_id
-    ]
+    children = [ing for ing in all_ingredients if ing.get("parent_id") == ingredient_id]
 
     return templates.TemplateResponse(
         "ingredient.html",

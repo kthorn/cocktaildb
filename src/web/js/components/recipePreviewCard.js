@@ -146,10 +146,10 @@ export function createRecipePreviewCard(container) {
 
     // Public API
     return {
-        show,           // Direct show without delay (for touch)
+        show, // Direct show without delay (for touch)
         startHover,
         cancelHover,
         hide,
-        isVisible: () => previewElement !== null
+        isVisible: () => previewElement !== null,
     };
 }

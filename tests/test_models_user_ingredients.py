@@ -6,11 +6,15 @@ Tests the Pydantic request and response models for user ingredient functionality
 import pytest
 from pydantic import ValidationError
 from datetime import datetime
-from api.models.requests import UserIngredientAdd, UserIngredientBulkAdd, UserIngredientBulkRemove
+from api.models.requests import (
+    UserIngredientAdd,
+    UserIngredientBulkAdd,
+    UserIngredientBulkRemove,
+)
 from api.models.responses import (
     UserIngredientResponse,
     UserIngredientListResponse,
-    UserIngredientBulkResponse
+    UserIngredientBulkResponse,
 )
 
 
@@ -21,13 +25,13 @@ class TestUserIngredientRequestModels:
         """Test UserIngredientAdd with valid data"""
         data = {"ingredient_id": 1}
         model = UserIngredientAdd(**data)
-        
+
         assert model.ingredient_id == 1
 
     def test_user_ingredient_add_invalid_negative_id(self):
         """Test UserIngredientAdd with negative ingredient ID"""
         data = {"ingredient_id": -1}
-        
+
         # Current model doesn't validate that ingredient_id > 0
         # This is validated at the business logic level
         model = UserIngredientAdd(**data)
@@ -36,7 +40,7 @@ class TestUserIngredientRequestModels:
     def test_user_ingredient_add_invalid_zero_id(self):
         """Test UserIngredientAdd with zero ingredient ID"""
         data = {"ingredient_id": 0}
-        
+
         # Current model doesn't validate that ingredient_id > 0
         # This is validated at the business logic level
         model = UserIngredientAdd(**data)
@@ -45,42 +49,42 @@ class TestUserIngredientRequestModels:
     def test_user_ingredient_add_missing_field(self):
         """Test UserIngredientAdd with missing required field"""
         data = {}
-        
+
         with pytest.raises(ValidationError) as exc_info:
             UserIngredientAdd(**data)
-        
+
         assert "ingredient_id" in str(exc_info.value)
         assert "Field required" in str(exc_info.value)
 
     def test_user_ingredient_add_invalid_type(self):
         """Test UserIngredientAdd with invalid data type"""
         data = {"ingredient_id": "not_an_integer"}
-        
+
         with pytest.raises(ValidationError) as exc_info:
             UserIngredientAdd(**data)
-        
+
         assert "Input should be a valid integer" in str(exc_info.value)
 
     def test_user_ingredient_bulk_add_valid(self):
         """Test UserIngredientBulkAdd with valid data"""
         data = {"ingredient_ids": [1, 2, 3]}
         model = UserIngredientBulkAdd(**data)
-        
+
         assert model.ingredient_ids == [1, 2, 3]
 
     def test_user_ingredient_bulk_add_empty_list(self):
         """Test UserIngredientBulkAdd with empty list"""
         data = {"ingredient_ids": []}
-        
+
         with pytest.raises(ValidationError) as exc_info:
             UserIngredientBulkAdd(**data)
-        
+
         assert "at least 1 item" in str(exc_info.value)
 
     def test_user_ingredient_bulk_add_invalid_item(self):
         """Test UserIngredientBulkAdd with invalid item in list"""
         data = {"ingredient_ids": [1, -1, 3]}
-        
+
         # Current model doesn't validate that ingredient_ids > 0
         # This is validated at the business logic level
         model = UserIngredientBulkAdd(**data)
@@ -90,27 +94,27 @@ class TestUserIngredientRequestModels:
         """Test UserIngredientBulkAdd with duplicate ingredient IDs"""
         data = {"ingredient_ids": [1, 2, 2, 3]}
         model = UserIngredientBulkAdd(**data)
-        
+
         # Should allow duplicates - the business logic will handle them
         assert model.ingredient_ids == [1, 2, 2, 3]
 
     def test_user_ingredient_bulk_add_missing_field(self):
         """Test UserIngredientBulkAdd with missing required field"""
         data = {}
-        
+
         with pytest.raises(ValidationError) as exc_info:
             UserIngredientBulkAdd(**data)
-        
+
         assert "ingredient_ids" in str(exc_info.value)
         assert "Field required" in str(exc_info.value)
 
     def test_user_ingredient_bulk_add_invalid_type(self):
         """Test UserIngredientBulkAdd with invalid data type"""
         data = {"ingredient_ids": "not_a_list"}
-        
+
         with pytest.raises(ValidationError) as exc_info:
             UserIngredientBulkAdd(**data)
-        
+
         assert "Input should be a valid list" in str(exc_info.value)
 
     def test_user_ingredient_bulk_add_max_items(self):
@@ -118,7 +122,7 @@ class TestUserIngredientRequestModels:
         # Test with a large list (100 items)
         data = {"ingredient_ids": list(range(1, 101))}
         model = UserIngredientBulkAdd(**data)
-        
+
         assert len(model.ingredient_ids) == 100
         assert model.ingredient_ids[0] == 1
         assert model.ingredient_ids[-1] == 100
@@ -127,22 +131,22 @@ class TestUserIngredientRequestModels:
         """Test UserIngredientBulkRemove with valid data"""
         data = {"ingredient_ids": [1, 2, 3]}
         model = UserIngredientBulkRemove(**data)
-        
+
         assert model.ingredient_ids == [1, 2, 3]
 
     def test_user_ingredient_bulk_remove_empty_list(self):
         """Test UserIngredientBulkRemove with empty list"""
         data = {"ingredient_ids": []}
-        
+
         with pytest.raises(ValidationError) as exc_info:
             UserIngredientBulkRemove(**data)
-        
+
         assert "at least 1 item" in str(exc_info.value)
 
     def test_user_ingredient_bulk_remove_invalid_item(self):
         """Test UserIngredientBulkRemove with invalid item in list"""
         data = {"ingredient_ids": [1, 0, 3]}
-        
+
         # Current model doesn't validate that ingredient_ids > 0
         # This is validated at the business logic level
         model = UserIngredientBulkRemove(**data)
@@ -160,7 +164,7 @@ class TestUserIngredientResponseModels:
             "description": "A test gin",
             "parent_id": None,
             "path": "/1/",
-            "added_at": datetime(2023, 1, 1, 12, 0, 0)
+            "added_at": datetime(2023, 1, 1, 12, 0, 0),
         }
         model = UserIngredientResponse(**data)
 
@@ -184,7 +188,7 @@ class TestUserIngredientResponseModels:
             description=None,
             parent_id=None,
             path=None,
-            added_at=dt
+            added_at=dt,
         )
         assert model.added_at == dt
 
@@ -196,7 +200,7 @@ class TestUserIngredientResponseModels:
             description=None,
             parent_id=None,
             path=None,
-            added_at="2023-01-01T12:00:00"
+            added_at="2023-01-01T12:00:00",
         )
         assert model.added_at == datetime(2023, 1, 1, 12, 0, 0)
 
@@ -208,7 +212,7 @@ class TestUserIngredientResponseModels:
             "description": None,
             "parent_id": None,
             "path": None,
-            "added_at": datetime(2023, 1, 1, 12, 0, 0)
+            "added_at": datetime(2023, 1, 1, 12, 0, 0),
         }
         model = UserIngredientResponse(**data)
 
@@ -226,7 +230,7 @@ class TestUserIngredientResponseModels:
             "description": "A type of gin",
             "parent_id": 1,
             "path": "/1/2/",
-            "added_at": datetime(2023, 1, 1, 12, 0, 0)
+            "added_at": datetime(2023, 1, 1, 12, 0, 0),
         }
         model = UserIngredientResponse(**data)
 
@@ -243,12 +247,12 @@ class TestUserIngredientResponseModels:
             "description": "A test gin",
             "parent_id": None,
             "path": "/1/",
-            "added_at": datetime(2023, 1, 1, 12, 0, 0)
+            "added_at": datetime(2023, 1, 1, 12, 0, 0),
         }
-        
+
         with pytest.raises(ValidationError) as exc_info:
             UserIngredientResponse(**data)
-        
+
         assert "ingredient_id" in str(exc_info.value)
         assert "Field required" in str(exc_info.value)
 
@@ -261,12 +265,12 @@ class TestUserIngredientResponseModels:
             "description": None,
             "parent_id": None,
             "path": None,
-            "added_at": datetime(2023, 1, 1, 12, 0, 0)
+            "added_at": datetime(2023, 1, 1, 12, 0, 0),
         }
-        
+
         with pytest.raises(ValidationError) as exc_info:
             UserIngredientResponse(**data)
-        
+
         assert "Input should be a valid integer" in str(exc_info.value)
 
     def test_user_ingredient_list_response_valid(self):
@@ -278,7 +282,7 @@ class TestUserIngredientResponseModels:
                 "description": "A test gin",
                 "parent_id": None,
                 "path": "/1/",
-                "added_at": datetime(2023, 1, 1, 12, 0, 0)
+                "added_at": datetime(2023, 1, 1, 12, 0, 0),
             },
             {
                 "ingredient_id": 2,
@@ -286,16 +290,13 @@ class TestUserIngredientResponseModels:
                 "description": "A test vermouth",
                 "parent_id": None,
                 "path": "/2/",
-                "added_at": datetime(2023, 1, 1, 13, 0, 0)
-            }
+                "added_at": datetime(2023, 1, 1, 13, 0, 0),
+            },
         ]
-        
-        data = {
-            "ingredients": ingredient_data,
-            "total_count": 2
-        }
+
+        data = {"ingredients": ingredient_data, "total_count": 2}
         model = UserIngredientListResponse(**data)
-        
+
         assert len(model.ingredients) == 2
         assert model.total_count == 2
         assert model.ingredients[0].ingredient_id == 1
@@ -303,12 +304,9 @@ class TestUserIngredientResponseModels:
 
     def test_user_ingredient_list_response_empty(self):
         """Test UserIngredientListResponse with empty list"""
-        data = {
-            "ingredients": [],
-            "total_count": 0
-        }
+        data = {"ingredients": [], "total_count": 0}
         model = UserIngredientListResponse(**data)
-        
+
         assert len(model.ingredients) == 0
         assert model.total_count == 0
 
@@ -321,17 +319,14 @@ class TestUserIngredientResponseModels:
                 "description": "A test gin",
                 "parent_id": None,
                 "path": "/1/",
-                "added_at": datetime(2023, 1, 1, 12, 0, 0)
+                "added_at": datetime(2023, 1, 1, 12, 0, 0),
             }
         ]
-        
+
         # Count doesn't match the actual list length
-        data = {
-            "ingredients": ingredient_data,
-            "total_count": 5
-        }
+        data = {"ingredients": ingredient_data, "total_count": 5}
         model = UserIngredientListResponse(**data)
-        
+
         # Model should accept this - business logic would handle validation
         assert len(model.ingredients) == 1
         assert model.total_count == 5
@@ -342,10 +337,10 @@ class TestUserIngredientResponseModels:
             "added_count": 2,
             "already_exists_count": 1,
             "failed_count": 1,
-            "errors": ["Ingredient 999 does not exist"]
+            "errors": ["Ingredient 999 does not exist"],
         }
         model = UserIngredientBulkResponse(**data)
-        
+
         assert model.added_count == 2
         assert model.already_exists_count == 1
         assert model.failed_count == 1
@@ -358,10 +353,10 @@ class TestUserIngredientResponseModels:
             "added_count": 3,
             "already_exists_count": 0,
             "failed_count": 0,
-            "errors": []
+            "errors": [],
         }
         model = UserIngredientBulkResponse(**data)
-        
+
         assert model.added_count == 3
         assert model.already_exists_count == 0
         assert model.failed_count == 0
@@ -369,12 +364,9 @@ class TestUserIngredientResponseModels:
 
     def test_user_ingredient_bulk_response_remove_operation(self):
         """Test UserIngredientBulkResponse for remove operation"""
-        data = {
-            "removed_count": 2,
-            "not_found_count": 1
-        }
+        data = {"removed_count": 2, "not_found_count": 1}
         model = UserIngredientBulkResponse(**data)
-        
+
         assert model.removed_count == 2
         assert model.not_found_count == 1
         # Remove operations don't have added_count, already_exists_count, failed_count, or errors set
@@ -389,12 +381,12 @@ class TestUserIngredientResponseModels:
             "added_count": "not_an_integer",
             "already_exists_count": 1,
             "failed_count": 1,
-            "errors": []
+            "errors": [],
         }
-        
+
         with pytest.raises(ValidationError) as exc_info:
             UserIngredientBulkResponse(**data)
-        
+
         assert "Input should be a valid integer" in str(exc_info.value)
 
     def test_user_ingredient_bulk_response_negative_counts(self):
@@ -403,9 +395,9 @@ class TestUserIngredientResponseModels:
             "added_count": -1,
             "already_exists_count": 1,
             "failed_count": 1,
-            "errors": []
+            "errors": [],
         }
-        
+
         # Current model doesn't validate that counts >= 0
         # This is validated at the business logic level
         model = UserIngredientBulkResponse(**data)
@@ -417,12 +409,12 @@ class TestUserIngredientResponseModels:
             "added_count": 1,
             "already_exists_count": 1,
             "failed_count": 1,
-            "errors": "not_a_list"
+            "errors": "not_a_list",
         }
-        
+
         with pytest.raises(ValidationError) as exc_info:
             UserIngredientBulkResponse(**data)
-        
+
         assert "Input should be a valid list" in str(exc_info.value)
 
     def test_user_ingredient_bulk_response_errors_with_non_string_items(self):
@@ -431,12 +423,12 @@ class TestUserIngredientResponseModels:
             "added_count": 1,
             "already_exists_count": 1,
             "failed_count": 1,
-            "errors": [123, "Valid error message"]
+            "errors": [123, "Valid error message"],
         }
-        
+
         with pytest.raises(ValidationError) as exc_info:
             UserIngredientBulkResponse(**data)
-        
+
         assert "Input should be a valid string" in str(exc_info.value)
 
 
@@ -451,12 +443,12 @@ class TestUserIngredientModelSerialization:
             "description": "A test gin",
             "parent_id": None,
             "path": "/1/",
-            "added_at": datetime(2023, 1, 1, 12, 0, 0)
+            "added_at": datetime(2023, 1, 1, 12, 0, 0),
         }
         model = UserIngredientResponse(**data)
-        
+
         json_data = model.model_dump()
-        
+
         assert json_data["ingredient_id"] == 1
         assert json_data["name"] == "Test Gin"
         assert json_data["description"] == "A test gin"
@@ -473,18 +465,15 @@ class TestUserIngredientModelSerialization:
                 "description": "A test gin",
                 "parent_id": None,
                 "path": "/1/",
-                "added_at": datetime(2023, 1, 1, 12, 0, 0)
+                "added_at": datetime(2023, 1, 1, 12, 0, 0),
             }
         ]
-        
-        data = {
-            "ingredients": ingredient_data,
-            "total_count": 1
-        }
+
+        data = {"ingredients": ingredient_data, "total_count": 1}
         model = UserIngredientListResponse(**data)
-        
+
         json_data = model.model_dump()
-        
+
         assert len(json_data["ingredients"]) == 1
         assert json_data["total_count"] == 1
         assert json_data["ingredients"][0]["ingredient_id"] == 1
@@ -495,12 +484,12 @@ class TestUserIngredientModelSerialization:
             "added_count": 2,
             "already_exists_count": 1,
             "failed_count": 1,
-            "errors": ["Ingredient 999 does not exist"]
+            "errors": ["Ingredient 999 does not exist"],
         }
         model = UserIngredientBulkResponse(**data)
-        
+
         json_data = model.model_dump()
-        
+
         assert json_data["added_count"] == 2
         assert json_data["already_exists_count"] == 1
         assert json_data["failed_count"] == 1
@@ -516,9 +505,9 @@ class TestUserIngredientModelSerialization:
             "parent_id": None,
             "path": "/1/",
             "added_at": datetime(2023, 1, 1, 12, 0, 0),
-            "extra_field": "should_be_accepted"
+            "extra_field": "should_be_accepted",
         }
-        
+
         # Current models don't forbid extra fields
         model = UserIngredientResponse(**data)
         assert model.ingredient_id == 1
@@ -528,32 +517,30 @@ class TestUserIngredientModelSerialization:
         """Test that models handle field aliases correctly if any exist"""
         # This test checks if there are any field aliases defined
         # For now, models don't have aliases, but this ensures they work correctly
-        
+
         data = {
             "ingredient_id": 1,
             "name": "Test Gin",
             "description": "A test gin",
             "parent_id": None,
             "path": "/1/",
-            "added_at": datetime(2023, 1, 1, 12, 0, 0)
+            "added_at": datetime(2023, 1, 1, 12, 0, 0),
         }
         model = UserIngredientResponse(**data)
-        
+
         # Check that all fields are accessible
-        assert hasattr(model, 'ingredient_id')
-        assert hasattr(model, 'name')
-        assert hasattr(model, 'description')
-        assert hasattr(model, 'parent_id')
-        assert hasattr(model, 'path')
-        assert hasattr(model, 'added_at')
+        assert hasattr(model, "ingredient_id")
+        assert hasattr(model, "name")
+        assert hasattr(model, "description")
+        assert hasattr(model, "parent_id")
+        assert hasattr(model, "path")
+        assert hasattr(model, "added_at")
 
     def test_model_default_values(self):
         """Test that models handle default values correctly"""
         # Test UserIngredientBulkResponse with minimal data
-        data = {
-            "added_count": 1
-        }
-        
+        data = {"added_count": 1}
+
         # Since not all fields are required, this should work if defaults are properly set
         try:
             model = UserIngredientBulkResponse(**data)

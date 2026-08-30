@@ -64,6 +64,7 @@ def test_compute_cocktail_space_umap_em_handles_sparse_volume(
             },
         ]
     )
+
     def fake_em_fit(volume_matrix, cost_matrix, n_ingredients, iters=1, **_kwargs):
         n_recipes = volume_matrix.shape[0]
         dist = np.zeros((n_recipes, n_recipes), dtype=np.float32)
@@ -148,9 +149,7 @@ def test_compute_cocktail_space_umap_em_replaces_infinite_distances(
     )
 
     def fake_em_fit(volume_matrix, cost_matrix, n_ingredients, iters=1, **_kwargs):
-        dist = np.array(
-            [[0.0, np.inf], [np.inf, 0.8]], dtype=np.float32
-        )
+        dist = np.array([[0.0, np.inf], [np.inf, 0.8]], dtype=np.float32)
         return dist, cost_matrix, {"delta": [0.0]}
 
     def fake_umap_embedding(distance_matrix, **_kwargs):
@@ -239,9 +238,7 @@ def test_compute_cocktail_space_umap_em_uses_em_plans_for_similarity(
     def fake_emd_matrix(*_args, **_kwargs):
         raise AssertionError("emd_matrix should not be called for similarity")
 
-    expected_similarity = [
-        {"recipe_id": 10, "recipe_name": "A", "neighbors": []}
-    ]
+    expected_similarity = [{"recipe_id": 10, "recipe_name": "A", "neighbors": []}]
 
     def fake_build_recipe_similarity(*_args, **_kwargs):
         return expected_similarity
@@ -249,7 +246,9 @@ def test_compute_cocktail_space_umap_em_uses_em_plans_for_similarity(
     monkeypatch.setattr(barcart, "em_fit", fake_em_fit)
     monkeypatch.setattr(barcart, "compute_umap_embedding", fake_umap_embedding)
     monkeypatch.setattr(barcart, "emd_matrix", fake_emd_matrix)
-    monkeypatch.setattr(barcart.reporting, "build_recipe_similarity", fake_build_recipe_similarity)
+    monkeypatch.setattr(
+        barcart.reporting, "build_recipe_similarity", fake_build_recipe_similarity
+    )
 
     analytics_queries = AnalyticsQueries(DummyDB())
     monkeypatch.setattr(

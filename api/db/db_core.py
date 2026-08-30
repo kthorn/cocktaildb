@@ -35,11 +35,11 @@ class Database:
         try:
             # Read connection parameters from environment variables
             self.conn_params = {
-                'host': os.environ.get('DB_HOST', 'localhost'),
-                'port': os.environ.get('DB_PORT', '5432'),
-                'dbname': os.environ.get('DB_NAME', 'cocktaildb'),
-                'user': os.environ.get('DB_USER', 'cocktaildb'),
-                'password': os.environ.get('DB_PASSWORD', ''),
+                "host": os.environ.get("DB_HOST", "localhost"),
+                "port": os.environ.get("DB_PORT", "5432"),
+                "dbname": os.environ.get("DB_NAME", "cocktaildb"),
+                "user": os.environ.get("DB_USER", "cocktaildb"),
+                "password": os.environ.get("DB_PASSWORD", ""),
             }
             logger.info(
                 f"PostgreSQL connection: {self.conn_params['host']}:{self.conn_params['port']}/{self.conn_params['dbname']}"
@@ -60,9 +60,7 @@ class Database:
         if Database._pool is None:
             logger.info("Creating new PostgreSQL connection pool")
             Database._pool = pool.ThreadedConnectionPool(
-                minconn=1,
-                maxconn=10,
-                **self.conn_params
+                minconn=1, maxconn=10, **self.conn_params
             )
 
     def _test_connection(self):
@@ -393,7 +391,8 @@ class Database:
             ingredient = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id FROM ingredients WHERE id = %(id)s", {"id": ingredient_id}
+                    "SELECT id FROM ingredients WHERE id = %(id)s",
+                    {"id": ingredient_id},
                 ),
             )
             if not ingredient:
@@ -587,7 +586,8 @@ class Database:
             ingredient = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT path FROM ingredients WHERE id = %(id)s", {"id": ingredient_id}
+                    "SELECT path FROM ingredients WHERE id = %(id)s",
+                    {"id": ingredient_id},
                 ),
             )
             if not ingredient:
@@ -793,7 +793,9 @@ class Database:
             if conn:
                 self._return_connection(conn)
 
-    def bulk_create_recipes(self, recipes_data: List[Dict[str, Any]], user_id: str) -> List[Dict[str, Any]]:
+    def bulk_create_recipes(
+        self, recipes_data: List[Dict[str, Any]], user_id: str
+    ) -> List[Dict[str, Any]]:
         """Create multiple recipes in a single transaction (optimized for bulk uploads)"""
         conn = None
         created_recipes = []
@@ -840,7 +842,7 @@ class Database:
                             recipe_id,
                             ing["ingredient_id"],
                             ing.get("unit_id"),
-                            ing.get("amount")
+                            ing.get("amount"),
                         )
                         for ing in data["ingredients"]
                     ]
@@ -849,18 +851,20 @@ class Database:
                         INSERT INTO recipe_ingredients (recipe_id, ingredient_id, unit_id, amount)
                         VALUES (%s, %s, %s, %s)
                         """,
-                        ingredient_rows
+                        ingredient_rows,
                     )
 
                 # Store minimal data to avoid extra queries
-                created_recipes.append({
-                    "id": recipe_id,
-                    "name": data["name"],
-                    "instructions": data.get("instructions"),
-                    "description": data.get("description"),
-                    "source": data.get("source"),
-                    "source_url": data.get("source_url")
-                })
+                created_recipes.append(
+                    {
+                        "id": recipe_id,
+                        "name": data["name"],
+                        "instructions": data.get("instructions"),
+                        "description": data.get("description"),
+                        "source": data.get("source"),
+                        "source_url": data.get("source_url"),
+                    }
+                )
 
             # Commit all recipes at once
             conn.commit()
@@ -1304,7 +1308,8 @@ class Database:
             recipe = cast(
                 List[Dict[str, Any]],
                 self.execute_query(
-                    "SELECT id FROM recipes WHERE id = %(id)s", {"id": data["recipe_id"]}
+                    "SELECT id FROM recipes WHERE id = %(id)s",
+                    {"id": data["recipe_id"]},
                 ),
             )
             if not recipe:
@@ -1710,7 +1715,6 @@ class Database:
             )
             raise
 
-
     def get_tag(self, tag_id: int) -> Optional[Dict[str, Any]]:
         """Gets a tag by its ID from the unified tags table."""
         try:
@@ -1941,7 +1945,11 @@ class Database:
                                 f"Tag not found: {tag_name}, returning empty results"
                             )
                             if return_pagination:
-                                return {"recipes": [], "has_next": False, "next_cursor": None}
+                                return {
+                                    "recipes": [],
+                                    "has_next": False,
+                                    "next_cursor": None,
+                                }
                             return []
 
             logger.info(f"Searching recipes with params: {query_params}")
@@ -2712,9 +2720,7 @@ class Database:
             logger.error(f"Error getting recipe similarity for {recipe_id}: {str(e)}")
             raise
 
-    def upsert_recipe_similarity_batch(
-        self, similarities: List[Dict[str, Any]]
-    ) -> int:
+    def upsert_recipe_similarity_batch(self, similarities: List[Dict[str, Any]]) -> int:
         """
         Batch upsert recipe similarities during analytics refresh.
 
