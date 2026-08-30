@@ -611,6 +611,18 @@ function pluralize(count, singular) {
 }
 
 // Public tag management functionality
+function renderPublicTagStatus(tagsList, className, message) {
+    const status = document.createElement('div');
+    status.className = className;
+
+    const paragraph = document.createElement('p');
+    paragraph.textContent = message;
+    status.appendChild(paragraph);
+
+    tagsList.textContent = '';
+    tagsList.appendChild(status);
+}
+
 async function loadPublicTags() {
     const tagsList = document.getElementById('public-tags-list');
     const refreshBtn = document.getElementById('refresh-tags-btn');
@@ -619,7 +631,7 @@ async function loadPublicTags() {
     
     try {
         // Show loading state
-        tagsList.innerHTML = '<div class="loading-message"><p>Loading public tags...</p></div>';
+        renderPublicTagStatus(tagsList, 'loading-message', 'Loading public tags...');
         if (refreshBtn) {
             refreshBtn.disabled = true;
             refreshBtn.textContent = 'Loading...';
@@ -628,39 +640,48 @@ async function loadPublicTags() {
         const tags = await api.getPublicTags();
         
         if (tags.length === 0) {
-            tagsList.innerHTML = '<div class="empty-message"><p>No public tags found.</p></div>';
+            renderPublicTagStatus(tagsList, 'empty-message', 'No public tags found.');
             return;
         }
         
-        // Generate tag list HTML
-        let html = '';
+        tagsList.textContent = '';
         tags.forEach(tag => {
-            html += `
-                <div class="tag-management-item" data-tag-id="${tag.id}">
-                    <div class="tag-management-info">
-                        <div class="tag-management-name">${tag.name}</div>
-                        <div class="tag-management-usage">Used in ${tag.usage_count || 0} recipe${tag.usage_count === 1 ? '' : 's'}</div>
-                    </div>
-                    <div class="tag-management-actions">
-                        <button class="btn btn-danger btn-small delete-tag-btn" data-tag-id="${tag.id}" data-tag-name="${tag.name}">
-                            Delete
-                        </button>
-                    </div>
-                </div>
-            `;
-        });
-        
-        tagsList.innerHTML = html;
-        
-        // Add event listeners for delete buttons
-        const deleteButtons = tagsList.querySelectorAll('.delete-tag-btn');
-        deleteButtons.forEach(btn => {
-            btn.addEventListener('click', handleDeletePublicTag);
+            const tagItem = document.createElement('div');
+            tagItem.className = 'tag-management-item';
+            tagItem.dataset.tagId = tag.id;
+
+            const tagInfo = document.createElement('div');
+            tagInfo.className = 'tag-management-info';
+
+            const tagNameElement = document.createElement('div');
+            tagNameElement.className = 'tag-management-name';
+            tagNameElement.textContent = tag.name;
+            tagInfo.appendChild(tagNameElement);
+
+            const usageElement = document.createElement('div');
+            usageElement.className = 'tag-management-usage';
+            usageElement.textContent = `Used in ${tag.usage_count || 0} recipe${tag.usage_count === 1 ? '' : 's'}`;
+            tagInfo.appendChild(usageElement);
+            tagItem.appendChild(tagInfo);
+
+            const actions = document.createElement('div');
+            actions.className = 'tag-management-actions';
+
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'btn btn-danger btn-small delete-tag-btn';
+            deleteButton.dataset.tagId = tag.id;
+            deleteButton.dataset.tagName = tag.name;
+            deleteButton.textContent = 'Delete';
+            deleteButton.addEventListener('click', handleDeletePublicTag);
+            actions.appendChild(deleteButton);
+
+            tagItem.appendChild(actions);
+            tagsList.appendChild(tagItem);
         });
         
     } catch (error) {
         console.error('Error loading public tags:', error);
-        tagsList.innerHTML = '<div class="error-message"><p>Error loading tags. Please try again.</p></div>';
+        renderPublicTagStatus(tagsList, 'error-message', 'Error loading tags. Please try again.');
         showMessage('Error loading public tags', 'error');
     } finally {
         if (refreshBtn) {
@@ -701,7 +722,7 @@ async function handleDeletePublicTag(event) {
         // Check if list is now empty
         const tagsList = document.getElementById('public-tags-list');
         if (tagsList && tagsList.children.length === 0) {
-            tagsList.innerHTML = '<div class="empty-message"><p>No public tags found.</p></div>';
+            renderPublicTagStatus(tagsList, 'empty-message', 'No public tags found.');
         }
         
     } catch (error) {
