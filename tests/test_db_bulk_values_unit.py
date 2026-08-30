@@ -93,7 +93,7 @@ class TestBulkIngredientValueTransaction(unittest.TestCase):
     def test_no_op_values_are_revalidated_before_any_write(self):
         db = FakeDatabase({7: ("Lime Juice", Decimal("46"), None, None)})
 
-        with self.assertRaisesRegex(ValueError, "changed during validation"):
+        with self.assertRaises(ValueError) as raised:
             bulk_update_ingredient_values(
                 db,
                 {7: {"sugar_g_per_l": Decimal("2")}},
@@ -106,6 +106,10 @@ class TestBulkIngredientValueTransaction(unittest.TestCase):
                 },
             )
 
+        self.assertEqual(
+            str(raised.exception),
+            "Lime Juice (7): percent_abv is 46, CSV requested 45",
+        )
         self.assertEqual(db.connection.cursor_instance.update_count, 0)
         self.assertTrue(db.connection.rolled_back)
 

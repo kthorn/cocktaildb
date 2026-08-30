@@ -56,9 +56,14 @@ def bulk_update_ingredient_values(
                     f"Ingredient {ingredient_id} changed during validation"
                 )
             for field, expected_value in expected_values.get(ingredient_id, {}).items():
-                if ingredient[field_indexes[field]] != expected_value:
+                current_value = ingredient[field_indexes[field]]
+                if current_value != expected_value:
+                    requested_value = updates.get(ingredient_id, {}).get(
+                        field, expected_value
+                    )
                     raise ValueError(
-                        f"Ingredient {ingredient_id} changed during validation"
+                        f"{ingredient[0]} ({ingredient_id}): {field} is {current_value}, "
+                        f"CSV requested {requested_value}"
                     )
 
         for ingredient_id in sorted(updates):

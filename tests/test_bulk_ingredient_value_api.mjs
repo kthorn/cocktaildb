@@ -25,6 +25,22 @@ try {
     const options = client.getFetchOptions('GET', 'a,b\n1,2\n');
     assert.equal(options.headers['Content-Type'], 'text/csv');
     assert.equal(options.body, 'a,b\n1,2\n');
+
+    await assert.rejects(
+        client.handleResponse({
+            status: 409,
+            url: '/ingredients/bulk-values',
+            json: async () => ({
+                error: 'Ingredient values conflict with curated data',
+                detail: ['Campari (53): percent_abv is 25, CSV requested 28'],
+            }),
+        }),
+        (error) =>
+            error.message === 'Ingredient values conflict with curated data' &&
+            error.detail.length === 1 &&
+            error.detail[0] === 'Campari (53): percent_abv is 25, CSV requested 28',
+    );
+
     console.log('bulk ingredient value API test passed');
 } finally {
     if (createdConfig) await unlink(configUrl);

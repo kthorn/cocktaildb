@@ -7,7 +7,10 @@ class CocktailDBException(Exception):
     """Base exception for CocktailDB API"""
 
     def __init__(
-        self, message: str, status_code: int = 500, detail: Optional[str] = None
+        self,
+        message: str,
+        status_code: int = 500,
+        detail: Optional[str | list[str]] = None,
     ):
         self.message = message
         self.status_code = status_code
@@ -46,6 +49,8 @@ class ConflictException(CocktailDBException):
     """Resource conflict exceptions"""
 
     def __init__(
-        self, message: str = "Resource conflict", detail: Optional[str] = None
+        self,
+        message: str = "Resource conflict",
+        detail: Optional[str | list[str]] = None,
     ):
         super().__init__(message, status_code=409, detail=detail)
