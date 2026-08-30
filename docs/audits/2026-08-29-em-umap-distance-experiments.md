@@ -10,7 +10,7 @@ Experiments used 1,955 production recipes and 406 ingredients after hierarchy ro
 - BLOSUM smoothing `alpha=0.2`
 - UMAP `n_neighbors=10`, `min_dist=0.05`, and `random_state=42`
 
-EM produced more compact native-space clusters than Manhattan distance. After lowering BLOSUM smoothing from 1.0 to 0.2, candidate width mattered slightly more; 15% retained nearly all wider-run structure without the runtime cost of 20% or 40%. Lower smoothing improved both HDBSCAN coverage and silhouette at fixed candidate width, although it did not improve the intended rum/whiskey or gin/vodka substitutions.
+The rolled EM pipeline produced more compact native-space clusters than the unrolled Manhattan baseline. This was a pipeline comparison, not an isolation of EM alone. After lowering BLOSUM smoothing from 1.0 to 0.2, candidate width mattered slightly more; 15% retained nearly all wider-run structure without the runtime cost of 20% or 40%. Lower smoothing improved both HDBSCAN coverage and silhouette at fixed candidate width, although it did not improve the intended rum/whiskey or gin/vodka substitutions.
 
 Two attempts to learn functional substitutions were rejected:
 
@@ -42,7 +42,9 @@ Cluster quality was measured in the original distance space, not in the displaye
 
 Constrained matrices contain unknown pairs. Production-compatible evaluations replaced unknown distances with twice the largest computed distance in that matrix. Metrics involving completed matrices are therefore imputed proxies, not exact all-pairs measurements.
 
-## EM versus Manhattan distance
+## Rolled EM pipeline versus unrolled Manhattan baseline
+
+This comparison includes both the distance method and preprocessing: EM used hierarchy-rolled recipes, while Manhattan used the unrolled recipe vectors. It measures the two available pipelines and does not attribute the full difference to EM alone.
 
 Using the original smoothing value (`alpha=1.0`) and `candidate_k=195`:
 
@@ -61,7 +63,7 @@ Agreement with EM:
 - jointly clustered ARI: 0.911
 - jointly clustered AMI: 0.959
 
-Manhattan and EM largely agreed on assignments when both methods confidently clustered a recipe. EM's principal advantage was greater within-cluster compactness.
+Manhattan and the EM pipeline largely agreed on assignments when both methods confidently clustered a recipe. The rolled EM pipeline had greater within-cluster compactness, but this experiment did not isolate how much came from rollup versus EM learning.
 
 ## Constrained-EM candidate width
 
@@ -102,7 +104,7 @@ In one first-iteration measurement, the weighted ingredient-match matrix contain
 
 ### Grid results
 
-All settings retained the current neighbor selection, `candidate_k=195`, and a maximum of five iterations.
+All smoothing-grid settings retained the then-current `candidate_k=195` neighbor selection and a maximum of five iterations. Candidate width was retuned afterward.
 
 | Alpha | Clusters | Clustered | Coverage | Silhouette | Convergence status |
 |---:|---:|---:|---:|---:|---|
@@ -232,7 +234,7 @@ Although some absolute analogue distances decreased, their ranks worsened becaus
 
 ## What was learned
 
-1. EM adds meaningful cluster compactness over Manhattan distance.
+1. The rolled EM pipeline is more compact than the unrolled Manhattan baseline; EM's isolated contribution remains unmeasured.
 2. At alpha 0.2, a 15% candidate fraction is the best runtime/fidelity balance; wider graphs are nearly identical.
 3. The original smoothing overwhelms observed match evidence and flattens the learned cost matrix.
 4. `alpha=0.2` improves clustering but not functional substitutions.

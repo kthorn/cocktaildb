@@ -16,7 +16,7 @@ Usage:
 
     # Tune UMAP after choosing a distance configuration
     python scripts/test_constrained_em.py \
-        --tune-umap-matrix /tmp/em-benchmark/k-195.npz \
+        --tune-umap-matrix /tmp/em-benchmark/k-293.npz \
         --output-dir /tmp/umap-benchmark
 """
 
