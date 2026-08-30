@@ -194,7 +194,9 @@ class ErrorResponse(BaseModel):
     """Response model for error messages"""
 
     error: str = Field(..., description="Error message")
-    detail: Optional[str] = Field(None, description="Additional error details")
+    detail: Optional[str | List[str]] = Field(
+        None, description="Additional error details"
+    )
 
     class Config:
         from_attributes = True

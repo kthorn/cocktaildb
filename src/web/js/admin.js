@@ -350,6 +350,7 @@ function getIngredientValueUploadConfig() {
         buttonText: 'Upload Ingredient Values',
         fileExtension: '.csv',
         fileLabel: 'CSV',
+        buildErrorText: (error) => error.error_message,
     };
 }
 
@@ -371,7 +372,22 @@ async function handleBulkValueUpload(config) {
         fileInput.value = '';
     } catch (error) {
         console.error('Error uploading ingredient values:', error);
-        showMessage(`Error uploading ingredient values: ${error.message}`, 'error');
+        if (error.detail) {
+            const conflictMessages = Array.isArray(error.detail) ? error.detail : [error.detail];
+            const validationErrors = conflictMessages.map((errorMessage) => ({
+                error_message: errorMessage,
+            }));
+            displayUploadResults(
+                {
+                    uploaded_count: 0,
+                    failed_count: validationErrors.length,
+                    validation_errors: validationErrors,
+                },
+                config,
+            );
+        } else {
+            showMessage(`Error uploading ingredient values: ${error.message}`, 'error');
+        }
     } finally {
         showUploadProgress(false, '', config);
         const uploadBtn = document.getElementById(config.uploadBtnId);

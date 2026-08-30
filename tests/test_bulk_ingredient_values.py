@@ -60,9 +60,39 @@ async def test_bulk_values_conflict_rolls_back_every_value(editor_client, db_ins
     )
 
     assert response.status_code == 409
-    assert "already has percent_abv=40" in response.json()["detail"]
+    assert response.json()["detail"] == [
+        f"Curated Ingredient ({ingredient_ids['Curated Ingredient']}): "
+        "percent_abv is 40, CSV requested 45"
+    ]
     blank = db_instance.get_ingredient(ingredient_ids["Blank Ingredient"])
     assert blank["percent_abv"] is None
+
+
+@pytest.mark.asyncio
+async def test_bulk_values_reports_duplicate_csv_values(editor_client, db_instance):
+    db_instance.execute_query(
+        "INSERT INTO ingredients (name, path) VALUES ('Bitter; Orange', '/1/')"
+    )
+    ingredient = db_instance.execute_query(
+        "SELECT id FROM ingredients WHERE name = 'Bitter; Orange'"
+    )[0]
+    csv_text = (
+        "ingredient_id,ingredient_name,field,value\n"
+        f"{ingredient['id']},Bitter; Orange,percent_abv,20\n"
+        f"{ingredient['id']},Bitter; Orange,percent_abv,21\n"
+    )
+
+    response = await editor_client.post(
+        "/ingredients/bulk-values",
+        content=csv_text,
+        headers={"Content-Type": "text/csv"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == [
+        f"Bitter; Orange ({ingredient['id']}): "
+        "percent_abv has conflicting CSV values 20 and 21"
+    ]
 
 
 @pytest.mark.asyncio

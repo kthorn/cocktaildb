@@ -29,7 +29,9 @@ export class CocktailAPI {
                 // Check 'error' field first (user-friendly message from custom exceptions),
                 // then 'detail' field (FastAPI HTTPException), then fallback to generic message
                 const errorMessage = data.error || data.detail || `API error: ${response.status}`;
-                throw new Error(errorMessage);
+                const error = new Error(errorMessage);
+                error.detail = data.detail;
+                throw error;
             }
             return data;
         } catch (e) {

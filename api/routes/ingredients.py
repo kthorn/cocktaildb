@@ -199,7 +199,8 @@ async def upload_ingredient_values(
         if field in ingredient_updates:
             if ingredient_updates[field] != value:
                 conflicts.append(
-                    f"Ingredient {ingredient_id} has conflicting {field} values in the CSV"
+                    f"{ingredient['name']} ({ingredient_id}): {field} has conflicting "
+                    f"CSV values {ingredient_updates[field]} and {value}"
                 )
             else:
                 unchanged_count += 1
@@ -213,7 +214,8 @@ async def upload_ingredient_values(
             unchanged_count += 1
         else:
             conflicts.append(
-                f"Ingredient {ingredient_id} already has {field}={existing_value}"
+                f"{ingredient['name']} ({ingredient_id}): {field} is {existing_value}, "
+                f"CSV requested {value}"
             )
 
     if validation_errors:
@@ -222,7 +224,7 @@ async def upload_ingredient_values(
         )
     if conflicts:
         raise ConflictException(
-            "Ingredient values conflict with curated data", detail="; ".join(conflicts)
+            "Ingredient values conflict with curated data", detail=conflicts
         )
 
     updates = {
