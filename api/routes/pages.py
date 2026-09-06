@@ -2,6 +2,7 @@
 
 import json
 import logging
+from pathlib import Path
 from typing import Optional
 from xml.etree.ElementTree import Element, SubElement, tostring
 
@@ -16,7 +17,9 @@ from db.db_core import Database
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(
+    directory=str(Path(__file__).resolve().parents[1] / "templates")
+)
 
 
 def _safe_source_url(url: Optional[str]) -> Optional[str]:
@@ -107,10 +110,7 @@ async def recipe_by_name(
     db: Database = Depends(get_database),
 ):
     """Look up a recipe by name and redirect to /recipe/{id}."""
-    results = db.search_recipes_paginated(
-        search_params={"name": name}, limit=1, offset=0
-    )
-    recipes = results.get("recipes", [])
+    recipes = db.search_recipes_paginated(search_params={"q": name}, limit=1, offset=0)
     if recipes:
         recipe_id = recipes[0]["id"]
         return RedirectResponse(url=f"/recipe/{recipe_id}", status_code=302)
