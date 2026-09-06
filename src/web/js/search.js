@@ -50,6 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchButton = document.getElementById('search-button');
     const resetButton = document.getElementById('reset-button');
     const searchResultsContainer = document.getElementById('search-results-container');
+    const searchResults = document.getElementById('search-results-list');
     const loadingPlaceholder = document.querySelector('.loading-placeholder');
     const emptyResults = document.querySelector('.empty-message');
     const ingredientQueryBuilder = document.getElementById('ingredient-query-builder');
@@ -141,7 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
     resetButton.addEventListener('click', () => {
         searchForm.reset();
         emptyResults.classList.remove('hidden');
-        searchResultsContainer.querySelectorAll('.recipe-card').forEach((card) => card.remove());
+        searchResults.innerHTML = '';
 
         // Reset search pagination state
         currentSearchQuery = null;
@@ -223,9 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 emptyResults.classList.add('hidden');
 
                 // Remove existing results
-                searchResultsContainer
-                    .querySelectorAll('.recipe-card')
-                    .forEach((card) => card.remove());
+                searchResults.innerHTML = '';
 
                 // Disable existing infinite scroll
                 disableInfiniteScroll();
@@ -265,12 +264,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 useCursorPagination = nextSearchCursor !== null;
 
                 // Display results
-                if (reset) {
-                    displayRecipes(allSearchResults, searchResultsContainer, true, null, {
+                if (reset && allSearchResults.length > 0) {
+                    displayRecipes(allSearchResults, searchResults, true, null, {
                         compact: true,
                         linkCard: true,
                     });
-                } else {
+                } else if (!reset && result.recipes.length > 0) {
                     // Append new results using consistent displayRecipes approach
                     const tempContainer = document.createElement('div');
                     displayRecipes(result.recipes, tempContainer, true, null, {
@@ -278,7 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         linkCard: true,
                     });
                     Array.from(tempContainer.children).forEach((card) => {
-                        searchResultsContainer.appendChild(card);
+                        searchResults.appendChild(card);
                     });
                 }
 
