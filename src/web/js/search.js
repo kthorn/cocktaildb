@@ -24,6 +24,8 @@ let activeNameSuggestionIndex = -1;
 
 // Search pagination state
 let currentSearchQuery = null;
+let currentSearchSortBy = 'name';
+let currentSearchSortOrder = 'asc';
 let currentSearchPage = 1;
 let totalSearchPages = 1;
 let searchResultsPerPage = 10;
@@ -145,6 +147,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Reset search pagination state
         currentSearchQuery = null;
+        currentSearchSortBy = 'name';
+        currentSearchSortOrder = 'asc';
         currentSearchPage = 1;
         totalSearchPages = 1;
         allSearchResults = [];
@@ -206,13 +210,15 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             isSearching = true;
 
-            // Build the search query
-            const searchQuery = buildSearchQuery();
+            // Build and snapshot the search query only when starting a new search.
+            const searchQuery = reset ? buildSearchQuery() : currentSearchQuery;
             console.log('Built search query:', searchQuery);
 
             if (reset) {
                 // Reset pagination state for new search
                 currentSearchQuery = searchQuery;
+                currentSearchSortBy = currentSortBy;
+                currentSearchSortOrder = currentSortOrder;
                 currentSearchPage = 1;
                 allSearchResults = [];
                 currentSearchCursor = null;
@@ -233,15 +239,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Call the API to search recipes with pagination and sorting
             console.log('Calling searchRecipes with sort params:', {
-                sortBy: currentSortBy,
-                sortOrder: currentSortOrder,
+                sortBy: currentSearchSortBy,
+                sortOrder: currentSearchSortOrder,
             });
             const result = await api.searchRecipes(
                 searchQuery,
                 currentSearchPage,
                 searchResultsPerPage,
-                currentSortBy,
-                currentSortOrder,
+                currentSearchSortBy,
+                currentSearchSortOrder,
                 currentSearchCursor,
             );
             console.log('API result:', result);

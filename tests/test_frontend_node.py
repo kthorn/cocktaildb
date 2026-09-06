@@ -11,6 +11,7 @@ import pytest
         "tests/test_cocktail_space_callouts.js",
         "tests/test_cocktail_space_layout.mjs",
         "tests/test_admin_public_tags.js",
+        "tests/test_search_pagination.js",
     ],
 )
 def test_frontend_contract(script):
