@@ -125,7 +125,7 @@ class TestNameRedirect:
             follow_redirects=False,
         )
         assert response.status_code == 302
-        assert response.headers["location"].startswith("/recipe/")
+        assert response.headers["location"] == "/recipe/1"
 
     async def test_name_redirect_404_for_unknown(self, test_client_with_data):
         """GET /recipe/by-name?name=X returns 404 HTML for unknown name"""
