@@ -141,6 +141,12 @@ function buildHarness() {
     const searchButton = register('button', 'search-button');
     const resetButton = register('button', 'reset-button');
     const results = register('div', 'search-results-container');
+    // Include card containers declared by the page so this pagination fixture
+    // also works when result rendering is isolated from its status messages.
+    const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'web', 'search.html'), 'utf8');
+    for (const [, id] of html.matchAll(/<div id="(search-results-[^"]+)"/g)) {
+        if (!elements[id]) results.appendChild(register('div', id));
+    }
     const loading = register('div', '', 'loading-placeholder');
     const empty = register('div', '', 'empty-message');
     empty.appendChild(register('p'));
@@ -225,7 +231,10 @@ function buildHarness() {
     const source = fs
         .readFileSync(sourcePath, 'utf8')
         .replace(/^import .*;\n/gm, '')
-        .replace(/\n}\);\s*$/, '\n    this.testExports = { performSearch, loadMoreSearchResults };\n});\n');
+        .replace(
+            /\n}\);\s*$/,
+            '\n    this.testExports = { performSearch, loadMoreSearchResults };\n});\n',
+        );
     const context = vm.createContext({
         document,
         window: {
