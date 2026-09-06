@@ -10,7 +10,7 @@ export const NAV_CONFIG = {
         {
             id: 'home',
             label: 'Home',
-            href: 'index.html',
+            href: '/index.html',
             icon: '🏠',
             mobileBottom: true, // Show in mobile bottom nav
             mobileMenu: true, // Show in mobile hamburger menu
@@ -21,7 +21,7 @@ export const NAV_CONFIG = {
         {
             id: 'search',
             label: 'Search',
-            href: 'search.html',
+            href: '/search.html',
             icon: '🔍',
             mobileBottom: true,
             mobileMenu: true,
@@ -33,7 +33,7 @@ export const NAV_CONFIG = {
             id: 'my-ingredients',
             label: 'My Ingredients',
             shortLabel: 'My Bar', // Shorter label for compact spaces
-            href: 'user-ingredients.html',
+            href: '/user-ingredients.html',
             icon: '🍸',
             mobileBottom: true,
             mobileMenu: true,
@@ -45,7 +45,7 @@ export const NAV_CONFIG = {
             id: 'add-recipe',
             label: 'Add Recipe',
             shortLabel: 'Add',
-            href: 'recipes.html',
+            href: '/recipes.html',
             icon: '➕',
             mobileBottom: true,
             mobileMenu: true,
@@ -60,7 +60,7 @@ export const NAV_CONFIG = {
         {
             id: 'all-ingredients',
             label: 'All Ingredients',
-            href: 'ingredients.html',
+            href: '/ingredients.html',
             icon: '📋',
             mobileBottom: false,
             mobileMenu: true,
@@ -71,7 +71,7 @@ export const NAV_CONFIG = {
         {
             id: 'analytics',
             label: 'Analytics',
-            href: 'analytics.html',
+            href: '/analytics.html',
             icon: '📊',
             mobileBottom: false,
             mobileMenu: true,
@@ -82,7 +82,7 @@ export const NAV_CONFIG = {
         {
             id: 'about',
             label: 'About',
-            href: 'about.html',
+            href: '/about.html',
             icon: 'ℹ️',
             mobileBottom: false,
             mobileMenu: true,
@@ -97,7 +97,7 @@ export const NAV_CONFIG = {
         {
             id: 'admin',
             label: 'Admin',
-            href: 'admin.html',
+            href: '/admin.html',
             icon: '⚙️',
             mobileBottom: false,
             mobileMenu: true,
@@ -175,7 +175,7 @@ export function getNavigationItems(mode, options = {}) {
  * @returns {string|null} The ID of the current page or null
  */
 export function getCurrentPageId() {
-    const currentPage = window.location.pathname.split('/').pop() || 'index.html';
+    const currentPage = window.location.pathname === '/' ? '/index.html' : window.location.pathname;
 
     // Search through all navigation items
     const allItems = [...NAV_CONFIG.primary, ...NAV_CONFIG.secondary, ...NAV_CONFIG.admin];
