@@ -12,8 +12,6 @@ from psycopg2 import pool
 from .db_utils import extract_all_ingredient_ids, assemble_ingredient_full_names
 from .sql_queries import (
     get_recipe_by_id_sql,
-    get_all_recipes_sql,
-    get_recipe_ingredients_by_recipe_id_sql_factory,
     get_recipes_count_sql,
     get_ingredients_count_sql,
     INGREDIENT_SELECT_FIELDS,
@@ -1620,8 +1618,16 @@ class Database:
 
     def add_public_tag_to_recipe(self, recipe_id: int, tag_id: int) -> bool:
         """Associates a public tag with a recipe."""
+        return self._add_tag_to_recipe(recipe_id, tag_id)
+
+    def add_private_tag_to_recipe(self, recipe_id: int, tag_id: int) -> bool:
+        """Associates a private tag after the handler has checked ownership."""
+        return self._add_tag_to_recipe(recipe_id, tag_id)
+
+    def _add_tag_to_recipe(self, recipe_id: int, tag_id: int) -> bool:
+        """Insert an association, returning False if it already exists."""
         try:
-            logger.info(f"DB: Adding public tag {tag_id} to recipe {recipe_id}")
+            logger.info(f"DB: Adding tag {tag_id} to recipe {recipe_id}")
             result = self.execute_query(
                 """
                 INSERT INTO recipe_tags (recipe_id, tag_id)
@@ -1641,39 +1647,7 @@ class Database:
                 )
             return rows_affected > 0
         except Exception as e:
-            logger.error(
-                f"Error adding public tag {tag_id} to recipe {recipe_id}: {str(e)}"
-            )
-            raise
-
-    def add_private_tag_to_recipe(self, recipe_id: int, tag_id: int) -> bool:
-        """Associates a private tag with a recipe."""
-        try:
-            # We assume tag_id corresponds to a private tag owned by the relevant user.
-            # The check for tag ownership should happen in the handler before calling this.
-            logger.info(f"DB: Adding private tag {tag_id} to recipe {recipe_id}")
-            result = self.execute_query(
-                """
-                INSERT INTO recipe_tags (recipe_id, tag_id)
-                VALUES (%(recipe_id)s, %(tag_id)s)
-                ON CONFLICT(recipe_id, tag_id) DO NOTHING
-                """,
-                {"recipe_id": recipe_id, "tag_id": tag_id},
-            )
-            rows_affected = result.get("rowCount", 0)
-            if rows_affected > 0:
-                logger.info(
-                    f"DB: Successfully added private tag {tag_id} to recipe {recipe_id}"
-                )
-            else:
-                logger.warning(
-                    f"DB: Private tag {tag_id} already associated with recipe {recipe_id} (conflict ignored)"
-                )
-            return rows_affected > 0
-        except Exception as e:
-            logger.error(
-                f"Error adding private tag {tag_id} to recipe {recipe_id}: {str(e)}"
-            )
+            logger.error(f"Error adding tag {tag_id} to recipe {recipe_id}: {str(e)}")
             raise
 
     def remove_public_tag_from_recipe(self, recipe_id: int, tag_id: int) -> bool:

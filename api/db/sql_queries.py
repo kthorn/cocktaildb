@@ -82,38 +82,6 @@ get_recipe_by_id_sql = """
         ur.rating;
 """
 
-get_all_recipes_sql = """
-    SELECT
-        r.id, r.name, r.instructions, r.description, r.image_url,
-        r.source, r.source_url, r.avg_rating, r.rating_count, r.created_by,
-        STRING_AGG(CASE WHEN t.created_by IS NULL THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS public_tags_data,
-        STRING_AGG(CASE WHEN t.created_by = %(cognito_user_id)s THEN t.id || '|||' || t.name ELSE NULL END, ':::') AS private_tags_data
-    FROM
-        recipes r
-    LEFT JOIN
-        recipe_tags rt ON r.id = rt.recipe_id
-    LEFT JOIN
-        tags t ON rt.tag_id = t.id
-    GROUP BY
-        r.id, r.name, r.instructions, r.description, r.image_url,
-        r.source, r.source_url, r.avg_rating, r.rating_count, r.created_by;
-"""
-
-
-def get_recipe_ingredients_by_recipe_id_sql_factory(recipe_ids: list[int]) -> str:
-    recipe_ids_str = ",".join("%s" for _ in recipe_ids)
-    return f"""
-        SELECT ri.recipe_id, {INGREDIENT_SELECT_FIELDS}
-        FROM recipe_ingredients ri
-        JOIN ingredients i ON ri.ingredient_id = i.id
-        LEFT JOIN units u ON ri.unit_id = u.id
-        WHERE ri.recipe_id IN ({recipe_ids_str})
-        ORDER BY ri.recipe_id ASC,
-        COALESCE(ri.amount * u.conversion_to_ml, 0) DESC,
-        ri.id ASC
-    """
-
-
 get_recipes_count_sql = """
     SELECT COUNT(DISTINCT r.id) as total_count
     FROM recipes r

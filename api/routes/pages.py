@@ -1,6 +1,5 @@
 """Server-rendered HTML pages for recipe and ingredient discoverability."""
 
-import json
 import logging
 from pathlib import Path
 from typing import Optional

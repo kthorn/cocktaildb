@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, status
 
 from dependencies.auth import (
     UserInfo,
-    get_current_user_optional,
     require_authentication,
 )
 from db.database import get_database as get_db
