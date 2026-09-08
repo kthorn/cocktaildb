@@ -3101,6 +3101,12 @@ input[type="radio"]:focus {
     display: none;
 }
 
+.loading-placeholder.hidden,
+.empty-message.hidden,
+.infinite-scroll-loading.hidden {
+    display: none;
+}
+
 /* Loading indicators */
 .loading-indicator {
     position: absolute;

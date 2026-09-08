@@ -6,6 +6,18 @@ const vm = require('node:vm');
 const webRoot = path.join(__dirname, '..', 'src', 'web');
 const htmlSource = fs.readFileSync(path.join(webRoot, 'search.html'), 'utf8');
 const searchSource = fs.readFileSync(path.join(webRoot, 'js', 'search.js'), 'utf8');
+const stylesSource = fs.readFileSync(path.join(webRoot, 'styles.css'), 'utf8');
+
+// These components declare display:flex after the generic .hidden utility.
+// Require a more specific hidden rule so class toggles actually hide them.
+for (const className of ['loading-placeholder', 'empty-message', 'infinite-scroll-loading']) {
+    const hiddenRule = [...stylesSource.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find(
+        ([, selectors, declarations]) =>
+            selectors.split(',').some((selector) => selector.trim() === `.${className}.hidden`) &&
+            /display:\s*none\s*;/.test(declarations),
+    );
+    assert.ok(hiddenRule, `${className} must stay hidden despite its display:flex styling`);
+}
 
 const resultsSection = htmlSource.match(/<section class="results-section">([\s\S]*?)<\/section>/);
 assert.ok(resultsSection, 'search page must have a results section');
@@ -176,6 +188,10 @@ vm.runInNewContext(`${displayFunction}\n${performFunction}`, context);
 (async () => {
     await vm.runInNewContext('performSearch(true)', context);
     assert.equal(searchResults.children.length, 1, 'successful searches render recipe cards');
+    assert.ok(
+        loadingPlaceholder.classList.contains('hidden'),
+        'loading status hides when cards load',
+    );
     assert.equal(loadingPlaceholder.parentElement, outer, 'loading status remains attached');
     assert.equal(emptyResults.parentElement, outer, 'empty status remains attached');
     assert.equal(searchResults.parentElement, outer, 'card list remains attached');
@@ -197,6 +213,10 @@ vm.runInNewContext(`${displayFunction}\n${performFunction}`, context);
     assert.equal(emptyResults.parentElement, outer, 'empty status remains attached while waiting');
     pendingResolve({ recipes: [], pagination: { has_next: false, next_cursor: null } });
     await pendingSearch;
+    assert.ok(
+        loadingPlaceholder.classList.contains('hidden'),
+        'loading status hides for empty results',
+    );
     assert.equal(
         searchResults.innerHTML,
         '',
@@ -210,6 +230,10 @@ vm.runInNewContext(`${displayFunction}\n${performFunction}`, context);
 
     apiMode = 'error';
     await vm.runInNewContext('performSearch(true)', context);
+    assert.ok(
+        loadingPlaceholder.classList.contains('hidden'),
+        'loading status hides after failure',
+    );
     assert.equal(searchResults.children.length, 0, 'failed searches clear stale recipe cards');
     assert.equal(
         searchResults.innerHTML,
