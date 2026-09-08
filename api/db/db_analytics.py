@@ -201,8 +201,6 @@ class AnalyticsQueries:
         Returns dict with 'data' key containing list of:
             {recipe_id, recipe_name, x, y, ingredients: [sorted ingredient names]}
         """
-        import numpy as np
-        from scipy import sparse as sp
         from sklearn.metrics import pairwise_distances
         from barcart import compute_umap_embedding
 

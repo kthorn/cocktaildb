@@ -180,9 +180,9 @@ async def upload_ingredient_values(
 
     for row in rows:
         ingredient_id = row["ingredient_id"]
-        ingredient = ingredients.setdefault(
-            ingredient_id, db.get_ingredient(ingredient_id)
-        )
+        if ingredient_id not in ingredients:
+            ingredients[ingredient_id] = db.get_ingredient(ingredient_id)
+        ingredient = ingredients[ingredient_id]
         if ingredient is None:
             validation_errors.append(f"Ingredient {ingredient_id} does not exist")
             continue

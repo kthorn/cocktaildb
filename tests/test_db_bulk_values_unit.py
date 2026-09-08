@@ -3,6 +3,8 @@ import importlib
 import unittest
 from decimal import Decimal
 
+from core.exceptions import ValidationException
+
 bulk_update_ingredient_values = importlib.import_module(
     "api.db.db_bulk_values"
 ).bulk_update_ingredient_values
@@ -55,6 +57,7 @@ class FakeConnection:
 class FakeDatabase:
     def __init__(self, rows):
         self.connection = FakeConnection(rows)
+        self.ingredient_lookups = []
 
     def _get_connection(self):
         return self.connection
@@ -63,6 +66,7 @@ class FakeDatabase:
         assert connection is self.connection
 
     def get_ingredient(self, ingredient_id):
+        self.ingredient_lookups.append(ingredient_id)
         row = self.connection.cursor_instance.rows.get(ingredient_id)
         if row is None:
             return None
@@ -76,6 +80,53 @@ class FakeDatabase:
 
 
 class TestBulkIngredientValueTransaction(unittest.TestCase):
+    def test_upload_fetches_each_ingredient_once_across_multiple_fields(self):
+        db = FakeDatabase(
+            {
+                7: ("Lime Juice", None, None, None),
+                8: ("Rum", None, None, None),
+            }
+        )
+
+        response = asyncio.run(
+            upload_ingredient_values(
+                "ingredient_id,ingredient_name,field,value\n"
+                "7,Lime Juice,sugar_g_per_l,2\n"
+                "8,Rum,percent_abv,40\n"
+                "7,Lime Juice,titratable_acidity_g_per_l,46\n"
+                "7,Lime Juice,sugar_g_per_l,2\n",
+                db,
+                None,
+            )
+        )
+
+        self.assertEqual(
+            response, {"updated_count": 3, "unchanged_count": 1, "errors": []}
+        )
+        self.assertEqual(db.ingredient_lookups, [7, 8])
+        self.assertEqual(db.connection.cursor_instance.locked_ids, [7, 8])
+
+    def test_upload_caches_missing_ingredients_and_preserves_validation_errors(self):
+        db = FakeDatabase({})
+
+        with self.assertRaises(ValidationException) as raised:
+            asyncio.run(
+                upload_ingredient_values(
+                    "ingredient_id,ingredient_name,field,value\n"
+                    "7,Missing,sugar_g_per_l,2\n"
+                    "7,Missing,percent_abv,40\n",
+                    db,
+                    None,
+                )
+            )
+
+        self.assertEqual(
+            raised.exception.detail,
+            "Ingredient 7 does not exist; Ingredient 7 does not exist",
+        )
+        self.assertEqual(db.ingredient_lookups, [7])
+        self.assertEqual(db.connection.cursor_instance.update_count, 0)
+
     def test_expected_name_is_checked_inside_update_transaction(self):
         db = FakeDatabase({7: ("Stored Name", None, None, None)})
 

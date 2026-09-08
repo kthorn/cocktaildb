@@ -1,315 +1,262 @@
-"""
-Tests for pagination functionality in the FastAPI application
-"""
+"""Contract tests for paginated recipe search."""
 
 import pytest
+from pydantic import ValidationError
+
+
+def assert_recipe_shape(recipe: dict) -> None:
+    """Check the complete recipe shape returned by recipe search."""
+    assert {
+        "id",
+        "name",
+        "instructions",
+        "description",
+        "image_url",
+        "source",
+        "source_url",
+        "avg_rating",
+        "rating_count",
+        "user_rating",
+        "created_by",
+        "ingredients",
+        "tags",
+        "public_tags",
+        "private_tags",
+    } <= recipe.keys()
+    assert isinstance(recipe["ingredients"], list)
+    assert isinstance(recipe["tags"], list)
+    assert isinstance(recipe["public_tags"], list)
+    assert isinstance(recipe["private_tags"], list)
+
+    for ingredient in recipe["ingredients"]:
+        assert {
+            "ingredient_id",
+            "ingredient_name",
+            "ingredient_path",
+            "full_name",
+            "hierarchy",
+            "amount",
+            "unit_id",
+            "unit_name",
+            "unit_abbreviation",
+        } <= ingredient.keys()
+
+    for tag in recipe["tags"]:
+        assert {"id", "name", "type"} <= tag.keys()
+
+
+def assert_search_shape(data: dict) -> None:
+    """Check the top-level /recipes/search response shape."""
+    assert set(data) == {"recipes", "pagination", "query"}
+    pagination = data["pagination"]
+    assert set(pagination) == {
+        "page",
+        "limit",
+        "total_count",
+        "has_next",
+        "has_previous",
+        "next_cursor",
+    }
+    assert isinstance(data["recipes"], list)
+    assert isinstance(pagination["page"], int)
+    assert isinstance(pagination["limit"], int)
+    assert isinstance(pagination["total_count"], int)
+    assert isinstance(pagination["has_next"], bool)
+    assert isinstance(pagination["has_previous"], bool)
 
 
 class TestPaginationModels:
-    """Test pagination response models"""
+    """Validate the response models used by the search route."""
 
-    def test_pagination_metadata_model(self):
-        """Test pagination metadata model validation"""
-        try:
-            from api.models.responses import PaginationMetadata
+    def test_paginated_search_response_model(self):
+        from api.models.responses import PaginatedSearchResponse
 
-            # Valid pagination metadata
-            valid_data = {
-                "page": 1,
-                "limit": 10,
-                "total_count": 47,
-                "has_next": True,
-                "has_previous": False,
-            }
-            pagination = PaginationMetadata(**valid_data)
-            assert pagination.page == 1
-            assert pagination.has_next is True
-            assert pagination.has_previous is False
-
-        except ImportError:
-            pytest.skip("Pagination models not yet implemented")
-
-    def test_paginated_recipe_response_model(self):
-        """Test paginated recipe response model validation"""
-        try:
-            from api.models.responses import PaginatedRecipeResponse
-
-            # Mock recipe data
-            recipe_data = {
-                "id": 1,
-                "name": "Test Recipe",
-                "instructions": "Test instructions",
-                "description": "Test description",
-                "created_by": "test-user",
-                "avg_rating": 4.5,
-                "rating_count": 10,
-                "ingredients": [],
-                "public_tags": [],
-                "private_tags": [],
-            }
-
-            pagination_data = {
+        response = PaginatedSearchResponse(
+            recipes=[
+                {
+                    "id": 1,
+                    "name": "Test Recipe",
+                    "instructions": "Stir with ice",
+                    "ingredients": [],
+                    "tags": [],
+                }
+            ],
+            pagination={
                 "page": 1,
                 "limit": 10,
                 "total_count": 1,
                 "has_next": False,
                 "has_previous": False,
-            }
+            },
+            query="test",
+        )
 
-            # Valid paginated response
-            valid_data = {"recipes": [recipe_data], "pagination": pagination_data}
-            response = PaginatedRecipeResponse(**valid_data)
-            assert len(response.recipes) == 1
-            assert response.pagination.total_count == 1
+        assert response.recipes[0].name == "Test Recipe"
+        assert response.pagination.total_count == 1
+        assert response.query == "test"
 
-        except ImportError:
-            pytest.skip("Pagination models not yet implemented")
+    @pytest.mark.parametrize(
+        "field,value",
+        [("page", 0), ("limit", 0), ("limit", 1001), ("total_count", -1)],
+    )
+    def test_pagination_metadata_rejects_invalid_values(self, field, value):
+        from api.models.responses import PaginationMetadata
+
+        metadata = {
+            "page": 1,
+            "limit": 10,
+            "total_count": 1,
+            "has_next": False,
+            "has_previous": False,
+        }
+        metadata[field] = value
+
+        with pytest.raises(ValidationError):
+            PaginationMetadata(**metadata)
 
 
 @pytest.mark.asyncio
 class TestRecipePagination:
-    """Test recipe pagination endpoints"""
+    """Test the implemented /recipes/search pagination contract."""
 
-    async def test_get_recipes_with_pagination_default(self, test_client_memory):
-        """Test getting recipes with default pagination"""
-        response = await test_client_memory.get("/recipes")
+    async def test_default_pagination_response(self, test_client_with_data):
+        client, _ = test_client_with_data
 
-        # Should work even without pagination implemented yet
-        if response.status_code == 200:
-            data = response.json()
-            # If pagination is implemented, check structure
-            if "pagination" in data:
-                assert "recipes" in data
-                assert "pagination" in data
-                assert "page" in data["pagination"]
-                assert "limit" in data["pagination"]
-                assert "total_count" in data["pagination"]
-            # Otherwise, just check it returns recipes
-            else:
-                assert isinstance(data, list) or "recipes" in data
+        response = await client.get("/recipes/search")
 
-    async def test_get_recipes_with_page_parameter(self, test_client_memory):
-        """Test getting recipes with page parameter"""
-        response = await test_client_memory.get("/recipes/search?page=1")
+        assert response.status_code == 200
+        data = response.json()
+        assert_search_shape(data)
+        assert data["query"] is None
+        assert data["pagination"]["page"] == 1
+        assert data["pagination"]["limit"] == 20
+        assert data["pagination"]["has_previous"] is False
+        assert len(data["recipes"]) > 0
+        for recipe in data["recipes"]:
+            assert_recipe_shape(recipe)
 
-        # Should handle page parameter gracefully
-        assert response.status_code in [
-            200,
-            422,
-        ]  # 422 if validation not implemented yet
+    async def test_explicit_page_and_limit(self, test_client_with_data):
+        client, _ = test_client_with_data
 
-        if response.status_code == 200:
-            data = response.json()
-            if "pagination" in data:
-                assert data["pagination"]["page"] == 1
+        response = await client.get("/recipes/search?page=2&limit=2")
 
-    async def test_get_recipes_with_limit_parameter(self, test_client_memory):
-        """Test getting recipes with limit parameter"""
-        response = await test_client_memory.get("/recipes/search?limit=5")
+        assert response.status_code == 200
+        data = response.json()
+        assert_search_shape(data)
+        assert data["pagination"]["page"] == 2
+        assert data["pagination"]["limit"] == 2
+        assert data["pagination"]["has_previous"] is True
+        assert len(data["recipes"]) == 2
 
-        # Should handle limit parameter gracefully
-        assert response.status_code in [
-            200,
-            422,
-        ]  # 422 if validation not implemented yet
-
-        if response.status_code == 200:
-            data = response.json()
-            if "pagination" in data:
-                assert data["pagination"]["limit"] == 5
-
-    async def test_get_recipes_with_page_and_limit(self, test_client_memory):
-        """Test getting recipes with both page and limit parameters"""
-        response = await test_client_memory.get("/recipes/search?page=2&limit=3")
-
-        # Should handle both parameters gracefully
-        assert response.status_code in [
-            200,
-            422,
-        ]  # 422 if validation not implemented yet
-
-        if response.status_code == 200:
-            data = response.json()
-            if "pagination" in data:
-                assert data["pagination"]["page"] == 2
-                assert data["pagination"]["limit"] == 3
-
-    async def test_get_recipes_invalid_page(self, test_client_memory):
-        """Test getting recipes with invalid page parameter"""
-        response = await test_client_memory.get("/recipes/search?page=0")
-
-        # Should reject invalid page numbers
-        if response.status_code == 422:
-            # Validation working correctly
-            pass
-        elif response.status_code == 200:
-            # Not yet implemented, but should not crash
-            pass
-        else:
-            pytest.fail(f"Unexpected status code: {response.status_code}")
-
-    async def test_get_recipes_invalid_limit(self, test_client_memory):
-        """Test getting recipes with invalid limit parameter"""
-        response = await test_client_memory.get("/recipes/search?limit=-1")
-
-        # Should reject invalid limit values
-        if response.status_code == 422:
-            # Validation working correctly
-            pass
-        elif response.status_code == 200:
-            # Not yet implemented, but should not crash
-            pass
-        else:
-            pytest.fail(f"Unexpected status code: {response.status_code}")
-
-    async def test_pagination_metadata_consistency(self, test_client_memory):
-        """Test pagination metadata is mathematically consistent"""
-        response = await test_client_memory.get("/recipes/search?page=1&limit=5")
-
-        if response.status_code == 200:
-            data = response.json()
-            if "pagination" in data:
-                pagination = data["pagination"]
-
-                # Check has_next/has_previous logic
-                assert pagination["has_previous"] == (pagination["page"] > 1)
-
-
-@pytest.mark.asyncio
-class TestSearchPagination:
-    """Test search pagination endpoints"""
-
-    async def test_search_recipes_with_pagination(self, test_client_memory):
-        """Test searching recipes with pagination parameters"""
-        response = await test_client_memory.get("/search?q=test&page=1&limit=5")
-
-        # Should handle search with pagination parameters
-        assert response.status_code in [
-            200,
-            422,
-            404,
-        ]  # 404 if search endpoint not found
-
-        if response.status_code == 200:
-            data = response.json()
-            # Check if pagination structure exists
-            if "pagination" in data:
-                assert "recipes" in data or "results" in data
-                assert data["pagination"]["page"] == 1
-                assert data["pagination"]["limit"] == 5
-
-    async def test_search_recipes_maintains_filters_across_pages(
-        self, test_client_memory
+    async def test_metadata_is_consistent_across_pages(
+        self, test_client_with_data, db_with_test_data
     ):
-        """Test that search filters are maintained across paginated requests"""
-        # This test ensures that search criteria don't get lost when paginating
+        client, _ = test_client_with_data
+        cursor = db_with_test_data.cursor()
+        cursor.execute(
+            """
+            INSERT INTO recipes (name, instructions, description)
+            VALUES ('Plain Cocktail', 'Stir with ice', 'Not a test recipe')
+            """
+        )
+        db_with_test_data.commit()
+        cursor.close()
 
-        # First page with search
-        response1 = await test_client_memory.get("/search?q=mojito&page=1&limit=2")
+        first_response = await client.get("/recipes/search?q=Test&page=1&limit=2")
+        second_response = await client.get("/recipes/search?q=Test&page=2&limit=2")
 
-        # Second page with same search
-        response2 = await test_client_memory.get("/search?q=mojito&page=2&limit=2")
+        assert first_response.status_code == 200
+        assert second_response.status_code == 200
+        first = first_response.json()
+        second = second_response.json()
+        assert_search_shape(first)
+        assert_search_shape(second)
+        assert first["pagination"]["total_count"] == 2
+        assert second["pagination"]["total_count"] == 2
+        assert first["pagination"]["total_count"] == second["pagination"]["total_count"]
+        assert first["pagination"]["has_next"] is True
+        assert second["pagination"]["has_next"] is False
 
-        if response1.status_code == 200 and response2.status_code == 200:
-            data1 = response1.json()
-            data2 = response2.json()
+    async def test_search_filter_is_preserved_across_nonempty_pages(
+        self, test_client_with_data, db_with_test_data
+    ):
+        client, _ = test_client_with_data
+        cursor = db_with_test_data.cursor()
+        cursor.execute(
+            """
+            INSERT INTO recipes (name, instructions, description)
+            VALUES ('Plain Cocktail', 'Stir with ice', 'Not a test recipe')
+            """
+        )
+        db_with_test_data.commit()
+        cursor.close()
 
-            # If pagination implemented, check both pages have same total_count
-            if "pagination" in data1 and "pagination" in data2:
-                assert (
-                    data1["pagination"]["total_count"]
-                    == data2["pagination"]["total_count"]
-                )
+        first_response = await client.get("/recipes/search?q=Test&page=1&limit=1")
+        second_response = await client.get("/recipes/search?q=Test&page=2&limit=1")
 
+        assert first_response.status_code == 200
+        assert second_response.status_code == 200
+        first = first_response.json()
+        second = second_response.json()
+        assert first["query"] == "Test"
+        assert second["query"] == "Test"
+        assert len(first["recipes"]) == 1
+        assert len(second["recipes"]) == 1
+        assert first["recipes"][0]["id"] != second["recipes"][0]["id"]
+        assert all("test" in recipe["name"].lower() for recipe in first["recipes"])
+        assert all("test" in recipe["name"].lower() for recipe in second["recipes"])
 
-@pytest.mark.asyncio
-class TestPaginationPerformance:
-    """Test pagination performance characteristics"""
+    async def test_empty_search_result_has_consistent_metadata(
+        self, test_client_with_data
+    ):
+        client, _ = test_client_with_data
 
-    async def test_paginated_recipes_include_full_data(self, test_client_memory):
-        """Test that paginated recipe responses include full recipe details"""
-        response = await test_client_memory.get("/recipes/search?page=1&limit=5")
-
-        if response.status_code == 200:
-            data = response.json()
-            recipes = data.get("recipes", data) if isinstance(data, dict) else data
-
-            if recipes and len(recipes) > 0:
-                recipe = recipes[0]
-                # Should include full recipe details to eliminate N+1 queries
-                expected_fields = ["id", "name", "instructions"]
-                for field in expected_fields:
-                    assert field in recipe, f"Recipe missing field: {field}"
-
-                # Should include related data
-                if "ingredients" in recipe:
-                    assert isinstance(recipe["ingredients"], list)
-
-    async def test_pagination_response_time(self, test_client_memory):
-        """Test that paginated responses are reasonably fast"""
-        import time
-
-        start_time = time.time()
-        response = await test_client_memory.get("/recipes/search?page=1&limit=10")
-        end_time = time.time()
-
-        # Should respond within reasonable time (generous for test environment)
-        response_time = end_time - start_time
-        assert response_time < 5.0, f"Response took {response_time:.2f} seconds"
-
-        if response.status_code == 200:
-            # Response should be reasonably sized
-            content_length = len(response.content)
-            assert content_length > 0, "Response should have content"
-
-
-@pytest.mark.asyncio
-class TestPaginationEdgeCases:
-    """Test pagination edge cases and boundary conditions"""
-
-    async def test_empty_result_set_pagination(self, test_client_memory):
-        """Test pagination with empty result sets"""
-        # Search for something that likely doesn't exist
-        response = await test_client_memory.get(
-            "/search?q=nonexistentrecipe12345&page=1&limit=10"
+        response = await client.get(
+            "/recipes/search?q=nonexistentrecipe12345&page=1&limit=10"
         )
 
-        if response.status_code == 200:
-            data = response.json()
-            if "pagination" in data:
-                assert data["pagination"]["total_count"] == 0
-                assert data["pagination"]["has_next"] is False
-                assert data["pagination"]["has_previous"] is False
+        assert response.status_code == 200
+        data = response.json()
+        assert_search_shape(data)
+        assert data["query"] == "nonexistentrecipe12345"
+        assert data["recipes"] == []
+        assert data["pagination"]["total_count"] == 0
+        assert data["pagination"]["has_next"] is False
+        assert data["pagination"]["has_previous"] is False
 
-            recipes = data.get("recipes", data.get("results", []))
-            assert len(recipes) == 0
+    async def test_page_beyond_results_is_empty(self, test_client_with_data):
+        client, _ = test_client_with_data
 
-    async def test_large_page_number(self, test_client_memory):
-        """Test requesting a page number beyond available data"""
-        response = await test_client_memory.get("/recipes/search?page=9999&limit=10")
+        response = await client.get("/recipes/search?page=9999&limit=10")
 
-        # Should handle gracefully, either return empty results or error
-        assert response.status_code in [200, 404, 422]
-
-        if response.status_code == 200:
-            data = response.json()
-            if "pagination" in data:
-                recipes = data.get("recipes", [])
-                assert len(recipes) == 0  # Should be empty for page beyond data
-
-    async def test_maximum_limit_enforcement(self, test_client_memory):
-        """Test that excessively large limit values are handled"""
-        response = await test_client_memory.get("/recipes/search?page=1&limit=10000")
-
-        # Should either enforce a maximum limit or handle gracefully
-        assert response.status_code in [200, 422]
-
-        if response.status_code == 200:
-            data = response.json()
-            if "pagination" in data:
-                # Should either enforce a reasonable maximum or handle the large limit
-                assert data["pagination"]["limit"] <= 1000  # Reasonable maximum
+        assert response.status_code == 200
+        data = response.json()
+        assert_search_shape(data)
+        assert data["recipes"] == []
+        assert data["pagination"]["page"] == 9999
+        assert data["pagination"]["has_next"] is False
+        assert data["pagination"]["has_previous"] is True
 
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+@pytest.mark.asyncio
+class TestRecipeSearchRequestValidation:
+    """Validate query parameters without requiring a database connection."""
+
+    @pytest.mark.parametrize(
+        "query",
+        ["page=0", "page=-1", "page=invalid", "limit=0", "limit=-1", "limit=1001"],
+    )
+    async def test_invalid_pagination_parameters_return_422(self, query, monkeypatch):
+        import httpx
+
+        from api.main import app
+        from db.database import get_database
+
+        monkeypatch.setitem(app.dependency_overrides, get_database, lambda: object())
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            response = await client.get(f"/recipes/search?{query}")
+
+        assert response.status_code == 422

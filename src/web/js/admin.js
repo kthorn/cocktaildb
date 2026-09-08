@@ -1,9 +1,7 @@
 import { api } from './api.js';
-import { isAuthenticated, initAuth } from './auth.js';
+import { isAuthenticated } from './auth.js';
 
-document.addEventListener('DOMContentLoaded', async () => {
-    // Ensure authentication is initialized before checking permissions
-    await initAuth();
+document.addEventListener('DOMContentLoaded', () => {
     setupAdminPage();
 });
 

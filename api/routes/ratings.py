@@ -11,7 +11,7 @@ from dependencies.auth import (
 from db.database import get_database as get_db
 from db.db_core import Database
 from models.requests import RatingCreate
-from models.responses import RatingSummaryResponse, RatingResponse, MessageResponse
+from models.responses import RatingSummaryResponse, RatingResponse
 from .rating_handlers import (
     get_recipe_ratings_handler,
     create_or_update_rating_handler,

@@ -218,18 +218,6 @@ class PaginationMetadata(BaseModel):
         from_attributes = True
 
 
-class PaginatedRecipeResponse(BaseModel):
-    """Response model for paginated recipe data"""
-
-    recipes: List[RecipeResponse] = Field(
-        ..., description="List of recipes with full details"
-    )
-    pagination: PaginationMetadata = Field(..., description="Pagination metadata")
-
-    class Config:
-        from_attributes = True
-
-
 class PaginatedSearchResponse(BaseModel):
     """Response model for paginated search results"""
 

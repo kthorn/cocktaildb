@@ -25,6 +25,21 @@ storage_manager = AnalyticsStorage(ANALYTICS_PATH) if ANALYTICS_PATH else None
 PRIVATE_CACHE_CONTROL = "private, no-store"
 
 
+def _load_cached_analytics(storage_key: str) -> dict:
+    """Load one generated analytics document from configured local storage."""
+    if not storage_manager:
+        raise DatabaseException("Analytics storage not configured")
+
+    stored_data = storage_manager.get_analytics(storage_key)
+    if not stored_data:
+        raise DatabaseException(
+            "Analytics not generated. Please trigger analytics refresh.",
+            detail=f"{storage_key} data not found in storage",
+        )
+
+    return stored_data
+
+
 def add_cocktail_space_ratings(
     stored_data: dict, db: Database, user: Optional[UserInfo]
 ) -> dict:
@@ -73,22 +88,13 @@ async def get_ingredient_usage_analytics(
 ):
     """Get ingredient usage statistics with hierarchical aggregation
 
-    Root level data is cached in S3. Hierarchical drill-down data is computed on-the-fly.
+    Root level data is cached in local storage. Hierarchical drill-down data is
+    computed on-the-fly.
     """
     try:
-        # For root level (no filters), use cached data from S3
+        # For root level (no filters), use cached data from local storage
         if level is None and parent_id is None:
-            if not storage_manager:
-                raise DatabaseException("Analytics storage not configured")
-
-            stored_data = storage_manager.get_analytics("ingredient-usage")
-            if not stored_data:
-                raise DatabaseException(
-                    "Analytics not generated. Please trigger analytics refresh.",
-                    detail="ingredient-usage data not found in storage",
-                )
-
-            return stored_data
+            return _load_cached_analytics("ingredient-usage")
 
         # For hierarchical drill-down, compute on-the-fly
         else:
@@ -123,18 +129,7 @@ async def get_recipe_complexity_analytics(
     """Get recipe complexity distribution"""
     try:
         storage_key = "recipe-complexity"
-
-        if not storage_manager:
-            raise DatabaseException("Analytics storage not configured")
-
-        stored_data = storage_manager.get_analytics(storage_key)
-        if not stored_data:
-            raise DatabaseException(
-                "Analytics not generated. Please trigger analytics refresh.",
-                detail=f"{storage_key} data not found in storage",
-            )
-
-        return stored_data
+        return _load_cached_analytics(storage_key)
 
     except DatabaseException:
         raise
@@ -155,17 +150,7 @@ async def get_cocktail_space_analytics(
     response.headers["Cache-Control"] = PRIVATE_CACHE_CONTROL
     try:
         storage_key = "cocktail-space"
-
-        if not storage_manager:
-            raise DatabaseException("Analytics storage not configured")
-
-        stored_data = storage_manager.get_analytics(storage_key)
-        if not stored_data:
-            raise DatabaseException(
-                "Analytics not generated. Please trigger analytics refresh.",
-                detail="cocktail-space data not found in storage",
-            )
-
+        stored_data = _load_cached_analytics(storage_key)
         return add_cocktail_space_ratings(stored_data, db, user)
     except DatabaseException:
         raise
@@ -186,17 +171,7 @@ async def get_cocktail_space_em_analytics(
     response.headers["Cache-Control"] = PRIVATE_CACHE_CONTROL
     try:
         storage_key = "cocktail-space-em"
-
-        if not storage_manager:
-            raise DatabaseException("Analytics storage not configured")
-
-        stored_data = storage_manager.get_analytics(storage_key)
-        if not stored_data:
-            raise DatabaseException(
-                "Analytics not generated. Please trigger analytics refresh.",
-                detail="cocktail-space-em data not found in storage",
-            )
-
+        stored_data = _load_cached_analytics(storage_key)
         return add_cocktail_space_ratings(stored_data, db, user)
     except DatabaseException:
         raise
@@ -255,18 +230,7 @@ async def get_ingredient_tree_analytics(
     """
     try:
         storage_key = "ingredient-tree"
-
-        if not storage_manager:
-            raise DatabaseException("Analytics storage not configured")
-
-        stored_data = storage_manager.get_analytics(storage_key)
-        if not stored_data:
-            raise DatabaseException(
-                "Analytics not generated. Please trigger analytics refresh.",
-                detail="ingredient-tree data not found in storage",
-            )
-
-        return stored_data
+        return _load_cached_analytics(storage_key)
     except DatabaseException:
         raise
     except Exception as e:
