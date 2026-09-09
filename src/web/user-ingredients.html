@@ -11,10 +11,21 @@
         <main>
             <section class="page-header">
                 <h2>My Ingredients & Tags</h2>
-                <p>Manage your personal ingredient inventory and private tags</p>
+                <p>Manage your shared bar inventory and personal private tags</p>
             </section>
 
             <div class="auth-required-content">
+                <section class="group-inventory-banner" aria-labelledby="group-banner-heading">
+                    <div>
+                        <h3 id="group-banner-heading">Shared bar inventory</h3>
+                        <p id="group-banner-status">
+                            Your ingredients are shared with your current bar members. Personal
+                            private tags remain visible only to you.
+                        </p>
+                    </div>
+                    <a class="btn btn-secondary" href="/groups.html">Manage My Bar</a>
+                </section>
+
                 <section class="current-ingredients">
                     <div class="section-header">
                         <h3>Your Current Ingredients</h3>

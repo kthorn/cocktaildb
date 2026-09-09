@@ -1,5 +1,13 @@
 import { api } from './api.js';
-import { isAuthenticated } from './auth.js';
+import { getUserInfo, isAuthenticated } from './auth.js';
+
+function currentUserId() {
+    try {
+        return getUserInfo()?.cognitoUserId || null;
+    } catch {
+        return null;
+    }
+}
 
 class UserIngredientsManager {
     constructor() {
@@ -16,38 +24,137 @@ class UserIngredientsManager {
         // Ingredient recommendations
         this.recommendations = [];
         this.recommendationsLimit = 10; // Number of recommendations to display
+        this.authGeneration = 0;
+        this.authenticated = false;
+        this.principalId = null;
 
-        this.init();
+        this.initPromise = this.init();
     }
 
     async init() {
+        this.principalId = currentUserId();
+        this.bindEvents();
+        document.addEventListener('auth-state-changed', (event) => {
+            this.handleAuthChange(event.detail || {});
+        });
+
         // Check authentication and show appropriate content
         if (!isAuthenticated()) {
+            this.authenticated = false;
             this.showAuthRequired();
             return;
         }
 
+        this.authenticated = true;
         this.showAuthenticatedContent();
-        this.bindEvents();
+        // The banner is informational. Its request must not hold up inventory loading.
+        void this.loadGroupBanner();
         await this.loadData();
         await this.loadPrivateTags();
         await this.loadRecommendations();
     }
 
     showAuthRequired() {
-        document.querySelector('.auth-required-content').style.display = 'none';
+        const content = document.querySelector('.auth-required-content');
+        if (content) content.style.display = 'none';
         document.querySelector('.auth-required-message').classList.remove('hidden');
 
         // Bind login prompt
-        document.getElementById('login-prompt-btn').addEventListener('click', () => {
-            // Trigger login (this would be handled by auth.js)
-            window.location.href = '#login';
-        });
+        const loginPrompt = document.getElementById('login-prompt-btn');
+        if (loginPrompt && !loginPrompt.dataset.bound) {
+            loginPrompt.dataset.bound = 'true';
+            loginPrompt.addEventListener('click', () => {
+                const headerLogin = document.getElementById('login-btn');
+                if (headerLogin) headerLogin.click();
+                else window.location.href = '#login';
+            });
+        }
     }
 
     showAuthenticatedContent() {
-        document.querySelector('.auth-required-content').style.display = 'block';
+        const content = document.querySelector('.auth-required-content');
+        if (content) content.style.display = 'block';
         document.querySelector('.auth-required-message').classList.add('hidden');
+    }
+
+    handleAuthChange({ isAuthenticated: authenticated } = {}) {
+        const loggedIn = authenticated ?? isAuthenticated();
+        const nextPrincipalId = currentUserId();
+        const principalChanged = this.principalId !== nextPrincipalId;
+        if (!loggedIn) {
+            if (!this.authenticated) return;
+            this.authenticated = false;
+            this.principalId = null;
+            this.authGeneration += 1;
+            this.clearInventoryState();
+            this.showAuthRequired();
+            const banner = document.getElementById('group-banner-status');
+            if (banner) banner.textContent = 'Log in to view your shared bar inventory.';
+            return;
+        }
+
+        if (this.authenticated && !principalChanged) return;
+        this.principalId = nextPrincipalId;
+        this.authGeneration += 1;
+        this.authenticated = true;
+        this.clearInventoryState();
+        this.showAuthenticatedContent();
+        void this.loadGroupBanner();
+        void this.loadData();
+        void this.loadPrivateTags();
+        void this.loadRecommendations();
+    }
+
+    clearInventoryState() {
+        this.allIngredients = [];
+        this.userIngredients = [];
+        this.userIngredientIds.clear();
+        this.filteredIngredients = [];
+        this.selectedToAdd.clear();
+        this.selectedToRemove.clear();
+        this.privateTags = [];
+        this.recommendations = [];
+
+        const current = document.getElementById('current-ingredients-list');
+        const available = document.getElementById('available-ingredients-list');
+        const tags = document.getElementById('private-tags-list');
+        const recommendations = document.getElementById('recommendations-list');
+        const banner = document.getElementById('group-banner-status');
+        if (current) current.textContent = 'Loading your ingredients...';
+        if (available) available.textContent = 'Loading available ingredients...';
+        if (tags) tags.textContent = 'Loading your private tags...';
+        if (recommendations) recommendations.textContent = 'Loading recommendations...';
+        if (banner) banner.textContent = 'Loading your shared bar inventory...';
+        this.updateAddButton();
+        this.updateRemoveButton();
+    }
+
+    isCurrentMutation(generation, principalId) {
+        return (
+            generation === this.authGeneration &&
+            principalId === this.principalId &&
+            principalId === currentUserId() &&
+            isAuthenticated()
+        );
+    }
+
+    async loadGroupBanner() {
+        const banner = document.getElementById('group-banner-status');
+        if (!banner || !api.getMyGroup) return;
+        const generation = this.authGeneration;
+
+        try {
+            const group = await api.getMyGroup();
+            if (generation !== this.authGeneration || !isAuthenticated()) return;
+            if (group?.name) {
+                banner.textContent = `Your ingredients are shared with “${group.name}”. Personal private tags remain visible only to you.`;
+            }
+        } catch {
+            // The banner is supplementary; inventory loading continues independently.
+            if (generation !== this.authGeneration || !isAuthenticated()) return;
+            banner.textContent =
+                'Your shared bar inventory is available below. Personal private tags remain visible only to you.';
+        }
     }
 
     bindEvents() {
@@ -77,12 +184,14 @@ class UserIngredientsManager {
     }
 
     async loadData() {
+        const generation = this.authGeneration;
         try {
             // Load both user ingredients and all available ingredients
             const [userIngredientsData, allIngredientsData] = await Promise.all([
                 api.getUserIngredients(),
                 api.getIngredients(),
             ]);
+            if (generation !== this.authGeneration || !isAuthenticated()) return;
 
             this.userIngredients = userIngredientsData.ingredients || [];
             this.userIngredientIds = new Set(this.userIngredients.map((ing) => ing.ingredient_id));
@@ -94,6 +203,7 @@ class UserIngredientsManager {
             this.renderCurrentIngredients();
             this.renderAvailableIngredients();
         } catch (error) {
+            if (generation !== this.authGeneration || !isAuthenticated()) return;
             console.error('Error loading ingredients:', error);
             const errorMessage = error.message || 'Failed to load ingredients';
             this.showError(errorMessage);
@@ -324,10 +434,13 @@ class UserIngredientsManager {
 
     async addSelectedIngredients() {
         if (this.selectedToAdd.size === 0) return;
+        const generation = this.authGeneration;
+        const principalId = this.principalId;
 
         try {
             const ingredientIds = Array.from(this.selectedToAdd);
             await api.bulkAddUserIngredients(ingredientIds);
+            if (!this.isCurrentMutation(generation, principalId)) return;
 
             // Reset selection
             this.selectedToAdd.clear();
@@ -335,10 +448,13 @@ class UserIngredientsManager {
 
             // Reload data and recommendations
             await this.loadData();
+            if (!this.isCurrentMutation(generation, principalId)) return;
             await this.loadRecommendations();
+            if (!this.isCurrentMutation(generation, principalId)) return;
 
             this.showSuccess(`Added ${ingredientIds.length} ingredient(s) to your inventory`);
         } catch (error) {
+            if (!this.isCurrentMutation(generation, principalId)) return;
             console.error('Error adding ingredients:', error);
             const errorMessage = error.message || 'Failed to add ingredients';
             this.showError(errorMessage);
@@ -347,10 +463,13 @@ class UserIngredientsManager {
 
     async removeSelectedIngredients() {
         if (this.selectedToRemove.size === 0) return;
+        const generation = this.authGeneration;
+        const principalId = this.principalId;
 
         try {
             const ingredientIds = Array.from(this.selectedToRemove);
             await api.bulkRemoveUserIngredients(ingredientIds);
+            if (!this.isCurrentMutation(generation, principalId)) return;
 
             // Reset selection
             this.selectedToRemove.clear();
@@ -358,10 +477,13 @@ class UserIngredientsManager {
 
             // Reload data and recommendations
             await this.loadData();
+            if (!this.isCurrentMutation(generation, principalId)) return;
             await this.loadRecommendations();
+            if (!this.isCurrentMutation(generation, principalId)) return;
 
             this.showSuccess(`Removed ${ingredientIds.length} ingredient(s) from your inventory`);
         } catch (error) {
+            if (!this.isCurrentMutation(generation, principalId)) return;
             console.error('Error removing ingredients:', error);
 
             // Extract specific error message from the response
@@ -427,6 +549,7 @@ class UserIngredientsManager {
     async loadPrivateTags() {
         const tagsList = document.getElementById('private-tags-list');
         const refreshBtn = document.getElementById('refresh-private-tags-btn');
+        const generation = this.authGeneration;
 
         if (!tagsList) return;
 
@@ -440,6 +563,7 @@ class UserIngredientsManager {
             }
 
             this.privateTags = await api.getPrivateTags();
+            if (generation !== this.authGeneration || !isAuthenticated()) return;
 
             if (this.privateTags.length === 0) {
                 tagsList.innerHTML =
@@ -473,12 +597,13 @@ class UserIngredientsManager {
                 btn.addEventListener('click', (e) => this.handleDeletePrivateTag(e));
             });
         } catch (error) {
+            if (generation !== this.authGeneration || !isAuthenticated()) return;
             console.error('Error loading private tags:', error);
             tagsList.innerHTML =
                 '<div class="error-message"><p>Error loading tags. Please try again.</p></div>';
             this.showError('Error loading private tags');
         } finally {
-            if (refreshBtn) {
+            if (refreshBtn && generation === this.authGeneration) {
                 refreshBtn.disabled = false;
                 refreshBtn.textContent = 'Refresh';
             }
@@ -497,6 +622,8 @@ class UserIngredientsManager {
         }
 
         const originalText = button.textContent;
+        const generation = this.authGeneration;
+        const principalId = this.principalId;
 
         try {
             // Show loading state
@@ -504,6 +631,7 @@ class UserIngredientsManager {
             button.textContent = 'Deleting...';
 
             await api.deletePrivateTag(tagId);
+            if (!this.isCurrentMutation(generation, principalId)) return;
 
             // Remove the tag item from the UI
             const tagItem = button.closest('.tag-management-item');
@@ -523,6 +651,7 @@ class UserIngredientsManager {
                     '<div class="empty-message"><p>No private tags found. Create tags when adding them to recipes.</p></div>';
             }
         } catch (error) {
+            if (!this.isCurrentMutation(generation, principalId)) return;
             console.error('Error deleting private tag:', error);
             this.showError(
                 `Error deleting tag "${tagName}": ${error.message || 'Please try again'}`,
@@ -538,6 +667,7 @@ class UserIngredientsManager {
     async loadRecommendations() {
         const recommendationsList = document.getElementById('recommendations-list');
         const refreshBtn = document.getElementById('refresh-recommendations-btn');
+        const generation = this.authGeneration;
 
         if (!recommendationsList) return;
 
@@ -551,6 +681,7 @@ class UserIngredientsManager {
             }
 
             const response = await api.getIngredientRecommendations(this.recommendationsLimit);
+            if (generation !== this.authGeneration || !isAuthenticated()) return;
             this.recommendations = response.recommendations || [];
 
             if (this.recommendations.length === 0) {
@@ -561,12 +692,13 @@ class UserIngredientsManager {
 
             this.renderRecommendations();
         } catch (error) {
+            if (generation !== this.authGeneration || !isAuthenticated()) return;
             console.error('Error loading ingredient recommendations:', error);
             recommendationsList.innerHTML =
                 '<div class="error-message"><p>Error loading recommendations. Please try again.</p></div>';
             this.showError('Error loading ingredient recommendations');
         } finally {
-            if (refreshBtn) {
+            if (refreshBtn && generation === this.authGeneration) {
                 refreshBtn.disabled = false;
                 refreshBtn.textContent = 'Refresh';
             }
@@ -636,32 +768,41 @@ class UserIngredientsManager {
         const quickAddButtons = container.querySelectorAll('.quick-add-btn');
         quickAddButtons.forEach((btn) => {
             btn.addEventListener('click', async (e) => {
-                const ingredientId = parseInt(e.currentTarget.dataset.ingredientId);
-                const originalText = e.currentTarget.textContent;
+                const button = e.currentTarget;
+                const ingredientId = parseInt(button.dataset.ingredientId);
+                const originalText = button.textContent;
+                const generation = this.authGeneration;
+                const principalId = this.principalId;
 
                 try {
-                    e.currentTarget.disabled = true;
-                    e.currentTarget.textContent = 'Adding...';
+                    button.disabled = true;
+                    button.textContent = 'Adding...';
 
                     await api.bulkAddUserIngredients([ingredientId]);
+                    if (!this.isCurrentMutation(generation, principalId)) return;
 
                     // Reload data and recommendations
                     await this.loadData();
+                    if (!this.isCurrentMutation(generation, principalId)) return;
                     await this.loadRecommendations();
+                    if (!this.isCurrentMutation(generation, principalId)) return;
 
                     this.showSuccess(`Added ingredient to your inventory`);
                 } catch (error) {
+                    if (!this.isCurrentMutation(generation, principalId)) return;
                     console.error('Error adding ingredient from recommendations:', error);
                     this.showError(error.message || 'Failed to add ingredient');
 
                     // Restore button state
-                    e.currentTarget.disabled = false;
-                    e.currentTarget.textContent = originalText;
+                    button.disabled = false;
+                    button.textContent = originalText;
                 }
             });
         });
     }
 }
+
+export { UserIngredientsManager };
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
