@@ -42,6 +42,7 @@ done
 # Set defaults for optional vars
 export AWS_REGION="${AWS_REGION:-us-east-1}"
 export ENVIRONMENT="$ENVIRONMENT"
+RELEASE_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 
 echo "========================================"
 echo "  CocktailDB EC2 Deployment"
@@ -50,6 +51,7 @@ echo ""
 echo "Environment: $ENVIRONMENT"
 echo "Inventory:   inventory/${ENVIRONMENT}.yml"
 echo "Provision:   $PROVISION"
+echo "Release:     $RELEASE_ID"
 echo ""
 
 # Check if Ansible is installed
@@ -82,7 +84,8 @@ fi
 # Run deployment
 echo ""
 echo "=== Running Deployment Playbook ==="
-ansible-playbook -i "inventory/${ENVIRONMENT}.yml" playbooks/deploy.yml -v
+ansible-playbook -i "inventory/${ENVIRONMENT}.yml" playbooks/deploy.yml -v \
+    -e "deployment_release_id=${RELEASE_ID}"
 
 # Show completion message
 echo ""
