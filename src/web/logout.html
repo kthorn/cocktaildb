@@ -6,11 +6,10 @@
         <title>Logging out...</title>
         <!-- Prevent FOUC (Flash of Unstyled Content) with common.js fallback -->
         <script type="module">
+            import { clearSession } from './js/auth.js';
             document.addEventListener('DOMContentLoaded', () => {
                 // Clear all auth-related data from localStorage
-                localStorage.removeItem('token');
-                localStorage.removeItem('id_token');
-                localStorage.removeItem('username');
+                clearSession();
 
                 document.getElementById('status').textContent = 'Logout successful. Redirecting...';
 

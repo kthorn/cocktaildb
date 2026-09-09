@@ -192,7 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadFooter();
 
     // Initialize authentication
-    initAuth();
+    initAuth(updateNavigationAuth);
 
     // Initialize navigation (after auth is set up)
     // Delay slightly to ensure auth state is available
