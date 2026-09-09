@@ -163,22 +163,29 @@ def test_migration_backfills_distinct_users_and_preserves_inventory(pre_feature_
         for _id, user, ingredient, timestamp in before
     ]
     assert migrated == expected
-    assert _fetchall(
-        pre_feature_db,
-        """
+    assert (
+        _fetchall(
+            pre_feature_db,
+            """
         SELECT id, cognito_user_id, ingredient_id, added_at
         FROM user_ingredients
         ORDER BY cognito_user_id, ingredient_id
         """,
-    ) == before
+        )
+        == before
+    )
 
 
 def test_migration_with_empty_legacy_inventory_creates_no_groups(pre_feature_db):
     _run_migration(pre_feature_db)
 
     assert _fetchall(pre_feature_db, "SELECT count(*) FROM user_groups")[0][0] == 0
-    assert _fetchall(pre_feature_db, "SELECT count(*) FROM user_group_members")[0][0] == 0
-    assert _fetchall(pre_feature_db, "SELECT count(*) FROM group_ingredients")[0][0] == 0
+    assert (
+        _fetchall(pre_feature_db, "SELECT count(*) FROM user_group_members")[0][0] == 0
+    )
+    assert (
+        _fetchall(pre_feature_db, "SELECT count(*) FROM group_ingredients")[0][0] == 0
+    )
     assert _fetchall(
         pre_feature_db,
         "SELECT extname FROM pg_extension WHERE extname = 'pgcrypto'",
@@ -205,7 +212,10 @@ def test_migration_rolls_back_all_objects_when_failure_is_injected(pre_feature_d
         _run_migration(pre_feature_db, inject_failure=True)
 
     assert _fetchall(pre_feature_db, "SELECT to_regclass('user_groups')")[0][0] is None
-    assert _fetchall(pre_feature_db, "SELECT to_regclass('group_ingredients')")[0][0] is None
+    assert (
+        _fetchall(pre_feature_db, "SELECT to_regclass('group_ingredients')")[0][0]
+        is None
+    )
     assert _fetchall(pre_feature_db, "SELECT count(*) FROM user_ingredients")[0][0] == 4
 
 
