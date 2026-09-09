@@ -1,5 +1,5 @@
 import config from './config.js';
-import { isAuthenticated } from './auth.js';
+import { isAuthenticated, ensureSession } from './auth.js';
 
 export class CocktailAPI {
     constructor(baseUrl = '') {
@@ -85,6 +85,7 @@ export class CocktailAPI {
     // Private helper for making requests
     async _request(path, method = 'GET', body = null, requiresAuth = false) {
         const url = `${this.baseUrl}${path}`;
+        if (method !== 'GET' || requiresAuth) await ensureSession();
         const options = this.getFetchOptions(method, body, requiresAuth);
         const response = await fetch(url, options);
         return this.handleResponse(response);
@@ -244,6 +245,8 @@ export class CocktailAPI {
         // Build the URL with query string
         const queryString = queryParams.toString();
         console.log('Built query string:', queryString);
+
+        await ensureSession();
 
         // Use authenticated endpoint for logged-in users, regular search for anonymous users
         let url;
