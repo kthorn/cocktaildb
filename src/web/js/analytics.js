@@ -20,8 +20,6 @@ const state = {
  * Initialize the analytics page
  */
 async function initAnalytics() {
-    console.log('Initializing analytics page');
-
     // Setup tab navigation
     setupTabNavigation();
 
@@ -183,8 +181,6 @@ function syncMobileViewSelector(tabName) {
  * @param {string} tabName - Name of the tab to load
  */
 async function loadTabData(tabName) {
-    console.log(`Loading data for tab: ${tabName}`);
-
     switch (tabName) {
         case 'ingredients':
             await loadIngredientUsageData();
@@ -268,11 +264,8 @@ async function loadIngredientUsageData() {
  */
 async function handleIngredientClick(ingredientData) {
     if (!ingredientData.has_children) {
-        console.log('Ingredient has no children, ignoring click');
         return;
     }
-
-    console.log('Drilling down into ingredient:', ingredientData.ingredient_name);
 
     // Add to breadcrumb navigation
     state.ingredientHierarchy.push({
@@ -612,8 +605,6 @@ function findMode(data) {
  * Handle recipe click from cocktail space chart
  */
 async function handleRecipeClick(recipeId, recipeName) {
-    console.log('Recipe clicked:', recipeId, recipeName);
-
     const modal = document.getElementById('recipe-modal');
     const modalBody = document.getElementById('recipe-modal-card');
     const modalLoading = document.getElementById('recipe-modal-loading');

@@ -5,8 +5,6 @@
  * @param {Array} data - Array of complexity distribution objects
  */
 export function createRecipeComplexityChart(container, data) {
-    console.log('Creating recipe complexity chart with data:', data);
-
     // Clear container
     container.innerHTML = '';
 

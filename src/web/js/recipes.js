@@ -627,11 +627,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
     const editRecipeId = urlParams.get('edit');
     if (editRecipeId) {
-        console.log('Edit recipe ID found:', editRecipeId);
         // Wait for ingredients and units to load, then edit the recipe
         Promise.all([loadUnits(), loadIngredients()])
             .then(() => {
-                console.log('Units and ingredients loaded, calling editRecipe');
                 editRecipe(editRecipeId);
             })
             .catch((error) => {
@@ -642,8 +640,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Edit recipe
 async function editRecipe(id) {
-    console.log('editRecipe called with ID:', id);
-
     // Check editor permissions first
     if (!api.isEditor()) {
         alert('Editor access required. Only editors and admins can edit recipes.');
@@ -661,7 +657,6 @@ async function editRecipe(id) {
         // Show loading state
         form.classList.add('loading');
 
-        console.log('Fetching recipe data for ID:', id);
         const recipe = await api.getRecipe(id);
         if (!recipe) {
             throw new Error('Recipe not found');

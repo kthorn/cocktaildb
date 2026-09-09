@@ -87,7 +87,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const [sortBy, sortOrder] = sortSelect.value.split(':');
         currentSortBy = sortBy;
         currentSortOrder = sortOrder;
-        console.log('Initial sort values:', { sortBy: currentSortBy, sortOrder: currentSortOrder });
     }
 
     // Check for URL query parameters
@@ -213,7 +212,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Build and snapshot the search query only when starting a new search.
             const searchQuery = reset ? buildSearchQuery() : currentSearchQuery;
-            console.log('Built search query:', searchQuery);
 
             if (reset) {
                 // Reset pagination state for new search
@@ -237,10 +235,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Call the API to search recipes with pagination and sorting
-            console.log('Calling searchRecipes with sort params:', {
-                sortBy: currentSearchSortBy,
-                sortOrder: currentSearchSortOrder,
-            });
             const result = await api.searchRecipes(
                 searchQuery,
                 currentSearchPage,
@@ -249,7 +243,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentSearchSortOrder,
                 currentSearchCursor,
             );
-            console.log('API result:', result);
 
             // Hide loading placeholder
             loadingPlaceholder.classList.add('hidden');
@@ -298,11 +291,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     emptyResults.querySelector('p').textContent =
                         'No recipes found matching your criteria.';
                 }
-
-                console.log(
-                    `Search page ${currentSearchPage} loaded (${result.recipes.length} recipes), has_next: ${result.pagination.has_next}`,
-                );
-                console.log('Pagination info:', result.pagination);
             } else if (reset) {
                 // Show no results message
                 emptyResults.classList.remove('hidden');
@@ -324,10 +312,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Setup infinite scroll for search results
     function setupInfiniteScroll(hasNext) {
-        console.log(`Setting up infinite scroll: page ${currentSearchPage}, has_next: ${hasNext}`);
         if (hasNext) {
             isInfiniteScrollEnabled = true;
-            console.log('Infinite scroll enabled');
 
             // Add loading indicator at bottom
             addScrollLoadingIndicator();
@@ -335,7 +321,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // Add scroll event listener
             window.addEventListener('scroll', handleScroll);
         } else {
-            console.log('Infinite scroll disabled - no more pages');
             disableInfiniteScroll();
         }
     }
@@ -388,14 +373,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Debug logging (only log occasionally to avoid spam)
         if (Math.random() < 0.01) {
             // Log ~1% of scroll events
-            console.log(
-                `Scroll: distance from bottom = ${distanceFromBottom}px, threshold = ${scrollThreshold}px`,
-            );
         }
 
         // Trigger load when within threshold of bottom
         if (distanceFromBottom <= scrollThreshold) {
-            console.log('Triggering infinite scroll load');
             loadMoreSearchResults();
         }
     }
@@ -431,16 +412,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Add name search if provided
         const nameValue = nameSearch.value.trim();
-        console.log('Name search value:', nameValue);
         if (nameValue) {
             query.name = nameValue;
-            console.log('Added name to query:', query.name);
         }
 
         // Add rating filter from star selection
         if (starRatingFilterComponent) {
             const selectedRating = starRatingFilterComponent.dataset.rating;
-            console.log('Selected star rating:', selectedRating);
             if (selectedRating && selectedRating !== '0') {
                 query.rating = parseInt(selectedRating);
             }
@@ -491,7 +469,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        console.log('Final search query object:', query);
         return query;
     }
 
@@ -499,7 +476,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadIngredients() {
         try {
             availableIngredients = await api.getIngredients();
-            console.log('Loaded ingredients for search:', availableIngredients.length);
 
             // Hide loading status in all ingredient search rows
             document.querySelectorAll('.search-status').forEach((status) => {
@@ -529,8 +505,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     );
                 }
             }
-
-            console.log('Loaded tags for search:', availableTags.length);
         } catch (error) {
             console.error('Error loading tags:', error);
         }
@@ -1187,7 +1161,6 @@ document.addEventListener('DOMContentLoaded', () => {
             allowToggle: true,
             showDifferentStates: false,
             onClick: (rating) => {
-                console.log('Star rating filter changed:', rating);
                 // Update wrapper classes for styling
                 if (rating > 0) {
                     wrapper.classList.add('has-selection');
@@ -1217,8 +1190,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const [sortBy, sortOrder] = e.target.value.split(':');
             currentSortBy = sortBy;
             currentSortOrder = sortOrder;
-
-            console.log('Sort changed:', { sortBy: currentSortBy, sortOrder: currentSortOrder });
 
             // Trigger search with new sort parameters if we have search results
             if (currentSearchQuery !== null) {

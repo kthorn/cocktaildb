@@ -1,0 +1,17 @@
+/* Shared ingredient hierarchy state. Page-specific tree and row styles remain
+   in styles.css so the admin and inventory trees can differ. */
+.hierarchy-children {
+    margin-left: 20px;
+}
+
+.hierarchy-item.is-hidden {
+    display: none;
+}
+
+.tree-children {
+    display: none;
+}
+
+.tree-children.is-expanded {
+    display: block;
+}

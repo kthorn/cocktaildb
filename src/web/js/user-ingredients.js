@@ -1,5 +1,10 @@
 import { api } from './api.js';
 import { isAuthenticated } from './auth.js';
+import {
+    buildHierarchy,
+    getIngredientId,
+    renderHierarchyHTML,
+} from './components/ingredientTree.js';
 
 class UserIngredientsManager {
     constructor() {
@@ -102,90 +107,39 @@ class UserIngredientsManager {
 
     renderCurrentIngredients() {
         const container = document.getElementById('current-ingredients-list');
-
-        if (this.userIngredients.length === 0) {
-            container.innerHTML =
-                '<p class="empty-state">No ingredients in your inventory yet.</p>';
-            return;
-        }
-
-        // Build hierarchy structure
-        const hierarchy = this.buildHierarchy(this.userIngredients);
-        container.innerHTML = this.renderHierarchyHTML(hierarchy, 'current');
-
-        // Bind checkbox events for removal
+        this.renderIngredientList(
+            container,
+            this.userIngredients,
+            'current',
+            'No ingredients in your inventory yet.',
+        );
         this.bindCheckboxEvents(container, 'current');
     }
 
     renderAvailableIngredients() {
         const container = document.getElementById('available-ingredients-list');
-
-        if (this.filteredIngredients.length === 0) {
-            container.innerHTML =
-                '<p class="empty-state">All ingredients are already in your inventory.</p>';
-            return;
-        }
-
-        // Build hierarchy structure
-        const hierarchy = this.buildHierarchy(this.filteredIngredients);
-        container.innerHTML = this.renderHierarchyHTML(hierarchy, 'available');
-
-        // Bind checkbox events for adding
+        this.renderIngredientList(
+            container,
+            this.filteredIngredients,
+            'available',
+            'All ingredients are already in your inventory.',
+        );
         this.bindCheckboxEvents(container, 'available');
     }
 
-    buildHierarchy(ingredients) {
-        const ingredientMap = new Map();
-        const rootIngredients = [];
+    renderIngredientList(container, ingredients, type, emptyMessage) {
+        if (ingredients.length === 0) {
+            container.innerHTML = `<p class="empty-state">${emptyMessage}</p>`;
+            return;
+        }
 
-        // First pass: create map of all ingredients
-        ingredients.forEach((ingredient) => {
-            ingredientMap.set(ingredient.ingredient_id || ingredient.id, {
-                ...ingredient,
-                children: [],
-            });
-        });
-
-        // Second pass: build parent-child relationships
-        ingredients.forEach((ingredient) => {
-            const id = ingredient.ingredient_id || ingredient.id;
-            const parentId = ingredient.parent_id;
-
-            if (parentId && ingredientMap.has(parentId)) {
-                ingredientMap.get(parentId).children.push(ingredientMap.get(id));
-            } else {
-                rootIngredients.push(ingredientMap.get(id));
-            }
-        });
-
-        // Sort each level by name
-        const sortHierarchy = (items) => {
-            items.sort((a, b) => a.name.localeCompare(b.name));
-            items.forEach((item) => {
-                if (item.children.length > 0) {
-                    sortHierarchy(item.children);
-                }
-            });
-        };
-
-        sortHierarchy(rootIngredients);
-        return rootIngredients;
-    }
-
-    renderHierarchyHTML(hierarchy, type, level = 0) {
-        if (hierarchy.length === 0) return '';
-
-        const isRoot = level === 0;
-        const listClass = isRoot ? 'hierarchy-root' : 'hierarchy-children';
-
-        let html = `<ul class="${listClass}" style="margin-left: ${level * 20}px;">`;
-
-        hierarchy.forEach((ingredient) => {
-            const id = ingredient.ingredient_id || ingredient.id;
-            const hasChildren = ingredient.children && ingredient.children.length > 0;
-            const checkboxId = `${type}-${id}`;
-
-            html += `
+        const hierarchy = buildHierarchy(ingredients);
+        container.innerHTML = renderHierarchyHTML(
+            hierarchy,
+            (ingredient, { childrenHTML, hasChildren }) => {
+                const id = getIngredientId(ingredient);
+                const checkboxId = `${type}-${id}`;
+                return `
                 <li class="hierarchy-item ${hasChildren ? 'has-children' : ''}">
                     <div class="ingredient-row">
                         <input type="checkbox" id="${checkboxId}" value="${id}" class="ingredient-checkbox">
@@ -193,13 +147,11 @@ class UserIngredientsManager {
                             ${ingredient.name}
                         </label>
                     </div>
-                    ${hasChildren ? this.renderHierarchyHTML(ingredient.children, type, level + 1) : ''}
+                    ${childrenHTML}
                 </li>
             `;
-        });
-
-        html += '</ul>';
-        return html;
+            },
+        );
     }
 
     bindCheckboxEvents(container, type) {
