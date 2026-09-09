@@ -17,3 +17,8 @@ testcontainers>=4.0.0
 
 # PostgreSQL driver (should already be installed via psycopg2)
 psycopg2-binary>=2.9.0
+
+# Local deployment harness (Python 3.12+, matching the API runtime).
+# The full Ansible distribution includes collections used by deploy.yml.
+ansible==13.1.0
+PyYAML==6.0.2

@@ -20,7 +20,9 @@ export class CocktailAPI {
             }
             // For other 404s, provide the error but with a clearer message
             const errorObj = { error: `Resource not found: ${response.url}` };
-            throw new Error(errorObj.error);
+            const error = new Error(errorObj.error);
+            error.status = 404;
+            throw error;
         }
 
         try {
@@ -30,6 +32,7 @@ export class CocktailAPI {
                 // then 'detail' field (FastAPI HTTPException), then fallback to generic message
                 const errorMessage = data.error || data.detail || `API error: ${response.status}`;
                 const error = new Error(errorMessage);
+                error.status = response.status;
                 error.detail = data.detail;
                 throw error;
             }
@@ -456,6 +459,84 @@ export class CocktailAPI {
     // User Ingredients API
     async getUserIngredients() {
         return this._request('/user-ingredients', 'GET', null, true);
+    }
+
+    // Shared groups API
+    async getMyGroup() {
+        return this._request('/groups/mine', 'GET', null, true);
+    }
+
+    async createGroup(nameOrData, description = undefined) {
+        const body =
+            nameOrData && typeof nameOrData === 'object' ? { ...nameOrData } : { name: nameOrData };
+        if (description !== undefined) body.description = description;
+        return this._request('/groups', 'POST', body);
+    }
+
+    async updateGroup(groupId, changes) {
+        return this._request(`/groups/${groupId}`, 'PUT', changes);
+    }
+
+    async joinGroup(inviteCode) {
+        return this._request('/groups/join', 'POST', { invite_code: inviteCode });
+    }
+
+    async leaveGroup(groupId, copyInventory = true) {
+        return this._request(`/groups/${groupId}/leave`, 'POST', {
+            copy_inventory: Boolean(copyInventory),
+        });
+    }
+
+    async removeGroupMember(groupId, cognitoUserId) {
+        return this._request(
+            `/groups/${groupId}/members/${encodeURIComponent(cognitoUserId)}`,
+            'DELETE',
+        );
+    }
+
+    async regenerateInviteCode(groupId) {
+        return this._request(`/groups/${groupId}/invite-code/regenerate`, 'POST');
+    }
+
+    // Shared group inventory API. These retain the response shapes of the
+    // original user-ingredients methods while making the group explicit.
+    async getGroupIngredients(groupId) {
+        return this._request(`/groups/${groupId}/ingredients`, 'GET', null, true);
+    }
+
+    async addGroupIngredient(groupId, ingredientId) {
+        return this._request(`/groups/${groupId}/ingredients`, 'POST', {
+            ingredient_id: ingredientId,
+        });
+    }
+
+    async removeGroupIngredient(groupId, ingredientId) {
+        return this._request(`/groups/${groupId}/ingredients/${ingredientId}`, 'DELETE');
+    }
+
+    async bulkAddGroupIngredients(groupId, ingredientIds) {
+        return this._request(`/groups/${groupId}/ingredients/bulk`, 'POST', {
+            ingredient_ids: ingredientIds,
+        });
+    }
+
+    async bulkRemoveGroupIngredients(groupId, ingredientIds) {
+        return this._request(`/groups/${groupId}/ingredients/bulk`, 'DELETE', {
+            ingredient_ids: ingredientIds,
+        });
+    }
+
+    async getGroupIngredientRecommendations(groupId, limit = 20) {
+        return this._request(
+            `/groups/${groupId}/ingredients/recommendations?limit=${encodeURIComponent(limit)}`,
+            'GET',
+            null,
+            true,
+        );
+    }
+
+    async getGroupRecommendations(groupId, limit = 20) {
+        return this.getGroupIngredientRecommendations(groupId, limit);
     }
 
     async addUserIngredient(ingredientId) {

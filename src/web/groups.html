@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>My Bar - Mixology Tools</title>
+    </head>
+
+    <body>
+        <!-- Header will be loaded by common.js -->
+
+        <main>
+            <section class="page-header">
+                <h2>My Bar</h2>
+                <p>Share one home bar inventory with people you trust.</p>
+            </section>
+
+            <div id="groups-status" class="groups-status" role="status" aria-live="polite">
+                Loading your shared bar…
+            </div>
+
+            <div id="groups-content" class="auth-required-content">
+                <section class="group-details" aria-labelledby="group-details-heading">
+                    <div class="section-header">
+                        <h3 id="group-details-heading">Bar details</h3>
+                        <button id="save-group-btn" class="btn btn-primary" type="button">
+                            Save details
+                        </button>
+                    </div>
+                    <div class="form-field">
+                        <label for="group-name">Bar name</label>
+                        <input id="group-name" name="name" type="text" maxlength="100" required />
+                    </div>
+                    <div class="form-field">
+                        <label for="group-description">Description</label>
+                        <textarea
+                            id="group-description"
+                            name="description"
+                            maxlength="500"
+                            rows="3"
+                        ></textarea>
+                    </div>
+                </section>
+
+                <section class="group-invite" aria-labelledby="group-invite-heading">
+                    <div class="section-header">
+                        <h3 id="group-invite-heading">Invite people</h3>
+                        <button id="rotate-invite-btn" class="btn btn-secondary" type="button">
+                            Regenerate code
+                        </button>
+                    </div>
+                    <p>
+                        Share this code with people who should use the shared bar. Regenerating it
+                        retires the old code.
+                    </p>
+                    <div class="invite-code-controls">
+                        <label class="sr-only" for="group-invite-code">Invite code</label>
+                        <input
+                            id="group-invite-code"
+                            type="text"
+                            readonly
+                            aria-describedby="invite-code-help"
+                        />
+                        <button id="copy-invite-btn" class="btn btn-primary" type="button">
+                            Copy code
+                        </button>
+                    </div>
+                    <p id="invite-code-help" class="form-help">
+                        If copying is unavailable, select this code and copy it manually.
+                    </p>
+                </section>
+
+                <section class="group-join" aria-labelledby="join-group-heading">
+                    <h3 id="join-group-heading">Join another bar</h3>
+                    <p>
+                        Joining copies all ingredients from your current bar into the bar you are
+                        joining. Existing members of that bar will see and share those additions;
+                        your personal private tags stay private.
+                    </p>
+                    <form id="join-group-form">
+                        <div class="invite-code-controls">
+                            <label for="join-invite-code">Invite code</label>
+                            <input
+                                id="join-invite-code"
+                                type="text"
+                                maxlength="12"
+                                autocomplete="off"
+                                required
+                            />
+                            <button id="join-group-btn" class="btn btn-primary" type="submit">
+                                Join bar
+                            </button>
+                        </div>
+                    </form>
+                </section>
+
+                <section class="group-members-section" aria-labelledby="group-members-heading">
+                    <h3 id="group-members-heading">
+                        Members <span id="group-member-count" class="group-member-count"></span>
+                    </h3>
+                    <p class="form-help">
+                        Every member can edit the bar and remove another member. A removed member
+                        keeps a personal copy of this inventory.
+                    </p>
+                    <div id="group-members" class="group-members" aria-live="polite"></div>
+                </section>
+
+                <section id="leave-group-section" class="leave-group-section hidden">
+                    <h3>Leave this bar</h3>
+                    <p>
+                        You will get a new personal bar. Choose whether it should start with a copy
+                        of this shared inventory.
+                    </p>
+                    <label>
+                        <input id="leave-copy-inventory" type="checkbox" checked />
+                        Copy the shared inventory into my new personal bar
+                    </label>
+                    <button id="leave-group-btn" class="btn btn-danger" type="button">
+                        Leave bar
+                    </button>
+                </section>
+            </div>
+
+            <div id="groups-auth-message" class="auth-required-message hidden">
+                <p>
+                    Please
+                    <button id="groups-login-btn" class="btn btn-link" type="button">log in</button>
+                    to manage your shared bar.
+                </p>
+            </div>
+
+            <button id="groups-retry" class="btn btn-primary hidden" type="button">Retry</button>
+        </main>
+
+        <!-- Footer will be loaded by common.js -->
+
+        <script type="module" src="js/common.js"></script>
+        <script type="module" src="js/groups.js"></script>
+    </body>
+</html>

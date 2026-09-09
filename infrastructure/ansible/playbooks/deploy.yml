@@ -8,6 +8,22 @@
     app_home: /opt/cocktaildb
     app_user: cocktaildb
     app_group: cocktaildb
+    release_root: "{{ app_home }}/releases/{{ deployment_release_id }}"
+    release_web_root: "{{ release_root }}/web"
+
+  pre_tasks:
+    - name: Freeze deployment release ID
+      ansible.builtin.set_fact:
+        deployment_release_id: "{{ deployment_release_id | default(lookup('pipe', 'date -u +%Y%m%dT%H%M%SZ'), true) }}"
+
+    # This atomic directory lock is acquired before the first remote mutation.
+    # A failed play intentionally leaves it for operator inspection.
+    - name: Acquire deployment lifecycle lock
+      ansible.builtin.command:
+        argv:
+          - mkdir
+          - /var/lock/cocktaildb-deploy-ansible.lock
+      changed_when: true
 
   tasks:
     # Validate required environment variables
@@ -25,11 +41,27 @@
           Set COCKTAILDB_DB_PASSWORD to the actual database password.
       when: app_env == 'prod' and db_password == 'changeme'
 
-    # Sync API code
-    - name: Sync API code to server
-      synchronize:
+    # Stage the whole release away from the currently served frontend. The
+    # cutover helper is the only task allowed to publish release_web_root.
+    - name: Create staged release directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0755'
+      loop:
+        - "{{ app_home }}/releases"
+        - "{{ release_root }}"
+        - "{{ release_root }}/api"
+        - "{{ release_web_root }}"
+        - "{{ release_root }}/packages"
+        - "{{ release_root }}/migrations"
+
+    - name: Stage API code
+      ansible.builtin.synchronize:
         src: "{{ playbook_dir }}/../../../api/"
-        dest: "{{ app_home }}/api/"
+        dest: "{{ release_root }}/api/"
         delete: yes
         rsync_opts:
           - "--exclude=__pycache__"
@@ -38,30 +70,18 @@
           - "--exclude=tests/"
           - "--exclude=*.db"
 
-    # Sync frontend code
-    - name: Sync frontend code to server
-      synchronize:
+    - name: Stage frontend code
+      ansible.builtin.synchronize:
         src: "{{ playbook_dir }}/../../../src/web/"
-        dest: "{{ app_home }}/web/"
+        dest: "{{ release_web_root }}/"
         delete: yes
         rsync_opts:
           - "--exclude=config.js"
-      notify: Restart Caddy
 
-    # Ensure packages directory exists
-    - name: Create packages directory
-      file:
-        path: "{{ app_home }}/packages"
-        state: directory
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
-        mode: '0755'
-
-    # Sync barcart analytics package
-    - name: Sync barcart package to server
-      synchronize:
+    - name: Stage barcart package
+      ansible.builtin.synchronize:
         src: "{{ playbook_dir }}/../../../packages/barcart/"
-        dest: "{{ app_home }}/packages/barcart/"
+        dest: "{{ release_root }}/packages/barcart/"
         delete: yes
         rsync_opts:
           - "--exclude=__pycache__"
@@ -69,19 +89,37 @@
           - "--exclude=.pytest_cache"
           - "--exclude=tests/"
 
-    # Generate config.js from template (environment-specific)
-    - name: Generate frontend config.js
-      template:
+    - name: Stage frontend config.js
+      ansible.builtin.template:
         src: ../files/config.js.j2
-        dest: "{{ app_home }}/web/js/config.js"
+        dest: "{{ release_web_root }}/js/config.js"
         owner: "{{ app_user }}"
         group: "{{ app_group }}"
         mode: '0644'
-      notify: Restart Caddy
 
-    # Copy docker-compose files
-    - name: Copy docker-compose files
-      copy:
+    - name: Stage docker-compose files
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ release_root }}/"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
+      loop:
+        - "{{ playbook_dir }}/../../../docker-compose.yml"
+        - "{{ playbook_dir }}/../../../docker-compose.prod.yml"
+
+    - name: Stage docker ignore
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../../.dockerignore"
+        dest: "{{ release_root }}/.dockerignore"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
+
+    # Keep operational scripts and Compose configuration at stable paths used
+    # by systemd and by the cutover helper. Updating these does not start code.
+    - name: Copy active docker-compose files
+      ansible.builtin.copy:
         src: "{{ item }}"
         dest: "{{ app_home }}/"
         owner: "{{ app_user }}"
@@ -91,18 +129,8 @@
         - "{{ playbook_dir }}/../../../docker-compose.yml"
         - "{{ playbook_dir }}/../../../docker-compose.prod.yml"
 
-    # Copy repo .dockerignore for root build context
-    - name: Copy docker ignore
-      copy:
-        src: "{{ playbook_dir }}/../../../.dockerignore"
-        dest: "{{ app_home }}/.dockerignore"
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
-        mode: '0644'
-
-    # Copy deployment scripts
     - name: Copy deployment scripts
-      copy:
+      ansible.builtin.copy:
         src: "{{ playbook_dir }}/../../scripts/"
         dest: "{{ app_home }}/scripts/"
         owner: "{{ app_user }}"
@@ -145,7 +173,6 @@
         owner: root
         group: root
         mode: '0644'
-      notify: Restart Caddy
 
     # Configure Caddy environment variables (domain, ACME email)
     - name: Create Caddy systemd override directory
@@ -168,7 +195,6 @@
         mode: '0644'
       notify:
         - Daemon reload
-        - Restart Caddy
 
     # Create environment file from template
     - name: Create environment file
@@ -195,24 +221,55 @@
         group: "{{ app_group }}"
         recurse: yes
 
-    # Sync migrations
-    - name: Sync migrations to server
-      synchronize:
+    - name: Stage migrations
+      ansible.builtin.synchronize:
         src: "{{ playbook_dir }}/../../../migrations/"
-        dest: "{{ app_home }}/migrations/"
+        dest: "{{ release_root }}/migrations/"
         delete: yes
 
-    # Run pending database migrations before restarting the API
-    - name: Run database migrations
-      shell: |
-        cd {{ app_home }}
-        ./scripts/run-migrations.sh {{ app_env }}
+    - name: Set ownership of staged release
+      ansible.builtin.file:
+        path: "{{ release_root }}"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        recurse: yes
 
-    # Build and start API container (always rebuild to pick up code changes)
-    - name: Build and start API with Docker Compose
-      shell: |
-        cd {{ app_home }}
-        docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --force-recreate
+    - name: Apply safe infrastructure handlers before cutover
+      ansible.builtin.meta: flush_handlers
+
+    - name: Validate staged Caddy configuration
+      ansible.builtin.command:
+        argv:
+          - caddy
+          - validate
+          - --config
+          - /etc/caddy/Caddyfile
+          - --adapter
+          - caddyfile
+      environment:
+        DOMAIN_NAME: "{{ domain_name }}"
+        ACME_EMAIL: "admin@{{ domain_name }}"
+      changed_when: false
+
+    # Caddy has its admin API disabled. Restart only after validation and while
+    # the old frontend/API are still active at their stable paths.
+    - name: Restart Caddy
+      ansible.builtin.systemd:
+        name: caddy
+        state: restarted
+
+    - name: Run ordered deployment cutover
+      ansible.builtin.command:
+        argv:
+          - "{{ app_home }}/scripts/deploy-cutover.sh"
+      environment:
+        APP_HOME: "{{ app_home }}"
+        RELEASE_ID: "{{ deployment_release_id }}"
+        RELEASE_ROOT: "{{ release_root }}"
+        SERVED_WEB: "{{ app_home }}/web"
+        APP_ENV: "{{ app_env }}"
+      register: deployment_cutover
+      changed_when: true
 
     # Enable systemd timers
     - name: Enable backup timer
@@ -234,22 +291,17 @@
         enabled: yes
         state: started
 
+    - name: Release deployment lifecycle lock
+      ansible.builtin.file:
+        path: /var/lock/cocktaildb-deploy-ansible.lock
+        state: absent
+
   handlers:
     - name: Daemon reload
       systemd:
         daemon_reload: yes
 
-    - name: Restart API
-      shell: |
-        cd {{ app_home }}
-        docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --force-recreate
-
     - name: Restart polkit
       systemd:
         name: polkit
-        state: restarted
-
-    - name: Restart Caddy
-      systemd:
-        name: caddy
         state: restarted

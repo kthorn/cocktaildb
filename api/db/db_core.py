@@ -9,6 +9,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2 import pool
 
+from .group_inventory import GroupInventoryMixin
 from .db_utils import extract_all_ingredient_ids, assemble_ingredient_full_names
 from .sql_queries import (
     get_recipe_by_id_sql,
@@ -23,7 +24,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 
-class Database:
+class Database(GroupInventoryMixin):
     # Class-level connection pool (shared across instances)
     _pool: pool.ThreadedConnectionPool = None
 
@@ -1800,6 +1801,48 @@ class Database:
     # --- Pagination Methods ---
     def search_recipes_paginated(
         self,
+        search_params,
+        limit=20,
+        offset=0,
+        sort_by="name",
+        sort_order="asc",
+        user_id=None,
+        rating_type="average",
+        cursor=None,
+        return_pagination=False,
+    ):
+        if search_params.get("inventory"):
+            if not user_id:
+                raise ValidationException("Inventory filtering requires authentication")
+            with self._group_transaction() as db_cursor:
+                group_id = self._ensure_group(db_cursor, user_id)
+                return self._search_recipes_paginated(
+                    search_params,
+                    limit,
+                    offset,
+                    sort_by,
+                    sort_order,
+                    user_id,
+                    rating_type,
+                    cursor,
+                    return_pagination,
+                    db_cursor,
+                    group_id,
+                )
+        return self._search_recipes_paginated(
+            search_params,
+            limit,
+            offset,
+            sort_by,
+            sort_order,
+            user_id,
+            rating_type,
+            cursor,
+            return_pagination,
+        )
+
+    def _search_recipes_paginated(
+        self,
         search_params: Dict[str, Any],
         limit: int = 20,
         offset: int = 0,
@@ -1809,8 +1852,21 @@ class Database:
         rating_type: str = "average",
         cursor: Optional[str] = None,
         return_pagination: bool = False,
+        db_cursor=None,
+        group_id=None,
     ) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
         """Search recipes with pagination"""
+
+        def execute_query(sql, params):
+            if db_cursor is None:
+                return self.execute_query(sql, params)
+            db_cursor.execute(sql, params)
+            return [dict(row) for row in db_cursor.fetchall()]
+
+        def lookup(sql, params):
+            rows = execute_query(sql, params)
+            return rows[0] if rows else None
+
         try:
             from .sql_queries import (
                 build_search_recipes_paginated_sql,
@@ -1831,8 +1887,15 @@ class Database:
                 "sort_by": sort_by,
                 "sort_order": sort_order,
                 "cognito_user_id": user_id,
+                "group_id": group_id,
             }
-            use_keyset = sort_by != "random" and return_pagination
+            use_keyset = (
+                sort_by != "random"
+                and return_pagination
+                and (offset == 0 or cursor is not None)
+            )
+            if return_pagination and not use_keyset:
+                query_params["limit"] = limit + 1
             cursor_payload = None
             if use_keyset and cursor:
                 cursor_payload = self._decode_search_cursor(cursor, sort_by, sort_order)
@@ -1861,7 +1924,14 @@ class Database:
                         ingredient_name = ingredient_spec
                         operator = "MUST"  # Default to MUST if no operator specified
 
-                    ingredient = self.get_ingredient_by_name(ingredient_name)
+                    ingredient = (
+                        self.get_ingredient_by_name(ingredient_name)
+                        if db_cursor is None
+                        else lookup(
+                            "SELECT id, path FROM ingredients WHERE name=%s",
+                            (ingredient_name,),
+                        )
+                    )
                     if ingredient:
                         # Use path-based matching to include child ingredients
                         param_name = f"ingredient_path_{i}"
@@ -1895,9 +1965,23 @@ class Database:
                     tag_name = tag_name.strip()
                     if tag_name:
                         # Check if tag exists (both public and private)
-                        public_tag = self.get_public_tag_by_name(tag_name)
+                        public_tag = (
+                            self.get_public_tag_by_name(tag_name)
+                            if db_cursor is None
+                            else lookup(
+                                "SELECT id FROM tags WHERE name=%s AND created_by IS NULL",
+                                (tag_name,),
+                            )
+                        )
                         private_tag = (
-                            self.get_private_tag_by_name_and_user(tag_name, user_id)
+                            (
+                                self.get_private_tag_by_name_and_user(tag_name, user_id)
+                                if db_cursor is None
+                                else lookup(
+                                    "SELECT id FROM tags WHERE name=%s AND created_by=%s",
+                                    (tag_name, user_id),
+                                )
+                            )
                             if user_id
                             else None
                         )
@@ -1959,7 +2043,7 @@ class Database:
                 )
             # Get paginated results
             rows = cast(
-                List[Dict[str, Any]], self.execute_query(paginated_sql, query_params)
+                List[Dict[str, Any]], execute_query(paginated_sql, query_params)
             )
 
             # Debug: Log the number of rows returned from database
@@ -2040,7 +2124,7 @@ class Database:
                 placeholders = ",".join("%s" for _ in all_needed_ingredient_ids)
                 names_result = cast(
                     List[Dict[str, Any]],
-                    self.execute_query(
+                    execute_query(
                         f"SELECT id, name FROM ingredients WHERE id IN ({placeholders})",
                         tuple(all_needed_ingredient_ids),
                     ),
@@ -2073,7 +2157,8 @@ class Database:
                 for recipe in result:
                     recipe.pop("_sort_value", None)
             else:
-                has_next = len(result) == limit
+                has_next = len(result) > limit
+                result = result[:limit]
                 for recipe in result:
                     recipe.pop("_sort_value", None)
 
@@ -2133,513 +2218,7 @@ class Database:
 
     # --- User Ingredient Tracking Methods ---
 
-    def add_user_ingredient(self, user_id: str, ingredient_id: int) -> Dict[str, Any]:
-        """Add an ingredient to a user's inventory, including all parent ingredients"""
-        conn = None
-        try:
-            # Check if ingredient exists
-            ingredient = self.get_ingredient(ingredient_id)
-            if not ingredient:
-                raise ValueError(f"Ingredient with ID {ingredient_id} does not exist")
-
-            # Check if user already has this ingredient
-            existing = cast(
-                List[Dict[str, Any]],
-                self.execute_query(
-                    "SELECT id FROM user_ingredients WHERE cognito_user_id = %(user_id)s AND ingredient_id = %(ingredient_id)s",
-                    {"user_id": user_id, "ingredient_id": ingredient_id},
-                ),
-            )
-
-            if existing:
-                # User already has this ingredient, raise exception
-                raise ValueError(
-                    f"Ingredient {ingredient_id} already exists in user's inventory"
-                )
-
-            # Get all parent ingredients from the path
-            parent_ingredient_ids = []
-            ingredient_path = ingredient["path"]
-
-            # Parse the path to extract parent IDs
-            # Path format is like "/1/23/45/" where 1, 23, 45 are ingredient IDs
-            if ingredient_path:
-                # Split by '/' and filter out empty strings
-                path_parts = [part for part in ingredient_path.split("/") if part]
-                # All parts except the last one are parent IDs
-                parent_ingredient_ids = [int(part) for part in path_parts[:-1]]
-
-            # Start a transaction to add all ingredients
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            cursor.execute("BEGIN")
-
-            # Add all parent ingredients first (if they don't already exist)
-            for parent_id in parent_ingredient_ids:
-                try:
-                    # Use INSERT OR IGNORE to add parent ingredient only if it doesn't exist
-                    cursor.execute(
-                        """
-                        INSERT INTO user_ingredients (cognito_user_id, ingredient_id)
-                        VALUES (%s, %s)
-                        ON CONFLICT (cognito_user_id, ingredient_id) DO NOTHING
-                        """,
-                        (user_id, parent_id),
-                    )
-                    if cursor.rowcount > 0:
-                        logger.info(
-                            f"Added parent ingredient {parent_id} to user {user_id}"
-                        )
-                except Exception as e:
-                    logger.warning(
-                        f"Error adding parent ingredient {parent_id} to user {user_id}: {str(e)}"
-                    )
-                    # Continue with other parents - don't fail the entire operation
-
-            # Add the main ingredient
-            cursor.execute(
-                "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
-                (user_id, ingredient_id),
-            )
-
-            conn.commit()
-            self._return_connection(conn)
-            conn = None
-
-            # Return the created record with ingredient details
-            return {
-                "ingredient_id": ingredient_id,
-                "ingredient_name": ingredient["name"],
-                "added_at": "now",  # PostgreSQL NOW()
-                "parents_added": len(parent_ingredient_ids),
-            }
-
-        except Exception as e:
-            if conn:
-                conn.rollback()
-            logger.error(
-                f"Error adding ingredient {ingredient_id} to user {user_id}: {str(e)}"
-            )
-            raise
-        finally:
-            if conn:
-                self._return_connection(conn)
-
-    def remove_user_ingredient(self, user_id: str, ingredient_id: int) -> bool:
-        """Remove an ingredient from a user's inventory, but prevent removing parents if children exist"""
-        try:
-            # Check if user has this ingredient
-            existing = cast(
-                List[Dict[str, Any]],
-                self.execute_query(
-                    "SELECT id FROM user_ingredients WHERE cognito_user_id = %(user_id)s AND ingredient_id = %(ingredient_id)s",
-                    {"user_id": user_id, "ingredient_id": ingredient_id},
-                ),
-            )
-
-            if not existing:
-                return False
-
-            # Get the ingredient details to check for child ingredients
-            ingredient = self.get_ingredient(ingredient_id)
-            if not ingredient:
-                return False
-
-            # Check if this ingredient has any child ingredients in the user's inventory
-            # Child ingredients would have paths that start with this ingredient's path
-            ingredient_path = ingredient["path"]
-            if ingredient_path:
-                # Look for child ingredients in user's inventory
-                child_ingredients = cast(
-                    List[Dict[str, Any]],
-                    self.execute_query(
-                        """
-                        SELECT ui.ingredient_id, i.name, i.path
-                        FROM user_ingredients ui
-                        JOIN ingredients i ON ui.ingredient_id = i.id
-                        WHERE ui.cognito_user_id = %(user_id)s
-                        AND i.path LIKE %(child_path_pattern)s
-                        AND i.id != %(ingredient_id)s
-                        """,
-                        {
-                            "user_id": user_id,
-                            "child_path_pattern": f"{ingredient_path}%",
-                            "ingredient_id": ingredient_id,
-                        },
-                    ),
-                )
-
-                if child_ingredients:
-                    # Get child ingredient names for the error message
-                    child_names = [child["name"] for child in child_ingredients]
-                    raise ValueError(
-                        f"Cannot remove ingredient '{ingredient['name']}' because it has child ingredients in your inventory: {', '.join(child_names)}. Please remove the child ingredients first."
-                    )
-
-            # Remove the ingredient from user's inventory
-            result = self.execute_query(
-                "DELETE FROM user_ingredients WHERE cognito_user_id = %(user_id)s AND ingredient_id = %(ingredient_id)s",
-                {"user_id": user_id, "ingredient_id": ingredient_id},
-            )
-
-            return result.get("rowCount", 0) > 0
-
-        except Exception as e:
-            logger.error(
-                f"Error removing ingredient {ingredient_id} from user {user_id}: {str(e)}"
-            )
-            raise
-
-    def get_user_ingredients(self, user_id: str) -> List[Dict[str, Any]]:
-        """Get all ingredients for a user with full ingredient details"""
-        try:
-            result = cast(
-                List[Dict[str, Any]],
-                self.execute_query(
-                    """
-                    SELECT ui.ingredient_id, ui.added_at, i.name, i.description, i.parent_id, i.path
-                    FROM user_ingredients ui
-                    JOIN ingredients i ON ui.ingredient_id = i.id
-                    WHERE ui.cognito_user_id = %(user_id)s
-                    ORDER BY i.name
-                    """,
-                    {"user_id": user_id},
-                ),
-            )
-            return result
-
-        except Exception as e:
-            logger.error(f"Error getting ingredients for user {user_id}: {str(e)}")
-            raise
-
-    def add_user_ingredients_bulk(
-        self, user_id: str, ingredient_ids: List[int]
-    ) -> Dict[str, Any]:
-        """Add multiple ingredients to a user's inventory"""
-        conn = None
-        try:
-            if not ingredient_ids:
-                return {
-                    "added_count": 0,
-                    "already_exists_count": 0,
-                    "failed_count": 0,
-                    "errors": [],
-                }
-
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            cursor.execute("BEGIN")
-
-            added_count = 0
-            already_exists_count = 0
-            failed_count = 0
-            errors = []
-
-            for ingredient_id in ingredient_ids:
-                try:
-                    # Check if ingredient exists
-                    ingredient_check = cast(
-                        List[Dict[str, Any]],
-                        self.execute_query(
-                            "SELECT id FROM ingredients WHERE id = %(ingredient_id)s",
-                            {"ingredient_id": ingredient_id},
-                        ),
-                    )
-                    if not ingredient_check:
-                        errors.append(
-                            f"Ingredient with ID {ingredient_id} does not exist"
-                        )
-                        failed_count += 1
-                        continue
-
-                    # Check if user already has this ingredient
-                    cursor.execute(
-                        "SELECT id FROM user_ingredients WHERE cognito_user_id = %s AND ingredient_id = %s",
-                        (user_id, ingredient_id),
-                    )
-                    existing = cursor.fetchone()
-
-                    if existing:
-                        already_exists_count += 1
-                        continue
-
-                    # Add the ingredient
-                    cursor.execute(
-                        "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
-                        (user_id, ingredient_id),
-                    )
-                    added_count += 1
-
-                except Exception as e:
-                    errors.append(f"Error adding ingredient {ingredient_id}: {str(e)}")
-                    failed_count += 1
-
-            conn.commit()
-
-            return {
-                "added_count": added_count,
-                "already_exists_count": already_exists_count,
-                "failed_count": failed_count,
-                "errors": errors,
-            }
-
-        except Exception as e:
-            if conn:
-                conn.rollback()
-            logger.error(f"Error in bulk add ingredients for user {user_id}: {str(e)}")
-            raise
-        finally:
-            if conn:
-                self._return_connection(conn)
-
-    def remove_user_ingredients_bulk(
-        self, user_id: str, ingredient_ids: List[int]
-    ) -> Dict[str, Any]:
-        """Remove multiple ingredients from a user's inventory with ordered deletion (children first, then parents)"""
-        conn = None
-        try:
-            if not ingredient_ids:
-                logger.info(
-                    f"Bulk remove called for user {user_id} with empty ingredient list"
-                )
-                return {"removed_count": 0, "not_found_count": 0}
-
-            logger.info(
-                f"Starting bulk remove for user {user_id} with {len(ingredient_ids)} ingredients: {ingredient_ids}"
-            )
-
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            cursor.execute("BEGIN")
-
-            removed_count = 0
-            not_found_count = 0
-            validation_errors = []
-
-            # First pass: validate all ingredients exist and collect their details
-            logger.info(
-                f"Validating {len(ingredient_ids)} ingredients for existence and collecting details"
-            )
-            valid_ingredients = []
-            for ingredient_id in ingredient_ids:
-                try:
-                    # Check if user has this ingredient
-                    cursor.execute(
-                        "SELECT id FROM user_ingredients WHERE cognito_user_id = %s AND ingredient_id = %s",
-                        (user_id, ingredient_id),
-                    )
-                    existing = cursor.fetchone()
-
-                    if not existing:
-                        logger.debug(
-                            f"Ingredient {ingredient_id} not found in user {user_id} inventory"
-                        )
-                        not_found_count += 1
-                        continue
-
-                    # Get the ingredient details
-                    cursor.execute(
-                        "SELECT id, name, path FROM ingredients WHERE id = %s",
-                        (ingredient_id,),
-                    )
-                    ingredient = cursor.fetchone()
-
-                    if not ingredient:
-                        logger.warning(
-                            f"Ingredient {ingredient_id} not found in ingredients table"
-                        )
-                        not_found_count += 1
-                        continue
-
-                    valid_ingredients.append(
-                        {
-                            "id": ingredient[0],
-                            "name": ingredient[1],
-                            "path": ingredient[2] or "",
-                        }
-                    )
-                    logger.debug(
-                        f"Ingredient {ingredient_id} ({ingredient[1]}) found with path: {ingredient[2]}"
-                    )
-
-                except Exception as e:
-                    error_msg = f"Error validating ingredient {ingredient_id}: {str(e)}"
-                    logger.error(error_msg)
-                    validation_errors.append(error_msg)
-
-            if validation_errors:
-                conn.rollback()
-                error_summary = f"Validation failed for {len(validation_errors)} ingredients: {'; '.join(validation_errors)}"
-                logger.error(
-                    f"Bulk remove validation failed for user {user_id}: {error_summary}"
-                )
-                raise ValueError(error_summary)
-
-            # Create a set of ingredient IDs being removed for quick lookup
-            ingredient_ids_to_remove = set(ing["id"] for ing in valid_ingredients)
-
-            # Second pass: check for parent-child conflicts only for ingredients that won't be removed
-            logger.info(
-                f"Checking for parent-child conflicts for {len(valid_ingredients)} valid ingredients"
-            )
-            for ingredient in valid_ingredients:
-                try:
-                    ingredient_id = ingredient["id"]
-                    ingredient_name = ingredient["name"]
-                    ingredient_path = ingredient["path"]
-
-                    # Check if this ingredient has any child ingredients in the user's inventory
-                    if ingredient_path:
-                        # Look for child ingredients in user's inventory
-                        cursor.execute(
-                            """
-                            SELECT ui.ingredient_id, i.name, i.path
-                            FROM user_ingredients ui
-                            JOIN ingredients i ON ui.ingredient_id = i.id
-                            WHERE ui.cognito_user_id = %s 
-                            AND i.path LIKE %s
-                            AND i.id != %s
-                            """,
-                            (user_id, f"{ingredient_path}%", ingredient_id),
-                        )
-                        child_ingredients = cursor.fetchall()
-
-                        if child_ingredients:
-                            # Check if any child ingredients are NOT being removed
-                            children_not_being_removed = []
-                            for child in child_ingredients:
-                                child_id = child[0]
-                                child_name = child[1]
-                                if child_id not in ingredient_ids_to_remove:
-                                    children_not_being_removed.append(child_name)
-
-                            if children_not_being_removed:
-                                error_msg = f"Cannot remove ingredient '{ingredient_name}' because it has child ingredients in your inventory that are not being removed: {', '.join(children_not_being_removed)}. Please include these child ingredients in the removal or remove them first."
-                                logger.warning(
-                                    f"Parent-child validation failed for ingredient {ingredient_id}: {error_msg}"
-                                )
-                                validation_errors.append(error_msg)
-                                continue
-                            else:
-                                logger.debug(
-                                    f"Ingredient {ingredient_id} ({ingredient_name}) has children but they are all being removed"
-                                )
-
-                    logger.debug(
-                        f"Ingredient {ingredient_id} ({ingredient_name}) passed validation"
-                    )
-
-                except Exception as e:
-                    error_msg = f"Error validating ingredient {ingredient_id}: {str(e)}"
-                    logger.error(error_msg)
-                    validation_errors.append(error_msg)
-
-            # If there are validation errors, rollback and raise exception
-            if validation_errors:
-                conn.rollback()
-                error_summary = f"Validation failed for {len(validation_errors)} ingredients: {'; '.join(validation_errors)}"
-                logger.error(
-                    f"Bulk remove validation failed for user {user_id}: {error_summary}"
-                )
-                raise ValueError(error_summary)
-
-            # Third pass: sort ingredients by path depth (deepest first) to ensure children are deleted before parents
-            logger.info("Sorting ingredients by path depth for ordered deletion")
-            valid_ingredients.sort(
-                key=lambda x: len(x["path"].split("/")) if x["path"] else 0,
-                reverse=True,
-            )
-
-            # Fourth pass: remove ingredients in sorted order (children first, then parents)
-            logger.info(
-                f"Proceeding to remove {len(valid_ingredients)} ingredients in sorted order for user {user_id}"
-            )
-            for ingredient in valid_ingredients:
-                try:
-                    ingredient_id = ingredient["id"]
-                    ingredient_name = ingredient["name"]
-
-                    # Check if user still has this ingredient (re-check in case something changed)
-                    cursor.execute(
-                        "SELECT id FROM user_ingredients WHERE cognito_user_id = %s AND ingredient_id = %s",
-                        (user_id, ingredient_id),
-                    )
-                    existing = cursor.fetchone()
-
-                    if not existing:
-                        logger.debug(
-                            f"Ingredient {ingredient_id} no longer in user {user_id} inventory, skipping"
-                        )
-                        continue
-
-                    # Remove the ingredient
-                    cursor.execute(
-                        "DELETE FROM user_ingredients WHERE cognito_user_id = %s AND ingredient_id = %s",
-                        (user_id, ingredient_id),
-                    )
-                    removed_count += 1
-                    logger.debug(
-                        f"Successfully removed ingredient {ingredient_id} ({ingredient_name}) for user {user_id}"
-                    )
-
-                except Exception as e:
-                    logger.error(
-                        f"Error removing ingredient {ingredient_id} for user {user_id}: {str(e)}"
-                    )
-                    # Continue with other ingredients
-
-            conn.commit()
-            logger.info(
-                f"Bulk remove completed for user {user_id}: {removed_count} removed, {not_found_count} not found"
-            )
-
-            return {"removed_count": removed_count, "not_found_count": not_found_count}
-
-        except Exception as e:
-            if conn:
-                conn.rollback()
-            logger.error(
-                f"Error in bulk remove ingredients for user {user_id}: {str(e)}"
-            )
-            raise
-        finally:
-            if conn:
-                self._return_connection(conn)
-
-    def get_ingredient_recommendations(
-        self, user_id: str, limit: int = 20
-    ) -> List[Dict[str, Any]]:
-        """
-        Get ingredient recommendations that would unlock the most new recipes.
-
-        This finds ingredients the user doesn't have that would complete the most
-        "almost makeable" recipes (recipes where user has all but one ingredient).
-        Respects allow_substitution rules for ingredient matching.
-        """
-        try:
-            from .sql_queries import get_ingredient_recommendations_sql
-
-            query = get_ingredient_recommendations_sql()
-
-            result = cast(
-                List[Dict[str, Any]],
-                self.execute_query(query, {"user_id": user_id, "limit": limit}),
-            )
-
-            # Parse the recipe_names field (pipe-delimited string) into a list
-            for row in result:
-                if row.get("recipe_names"):
-                    row["recipe_names"] = row["recipe_names"].split("|||")
-                else:
-                    row["recipe_names"] = []
-
-            return result
-
-        except Exception as e:
-            logger.error(
-                f"Error getting ingredient recommendations for user {user_id}: {str(e)}"
-            )
-            raise
+    # Inventory methods are supplied by GroupInventoryMixin.
 
     # --- End User Ingredient Tracking Methods ---
 

@@ -25,7 +25,7 @@ This project uses the following AWS services:
 ## Prerequisites
 
 - AWS CLI installed and configured with appropriate credentials
-- Python 3.9 or later
+- Python 3.9 or later for config scripts; Python 3.12 or later for the full test suite (`requirements-test.txt`), matching the API container runtime
 - boto3 Python package (`pip install boto3`) — only needed for `scripts/generate_config.py`, not for running the API
 
 ## Local Development
