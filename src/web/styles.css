@@ -3617,3 +3617,19 @@ input[type="radio"]:focus {
         display: none !important;
     }
 }
+
+/* Shared spacing and static page presentation. */
+.text-light { color: var(--text-light); }
+.mt-xs { margin-top: var(--space-xs); }
+.mt-sm { margin-top: var(--space-sm); }
+.mt-md, .success-results, .error-results { margin-top: var(--space-md); }
+.mb-sm { margin-bottom: var(--space-sm); }
+.mb-md { margin-bottom: var(--space-md); }
+.upload-success-title { color: var(--success-color, #28a745); }
+.upload-error-title { color: var(--error-color, #dc3545); }
+.legend-ingredient-parent { background: #1f77b4; }
+.legend-ingredient-leaf { background: #aec7e8; }
+.legend-tree-parent { background: var(--accent-color, #a61816); }
+.legend-tree-leaf { background: var(--primary-color, #2c3e50); }
+.ingredient-tree-container { min-height: 700px; }
+.ingredient-tree-area { height: 700px; }

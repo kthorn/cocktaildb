@@ -1,145 +1,5 @@
 import { api } from './api.js';
-import { isAuthenticated } from './auth.js';
-
-// Define these functions in the global scope so they can be accessed from HTML
-window.editIngredient = async function (id) {
-    // Check editor permissions first
-    if (!api.isEditor()) {
-        alert('Editor access required. Only editors and admins can edit ingredients.');
-        return;
-    }
-
-    const form = document.getElementById('ingredient-form');
-    if (!form) {
-        console.error('Ingredient form not found');
-        return;
-    }
-    const submitButton = form.querySelector('button[type="submit"]');
-
-    try {
-        const ingredient = await api.getIngredient(id);
-
-        // Populate form with ingredient data
-        document.getElementById('ingredient-name').value = ingredient.name;
-        document.getElementById('ingredient-description').value = ingredient.description || '';
-        document.getElementById('ingredient-url').value = ingredient.url || '';
-        document.getElementById('ingredient-percent-abv').value = ingredient.percent_abv ?? '';
-        document.getElementById('ingredient-sugar-g-per-l').value = ingredient.sugar_g_per_l ?? '';
-        document.getElementById('ingredient-acid-g-per-l').value =
-            ingredient.titratable_acidity_g_per_l ?? '';
-
-        // Set allow_substitution checkbox
-        const allowSubstitutionCheckbox = document.getElementById('ingredient-allow-substitution');
-        if (allowSubstitutionCheckbox) {
-            allowSubstitutionCheckbox.checked = ingredient.allow_substitution || false;
-        }
-
-        // Set parent ingredient if it exists
-        if (ingredient.parent_id) {
-            try {
-                const parentIngredient = await api.getIngredient(ingredient.parent_id);
-                document.getElementById('ingredient-parent').value = parentIngredient.id;
-                document.getElementById('ingredient-parent-search').value = parentIngredient.name;
-            } catch (error) {
-                console.error('Error loading parent ingredient:', error);
-            }
-        } else {
-            document.getElementById('ingredient-parent').value = '';
-            document.getElementById('ingredient-parent-search').value = '';
-        }
-
-        // Change form to update mode
-        form.dataset.mode = 'edit';
-        form.dataset.id = id;
-        if (submitButton) {
-            submitButton.textContent = 'Update Ingredient';
-        }
-
-        // Scroll to form
-        form.scrollIntoView({ behavior: 'smooth' });
-    } catch (error) {
-        console.error('Error loading ingredient:', error);
-        alert('Failed to load ingredient. Please try again.');
-    }
-};
-
-window.deleteIngredient = async function (id) {
-    // Check editor permissions first
-    if (!api.isEditor()) {
-        alert('Editor access required. Only editors and admins can delete ingredients.');
-        return;
-    }
-
-    if (!confirm('Are you sure you want to delete this ingredient?')) {
-        return;
-    }
-
-    try {
-        await api.deleteIngredient(id);
-        window.loadIngredients(); // Making sure loadIngredients is accessible
-    } catch (error) {
-        console.error('Error deleting ingredient:', error);
-        alert('Failed to delete ingredient. Please try again.');
-    }
-};
-
-// Make loadIngredients accessible globally
-window.loadIngredients = async function () {
-    const ingredientsContainer = document.getElementById('ingredients-container');
-    const loadingIndicator = document.getElementById('parent-loading-indicator');
-    const searchStatus = document.getElementById('parent-search-status');
-
-    try {
-        // Show loading state
-        if (loadingIndicator) loadingIndicator.classList.add('active');
-        if (searchStatus) searchStatus.classList.add('active');
-
-        window.availableIngredients = await api.getIngredients();
-
-        // Call displayIngredients if it exists in window or current scope
-        if (typeof window.displayIngredients === 'function') {
-            window.displayIngredients(window.availableIngredients);
-        } else if (typeof displayIngredients === 'function') {
-            displayIngredients(window.availableIngredients);
-        } else {
-            // Fallback implementation if not yet defined
-            ingredientsContainer.innerHTML = '';
-            if (window.availableIngredients.length === 0) {
-                ingredientsContainer.innerHTML = '<p>No ingredients found.</p>';
-                return;
-            }
-
-            window.availableIngredients.forEach((ingredient) => {
-                const card = document.createElement('div');
-                card.className = 'ingredient-card';
-                card.innerHTML = `
-                    <h4>${ingredient.name}</h4>
-                    <p>${ingredient.description || 'No description'}</p>
-                    <div class="card-actions">
-                        <button onclick="editIngredient(${ingredient.id})">Edit</button>
-                        <button onclick="deleteIngredient(${ingredient.id})">Delete</button>
-                    </div>
-                `;
-                ingredientsContainer.appendChild(card);
-            });
-        }
-
-        // Update parent options if the function exists
-        if (typeof window.updateParentOptions === 'function') {
-            window.updateParentOptions(window.availableIngredients);
-        }
-    } catch (error) {
-        console.error('Error loading ingredients:', error);
-        if (ingredientsContainer) {
-            ingredientsContainer.innerHTML =
-                '<p>Error loading ingredients. Please try again later.</p>';
-        }
-    } finally {
-        // Hide loading state
-        if (loadingIndicator) loadingIndicator.classList.remove('active');
-        if (searchStatus) searchStatus.classList.remove('active');
-    }
-};
+import { buildHierarchy, renderHierarchyHTML } from './components/ingredientTree.js';
 
 // Update page elements based on authentication and editor status
 function updatePageBasedOnAuth() {
@@ -199,6 +59,169 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    let availableIngredients = [];
+
+    async function editIngredient(id) {
+        if (!api.isEditor()) {
+            alert('Editor access required. Only editors and admins can edit ingredients.');
+            return;
+        }
+
+        const form = document.getElementById('ingredient-form');
+        if (!form) {
+            console.error('Ingredient form not found');
+            return;
+        }
+        const submitButton = form.querySelector('button[type="submit"]');
+
+        try {
+            const ingredient = await api.getIngredient(id);
+            document.getElementById('ingredient-name').value = ingredient.name;
+            document.getElementById('ingredient-description').value = ingredient.description || '';
+            document.getElementById('ingredient-url').value = ingredient.url || '';
+            document.getElementById('ingredient-percent-abv').value = ingredient.percent_abv ?? '';
+            document.getElementById('ingredient-sugar-g-per-l').value =
+                ingredient.sugar_g_per_l ?? '';
+            document.getElementById('ingredient-acid-g-per-l').value =
+                ingredient.titratable_acidity_g_per_l ?? '';
+
+            const allowSubstitutionCheckbox = document.getElementById(
+                'ingredient-allow-substitution',
+            );
+            if (allowSubstitutionCheckbox) {
+                allowSubstitutionCheckbox.checked = ingredient.allow_substitution || false;
+            }
+
+            if (ingredient.parent_id) {
+                try {
+                    const parentIngredient = await api.getIngredient(ingredient.parent_id);
+                    parentSelect.value = parentIngredient.id;
+                    parentSearchInput.value = parentIngredient.name;
+                } catch (error) {
+                    console.error('Error loading parent ingredient:', error);
+                }
+            } else {
+                parentSelect.value = '';
+                parentSearchInput.value = '';
+            }
+
+            form.dataset.mode = 'edit';
+            form.dataset.id = id;
+            if (submitButton) submitButton.textContent = 'Update Ingredient';
+            form.scrollIntoView({ behavior: 'smooth' });
+        } catch (error) {
+            console.error('Error loading ingredient:', error);
+            alert('Failed to load ingredient. Please try again.');
+        }
+    }
+
+    async function deleteIngredient(id) {
+        if (!api.isEditor()) {
+            alert('Editor access required. Only editors and admins can delete ingredients.');
+            return;
+        }
+
+        if (!confirm('Are you sure you want to delete this ingredient?')) return;
+
+        try {
+            await api.deleteIngredient(id);
+            await loadIngredients();
+        } catch (error) {
+            console.error('Error deleting ingredient:', error);
+            alert('Failed to delete ingredient. Please try again.');
+        }
+    }
+
+    async function loadIngredients() {
+        const loadingIndicator = document.getElementById('parent-loading-indicator');
+
+        try {
+            if (loadingIndicator) loadingIndicator.classList.add('active');
+            if (searchStatus) searchStatus.classList.add('active');
+
+            availableIngredients = await api.getIngredients();
+            displayIngredients(availableIngredients);
+            updateParentOptions(availableIngredients);
+        } catch (error) {
+            console.error('Error loading ingredients:', error);
+            ingredientsContainer.innerHTML =
+                '<p>Error loading ingredients. Please try again later.</p>';
+        } finally {
+            if (loadingIndicator) loadingIndicator.classList.remove('active');
+            if (searchStatus) searchStatus.classList.remove('active');
+        }
+    }
+
+    function updateParentOptions(ingredients) {
+        parentSelect.innerHTML = '<option value="">None</option>';
+        ingredients.forEach((ingredient) => {
+            const option = document.createElement('option');
+            option.value = ingredient.id;
+            option.textContent = ingredient.name;
+            parentSelect.appendChild(option);
+        });
+    }
+
+    function displayIngredients(ingredients) {
+        ingredientsContainer.innerHTML = '';
+        if (ingredients.length === 0) {
+            ingredientsContainer.innerHTML = '<p>No ingredients found.</p>';
+            return;
+        }
+
+        const hierarchy = buildHierarchy(ingredients);
+        ingredientsContainer.innerHTML = renderHierarchyHTML(
+            hierarchy,
+            (ingredient, { childrenHTML, hasChildren }) => {
+                const actionButtons = api.isEditor()
+                    ? `
+                        <div class="tree-actions">
+                            <button class="btn-small btn-outline" data-action="edit" data-ingredient-id="${ingredient.id}">Edit</button>
+                            <button class="btn-small btn-outline-danger" data-action="delete" data-ingredient-id="${ingredient.id}">Delete</button>
+                        </div>
+                    `
+                    : '';
+
+                return `
+                    <li class="hierarchy-item ${hasChildren ? 'has-children' : ''}">
+                        <div class="ingredient-tree-row">
+                            ${hasChildren ? '<button class="tree-toggle" type="button" data-action="toggle" aria-expanded="false">▶</button>' : '<span class="tree-spacer">‣</span>'}
+                            <div class="tree-content">
+                                <div class="tree-info">
+                                    <span class="tree-name">${ingredient.name}</span>
+                                    ${ingredient.description ? `<span class="tree-description">${ingredient.description}</span>` : ''}
+                                    <span class="tree-substitution">[Substitutable: ${ingredient.allow_substitution ? 'Yes' : 'No'}]</span>
+                                </div>
+                                ${actionButtons}
+                            </div>
+                        </div>
+                        ${hasChildren ? `<div class="tree-children">${childrenHTML}</div>` : ''}
+                    </li>
+                `;
+            },
+        );
+    }
+
+    ingredientsContainer.addEventListener('click', (event) => {
+        const actionTarget = event.target.closest('[data-action]');
+        if (!actionTarget || !ingredientsContainer.contains(actionTarget)) return;
+
+        const action = actionTarget.dataset.action;
+        if (action === 'toggle') {
+            const item = actionTarget.closest('.hierarchy-item');
+            const children = item?.querySelector(':scope > .tree-children');
+            if (!children) return;
+            const expanded = children.classList.toggle('is-expanded');
+            actionTarget.textContent = expanded ? '▼' : '▶';
+            actionTarget.setAttribute('aria-expanded', String(expanded));
+            item.classList.toggle('expanded', expanded);
+        } else if (action === 'edit') {
+            editIngredient(Number(actionTarget.dataset.ingredientId));
+        } else if (action === 'delete') {
+            deleteIngredient(Number(actionTarget.dataset.ingredientId));
+        }
+    });
+
     // Load ingredients on page load
     loadIngredients();
 
@@ -238,7 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const parentName = parentSearchInput.value.trim();
 
         if (parentName) {
-            const parentIngredient = window.availableIngredients.find(
+            const parentIngredient = availableIngredients.find(
                 (ing) => ing.name.toLowerCase() === parentName.toLowerCase(),
             );
 
@@ -302,7 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!searchTerm.trim()) {
             // Show all items when search is empty
             hierarchyItems.forEach((item) => {
-                item.style.display = 'block';
+                item.classList.remove('is-hidden');
             });
             return;
         }
@@ -318,157 +341,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 : '';
 
             if (name.includes(searchTerm) || description.includes(searchTerm)) {
-                item.style.display = 'block';
+                item.classList.remove('is-hidden');
                 // Show parent items when child matches
                 let parent = item.parentElement.closest('.hierarchy-item');
                 while (parent) {
-                    parent.style.display = 'block';
+                    parent.classList.remove('is-hidden');
                     // Expand parent to show matching child
                     const toggle = parent.querySelector('.tree-toggle');
                     const children = parent.querySelector('.tree-children');
                     if (toggle && children) {
-                        children.style.display = 'block';
+                        children.classList.add('is-expanded');
                         toggle.textContent = '▼';
+                        toggle.setAttribute('aria-expanded', 'true');
                         parent.classList.add('expanded');
                     }
                     parent = parent.parentElement.closest('.hierarchy-item');
                 }
             } else {
-                item.style.display = 'none';
+                item.classList.add('is-hidden');
             }
         });
     });
 
     // Setup parent ingredient autocomplete
     setupParentAutocomplete();
-
-    // Function to update parent ingredient options in the select
-    window.updateParentOptions = function (ingredients) {
-        parentSelect.innerHTML = '<option value="">None</option>';
-        ingredients.forEach((ingredient) => {
-            const option = document.createElement('option');
-            option.value = ingredient.id;
-            option.textContent = ingredient.name;
-            parentSelect.appendChild(option);
-        });
-    };
-
-    // Display ingredients in hierarchical tree view
-    window.displayIngredients = function (ingredients) {
-        ingredientsContainer.innerHTML = '';
-
-        if (ingredients.length === 0) {
-            ingredientsContainer.innerHTML = '<p>No ingredients found.</p>';
-            return;
-        }
-
-        // Build hierarchy structure
-        const hierarchy = buildHierarchy(ingredients);
-        ingredientsContainer.innerHTML = renderHierarchyHTML(hierarchy, 0);
-
-        // Add click listeners for expand/collapse
-        bindToggleEvents();
-    };
-
-    // Build hierarchy structure from flat ingredient list
-    function buildHierarchy(ingredients) {
-        const ingredientMap = new Map();
-        const rootIngredients = [];
-
-        // First pass: create map of all ingredients
-        ingredients.forEach((ingredient) => {
-            ingredientMap.set(ingredient.id, {
-                ...ingredient,
-                children: [],
-            });
-        });
-
-        // Second pass: build parent-child relationships
-        ingredients.forEach((ingredient) => {
-            const parentId = ingredient.parent_id;
-
-            if (parentId && ingredientMap.has(parentId)) {
-                ingredientMap.get(parentId).children.push(ingredientMap.get(ingredient.id));
-            } else {
-                rootIngredients.push(ingredientMap.get(ingredient.id));
-            }
-        });
-
-        // Sort each level by name
-        const sortHierarchy = (items) => {
-            items.sort((a, b) => a.name.localeCompare(b.name));
-            items.forEach((item) => {
-                if (item.children.length > 0) {
-                    sortHierarchy(item.children);
-                }
-            });
-        };
-
-        sortHierarchy(rootIngredients);
-        return rootIngredients;
-    }
-
-    // Render hierarchy as HTML with expand/collapse functionality
-    function renderHierarchyHTML(hierarchy, level = 0) {
-        if (hierarchy.length === 0) return '';
-
-        const isRoot = level === 0;
-        const listClass = isRoot ? 'hierarchy-root' : 'hierarchy-children';
-
-        let html = `<ul class="${listClass}" style="margin-left: ${level * 20}px;">`;
-
-        hierarchy.forEach((ingredient) => {
-            const hasChildren = ingredient.children && ingredient.children.length > 0;
-
-            // Only show action buttons if user is an editor/admin
-            const actionButtons = api.isEditor()
-                ? `
-                <div class="tree-actions">
-                    <button class="btn-small btn-outline" onclick="editIngredient(${ingredient.id})">Edit</button>
-                    <button class="btn-small btn-outline-danger" onclick="deleteIngredient(${ingredient.id})">Delete</button>
-                </div>
-            `
-                : '';
-
-            html += `
-                <li class="hierarchy-item ${hasChildren ? 'has-children' : ''}">
-                    <div class="ingredient-tree-row">
-                        ${hasChildren ? `<button class="tree-toggle" onclick="toggleHierarchyItem(this)">▶</button>` : '<span class="tree-spacer">‣</span>'}
-                        <div class="tree-content">
-                            <div class="tree-info">
-                                <span class="tree-name">${ingredient.name}</span>
-                                ${ingredient.description ? `<span class="tree-description">${ingredient.description}</span>` : ''}
-                                <span class="tree-substitution">[Substitutable: ${ingredient.allow_substitution ? 'Yes' : 'No'}]</span>
-                            </div>
-                            ${actionButtons}
-                        </div>
-                    </div>
-                    ${hasChildren ? `<div class="tree-children" style="display: none;">${renderHierarchyHTML(ingredient.children, level + 1)}</div>` : ''}
-                </li>
-            `;
-        });
-
-        html += '</ul>';
-        return html;
-    }
-
-    // Bind toggle events for expand/collapse
-    function bindToggleEvents() {
-        // Make toggle function globally accessible
-        window.toggleHierarchyItem = function (button) {
-            const item = button.closest('.hierarchy-item');
-            const children = item.querySelector('.tree-children');
-
-            if (children) {
-                const isExpanded = children.style.display !== 'none';
-                children.style.display = isExpanded ? 'none' : 'block';
-                button.textContent = isExpanded ? '▶' : '▼';
-
-                // Update has-children class for styling
-                item.classList.toggle('expanded', !isExpanded);
-            }
-        };
-    }
 
     // Setup autocomplete for parent ingredient search
     function setupParentAutocomplete() {
@@ -485,8 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Ensure we have access to the ingredients
-            if (!window.availableIngredients || !Array.isArray(window.availableIngredients)) {
-                console.log('Waiting for ingredients to load...');
+            if (!Array.isArray(availableIngredients)) {
                 if (searchStatus) {
                     searchStatus.textContent = 'Loading ingredients...';
                     searchStatus.classList.add('active');
@@ -499,14 +394,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 searchStatus.classList.remove('active');
             }
 
-            console.log('Searching for:', searchTerm, 'in', window.availableIngredients);
-
             // Find matching ingredients
-            const matches = window.availableIngredients.filter((ingredient) =>
+            const matches = availableIngredients.filter((ingredient) =>
                 ingredient.name.toLowerCase().includes(searchTerm),
             );
-
-            console.log('Matches found:', matches.length, matches);
 
             if (matches.length === 0) {
                 parentAutocompleteDropdown.style.display = 'none';
@@ -567,9 +458,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 parentSearchInput.value = selectedValue;
 
                 // Find and set the corresponding parent ID
-                const parent = window.availableIngredients.find(
-                    (ing) => ing.name === selectedValue,
-                );
+                const parent = availableIngredients.find((ing) => ing.name === selectedValue);
                 if (parent) {
                     parentSelect.value = parent.id;
                 }
@@ -580,7 +469,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Input event listener for parent search
         parentSearchInput.addEventListener('input', function () {
-            console.log('Parent search input changed:', this.value);
             updateParentAutocomplete();
         });
 

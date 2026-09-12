@@ -10,35 +10,6 @@ let mobileHamburgerMenu = null;
 let desktopNav = null;
 
 /**
- * Loads common head elements into the document
- * This includes meta tags, icons, CSS with FOUC prevention
- */
-export function loadCommonHead() {
-    const headContent = `
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <!-- Direct CSS link with FOUC prevention -->
-        <style>
-            body { visibility: hidden; }
-        </style>
-        <link rel="stylesheet" href="/normalize.css">
-        <link rel="stylesheet" href="/styles.css"
-            onload="document.body.style.visibility=''"
-            onerror="document.body.style.visibility=''">
-        <!-- Favicon and app icons -->
-        <link rel="icon" type="image/png" href="/img/favicon-96x96.png" sizes="96x96" />
-        <link rel="icon" type="image/svg+xml" href="/img/favicon.svg" />
-        <link rel="shortcut icon" href="/img/favicon.ico" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png" />
-        <meta name="apple-mobile-web-app-title" content="Mixology Tools" />
-        <link rel="manifest" href="/site.webmanifest" />
-    `;
-
-    // Insert the common head elements
-    document.head.insertAdjacentHTML('beforeend', headContent);
-}
-
-/**
  * Loads header component into the page
  */
 export function loadHeader() {
@@ -165,9 +136,6 @@ export function loadFooter() {
     const footer = document.createElement('footer');
     footer.innerHTML = `
     <p>&copy; ${new Date().getFullYear()} Kurt Thorn</p>
-    <style>
-        body { visibility: visible !important; }
-    </style>
   `;
 
     // Find the existing footer and replace it
@@ -182,10 +150,7 @@ export function loadFooter() {
 
 // Initialize common components when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    // Load the common head elements first
-    loadCommonHead();
-
-    // Then load the header
+    // Load the header
     loadHeader();
 
     // Load the footer

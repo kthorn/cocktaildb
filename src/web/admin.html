@@ -1,8 +1,17 @@
 <!doctype html>
 <html lang="en">
     <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta charset="UTF-8" />
         <title>Admin - Mixology Tools</title>
+        <link rel="stylesheet" href="/normalize.css" />
+        <link rel="stylesheet" href="/styles.css" />
+        <link rel="icon" type="image/png" href="/img/favicon-96x96.png" sizes="96x96" />
+        <link rel="icon" type="image/svg+xml" href="/img/favicon.svg" />
+        <link rel="shortcut icon" href="/img/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-title" content="Mixology Tools" />
+        <link rel="manifest" href="/site.webmanifest" />
     </head>
 
     <body>
@@ -19,12 +28,12 @@
                                 Download JSON Template
                             </button>
                         </div>
-                        <p style="color: var(--text-light); margin-top: var(--space-sm)">
+                        <p class="text-light mt-sm">
                             Download a JSON template with the correct format for bulk recipe
                             uploads.
                         </p>
 
-                        <div style="margin-top: var(--space-md)">
+                        <div class="mt-md">
                             <label for="recipe-file-input" class="form-label"
                                 >Upload Recipe JSON File:</label
                             >
@@ -32,30 +41,22 @@
                                 type="file"
                                 id="recipe-file-input"
                                 accept=".json"
-                                class="form-control"
-                                style="margin-bottom: var(--space-sm)"
+                                class="mb-sm form-control"
                             />
                             <button id="upload-recipes-btn" class="btn btn-primary" disabled>
                                 Upload Recipes
                             </button>
-                            <p style="color: var(--text-light); margin-top: var(--space-xs)">
-                                Limit: 100 recipes per upload.
-                            </p>
+                            <p class="text-light mt-xs">Limit: 100 recipes per upload.</p>
                         </div>
 
-                        <div
-                            id="upload-progress"
-                            style="display: none; margin-top: var(--space-sm)"
-                        >
+                        <div id="upload-progress" class="mt-sm" hidden>
                             <div class="progress-bar">
                                 <div class="progress-fill"></div>
                             </div>
-                            <p style="color: var(--text-light); margin-top: var(--space-xs)">
-                                Uploading recipes...
-                            </p>
+                            <p class="text-light mt-xs">Uploading recipes...</p>
                         </div>
 
-                        <div id="upload-results" style="margin-top: var(--space-md)"></div>
+                        <div id="upload-results" class="mt-md"></div>
                     </div>
 
                     <div class="card-container">
@@ -65,14 +66,14 @@
                                 Download JSON Template
                             </button>
                         </div>
-                        <p style="color: var(--text-light); margin-top: var(--space-sm)">
+                        <p class="text-light mt-sm">
                             Download a JSON template with the correct format for bulk ingredient
                             uploads. The template includes allow_substitution field: true allows
                             this ingredient to be substituted with siblings/ancestors in recipes,
                             false (default) requires exact match.
                         </p>
 
-                        <div style="margin-top: var(--space-md)">
+                        <div class="mt-md">
                             <label for="ingredient-file-input" class="form-label"
                                 >Upload Ingredient JSON File:</label
                             >
@@ -80,38 +81,27 @@
                                 type="file"
                                 id="ingredient-file-input"
                                 accept=".json"
-                                class="form-control"
-                                style="margin-bottom: var(--space-sm)"
+                                class="mb-sm form-control"
                             />
                             <button id="upload-ingredients-btn" class="btn btn-primary" disabled>
                                 Upload Ingredients
                             </button>
-                            <p style="color: var(--text-light); margin-top: var(--space-xs)">
-                                Limit: 200 ingredients per upload.
-                            </p>
+                            <p class="text-light mt-xs">Limit: 200 ingredients per upload.</p>
                         </div>
 
-                        <div
-                            id="ingredient-upload-progress"
-                            style="display: none; margin-top: var(--space-sm)"
-                        >
+                        <div id="ingredient-upload-progress" class="mt-sm" hidden>
                             <div class="progress-bar">
                                 <div class="progress-fill"></div>
                             </div>
-                            <p style="color: var(--text-light); margin-top: var(--space-xs)">
-                                Uploading ingredients...
-                            </p>
+                            <p class="text-light mt-xs">Uploading ingredients...</p>
                         </div>
 
-                        <div
-                            id="ingredient-upload-results"
-                            style="margin-top: var(--space-md)"
-                        ></div>
+                        <div id="ingredient-upload-results" class="mt-md"></div>
                     </div>
 
                     <div class="card-container">
                         <h3>Bulk Ingredient Value Upload</h3>
-                        <p style="color: var(--text-light); margin-bottom: var(--space-md)">
+                        <p class="text-light mb-md">
                             Upload a CSV containing ingredient_id, ingredient_name, field, and
                             value. Existing unequal values are rejected without changing any
                             ingredients.
@@ -124,8 +114,7 @@
                                 type="file"
                                 id="ingredient-value-file-input"
                                 accept=".csv,text/csv"
-                                class="form-control"
-                                style="margin-bottom: var(--space-sm)"
+                                class="mb-sm form-control"
                             />
                             <button
                                 id="upload-ingredient-values-btn"
@@ -134,37 +123,30 @@
                             >
                                 Upload Ingredient Values
                             </button>
-                            <p style="color: var(--text-light); margin-top: var(--space-xs)">
-                                Limit: 200 values per upload.
-                            </p>
+                            <p class="text-light mt-xs">Limit: 200 values per upload.</p>
                         </div>
-                        <div
-                            id="ingredient-value-upload-progress"
-                            style="display: none; margin-top: var(--space-sm)"
-                        >
+                        <div id="ingredient-value-upload-progress" class="mt-sm" hidden>
                             <div class="progress-bar">
                                 <div class="progress-fill"></div>
                             </div>
-                            <p style="color: var(--text-light); margin-top: var(--space-xs)">
-                                Uploading ingredient values...
-                            </p>
+                            <p class="text-light mt-xs">Uploading ingredient values...</p>
                         </div>
                         <div
                             id="ingredient-value-upload-results"
                             role="status"
                             aria-live="polite"
-                            style="margin-top: var(--space-md)"
+                            class="mt-md"
                         ></div>
                     </div>
 
                     <div class="card-container">
                         <h3>Public Tag Management</h3>
-                        <p style="color: var(--text-light); margin-bottom: var(--space-md)">
+                        <p class="text-light mb-md">
                             Manage public tags used across all recipes. Deleting a tag will remove
                             it from all recipes.
                         </p>
 
-                        <div class="form-actions" style="margin-bottom: var(--space-md)">
+                        <div class="mb-md form-actions">
                             <button id="refresh-tags-btn" class="btn btn-primary">
                                 Refresh Tags
                             </button>
@@ -179,7 +161,7 @@
 
                     <div class="card-container">
                         <h3>Analytics Downloads</h3>
-                        <p style="color: var(--text-light); margin-bottom: var(--space-md)">
+                        <p class="text-light mb-md">
                             Download the latest EM pairwise recipe distance matrix.
                         </p>
                         <div class="form-actions">

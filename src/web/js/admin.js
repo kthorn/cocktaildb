@@ -495,7 +495,7 @@ function showUploadProgress(show, message, config) {
 
     if (show) {
         if (progressDiv) {
-            progressDiv.style.display = 'block';
+            progressDiv.hidden = false;
         }
         if (uploadBtn) {
             uploadBtn.disabled = true;
@@ -506,7 +506,7 @@ function showUploadProgress(show, message, config) {
         }
     } else {
         if (progressDiv) {
-            progressDiv.style.display = 'none';
+            progressDiv.hidden = true;
         }
         if (uploadBtn) {
             uploadBtn.disabled = false;
@@ -554,10 +554,9 @@ function displayUploadResults(result, config) {
     if (successes.length > 0) {
         const successBlock = document.createElement('div');
         successBlock.className = 'success-results';
-        successBlock.style.marginTop = 'var(--space-md)';
 
         const successTitle = document.createElement('h5');
-        successTitle.style.color = 'var(--success-color, #28a745)';
+        successTitle.className = 'upload-success-title';
         successTitle.textContent = 'Successfully Uploaded:';
         successBlock.appendChild(successTitle);
 
@@ -575,10 +574,9 @@ function displayUploadResults(result, config) {
     if (validationErrors.length > 0) {
         const errorBlock = document.createElement('div');
         errorBlock.className = 'error-results';
-        errorBlock.style.marginTop = 'var(--space-md)';
 
         const errorTitle = document.createElement('h5');
-        errorTitle.style.color = 'var(--error-color, #dc3545)';
+        errorTitle.className = 'upload-error-title';
         errorTitle.textContent = 'Validation Errors:';
         errorBlock.appendChild(errorTitle);
 
