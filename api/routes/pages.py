@@ -2,16 +2,14 @@
 
 import logging
 from pathlib import Path
-from typing import Optional
 from xml.etree.ElementTree import Element, SubElement, tostring
-
-from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from fastapi.templating import Jinja2Templates
 
 from core.config import settings
 from db.database import get_database
 from db.db_core import Database
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.templating import Jinja2Templates
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +19,7 @@ templates = Jinja2Templates(
 )
 
 
-def _safe_source_url(url: Optional[str]) -> Optional[str]:
+def _safe_source_url(url: str | None) -> str | None:
     """Only allow http/https URLs for source links."""
     if url and url.startswith(("http://", "https://")):
         return url
@@ -115,8 +113,9 @@ async def recipe_by_name(
         return RedirectResponse(url=f"/recipe/{recipe_id}", status_code=302)
 
     return templates.TemplateResponse(
-        "404.html",
-        {"request": request, "message": f'Recipe "{name}" not found.'},
+        request=request,
+        name="404.html",
+        context={"message": f'Recipe "{name}" not found.'},
         status_code=404,
     )
 
@@ -131,8 +130,9 @@ async def recipe_page(
     recipe = db.get_recipe(recipe_id)
     if not recipe:
         return templates.TemplateResponse(
-            "404.html",
-            {"request": request, "message": "Recipe not found."},
+            request=request,
+            name="404.html",
+            context={"message": "Recipe not found."},
             status_code=404,
         )
 
@@ -146,9 +146,9 @@ async def recipe_page(
     similar_recipes = similar.get("neighbors", []) if similar else []
 
     return templates.TemplateResponse(
-        "recipe.html",
-        {
-            "request": request,
+        request=request,
+        name="recipe.html",
+        context={
             "recipe": recipe,
             "base_url": base_url,
             "ingredient_summary": _ingredient_summary(ingredients),
@@ -169,8 +169,9 @@ async def ingredient_page(
     ingredient = db.get_ingredient(ingredient_id)
     if not ingredient:
         return templates.TemplateResponse(
-            "404.html",
-            {"request": request, "message": "Ingredient not found."},
+            request=request,
+            name="404.html",
+            context={"message": "Ingredient not found."},
             status_code=404,
         )
 
@@ -191,9 +192,9 @@ async def ingredient_page(
     children = [ing for ing in all_ingredients if ing.get("parent_id") == ingredient_id]
 
     return templates.TemplateResponse(
-        "ingredient.html",
-        {
-            "request": request,
+        request=request,
+        name="ingredient.html",
+        context={
             "ingredient": ingredient,
             "base_url": base_url,
             "breadcrumb": breadcrumb,
