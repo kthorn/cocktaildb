@@ -61,10 +61,8 @@ if ! command -v ansible-playbook &> /dev/null; then
     exit 1
 fi
 
-# Install Ansible requirements
-echo "Installing Ansible requirements..."
+# Playbook paths and the inventory are relative to the Ansible directory.
 cd "$ANSIBLE_DIR"
-ansible-galaxy collection install -r requirements.yml --force
 
 # Run provisioning if requested
 if [ "$PROVISION" = true ]; then

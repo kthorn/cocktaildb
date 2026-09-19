@@ -5,8 +5,6 @@
   become: yes
 
   vars:
-    domain_name: "{{ lookup('env', 'COCKTAILDB_DOMAIN') | default('localhost', true) }}"
-    acme_email: "{{ lookup('env', 'ACME_EMAIL') | default('admin@example.com', true) }}"
     caddy_config_dir: /etc/caddy
     web_root: /opt/cocktaildb/web
 
@@ -35,32 +33,24 @@
         group: root
         mode: '0755'
 
+    # The domain comes from the inventory. deploy.yml publishes the same file,
+    # so there is exactly one Caddy configuration to keep current.
     - name: Deploy Caddyfile
-      template:
-        src: ../files/Caddyfile.j2
+      copy:
+        src: "{{ playbook_dir }}/../../caddy/Caddyfile"
         dest: "{{ caddy_config_dir }}/Caddyfile"
         owner: root
         group: root
         mode: '0644'
-      notify: Reload Caddy
+      notify: Restart Caddy
 
-    - name: Create Caddy environment file
-      copy:
-        dest: /etc/caddy/caddy.env
-        content: |
-          DOMAIN_NAME={{ domain_name }}
-          ACME_EMAIL={{ acme_email }}
-        owner: root
-        group: root
-        mode: '0600'
-      notify: Reload Caddy
-
-    - name: Configure Caddy systemd override for environment
+    - name: Configure Caddy environment variables
       copy:
         dest: /etc/systemd/system/caddy.service.d/override.conf
         content: |
           [Service]
-          EnvironmentFile=/etc/caddy/caddy.env
+          Environment=DOMAIN_NAME={{ domain_name }}
+          Environment=ACME_EMAIL=admin@{{ domain_name }}
         owner: root
         group: root
         mode: '0644'
@@ -79,12 +69,7 @@
       systemd:
         daemon_reload: yes
 
-    - name: Reload Caddy
-      # Use restart since admin API is disabled (admin off) in Caddyfile
-      systemd:
-        name: caddy
-        state: restarted
-
+    # Caddy has its admin API disabled (admin off), so a reload is unavailable.
     - name: Restart Caddy
       systemd:
         name: caddy

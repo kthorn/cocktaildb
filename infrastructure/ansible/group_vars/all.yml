@@ -11,9 +11,6 @@ db_name: cocktaildb
 db_user: cocktaildb
 db_password: "{{ lookup('env', 'COCKTAILDB_DB_PASSWORD') | default('changeme', true) }}"
 
-# Docker settings
-docker_compose_version: "2.24.0"
-
 # AWS region
 aws_region: us-east-1
 

@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 import yaml
 
-
 ROOT = Path(__file__).resolve().parents[1]
 CUTOVER = ROOT / "infrastructure" / "scripts" / "deploy-cutover.sh"
 ANSIBLE = shutil.which("ansible-playbook") or str(
@@ -633,8 +632,18 @@ def test_deploy_playbook_stages_frontend_and_has_no_restart_handlers():
         "mkdir",
         "/var/lock/cocktaildb-deploy-ansible.lock",
     ]
-    cutover_tasks = [task for task in tasks if "deploy-cutover.sh" in str(task)]
+    cutover_tasks = [
+        task
+        for task in tasks
+        if any(
+            "deploy-cutover.sh" in str(argument)
+            for argument in (
+                (task.get("ansible.builtin.command") or {}).get("argv") or []
+            )
+        )
+    ]
     assert cutover_tasks, "normal deploy playbook does not invoke the cutover gate"
+    assert len(cutover_tasks) == 1, "the cutover gate must run exactly once"
     assert "Restart API" not in {handler["name"] for handler in handlers}
     assert all("Restart Caddy" not in task.get("notify", []) for task in tasks)
 
