@@ -75,3 +75,10 @@ async def test_existing_pages_render_outside_repository(
     assert "text/html" in response.headers["content-type"]
     assert "Example" in response.text
     assert "application/ld+json" in response.text
+
+    assert response.text.count('name="viewport"') == 1
+    assert 'href="/normalize.css"' in response.text
+    assert 'href="/styles.css"' in response.text
+    assert 'href="/img/favicon.svg"' in response.text
+    if url.startswith("/recipe/"):
+        assert 'href="/recipe-card.css"' in response.text

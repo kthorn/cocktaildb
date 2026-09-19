@@ -57,21 +57,15 @@ async function loadMoreRecipes() {
     isLoadingRecipes = true;
 
     try {
-        console.log(`Loading page ${currentPage}...`);
         const result = await api.searchRecipes({}, currentPage, recipesPerPage, 'random', 'asc'); // Empty search returns all recipes in random order
-        console.log(`Page ${currentPage} result:`, result);
 
         if (result && result.recipes && result.recipes.length > 0) {
             recipes = recipes.concat(result.recipes);
-            console.log(`Added ${result.recipes.length} recipes. Total: ${recipes.length}`);
 
             // Check if there are more pages
-            console.log('Pagination object:', result.pagination);
             hasMoreRecipes = result.pagination.has_next;
-            console.log(`Has more pages: ${hasMoreRecipes}`);
             currentPage++;
         } else {
-            console.log('No more recipes found');
             hasMoreRecipes = false;
         }
     } catch (error) {

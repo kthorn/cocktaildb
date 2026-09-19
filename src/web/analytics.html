@@ -8,7 +8,16 @@
             content="Cocktail database analytics - ingredient usage, recipe complexity, and similarity visualizations."
         />
         <title>Analytics - Mixology Tools</title>
-        <!-- Prevent FOUC (Flash of Unstyled Content) with common.js fallback -->
+        <link rel="stylesheet" href="/normalize.css" />
+        <link rel="stylesheet" href="/styles.css" />
+        <link rel="stylesheet" href="/recipe-card.css" />
+        <link rel="stylesheet" href="/ingredient-chart.css" />
+        <link rel="icon" type="image/png" href="/img/favicon-96x96.png" sizes="96x96" />
+        <link rel="icon" type="image/svg+xml" href="/img/favicon.svg" />
+        <link rel="shortcut icon" href="/img/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-title" content="Mixology Tools" />
+        <link rel="manifest" href="/site.webmanifest" />
     </head>
 
     <body>
@@ -129,11 +138,11 @@
                         <div class="chart-info">
                             <div class="legend">
                                 <span class="legend-item">
-                                    <span class="legend-color" style="background: #1f77b4"></span>
+                                    <span class="legend-ingredient-parent legend-color"></span>
                                     Has subtypes (click to expand)
                                 </span>
                                 <span class="legend-item">
-                                    <span class="legend-color" style="background: #aec7e8"></span>
+                                    <span class="legend-ingredient-leaf legend-color"></span>
                                     Leaf ingredient
                                 </span>
                             </div>
@@ -156,12 +165,8 @@
                             </p>
                         </div>
 
-                        <div class="chart-container" style="min-height: 700px">
-                            <div
-                                id="ingredient-tree-chart"
-                                class="chart-area"
-                                style="height: 700px"
-                            >
+                        <div class="ingredient-tree-container chart-container">
+                            <div id="ingredient-tree-chart" class="ingredient-tree-area chart-area">
                                 <!-- D3.js tree will be rendered here -->
                             </div>
                             <div id="ingredient-tree-loading" class="loading-state">
@@ -178,17 +183,11 @@
                             <!-- Note: Legend colors should match those in ingredientTreeChart.js getColors() -->
                             <div class="legend">
                                 <span class="legend-item">
-                                    <span
-                                        class="legend-color"
-                                        style="background: var(--accent-color, #a61816)"
-                                    ></span>
+                                    <span class="legend-tree-parent legend-color"></span>
                                     Has children (click to expand)
                                 </span>
                                 <span class="legend-item">
-                                    <span
-                                        class="legend-color"
-                                        style="background: var(--primary-color, #2c3e50)"
-                                    ></span>
+                                    <span class="legend-tree-leaf legend-color"></span>
                                     Leaf ingredient
                                 </span>
                             </div>

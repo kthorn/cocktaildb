@@ -26,8 +26,6 @@ const CONFIG = {
 };
 
 export function createIngredientUsageChart(container, data, options = {}) {
-    console.log('Creating ingredient usage chart with data:', data);
-
     // Clear container
     container.innerHTML = '';
 

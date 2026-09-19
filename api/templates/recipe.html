@@ -5,6 +5,7 @@
 {% block description %}{{ recipe.name }} cocktail recipe: {{ ingredient_summary }}{% endblock %}
 
 {% block extra_head %}
+<link rel="stylesheet" href="/recipe-card.css">
 <meta property="og:title" content="{{ recipe.name }} — Mixology Tools">
 <meta property="og:description" content="{{ recipe.name }} cocktail recipe: {{ ingredient_summary }}">
 <meta property="og:url" content="{{ base_url }}/recipe/{{ recipe.id }}">

@@ -152,10 +152,6 @@ export class MobileBottomNav {
         } else {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
-                // Optionally show a message that login is required
-                if (item.authRequired && !this.isAuthenticated) {
-                    console.log('Login required for', item.label);
-                }
             });
         }
 

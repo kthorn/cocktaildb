@@ -1,0 +1,78 @@
+/* Styles for recipe-card.js elements extracted from inline declarations. */
+.modal.is-hidden {
+    display: none;
+}
+
+.recipe-card .tags-container.is-hidden,
+.recipe-card .no-tags-placeholder.is-hidden,
+.share-feedback.is-hidden {
+    display: none;
+}
+
+.recipe-card .tags-container {
+    display: inline;
+}
+
+.recipe-card .share-recipe-btn {
+    font-size: 0.8em;
+    padding: 4px 8px;
+}
+
+.user-rating-indicator {
+    color: #666;
+    font-size: 0.8em;
+}
+
+.user-rating-indicator.not-rated {
+    color: #999;
+}
+
+.ingredient-hierarchy-tooltip {
+    position: absolute;
+    z-index: 9999;
+    max-width: 300px;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.9);
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    color: white;
+    font-size: 12px;
+    pointer-events: none;
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+.recipe-card .ingredient-name {
+    font-weight: normal;
+}
+
+.ingredient-name.has-hierarchy {
+    cursor: help;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+}
+
+.share-copy-fallback {
+    position: fixed;
+    top: -999999px;
+    left: -999999px;
+}
+
+.share-feedback {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    padding: 12px 16px;
+    background: #28a745;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    color: white;
+    font-size: 14px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.share-feedback.is-visible {
+    opacity: 1;
+}

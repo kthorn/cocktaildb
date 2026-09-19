@@ -1,0 +1,15 @@
+.tree-tooltip {
+    position: absolute;
+    pointer-events: none;
+    background-color: rgba(44, 62, 80, 0.95);
+    color: #ffffff;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(166, 24, 22, 0.3);
+}

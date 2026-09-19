@@ -203,10 +203,6 @@ export class CocktailAPI {
         // Add sorting parameters
         queryParams.append('sort_by', sortBy);
         queryParams.append('sort_order', sortOrder);
-        console.log('Adding sort parameters to API call:', {
-            sort_by: sortBy,
-            sort_order: sortOrder,
-        });
 
         if (cursor) {
             queryParams.append('cursor', cursor);
@@ -214,7 +210,6 @@ export class CocktailAPI {
 
         // Add search filters to query params
         if (searchQuery.name) {
-            console.log('Adding name query parameter:', searchQuery.name);
             queryParams.append('q', searchQuery.name);
         }
 
@@ -247,7 +242,6 @@ export class CocktailAPI {
 
         // Build the URL with query string
         const queryString = queryParams.toString();
-        console.log('Built query string:', queryString);
 
         await ensureSession();
 
@@ -271,8 +265,6 @@ export class CocktailAPI {
             url = `${this.baseUrl}/recipes/search${anonymousQueryString ? `?${anonymousQueryString}` : ''}`;
             requiresAuth = false;
         }
-
-        console.log('Final search URL:', url);
 
         // Always use GET for recipe searches
         const response = await fetch(url, this.getFetchOptions('GET', null, requiresAuth));
