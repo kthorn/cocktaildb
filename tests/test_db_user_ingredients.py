@@ -35,7 +35,7 @@ class TestDatabaseUserIngredients:
 
         # Verify ingredient was added to database
         check_result = db_instance.execute_query(
-            "SELECT * FROM user_ingredients WHERE cognito_user_id = %s AND ingredient_id = %s",
+            "SELECT gi.*, m.cognito_user_id FROM group_ingredients gi JOIN user_group_members m ON m.group_id = gi.group_id WHERE m.cognito_user_id = %s AND gi.ingredient_id = %s",
             (user_id, ingredient_id),
         )
         assert len(check_result) == 1
@@ -101,7 +101,7 @@ class TestDatabaseUserIngredients:
 
         # Verify ingredient was removed from database
         check_result = db_instance.execute_query(
-            "SELECT * FROM user_ingredients WHERE cognito_user_id = %s AND ingredient_id = %s",
+            "SELECT gi.*, m.cognito_user_id FROM group_ingredients gi JOIN user_group_members m ON m.group_id = gi.group_id WHERE m.cognito_user_id = %s AND gi.ingredient_id = %s",
             (user_id, ingredient_id),
         )
         assert len(check_result) == 0
@@ -227,7 +227,7 @@ class TestDatabaseUserIngredients:
         # Verify all ingredients were added
         for ingredient_id in ingredient_ids:
             check_result = db_instance.execute_query(
-                "SELECT * FROM user_ingredients WHERE cognito_user_id = %s AND ingredient_id = %s",
+                "SELECT gi.*, m.cognito_user_id FROM group_ingredients gi JOIN user_group_members m ON m.group_id = gi.group_id WHERE m.cognito_user_id = %s AND gi.ingredient_id = %s",
                 (user_id, ingredient_id),
             )
             assert len(check_result) == 1
@@ -318,7 +318,7 @@ class TestDatabaseUserIngredients:
         # Verify all ingredients were removed
         for ingredient_id in ingredient_ids:
             check_result = db_instance.execute_query(
-                "SELECT * FROM user_ingredients WHERE cognito_user_id = %s AND ingredient_id = %s",
+                "SELECT gi.*, m.cognito_user_id FROM group_ingredients gi JOIN user_group_members m ON m.group_id = gi.group_id WHERE m.cognito_user_id = %s AND gi.ingredient_id = %s",
                 (user_id, ingredient_id),
             )
             assert len(check_result) == 0

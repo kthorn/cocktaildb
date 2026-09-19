@@ -96,14 +96,8 @@ class TestIngredientRecommendations:
         self.setup_test_data(db_instance_with_data, user_id)
 
         # User has Bourbon and Simple Syrup
-        db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
-            (user_id, 100),  # Bourbon
-        )
-        db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
-            (user_id, 104),  # Simple Syrup
-        )
+        db_instance_with_data.add_user_ingredients_bulk(user_id, [100])
+        db_instance_with_data.add_user_ingredients_bulk(user_id, [104])
 
         # Get recommendations
         recommendations = db_instance_with_data.get_ingredient_recommendations(
@@ -142,16 +136,10 @@ class TestIngredientRecommendations:
         self.setup_test_data(db_instance_with_data, user_id)
 
         # User has Bourbon, so they're 1 ingredient away from multiple recipes
-        db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
-            (user_id, 100),  # Bourbon
-        )
+        db_instance_with_data.add_user_ingredients_bulk(user_id, [100])
 
         # Also add Simple Syrup
-        db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
-            (user_id, 104),  # Simple Syrup
-        )
+        db_instance_with_data.add_user_ingredients_bulk(user_id, [104])
 
         recommendations = db_instance_with_data.get_ingredient_recommendations(
             user_id, limit=10
@@ -175,10 +163,7 @@ class TestIngredientRecommendations:
         self.setup_test_data(db_instance_with_data, user_id)
 
         # User has Bourbon
-        db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
-            (user_id, 100),  # Bourbon
-        )
+        db_instance_with_data.add_user_ingredients_bulk(user_id, [100])
 
         # Request only 2 recommendations
         recommendations = db_instance_with_data.get_ingredient_recommendations(
@@ -196,10 +181,7 @@ class TestIngredientRecommendations:
 
         # Give user all necessary ingredients
         for ingredient_id in [100, 102, 103, 104, 105, 106, 107, 2, 6]:
-            db_instance_with_data.execute_query(
-                "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
-                (user_id, ingredient_id),
-            )
+            db_instance_with_data.add_user_ingredients_bulk(user_id, [ingredient_id])
 
         recommendations = db_instance_with_data.get_ingredient_recommendations(
             user_id, limit=10
@@ -215,14 +197,8 @@ class TestIngredientRecommendations:
         self.setup_test_data(db_instance_with_data, user_id)
 
         # User has Bourbon and Simple Syrup (can almost make Old Fashioned and Whiskey Sour)
-        db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
-            (user_id, 100),  # Bourbon
-        )
-        db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
-            (user_id, 104),  # Simple Syrup
-        )
+        db_instance_with_data.add_user_ingredients_bulk(user_id, [100])
+        db_instance_with_data.add_user_ingredients_bulk(user_id, [104])
 
         recommendations = db_instance_with_data.get_ingredient_recommendations(
             user_id, limit=10
@@ -258,10 +234,7 @@ class TestIngredientRecommendations:
         )
 
         # User has generic Rum (id=2)
-        db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
-            (user_id, 2),  # Generic Rum
-        )
+        db_instance_with_data.add_user_ingredients_bulk(user_id, [2])
 
         recommendations = db_instance_with_data.get_ingredient_recommendations(
             user_id, limit=10
@@ -300,10 +273,7 @@ class TestIngredientRecommendations:
         )
 
         # User has Bourbon (sibling of Rye, both allow_substitution=True)
-        db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
-            (user_id, 302),  # Bourbon
-        )
+        db_instance_with_data.add_user_ingredients_bulk(user_id, [302])
 
         recommendations = db_instance_with_data.get_ingredient_recommendations(
             user_id, limit=10
@@ -348,10 +318,7 @@ class TestIngredientRecommendations:
         )
 
         # User has Cognac (different branch, common ancestor with allow_substitution=True)
-        db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
-            (user_id, 404),  # Cognac
-        )
+        db_instance_with_data.add_user_ingredients_bulk(user_id, [404])
 
         recommendations = db_instance_with_data.get_ingredient_recommendations(
             user_id, limit=10
@@ -392,10 +359,7 @@ class TestIngredientRecommendations:
         )
 
         # User has Montenegro (sibling, but both allow_substitution=False)
-        db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
-            (user_id, 502),  # Montenegro
-        )
+        db_instance_with_data.add_user_ingredients_bulk(user_id, [502])
 
         recommendations = db_instance_with_data.get_ingredient_recommendations(
             user_id, limit=10
@@ -428,10 +392,7 @@ class TestIngredientRecommendationsAPI:
         test.setup_test_data(db_instance_with_data, user_id)
 
         # Add some user ingredients
-        db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
-            (user_id, 100),  # Bourbon
-        )
+        db_instance_with_data.add_user_ingredients_bulk(user_id, [100])
 
         response = await authenticated_client.get("/user-ingredients/recommendations")
         assert response.status_code == 200
@@ -452,10 +413,7 @@ class TestIngredientRecommendationsAPI:
         test.setup_test_data(db_instance_with_data, user_id)
 
         # Add user ingredient
-        db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
-            (user_id, 100),
-        )
+        db_instance_with_data.add_user_ingredients_bulk(user_id, [100])
 
         response = await authenticated_client.get(
             "/user-ingredients/recommendations?limit=5"
@@ -476,10 +434,7 @@ class TestIngredientRecommendationsAPI:
         test.setup_test_data(db_instance_with_data, user_id)
 
         # Add user ingredient
-        db_instance_with_data.execute_query(
-            "INSERT INTO user_ingredients (cognito_user_id, ingredient_id) VALUES (%s, %s)",
-            (user_id, 100),
-        )
+        db_instance_with_data.add_user_ingredients_bulk(user_id, [100])
 
         response = await authenticated_client.get("/user-ingredients/recommendations")
         assert response.status_code == 200

@@ -40,7 +40,12 @@ async def validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
     """Handle request validation errors"""
-    logger.warning(f"Validation error: {exc.errors()}")
+    # Pydantic errors include raw input (including invite codes). Log only
+    # structural information, never submitted values or validator context.
+    logger.warning(
+        "Validation error: %s",
+        [{"loc": error["loc"], "type": error["type"]} for error in exc.errors()],
+    )
 
     # Format validation errors in a user-friendly way
     error_details = []

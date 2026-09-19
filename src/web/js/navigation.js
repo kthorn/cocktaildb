@@ -32,13 +32,24 @@ export const NAV_CONFIG = {
         {
             id: 'my-ingredients',
             label: 'My Ingredients',
-            shortLabel: 'My Bar', // Shorter label for compact spaces
+            shortLabel: 'Ingredients', // Shorter label for compact spaces
             href: '/user-ingredients.html',
             icon: '🍸',
             mobileBottom: true,
             mobileMenu: true,
             desktop: true,
             authRequired: true, // Requires login
+            adminOnly: false,
+        },
+        {
+            id: 'my-bar',
+            label: 'My Bar',
+            href: '/groups.html',
+            icon: '👥',
+            mobileBottom: true,
+            mobileMenu: true,
+            desktop: true,
+            authRequired: true,
             adminOnly: false,
         },
         {

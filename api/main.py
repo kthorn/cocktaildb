@@ -36,6 +36,7 @@ from routes import (
     auth,
     admin,
     user_ingredients,
+    groups,
     stats,
     analytics,
     pages,
@@ -112,6 +113,7 @@ app.include_router(recipe_tags_router)
 app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(user_ingredients.router)
+app.include_router(groups.router)
 app.include_router(stats.router)
 app.include_router(analytics.router)
 app.include_router(pages.router)

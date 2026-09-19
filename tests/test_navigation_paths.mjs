@@ -2,6 +2,12 @@ import assert from 'node:assert/strict';
 import { NAV_CONFIG, getCurrentPageId, isNavItemActive } from '../src/web/js/navigation.js';
 
 const items = [...NAV_CONFIG.primary, ...NAV_CONFIG.secondary, ...NAV_CONFIG.admin];
+assert.equal(NAV_CONFIG.primary.filter((item) => item.mobileBottom).length, 5);
+assert.equal(NAV_CONFIG.primary.find((item) => item.id === 'my-bar').href, '/groups.html');
+assert.equal(
+    NAV_CONFIG.primary.find((item) => item.id === 'my-ingredients').shortLabel,
+    'Ingredients',
+);
 for (const base of ['/search.html', '/recipe/42', '/ingredient/7']) {
     for (const item of items) {
         const destination = new URL(item.href, `https://example.com${base}`);

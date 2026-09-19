@@ -166,9 +166,9 @@ def build_search_recipes_paginated_sql(
                 LEFT JOIN ingredients i_recipe ON ri_missing.ingredient_id = i_recipe.id
                 WHERE ri_missing.recipe_id = r_inv.id
                 AND NOT EXISTS (
-                    SELECT 1 FROM user_ingredients ui_check
+                    SELECT 1 FROM group_ingredients ui_check
                     LEFT JOIN ingredients i_user ON ui_check.ingredient_id = i_user.id
-                    WHERE ui_check.cognito_user_id = %(cognito_user_id)s
+                    WHERE ui_check.group_id = %(group_id)s
                     AND (
                         {substitution_match}
                     )
@@ -317,9 +317,9 @@ def build_search_recipes_keyset_sql(
                 LEFT JOIN ingredients i_recipe ON ri_missing.ingredient_id = i_recipe.id
                 WHERE ri_missing.recipe_id = r_inv.id
                 AND NOT EXISTS (
-                    SELECT 1 FROM user_ingredients ui_check
+                    SELECT 1 FROM group_ingredients ui_check
                     LEFT JOIN ingredients i_user ON ui_check.ingredient_id = i_user.id
-                    WHERE ui_check.cognito_user_id = %(cognito_user_id)s
+                    WHERE ui_check.group_id = %(group_id)s
                     AND (
                         {substitution_match}
                     )
@@ -401,9 +401,9 @@ def get_ingredient_recommendations_sql() -> str:
             i.path,
             i.parent_id,
             COALESCE(i.allow_substitution, FALSE) as user_allow_substitution
-        FROM user_ingredients ui
+        FROM group_ingredients ui
         JOIN ingredients i ON ui.ingredient_id = i.id
-        WHERE ui.cognito_user_id = %(user_id)s
+        WHERE ui.group_id = %(group_id)s
     ),
     -- For each recipe, find all required ingredients
     recipe_requirements AS (

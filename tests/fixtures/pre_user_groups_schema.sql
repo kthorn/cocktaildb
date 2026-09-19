@@ -6,7 +6,6 @@
 CREATE EXTENSION IF NOT EXISTS pg_trgm;  -- For text search and similarity
 CREATE EXTENSION IF NOT EXISTS citext;   -- For case-insensitive text
 CREATE EXTENSION IF NOT EXISTS unaccent; -- For accent-insensitive search
-CREATE EXTENSION IF NOT EXISTS pgcrypto; -- For invite-code generation
 
 -- Table Definitions
 
@@ -94,31 +93,6 @@ CREATE TABLE user_ingredients (
   UNIQUE(cognito_user_id, ingredient_id)
 );
 
-CREATE TABLE user_groups (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  invite_code TEXT NOT NULL UNIQUE,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE user_group_members (
-  id SERIAL PRIMARY KEY,
-  group_id INTEGER NOT NULL REFERENCES user_groups(id) ON DELETE CASCADE,
-  cognito_user_id TEXT NOT NULL UNIQUE,
-  joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE group_ingredients (
-  id SERIAL PRIMARY KEY,
-  group_id INTEGER NOT NULL REFERENCES user_groups(id) ON DELETE CASCADE,
-  ingredient_id INTEGER NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,
-  added_by TEXT NOT NULL,
-  added_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(group_id, ingredient_id)
-);
-
 CREATE TABLE analytics_refresh_state (
   id INTEGER PRIMARY KEY,
   dirty_at TIMESTAMP,
@@ -149,8 +123,6 @@ CREATE INDEX idx_ratings_cognito_user_id ON ratings(cognito_user_id);
 CREATE INDEX idx_ratings_recipe_id ON ratings(recipe_id);
 CREATE INDEX idx_user_ingredients_cognito_user_id ON user_ingredients(cognito_user_id);
 CREATE INDEX idx_user_ingredients_ingredient_id ON user_ingredients(ingredient_id);
-CREATE INDEX idx_user_group_members_group_id ON user_group_members(group_id);
-CREATE INDEX idx_group_ingredients_ingredient_id ON group_ingredients(ingredient_id);
 CREATE INDEX idx_recipes_created_by ON recipes(created_by);
 CREATE INDEX idx_recipes_name_id ON recipes(name, id);
 CREATE INDEX idx_recipes_avg_rating_id ON recipes(avg_rating, id);
@@ -343,11 +315,5 @@ EXECUTE FUNCTION update_updated_at_column();
 -- Trigger to automatically update updated_at for ingredients
 CREATE TRIGGER update_ingredients_updated_at
 BEFORE UPDATE ON ingredients
-FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
-
--- Trigger to automatically update updated_at for user groups
-CREATE TRIGGER update_user_groups_updated_at
-BEFORE UPDATE ON user_groups
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();

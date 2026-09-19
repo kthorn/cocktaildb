@@ -384,3 +384,19 @@ class IngredientRecommendationListResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class GroupMemberResponse(BaseModel):
+    cognito_user_id: str
+    joined_at: datetime
+
+
+class GroupDetailResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    invite_code: str
+    created_at: datetime
+    updated_at: datetime
+    members: List[GroupMemberResponse] = Field(default_factory=list)
+    member_count: int

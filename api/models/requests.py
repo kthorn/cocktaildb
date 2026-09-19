@@ -257,3 +257,38 @@ class UserIngredientBulkRemove(BaseModel):
     ingredient_ids: List[int] = Field(
         ..., description="List of ingredient IDs to remove from inventory", min_length=1
     )
+
+
+class GroupCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
+class GroupUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value):
+        if value is None:
+            raise ValueError("Group name cannot be null")
+        return value.strip() if isinstance(value, str) else value
+
+
+class GroupJoin(BaseModel):
+    invite_code: str = Field(..., pattern=r"^[0-9a-f]{12}$")
+
+    @field_validator("invite_code", mode="before")
+    @classmethod
+    def normalize_code(cls, value):
+        return value.strip().lower() if isinstance(value, str) else value
+
+
+class GroupLeave(BaseModel):
+    copy_inventory: bool = Field(..., strict=True)
