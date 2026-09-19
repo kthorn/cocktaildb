@@ -68,6 +68,8 @@ case "$operation" in
       printf 'Would apply: 16_future.sql\n'
     } | tee "$STATE_DIR/pending_output"
     ;;
+  cleanup)
+    ;;
   backup)
     touch "$STATE_DIR/backup_verified"
     ;;
@@ -125,6 +127,7 @@ esac
     )
     for operation in (
         "pending",
+        "cleanup",
         "backup",
         "build",
         "stop",
@@ -220,7 +223,7 @@ def test_failed_backup_command_cannot_fall_through_to_an_older_archive(tmp_path)
         "APP_HOME": str(app_home),
         "RELEASE_ROOT": str(release_root),
         "DEPLOY_LOCK_FILE": str(tmp_path / "deploy.lock"),
-        "DOCKER_BIN": "/bin/false",
+        "DOCKER_BIN": "/bin/true",
     }
 
     result = subprocess.run(
@@ -265,7 +268,7 @@ def test_corrupt_new_backup_stops_before_build(tmp_path):
         "APP_HOME": str(app_home),
         "RELEASE_ROOT": str(release_root),
         "DEPLOY_LOCK_FILE": str(tmp_path / "deploy.lock"),
-        "DOCKER_BIN": "/bin/false",
+        "DOCKER_BIN": "/bin/true",
     }
 
     result = subprocess.run(
@@ -362,6 +365,43 @@ printf 'curl %s\n' "$*" >> "$DOCKER_CALLS"
     return result, calls
 
 
+def test_docker_cleanup_is_conservative_and_surrounds_deployment(tmp_path):
+    result, calls = _run_default_operations(tmp_path, "exit 0")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert calls[:2] == ["image prune --force", "builder prune --force"]
+    assert calls[-2:] == ["image prune --force", "builder prune --force"]
+    assert sum("prune" in call for call in calls) == 4
+    assert (tmp_path / "app" / "web" / "js" / "config.js").exists()
+
+
+@pytest.mark.parametrize("command", ["image prune", "builder prune"])
+@pytest.mark.parametrize("after_publication", [False, True])
+def test_docker_cleanup_failures_do_not_stop_a_healthy_release(
+    tmp_path, command, after_publication
+):
+    condition = '[[ -f "$APP_HOME/web/js/config.js" ]]' if after_publication else "true"
+    result, calls = _run_default_operations(
+        tmp_path,
+        f'''if [[ "$1 $2" == "{command}" ]] && {condition}; then
+  exit 42
+fi
+''',
+    )
+
+    assert result.returncode != 0
+    if after_publication:
+        assert (
+            "Release is deployed, but Docker artifact cleanup failed" in result.stdout
+        )
+        assert (tmp_path / "app" / "web" / "js" / "config.js").exists()
+        assert sum(" stop " in f" {call} " for call in calls) == 1
+    else:
+        assert "Cutover failed during cleanup" in result.stdout
+        assert not any(call.startswith("build ") for call in calls)
+        assert not any(" stop " in f" {call} " for call in calls)
+
+
 def test_failed_previous_image_tag_stops_before_build(tmp_path):
     result, calls = _run_default_operations(
         tmp_path,
@@ -434,6 +474,7 @@ def test_first_cutover_orders_writer_shutdown_migration_readiness_and_publicatio
     assert "Would apply: 16_future.sql" in (state / "pending_output").read_text()
     assert _events(state) == [
         "pending",
+        "cleanup",
         "backup",
         "build",
         "stop",
@@ -444,6 +485,7 @@ def test_first_cutover_orders_writer_shutdown_migration_readiness_and_publicatio
         "start",
         "health",
         "publish",
+        "cleanup",
     ]
     assert (state / "previous_image_preserved").exists()
     assert (state / "group_write").exists(), (
@@ -535,6 +577,7 @@ def test_host_lock_rejects_an_overlapping_cutover(cutover_harness):
 @pytest.mark.parametrize(
     ("failed_phase", "last_event", "old_running", "new_running", "new_stopped"),
     [
+        ("cleanup", "cleanup", True, False, False),
         ("backup", "backup", True, False, False),
         ("build", "build", True, False, False),
         ("stop", "stop", True, False, False),
