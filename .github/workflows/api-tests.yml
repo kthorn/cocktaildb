@@ -36,7 +36,7 @@ jobs:
       - name: Check Docker for PostgreSQL fixtures
         run: docker info
 
-      - name: Test pages, middleware, errors, and downloads
+      - name: Test pages, middleware, errors, downloads, and deployment
         run: >-
           python -m pytest -q
           tests/test_page_route_contracts.py
@@ -44,3 +44,4 @@ jobs:
           tests/test_rate_limit.py
           tests/test_starlette_compatibility.py
           tests/test_analytics_em_distances_download.py
+          tests/test_group_inventory_deploy.py

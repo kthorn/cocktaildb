@@ -77,6 +77,13 @@ op_pending() {
     )
 }
 
+op_cleanup() {
+    # No --all or system prune: retain tagged releases/rollback images,
+    # containers, volumes, and database backups.
+    "$DOCKER_BIN" image prune --force || return
+    "$DOCKER_BIN" builder prune --force
+}
+
 op_backup() {
     local backup_file
 
@@ -322,6 +329,7 @@ else
     initial_parity_required=false
 fi
 
+run_phase cleanup
 run_phase backup
 run_phase build
 run_phase stop
@@ -346,4 +354,11 @@ run_phase start
 run_phase health
 run_phase publish
 
-say "Cutover complete: API ready and frontend published from $RELEASE_ROOT"
+say "CUTOVER phase=cleanup"
+if run_operation cleanup; then
+    say "Cutover complete: API ready and frontend published from $RELEASE_ROOT"
+else
+    status=$?
+    say "Release is deployed, but Docker artifact cleanup failed; leave the healthy API running and investigate."
+    exit "$status"
+fi
