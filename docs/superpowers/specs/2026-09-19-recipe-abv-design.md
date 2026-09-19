@@ -1,6 +1,6 @@
 # Ingredient-only recipe ABV
 
-**Status:** Draft — ready for codebase-grounded review
+**Status:** Refined
 
 ## Goal and scope
 
@@ -11,7 +11,9 @@ rather than presenting estimates as measurements.
 
 Include a live ingredient-family range view, a backend calculator, additive
 recipe-response data, JavaScript and server-rendered presentation, and tests.
-Do not change recipe editing or introduce new ingredient-entry fields.
+Also include the owner-approved fix that clears a former parent's derived ABV
+when its last child is deleted or reparented. Do not change recipe editing or
+introduce new ingredient-entry fields.
 
 Estimated served strength and structured preparation methods are deferred to
 [issue #70](https://github.com/kthorn/cocktaildb/issues/70). Do not infer shaking,
@@ -56,6 +58,15 @@ building a generic nutrient framework now.
   cards. `api/templates/recipe.html` renders the initial/no-JavaScript page.
 - Search can run through a supplied database cursor. Any new bulk lookup must
   use the same query executor/cursor, not open a separate connection.
+- `api/db/db_analytics.py` has existing similarity/ordering volume proxies:
+  top-up 90 mL, rinse 5 mL, and counted-item sentinels. These serve different
+  analytics semantics and intentionally remain unchanged here. Do not reuse
+  their permissive unknown-unit fallbacks for ABV. Harmonizing those analytics
+  assumptions is a recorded follow-up, not part of this calculation.
+- The canonical PostgreSQL schema does not seed units. Historical SQLite
+  migrations are documentation, not executable PostgreSQL seeding instructions.
+  Focused PostgreSQL tests must explicitly seed all units they use, including
+  `to rinse`, absent from the minimal `pg_db_with_schema` fixture.
 
 ## Approach and alternatives
 
@@ -81,15 +92,18 @@ Add a regular view named `ingredient_abv_ranges`, with one row per ingredient:
 For each ingredient, aggregate known **leaf** descendants, including itself if
 it is a leaf. A leaf has no children by `parent_id`. A usable observation has a
 finite ABV between 0 and 100, inclusive. Ignore null or invalid observations.
-Never feed inferred values or calculated parent means back into this view.
+Never feed newly inferred values or values from current non-leaf parents back
+into this view. Stored leaf values are assumed recorded: the legacy schema has
+no measurement provenance, including for historical former-parent values (see
+Rollup correction below).
 Count each observed leaf once; do not average subgroup ranges or means.
 
 Use `parent_id` relationships for ancestry so reparenting does not depend on a
 separately refreshed textual path. A recursive query can propagate observed
 leaves upward and aggregate by ancestor. Use cycle-safe traversal (for example,
 distinct leaf/ancestor pairs with recursive `UNION`) so malformed ancestry cannot
-make the query recurse forever. This is a regular read-only view, not a trigger
-or an alteration of the existing rollup behavior.
+make the query recurse forever. The view itself is read-only. The separate
+last-child correction below fixes the existing rollup's stale-value behavior.
 
 Resolve an ingredient as follows:
 
@@ -112,6 +126,36 @@ one resolved range and provenance record per requested ID. Do not query once
 per ingredient, ancestor, or recipe. Detect missing resolution records rather
 than silently dropping requested ingredients. Stop ancestor traversal safely
 on cycles; if no usable observation is found, use the documented 0–100 fallback.
+The depth-carrying resolution walk must use a visited-ID guard or PostgreSQL
+`CYCLE`; recursive `UNION` alone only deduplicates the view's depth-free pairs.
+
+## Rollup correction
+
+The owner approved clearing a former parent's derived ABV when its final child
+is deleted or moved. The current rollup only updates nodes that still have
+children, leaving old averages on nodes that become leaves.
+
+Add a narrowly scoped row-level AFTER DELETE / AFTER UPDATE OF parent_id trigger
+on ingredients. For a deletion, or a real parent_id change, inspect OLD.parent_id.
+If that parent still exists but now has no children, clear its percent_abv to
+NULL. Do not clear a parent that still has children, a deleted parent, unrelated
+leaves, or a node merely because a same-parent update occurred. The existing
+statement-level rollup then recomputes its ancestors from the corrected values.
+
+Retain the existing BEFORE-statement advisory lock and its before-row-lock
+ordering. The clearing update changes percent_abv, not parent_id, so it must
+not re-enter the new row trigger. Keep existing rollup recursion guards. Test
+batch deletion/reparenting as well as single-row operations, and verify ancestors
+are updated in the same transaction. Do not clear sugar/acidity in this ABV-only
+fix; their equivalent last-child behavior is recorded as follow-up debt.
+
+No provenance column or historical-data purge is introduced. Old childless
+categories with retained averages are indistinguishable from genuine recorded
+leaves using the existing schema. Do not automatically null existing leaf values
+at migration time; flag this historical limitation for a data audit with the
+owner before production rollout. The new fix prevents future occurrences but
+cannot retroactively certify stored measurements. A later explicit edit of a
+now-childless ingredient's ABV remains a legitimate recorded leaf value.
 
 ## Volume model and interval calculation
 
@@ -145,8 +189,16 @@ minimum_percent = sum(v_i * l_i) / V
 maximum_percent = sum(v_i * u_i) / V
 ```
 
-Use unrounded values for arithmetic and the width cutoff. Keep sufficient
-numeric precision for the exactly-20 boundary; test that boundary explicitly.
+Normalize numeric inputs to stdlib Decimal before arithmetic: retain database
+NUMERIC Decimals; convert finite REAL floats/integers using `Decimal(str(value))`;
+construct constants and fallback bounds from decimal strings. Never multiply
+Decimal strengths by float volumes. Check `is_finite()` before comparisons. Use
+unrounded values for arithmetic; compare `sum(v_i * (u_i - l_i))` against `20 * V`
+for the width cutoff, avoiding division-rounding artifacts at exactly 20. Use a
+local Decimal precision sufficient for these database input types (50 significant
+digits), and convert only final finite bounds to JSON numbers in the returned
+plain dictionary. Format display from Decimal values, not serialized floats.
+Test Decimal/float/int mixtures and the exactly-20 boundary explicitly.
 No density model, ethanol/water contraction, ice melt, fruit extraction, or
 rinse-retention model beyond the agreed assumptions is included.
 
@@ -168,16 +220,26 @@ metadata. Keep database access out of this module. Volume handling is a small
 function in this module, not a configurable rules engine or plugin registry.
 Future sugar/acid work can extract/reuse it when that second consumer exists.
 
-Add a narrow database enrichment helper that accepts the recipe collection and
+Add a narrow database enrichment helper in `api/db/db_core.py` that accepts the recipe collection and
 its query executor, performs the bulk range lookup once, and calls the same
-calculator for every recipe. Use it for single-recipe and search responses.
+calculator for every recipe. Call it inside `Database.get_recipe()` after ingredient
+assembly, so SSR receives the same populated dictionary as API consumers. Also
+call it inside `Database._search_recipes_paginated()` after over-fetch trimming,
+on both pagination-return and list-return paths, including random ordering.
+Use the transaction-bound executor when supplied. Do not rely on response-model
+serialization or API route hooks to enrich SSR data. Existing tag/rating handlers
+also call `get_recipe()` for existence checks; accept its additional bounded
+lookup there rather than adding a separate retrieval mode in this feature.
 Preserve the unit conversion field in search's intermediate ingredient rows.
 Keep added calculation inputs internal; no need to expand public ingredient
 response models merely to support the calculation.
 
 Add an optional `abv` object to `RecipeResponse` with default null for compatibility
 with existing mock/legacy producers. All production get/search paths populate
-it, including the get-recipe reads already used after create/update/bulk upload.
+it, including the get-recipe reads already used after single create/update.
+Bulk upload currently returns minimal created-recipe metadata directly, without
+reading full recipes: preserve that contract with abv null; a subsequent normal
+get/search returns the calculation. Do not add per-recipe bulk-upload reads.
 Do not add ABV fields to recipe write requests or store caller-supplied ABV.
 
 The result object contains:
@@ -186,8 +248,9 @@ The result object contains:
 - `min_percent` and `max_percent`: unrounded numeric bounds, or both null when
   volumes cannot be resolved or there is no modeled volume. When the width
   exceeds 20, preserve computed bounds here but set status to `unknown`.
-- `display`: a backend-formatted value, such as `26.7%`, `20.0–30.0%`, or `Unknown`.
-  Both renderers use this rather than reimplementing threshold/rounding rules.
+- `display`: a backend-formatted value, such as `26.7%`, `Estimated 20.0–30.0%`,
+  or `Unknown`. Include the `Estimated` prefix here for estimated results.
+  Both renderers use it verbatim, without duplicating status or formatting logic.
 - `notes`: ordered, deduplicated strings identifying the ingredients/families and
   assumptions used, or reasons for Unknown. Treat them as untrusted text in HTML.
 
@@ -201,8 +264,10 @@ Format point values to one decimal place. For a nonzero point below 0.1%, use
 `<0.1%` rather than suggesting zero alcohol. Format interval lower bounds downward
 and upper bounds upward to one decimal place so rounding does not shrink the
 interval or collapse a nonzero-width interval into a point. Decide Unknown using
-the raw width, not this rounded display. Prefix estimated displays in the UI with
-`Estimated`; a single-observation point must not appear as recorded strength.
+the raw width, not this rounded display. Include `Estimated` in the backend
+formatted string; a single-observation point must not appear as recorded strength.
+A rounded-down interval lower bound of zero remains a conservative model bound,
+not an assertion that the drink is alcohol-free.
 
 Missing data is a modeled result, not an exception. Database/query failures are
 real errors and retain existing error handling; do not silently return a guessed
@@ -217,24 +282,33 @@ or absent, omit the block for backwards compatibility; a populated unknown
 result renders Unknown plus its explanation.
 
 Use native `details`/`summary` for accessible expandable fine print when notes
-exist. Do not rely only on a hover tooltip. JavaScript should use textContent or
-an existing escaping helper for the new display and notes; Jinja autoescaping
-must remain enabled. Expanding notes must not trigger compact-card navigation.
+exist. Do not rely only on a hover tooltip. Build the new JavaScript block with
+DOM nodes and textContent for display and notes; no shared exported escaping
+helper currently exists. Jinja autoescaping must remain enabled. Add details and
+summary to createRecipeCard's compact-card interactive-target exclusion selector
+so expanding notes does not trigger navigation.
 Do not change JSON-LD nutrition fields or unrelated recipe formatting.
 
 ## Schema, rollout, and performance
 
 Add the view to `infrastructure/postgres/schema.sql` and a new numbered PostgreSQL
 migration after the latest existing migration (currently 15), with matching
-`CREATE OR REPLACE VIEW` definitions. Do not modify historical SQLite migrations
-01/02. The new migration is additive and rerunnable, does not rewrite ingredient
-values, and does not require destructive initialization. Add its rollback under
-`migrations/rollbacks/` following the current repository convention.
+`CREATE OR REPLACE VIEW` definitions and identical last-child correction function
+and trigger definitions. Use `CREATE OR REPLACE FUNCTION` and
+`DROP TRIGGER IF EXISTS` before recreating the trigger for idempotency.
+Do not modify historical SQLite migrations 01/02.
+The new migration installs the view and targeted rollup correction; it is rerunnable,
+does not rewrite existing ingredient measurements, and does not require destructive
+initialization. Add its rollback under `migrations/rollbacks/`: drop the new trigger
+and function, then the view; leave pre-existing rollup functions/triggers intact.
+Test rerunnability by directly executing the SQL twice; the deployment migration
+runner intentionally skips already-recorded migration filenames.
 
-Apply the additive view migration before deploying API code that queries it.
-Code rollback can leave the unused view in place; drop it only after old code is
-restored. No production deployment or database modification is authorized by
-this design work.
+Apply the migration before deploying API code that queries the view. Code rollback
+can leave the unused view and beneficial last-child correction in place. If the
+schema change must also be rolled back, restore old code first; note that removing
+the correction restores the old stale-average behavior. No production deployment
+or database modification is authorized by this design work.
 
 Preserve search ordering, pagination/cursors, tags, ratings, group inventory
 filtering, and authorization. ABV describes the recipe's specified ingredients,
@@ -251,6 +325,10 @@ Use existing pytest/PostgreSQL and Node test patterns; no new test framework.
 1. View: zero and null observations, multiple tree depths, leaf-only aggregation,
    unequal branch sizes, single observations, empty families, and independent
    roots. Verify view results after edits, inserts, deletes, and reparenting.
+   Rollup regression: loss of the last child clears the former parent's ABV and
+   removes it as an observation; higher ancestors recalculate; remaining-child
+   parents still average; unrelated measured leaves and no-op reparenting are
+   unchanged. Cover multi-row changes, direct SQL, and existing lock ordering.
 2. Resolution: recorded leaf versus parent average; category's own subtree;
    nearest populated ancestor; one observed sibling; no observations => 0–100;
    no cross-root borrowing. Test cycle-safe read behavior without invoking the
@@ -258,19 +336,28 @@ Use existing pytest/PostgreSQL and Node test patterns; no new test framework.
 3. Calculator: exact mix; narrow/wide unknown-strength contributions; width exactly
    20 and just above; inferred point versus recorded point; true zero; null versus
    zero; top-up 88.7205 mL; rinse 1 mL; `each` exclusion; special-unit amount policy;
-   unsupported units; missing/negative/non-finite quantities; invalid conversions;
+   unit-name case/whitespace variants; unsupported units;
+   missing/negative/non-finite quantities; invalid conversions;
    empty/all-excluded/all-zero recipes; rounding and deduplicated explanations.
 4. Integration: identical results in single-get, offset search, keyset search,
    and create/update follow-up reads. Include the transaction-bound executor and
-   inventory search. Verify bounded query count and fresh results after ABV edits.
-5. Migration: initialize with the canonical schema; apply the new migration twice;
-   confirm matching results and no mutation of stored composition data.
+   inventory search and random ordering. Verify bounded query count and fresh
+   results after ABV edits. Bulk upload keeps its minimal response with abv null;
+   subsequent normal reads populate it without changing bulk-upload query count.
+5. Migration: initialize with the canonical schema and explicit unit fixtures,
+   including rinse; directly apply the new migration twice; confirm matching view
+   and trigger behavior and no mutation of pre-existing stored composition data.
 6. UI/API: response-model preservation, SSR and card display for calculated,
    estimated, unknown, and missing objects; notes with HTML-sensitive names;
    keyboard-accessible details; expanding notes does not navigate compact cards.
 7. Run relevant existing recipe, pagination, ingredient-rollup, and page tests;
-   run repository formatter checks and changed-file diagnostics. Preserve
-   unrelated working-tree edits and record any external test prerequisites.
+   run the existing pytest coverage gate (80% across api), repository formatter
+   checks, and changed-file diagnostics. Register new Node contract tests in
+   `tests/test_frontend_node.py` when they must run under pytest. Preserve unrelated
+   working-tree edits: implement in a separate clean worktree from committed HEAD,
+   without moving or committing the other work. Record external test prerequisites;
+   the final design reviewer could not run PostgreSQL tests because Docker was
+   unavailable in its environment.
 
 ## Residual limitations
 
