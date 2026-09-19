@@ -23,8 +23,8 @@
 - Install hooks with `~/miniforge3/envs/cocktaildb/bin/python -m pip install pre-commit==4.6.2 && ~/miniforge3/envs/cocktaildb/bin/python -m pre_commit install`.
 - Run every formatter check with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run --all-files`.
 - Format/check Python only with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run ruff-format --all-files`.
-- Format/check static frontend JS/MJS/HTML only with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run prettier --all-files`.
-- Ruff and Prettier editor extensions use `ruff.toml` and `.prettierrc`; CI is authoritative.
+- Format/check static frontend JS/MJS/HTML and all YAML (Ansible, Compose, CloudFormation, CI) with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run prettier --all-files`. `api/templates/*.html` is excluded because those are Jinja2 templates, and shell files are not covered yet.
+- Ruff and Prettier editor extensions use `ruff.toml` and `.prettierrc`; CI is authoritative. `.prettierrc` governs every format Prettier touches, including YAML: 4-space indent, single quotes, 100-column print width.
 
 ## Coding Style & Naming Conventions
 - Python: Ruff formats code with 4-space indentation; use `snake_case` for functions/variables and `PascalCase` for classes.

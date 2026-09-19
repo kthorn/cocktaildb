@@ -5,338 +5,338 @@
   become: yes
 
   vars_files:
-    - ../group_vars/all.yml
+      - ../group_vars/all.yml
 
   vars:
-    packages:
-      - docker
-      - postgresql16-server
-      - postgresql16
-      - postgresql16-contrib
-      - python3
-      - python3-pip
-      - git
-      - htop
-      - tmux
-      - awscli
-      - rsync
+      packages:
+          - docker
+          - postgresql16-server
+          - postgresql16
+          - postgresql16-contrib
+          - python3
+          - python3-pip
+          - git
+          - htop
+          - tmux
+          - awscli
+          - rsync
 
   tasks:
-    - name: Update system packages
-      dnf:
-        name: "*"
-        state: latest
+      - name: Update system packages
+        dnf:
+            name: '*'
+            state: latest
 
-    - name: Install required packages
-      dnf:
-        name: "{{ packages }}"
-        state: present
+      - name: Install required packages
+        dnf:
+            name: '{{ packages }}'
+            state: present
 
-    # Docker setup
-    - name: Start and enable Docker
-      systemd:
-        name: docker
-        state: started
-        enabled: yes
+      # Docker setup
+      - name: Start and enable Docker
+        systemd:
+            name: docker
+            state: started
+            enabled: yes
 
-    - name: Add ec2-user to docker group
-      user:
-        name: ec2-user
-        groups: docker
-        append: yes
+      - name: Add ec2-user to docker group
+        user:
+            name: ec2-user
+            groups: docker
+            append: yes
 
-    # Install Docker Compose v2 plugin
-    - name: Create Docker CLI plugins directory
-      file:
-        path: /usr/local/lib/docker/cli-plugins
-        state: directory
-        mode: '0755'
+      # Install Docker Compose v2 plugin
+      - name: Create Docker CLI plugins directory
+        file:
+            path: /usr/local/lib/docker/cli-plugins
+            state: directory
+            mode: '0755'
 
-    - name: Download Docker Compose v2
-      get_url:
-        url: "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-aarch64"
-        dest: /usr/local/lib/docker/cli-plugins/docker-compose
-        mode: '0755'
+      - name: Download Docker Compose v2
+        get_url:
+            url: 'https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-aarch64'
+            dest: /usr/local/lib/docker/cli-plugins/docker-compose
+            mode: '0755'
 
-    # Create app user
-    - name: Create application user
-      user:
-        name: "{{ app_user }}"
-        system: yes
-        home: "{{ app_home }}"
-        shell: /bin/bash
-        create_home: yes
+      # Create app user
+      - name: Create application user
+        user:
+            name: '{{ app_user }}'
+            system: yes
+            home: '{{ app_home }}'
+            shell: /bin/bash
+            create_home: yes
 
-    - name: Add app user to docker group
-      user:
-        name: "{{ app_user }}"
-        groups: docker
-        append: yes
+      - name: Add app user to docker group
+        user:
+            name: '{{ app_user }}'
+            groups: docker
+            append: yes
 
-    # PostgreSQL setup
-    - name: Initialize PostgreSQL database
-      command: postgresql-setup --initdb
-      args:
-        creates: /var/lib/pgsql/data/PG_VERSION
+      # PostgreSQL setup
+      - name: Initialize PostgreSQL database
+        command: postgresql-setup --initdb
+        args:
+            creates: /var/lib/pgsql/data/PG_VERSION
 
-    - name: Configure PostgreSQL to listen on localhost and Docker bridge
-      lineinfile:
-        path: /var/lib/pgsql/data/postgresql.conf
-        regexp: "^#?listen_addresses"
-        line: "listen_addresses = 'localhost,172.17.0.1'"
-      notify: Restart PostgreSQL
+      - name: Configure PostgreSQL to listen on localhost and Docker bridge
+        lineinfile:
+            path: /var/lib/pgsql/data/postgresql.conf
+            regexp: '^#?listen_addresses'
+            line: "listen_addresses = 'localhost,172.17.0.1'"
+        notify: Restart PostgreSQL
 
-    - name: Configure PostgreSQL authentication
-      copy:
-        dest: /var/lib/pgsql/data/pg_hba.conf
-        content: |
-          # TYPE  DATABASE        USER            ADDRESS                 METHOD
-          local   all             postgres                                peer
-          local   all             all                                     md5
-          host    all             all             127.0.0.1/32            md5
-          # Allow Docker containers to connect
-          # 172.17.0.0/16 = default docker bridge
-          # 172.28.0.0/16 = cocktaildb custom network (from docker-compose.yml)
-          host    all             all             172.17.0.0/16           md5
-          host    all             all             172.28.0.0/16           md5
-        owner: postgres
-        group: postgres
-        mode: '0600'
-      notify: Restart PostgreSQL
+      - name: Configure PostgreSQL authentication
+        copy:
+            dest: /var/lib/pgsql/data/pg_hba.conf
+            content: |
+                # TYPE  DATABASE        USER            ADDRESS                 METHOD
+                local   all             postgres                                peer
+                local   all             all                                     md5
+                host    all             all             127.0.0.1/32            md5
+                # Allow Docker containers to connect
+                # 172.17.0.0/16 = default docker bridge
+                # 172.28.0.0/16 = cocktaildb custom network (from docker-compose.yml)
+                host    all             all             172.17.0.0/16           md5
+                host    all             all             172.28.0.0/16           md5
+            owner: postgres
+            group: postgres
+            mode: '0600'
+        notify: Restart PostgreSQL
 
-    # PostgreSQL must start after Docker so the bridge interface (172.17.0.1) exists
-    - name: Create PostgreSQL systemd override directory
-      file:
-        path: /etc/systemd/system/postgresql.service.d
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
+      # PostgreSQL must start after Docker so the bridge interface (172.17.0.1) exists
+      - name: Create PostgreSQL systemd override directory
+        file:
+            path: /etc/systemd/system/postgresql.service.d
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
 
-    - name: Configure PostgreSQL to start after Docker
-      copy:
-        dest: /etc/systemd/system/postgresql.service.d/override.conf
-        content: |
-          [Unit]
-          After=docker.service
-          Requires=docker.service
-        owner: root
-        group: root
-        mode: '0644'
-      notify:
-        - Daemon reload
-        - Restart PostgreSQL
+      - name: Configure PostgreSQL to start after Docker
+        copy:
+            dest: /etc/systemd/system/postgresql.service.d/override.conf
+            content: |
+                [Unit]
+                After=docker.service
+                Requires=docker.service
+            owner: root
+            group: root
+            mode: '0644'
+        notify:
+            - Daemon reload
+            - Restart PostgreSQL
 
-    - name: Start and enable PostgreSQL
-      systemd:
-        name: postgresql
-        state: started
-        enabled: yes
+      - name: Start and enable PostgreSQL
+        systemd:
+            name: postgresql
+            state: started
+            enabled: yes
 
-    # Create application directories
-    - name: Create application directories
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
-        mode: '0755'
-      loop:
-        - "{{ app_home }}"
-        - "{{ app_home }}/api"
-        - "{{ app_home }}/web"
-        - "{{ app_home }}/backups"
-        - "{{ app_home }}/logs"
-        - "{{ app_home }}/scripts"
+      # Create application directories
+      - name: Create application directories
+        file:
+            path: '{{ item }}'
+            state: directory
+            owner: '{{ app_user }}'
+            group: '{{ app_group }}'
+            mode: '0755'
+        loop:
+            - '{{ app_home }}'
+            - '{{ app_home }}/api'
+            - '{{ app_home }}/web'
+            - '{{ app_home }}/backups'
+            - '{{ app_home }}/logs'
+            - '{{ app_home }}/scripts'
 
-    # Install Caddy (direct binary for AL2023)
-    - name: Check if Caddy is installed
-      stat:
-        path: /usr/bin/caddy
-      register: caddy_binary
+      # Install Caddy (direct binary for AL2023)
+      - name: Check if Caddy is installed
+        stat:
+            path: /usr/bin/caddy
+        register: caddy_binary
 
-    - name: Download Caddy binary
-      get_url:
-        url: "https://caddyserver.com/api/download?os=linux&arch=arm64"
-        dest: /usr/bin/caddy
-        mode: '0755'
-      when: not caddy_binary.stat.exists
+      - name: Download Caddy binary
+        get_url:
+            url: 'https://caddyserver.com/api/download?os=linux&arch=arm64'
+            dest: /usr/bin/caddy
+            mode: '0755'
+        when: not caddy_binary.stat.exists
 
-    - name: Create caddy user
-      user:
-        name: caddy
-        system: yes
-        home: /var/lib/caddy
-        shell: /sbin/nologin
-        create_home: yes
+      - name: Create caddy user
+        user:
+            name: caddy
+            system: yes
+            home: /var/lib/caddy
+            shell: /sbin/nologin
+            create_home: yes
 
-    - name: Create Caddy config directory
-      file:
-        path: /etc/caddy
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
+      - name: Create Caddy config directory
+        file:
+            path: /etc/caddy
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
 
-    - name: Create Caddy systemd service
-      copy:
-        dest: /etc/systemd/system/caddy.service
-        content: |
-          [Unit]
-          Description=Caddy
-          Documentation=https://caddyserver.com/docs/
-          After=network.target network-online.target
-          Requires=network-online.target
+      - name: Create Caddy systemd service
+        copy:
+            dest: /etc/systemd/system/caddy.service
+            content: |
+                [Unit]
+                Description=Caddy
+                Documentation=https://caddyserver.com/docs/
+                After=network.target network-online.target
+                Requires=network-online.target
 
-          [Service]
-          Type=notify
-          User=caddy
-          Group=caddy
-          ExecStart=/usr/bin/caddy run --environ --config /etc/caddy/Caddyfile
-          ExecReload=/usr/bin/caddy reload --config /etc/caddy/Caddyfile
-          TimeoutStopSec=5s
-          LimitNOFILE=1048576
-          LimitNPROC=512
-          PrivateTmp=true
-          ProtectSystem=full
-          AmbientCapabilities=CAP_NET_BIND_SERVICE
+                [Service]
+                Type=notify
+                User=caddy
+                Group=caddy
+                ExecStart=/usr/bin/caddy run --environ --config /etc/caddy/Caddyfile
+                ExecReload=/usr/bin/caddy reload --config /etc/caddy/Caddyfile
+                TimeoutStopSec=5s
+                LimitNOFILE=1048576
+                LimitNPROC=512
+                PrivateTmp=true
+                ProtectSystem=full
+                AmbientCapabilities=CAP_NET_BIND_SERVICE
 
-          [Install]
-          WantedBy=multi-user.target
-        owner: root
-        group: root
-        mode: '0644'
-      notify: Daemon reload
+                [Install]
+                WantedBy=multi-user.target
+            owner: root
+            group: root
+            mode: '0644'
+        notify: Daemon reload
 
-    - name: Create Caddy log directory
-      file:
-        path: /var/log/caddy
-        state: directory
-        owner: caddy
-        group: caddy
-        mode: '0755'
+      - name: Create Caddy log directory
+        file:
+            path: /var/log/caddy
+            state: directory
+            owner: caddy
+            group: caddy
+            mode: '0755'
 
-    - name: Create Caddy systemd override directory
-      file:
-        path: /etc/systemd/system/caddy.service.d
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
+      - name: Create Caddy systemd override directory
+        file:
+            path: /etc/systemd/system/caddy.service.d
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
 
-    - name: Enable Caddy (will start after config deployed)
-      systemd:
-        name: caddy
-        enabled: yes
-        daemon_reload: yes
+      - name: Enable Caddy (will start after config deployed)
+        systemd:
+            name: caddy
+            enabled: yes
+            daemon_reload: yes
 
-    # CloudWatch Agent for log shipping
-    - name: Check if CloudWatch Agent is installed
-      command: rpm -q amazon-cloudwatch-agent
-      register: cw_agent_installed
-      changed_when: false
-      failed_when: false
+      # CloudWatch Agent for log shipping
+      - name: Check if CloudWatch Agent is installed
+        command: rpm -q amazon-cloudwatch-agent
+        register: cw_agent_installed
+        changed_when: false
+        failed_when: false
 
-    - name: Download CloudWatch Agent RPM
-      get_url:
-        url: "https://amazoncloudwatch-agent.s3.amazonaws.com/amazon_linux/arm64/latest/amazon-cloudwatch-agent.rpm"
-        dest: /tmp/amazon-cloudwatch-agent.rpm
-      when: cw_agent_installed.rc != 0
+      - name: Download CloudWatch Agent RPM
+        get_url:
+            url: 'https://amazoncloudwatch-agent.s3.amazonaws.com/amazon_linux/arm64/latest/amazon-cloudwatch-agent.rpm'
+            dest: /tmp/amazon-cloudwatch-agent.rpm
+        when: cw_agent_installed.rc != 0
 
-    - name: Install CloudWatch Agent
-      dnf:
-        name: /tmp/amazon-cloudwatch-agent.rpm
-        state: present
-        disable_gpg_check: true
-      when: cw_agent_installed.rc != 0
+      - name: Install CloudWatch Agent
+        dnf:
+            name: /tmp/amazon-cloudwatch-agent.rpm
+            state: present
+            disable_gpg_check: true
+        when: cw_agent_installed.rc != 0
 
-    - name: Create CloudWatch Agent config directory
-      file:
-        path: /etc/cocktaildb
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
+      - name: Create CloudWatch Agent config directory
+        file:
+            path: /etc/cocktaildb
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
 
-    - name: Deploy CloudWatch Agent config
-      copy:
-        src: ../../cloudwatch/amazon-cloudwatch-agent.json
-        dest: /etc/cocktaildb/amazon-cloudwatch-agent.json
-        owner: root
-        group: root
-        mode: '0644'
-      notify: Restart CloudWatch Agent
+      - name: Deploy CloudWatch Agent config
+        copy:
+            src: ../../cloudwatch/amazon-cloudwatch-agent.json
+            dest: /etc/cocktaildb/amazon-cloudwatch-agent.json
+            owner: root
+            group: root
+            mode: '0644'
+        notify: Restart CloudWatch Agent
 
-    - name: Start and enable CloudWatch Agent
-      shell: >
-        /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl
-        -a fetch-config
-        -m ec2
-        -c file:/etc/cocktaildb/amazon-cloudwatch-agent.json
-        -s
-      args:
-        creates: /opt/aws/amazon-cloudwatch-agent/logs/amazon-cloudwatch-agent.log
+      - name: Start and enable CloudWatch Agent
+        shell: >
+            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl
+            -a fetch-config
+            -m ec2
+            -c file:/etc/cocktaildb/amazon-cloudwatch-agent.json
+            -s
+        args:
+            creates: /opt/aws/amazon-cloudwatch-agent/logs/amazon-cloudwatch-agent.log
 
-    # Install Python packages
-    - name: Install Python dependencies
-      pip:
-        name:
-          - psycopg2-binary
-          - boto3
-        state: present
+      # Install Python packages
+      - name: Install Python dependencies
+        pip:
+            name:
+                - psycopg2-binary
+                - boto3
+            state: present
 
-    # Swap configuration - prevents OOM when running analytics
-    - name: Check if swap file exists
-      stat:
-        path: /swapfile
-      register: swap_file
+      # Swap configuration - prevents OOM when running analytics
+      - name: Check if swap file exists
+        stat:
+            path: /swapfile
+        register: swap_file
 
-    - name: Create swap file (2GB)
-      command: fallocate -l 2G /swapfile
-      when: not swap_file.stat.exists
+      - name: Create swap file (2GB)
+        command: fallocate -l 2G /swapfile
+        when: not swap_file.stat.exists
 
-    - name: Set swap file permissions
-      file:
-        path: /swapfile
-        mode: '0600'
-      when: not swap_file.stat.exists
+      - name: Set swap file permissions
+        file:
+            path: /swapfile
+            mode: '0600'
+        when: not swap_file.stat.exists
 
-    - name: Format swap file
-      command: mkswap /swapfile
-      when: not swap_file.stat.exists
+      - name: Format swap file
+        command: mkswap /swapfile
+        when: not swap_file.stat.exists
 
-    - name: Enable swap file
-      command: swapon /swapfile
-      when: not swap_file.stat.exists
-      ignore_errors: yes  # May already be enabled
+      - name: Enable swap file
+        command: swapon /swapfile
+        when: not swap_file.stat.exists
+        ignore_errors: yes # May already be enabled
 
-    - name: Add swap to fstab for persistence
-      lineinfile:
-        path: /etc/fstab
-        line: '/swapfile none swap sw 0 0'
-        state: present
+      - name: Add swap to fstab for persistence
+        lineinfile:
+            path: /etc/fstab
+            line: '/swapfile none swap sw 0 0'
+            state: present
 
-    - name: Configure swappiness (prefer RAM, use swap as safety net)
-      sysctl:
-        name: vm.swappiness
-        value: '10'
-        state: present
-        reload: yes
+      - name: Configure swappiness (prefer RAM, use swap as safety net)
+        sysctl:
+            name: vm.swappiness
+            value: '10'
+            state: present
+            reload: yes
 
   handlers:
-    - name: Restart PostgreSQL
-      systemd:
-        name: postgresql
-        state: restarted
+      - name: Restart PostgreSQL
+        systemd:
+            name: postgresql
+            state: restarted
 
-    - name: Daemon reload
-      systemd:
-        daemon_reload: yes
+      - name: Daemon reload
+        systemd:
+            daemon_reload: yes
 
-    - name: Restart CloudWatch Agent
-      shell: >
-        /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl
-        -a fetch-config
-        -m ec2
-        -c file:/etc/cocktaildb/amazon-cloudwatch-agent.json
-        -s
+      - name: Restart CloudWatch Agent
+        shell: >
+            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl
+            -a fetch-config
+            -m ec2
+            -c file:/etc/cocktaildb/amazon-cloudwatch-agent.json
+            -s
