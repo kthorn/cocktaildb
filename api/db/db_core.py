@@ -26,7 +26,7 @@ logger.setLevel(logging.DEBUG)
 
 class Database(GroupInventoryMixin):
     # Class-level connection pool (shared across instances)
-    _pool: pool.ThreadedConnectionPool = None
+    _pool: Optional[pool.ThreadedConnectionPool] = None
 
     def __init__(self):
         """Initialize the database connection to PostgreSQL"""
@@ -81,7 +81,7 @@ class Database(GroupInventoryMixin):
 
     def _get_connection(self):
         """Get a connection from the pool"""
-        return Database._pool.getconn()
+        return cast(pool.ThreadedConnectionPool, Database._pool).getconn()
 
     def _return_connection(self, conn):
         """Return a connection to the pool"""
@@ -690,9 +690,12 @@ class Database(GroupInventoryMixin):
         """Validate that all ingredient IDs exist in the database"""
         try:
             placeholders = ",".join("%s" for _ in ingredient_ids)
-            existing_ids_result = self.execute_query(
-                f"SELECT id FROM ingredients WHERE id IN ({placeholders})",
-                tuple(ingredient_ids),
+            existing_ids_result = cast(
+                List[Dict[str, Any]],
+                self.execute_query(
+                    f"SELECT id FROM ingredients WHERE id IN ({placeholders})",
+                    tuple(ingredient_ids),
+                ),
             )
 
             existing_ids = set(row["id"] for row in existing_ids_result)
@@ -1637,7 +1640,7 @@ class Database(GroupInventoryMixin):
                 """,
                 {"recipe_id": recipe_id, "tag_id": tag_id},
             )
-            rows_affected = result.get("rowCount", 0)
+            rows_affected = cast(Dict[str, int], result).get("rowCount", 0)
             if rows_affected > 0:
                 logger.info(
                     f"DB: Successfully added tag {tag_id} to recipe {recipe_id}"
@@ -1658,7 +1661,7 @@ class Database(GroupInventoryMixin):
                 "DELETE FROM recipe_tags WHERE recipe_id = %(recipe_id)s AND tag_id = %(tag_id)s",
                 {"recipe_id": recipe_id, "tag_id": tag_id},
             )
-            return result.get("rowCount", 0) > 0
+            return cast(Dict[str, int], result).get("rowCount", 0) > 0
         except Exception as e:
             logger.error(
                 f"Error removing public tag {tag_id} from recipe {recipe_id}: {str(e)}"
@@ -1683,7 +1686,7 @@ class Database(GroupInventoryMixin):
                     "cognito_user_id": cognito_user_id,
                 },
             )
-            return result.get("rowCount", 0) > 0
+            return cast(Dict[str, int], result).get("rowCount", 0) > 0
         except Exception as e:
             logger.error(
                 f"Error removing private tag {tag_id} from recipe {recipe_id} for user {cognito_user_id}: {str(e)}"
@@ -1759,7 +1762,7 @@ class Database(GroupInventoryMixin):
                 "DELETE FROM tags WHERE id = %(tag_id)s AND created_by IS NULL",
                 {"tag_id": tag_id},
             )
-            success = result.get("rowCount", 0) > 0
+            success = cast(Dict[str, int], result).get("rowCount", 0) > 0
             if success:
                 logger.info(f"Successfully deleted public tag {tag_id}")
             return success
@@ -1784,7 +1787,7 @@ class Database(GroupInventoryMixin):
                 "DELETE FROM tags WHERE id = %(tag_id)s AND created_by = %(user_id)s",
                 {"tag_id": tag_id, "user_id": user_id},
             )
-            success = result.get("rowCount", 0) > 0
+            success = cast(Dict[str, int], result).get("rowCount", 0) > 0
             if success:
                 logger.info(
                     f"Successfully deleted private tag {tag_id} for user {user_id}"
@@ -1857,9 +1860,9 @@ class Database(GroupInventoryMixin):
     ) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
         """Search recipes with pagination"""
 
-        def execute_query(sql, params):
+        def execute_query(sql, params) -> List[Dict[str, Any]]:
             if db_cursor is None:
-                return self.execute_query(sql, params)
+                return cast(List[Dict[str, Any]], self.execute_query(sql, params))
             db_cursor.execute(sql, params)
             return [dict(row) for row in db_cursor.fetchall()]
 
@@ -2227,7 +2230,9 @@ class Database(GroupInventoryMixin):
     def get_recipes_count(self) -> int:
         """Get total count of recipes"""
         try:
-            result = self.execute_query(get_recipes_count_sql)
+            result = cast(
+                List[Dict[str, Any]], self.execute_query(get_recipes_count_sql)
+            )
             return result[0]["total_count"] if result else 0
         except Exception as e:
             logger.error(f"Error getting recipes count: {str(e)}")
@@ -2236,7 +2241,9 @@ class Database(GroupInventoryMixin):
     def get_ingredients_count(self) -> int:
         """Get total count of ingredients"""
         try:
-            result = self.execute_query(get_ingredients_count_sql)
+            result = cast(
+                List[Dict[str, Any]], self.execute_query(get_ingredients_count_sql)
+            )
             return result[0]["total_count"] if result else 0
         except Exception as e:
             logger.error(f"Error getting ingredients count: {str(e)}")
