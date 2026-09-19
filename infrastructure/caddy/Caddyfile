@@ -8,8 +8,18 @@
     admin off
 }
 
+# Unversioned frontend files must revalidate after every deployment.
+(frontend_cache) {
+    @mutable path / *.html *.js *.css /recipe/* /ingredient/*
+    header @mutable Cache-Control "no-cache"
+
+    @immutable_media path *.png *.jpg *.jpeg *.gif *.svg *.woff *.woff2
+    header @immutable_media Cache-Control "public, max-age=3600"
+}
+
 # Production: Domain-based routing with automatic HTTPS
 {$DOMAIN_NAME:localhost} {
+    import frontend_cache
     # API proxy - forward /api/v1/* requests to FastAPI, stripping /api/v1 prefix
     handle /api/v1/* {
         uri strip_prefix /api/v1
@@ -74,12 +84,7 @@
     handle {
         root * /opt/cocktaildb/web
         file_server
-        try_files {path} /index.html
     }
-
-    # Cache static assets (1 hour) - revisit when fingerprinting is added
-    @static path *.js *.css *.png *.jpg *.jpeg *.gif *.svg *.woff *.woff2
-    header @static Cache-Control "public, max-age=3600"
 
     # Cache headers for read-only, non-personalized API responses
     @api_stable {
@@ -122,6 +127,7 @@
 
 # HTTP fallback for localhost development/testing (no HTTPS)
 :80 {
+    import frontend_cache
     @notLocalhost {
         not remote_ip 127.0.0.1
     }
@@ -158,6 +164,5 @@
     handle {
         root * /opt/cocktaildb/web
         file_server
-        try_files {path} /index.html
     }
 }
