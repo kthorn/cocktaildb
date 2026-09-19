@@ -27,4 +27,19 @@ Subject: `docs/superpowers/specs/2026-09-19-vite-hashed-assets-design.md`
 14. Existing two-Caddy parity requirement retained.
 15. D3 remains external and unchanged.
 
+## Dispatch 2 — Paseo Claude Opus 5 high, Plan Mode
+
+- Workspace: `wks_0da1e71c03f7622c`; agent: `c313a1db-f789-4ee9-a488-1bacdae24771`.
+- Provider diagnostic ready; model registry confirmed high effort. Completed idle, exactly one RESULT marker.
+- Report: `/tmp/vite-opus-review.GfN4WI.md`.
+- Result: findings; refinement not converged.
+- Fix: explicitly place stable public files/icons in public/ and test webmanifest icon references; metadata stays outside the served tree.
+- Fix: define type-aware CSS manifest handling based on the pinned Vite's actual output. Do not accept the reviewer's unverified claim that every CSS-only entry necessarily emits an empty JS sibling.
+- Simplification: preserve relative config imports in source/tests; externalize the exact module and map its built URL instead of rewriting Node tests. Verify built import text.
+- Fix: manifest staged after delete-enabled API sync and before image build, only in remote release context.
+- Fix: ignore node_modules; select mpa app type; specify disposable configured preview copy.
+- Fix: include standalone Caddy deploy path, stable web-root symlink handling, and concrete formatting/documentation targets.
+- Existing tests must retain coverage when updating hardcoded task/header/output assertions; no assertion deletion to hide failures.
+- Do not rely on the reviewer's unverified claim that Ansible template creates missing parent directories: deployment staging must create runtime-config parent directories explicitly.
+
 Next: claim next roster slot and re-review amended subject. No application implementation is authorized yet.
