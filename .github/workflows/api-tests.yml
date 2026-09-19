@@ -1,51 +1,51 @@
 name: API compatibility
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
+    pull_request:
+    push:
+        branches:
+            - main
 
 permissions:
-  contents: read
+    contents: read
 
 jobs:
-  api-tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+    api-tests:
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: 3.12.10
-          cache: pip
-          cache-dependency-path: |
-            api/requirements.txt
-            requirements-test.txt
+            - name: Set up Python
+              uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+              with:
+                  python-version: 3.12.10
+                  cache: pip
+                  cache-dependency-path: |
+                      api/requirements.txt
+                      requirements-test.txt
 
-      - name: Install production and test dependencies
-        run: |
-          python -m pip install -r requirements-test.txt
-          python -m pip check
+            - name: Install production and test dependencies
+              run: |
+                  python -m pip install -r requirements-test.txt
+                  python -m pip check
 
-      - name: Check database result types
-        run: python -m pyright --pythonpath "$(command -v python)" api/db/db_core.py
+            - name: Check database result types
+              run: python -m pyright --pythonpath "$(command -v python)" api/db/db_core.py
 
-      - name: Check Docker for PostgreSQL fixtures
-        run: docker info
+            - name: Check Docker for PostgreSQL fixtures
+              run: docker info
 
-      - name: Test pages, middleware, errors, downloads, and deployment
-        run: >-
-          python -m pytest -q
-          tests/test_page_route_contracts.py
-          tests/test_pages.py
-          tests/test_rate_limit.py
-          tests/test_starlette_compatibility.py
-          tests/test_analytics_em_distances_download.py
-          tests/test_db_tag_associations_unit.py
-          tests/test_group_inventory_deploy.py
+            - name: Test pages, middleware, errors, downloads, and deployment
+              run: >-
+                  python -m pytest -q
+                  tests/test_page_route_contracts.py
+                  tests/test_pages.py
+                  tests/test_rate_limit.py
+                  tests/test_starlette_compatibility.py
+                  tests/test_analytics_em_distances_download.py
+                  tests/test_db_tag_associations_unit.py
+                  tests/test_group_inventory_deploy.py
