@@ -5,8 +5,12 @@ from unittest.mock import Mock
 import httpx
 import pytest
 from fastapi import FastAPI
-
 from routes import pages
+
+# Reject the legacy call order on older Starlette too; 1.x no longer accepts it.
+pytestmark = pytest.mark.filterwarnings(
+    "error:The `name` is not the first parameter anymore:DeprecationWarning"
+)
 
 
 @pytest.fixture
@@ -31,6 +35,21 @@ async def test_name_redirect_uses_database_query_and_list(page_app):
     db.search_recipes_paginated.assert_called_once_with(
         search_params={"q": "Negroni"}, limit=1, offset=0
     )
+
+
+@pytest.mark.asyncio
+async def test_revolver_page_renders_with_request_first_template_api(page_app):
+    app, db = page_app
+    db.get_recipe.return_value = {"id": 1025, "name": "Revolver"}
+    db.get_recipe_similarity.return_value = None
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/recipe/1025")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Revolver" in response.text
+    assert "application/ld+json" in response.text
 
 
 @pytest.mark.asyncio
