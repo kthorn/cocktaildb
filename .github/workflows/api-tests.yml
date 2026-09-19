@@ -33,6 +33,9 @@ jobs:
           python -m pip install -r requirements-test.txt
           python -m pip check
 
+      - name: Check database result types
+        run: python -m pyright --pythonpath "$(command -v python)" api/db/db_core.py
+
       - name: Check Docker for PostgreSQL fixtures
         run: docker info
 
@@ -44,4 +47,5 @@ jobs:
           tests/test_rate_limit.py
           tests/test_starlette_compatibility.py
           tests/test_analytics_em_distances_download.py
+          tests/test_db_tag_associations_unit.py
           tests/test_group_inventory_deploy.py

@@ -12,6 +12,9 @@ pytest-mock>=3.14.1
 pytest-cov>=4.1.0
 httpx>=0.24.0
 
+# Focused database typing regression check
+pyright==1.1.408
+
 # PostgreSQL testing with Docker containers
 testcontainers>=4.0.0
 
