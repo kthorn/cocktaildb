@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -105,6 +105,19 @@ class TagResponse(BaseModel):
         from_attributes = True
 
 
+class RecipeABVResponse(BaseModel):
+    """Ingredient-only recipe ABV estimate and explanatory metadata."""
+
+    status: Literal["calculated", "estimated", "unknown"]
+    min_percent: Optional[float] = None
+    max_percent: Optional[float] = None
+    display: str
+    notes: List[str] = Field(default_factory=list)
+
+    class Config:
+        from_attributes = True
+
+
 class RecipeResponse(BaseModel):
     """Response model for recipe data - matches actual database schema"""
 
@@ -123,6 +136,9 @@ class RecipeResponse(BaseModel):
     )
     created_by: Optional[str] = Field(
         None, description="User ID who created this recipe"
+    )
+    abv: Optional[RecipeABVResponse] = Field(
+        None, description="Ingredient-only ABV estimate before dilution"
     )
     ingredients: List[RecipeIngredientResponse] = Field(
         default=[], description="Recipe ingredients"

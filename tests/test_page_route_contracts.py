@@ -53,6 +53,60 @@ async def test_revolver_page_renders_with_request_first_template_api(page_app):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "display", "notes"),
+    [
+        ("calculated", "27%", []),
+        ("estimated", "Estimated 20–30%", ["<script>alert(1)</script>: 1 mL rinse"]),
+        ("unknown", "Unknown", ["Ingredient volume unavailable"]),
+        ("estimated", "Estimated <1%", ["Single family observation"]),
+    ],
+)
+async def test_recipe_abv_renders_backend_display_and_safe_notes(
+    page_app, status, display, notes
+):
+    from html import escape
+
+    app, db = page_app
+    db.get_recipe.return_value = {
+        "id": 42,
+        "name": "Test drink",
+        "ingredients": [],
+        "abv": {"status": status, "display": display, "notes": notes},
+    }
+    db.get_recipe_similarity.return_value = None
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/recipe/42")
+    assert response.status_code == 200
+    assert "ABV before dilution" in response.text
+    assert escape(display) in response.text
+    assert ("<summary>Calculation notes</summary>" in response.text) == bool(notes)
+    for note in notes:
+        assert escape(note) in response.text
+    assert "<script>alert(1)</script>" not in response.text
+    assert '"nutrition"' not in response.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("include_null", [False, True])
+async def test_recipe_without_abv_omits_display(page_app, include_null):
+    app, db = page_app
+    recipe = {"id": 42, "name": "Legacy drink"}
+    if include_null:
+        recipe["abv"] = None
+    db.get_recipe.return_value = recipe
+    db.get_recipe_similarity.return_value = None
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/recipe/42")
+    assert response.status_code == 200
+    assert "ABV before dilution" not in response.text
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("outside_repo", [False, True])
 @pytest.mark.parametrize(
     "url", ["/recipe/42", "/ingredient/42", "/recipe/by-name?name=missing"]
