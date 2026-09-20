@@ -38,7 +38,7 @@ get_ami() {
     aws ec2 describe-images \
         --owners amazon \
         --filters "Name=name,Values=al2023-ami-*-arm64" \
-                  "Name=state,Values=available" \
+        "Name=state,Values=available" \
         --query 'sort_by(Images, &CreationDate)[-1].ImageId' \
         --output text
 }

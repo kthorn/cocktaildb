@@ -1,19 +1,32 @@
 repos:
-  - repo: local
-    hooks:
-      - id: ruff-format
-        name: ruff format
-        entry: ruff format
-        language: python
-        additional_dependencies:
-          - ruff==0.16.5
-        types:
-          - python
+    - repo: local
+      hooks:
+          - id: ruff-format
+            name: ruff format
+            entry: ruff format
+            language: python
+            additional_dependencies:
+                - ruff==0.16.5
+            types:
+                - python
 
-      - id: prettier
-        name: prettier
-        entry: prettier --write
-        language: node
-        additional_dependencies:
-          - prettier@3.9.6
-        files: ^(src/web/.*\.(js|mjs|html)|tests/.*\.(js|mjs))$
+          # One formatter for the frontend code and every YAML file the repository
+          # owns: Ansible, Compose, CloudFormation and CI. Style comes from
+          # .prettierrc, not from this hook. api/templates/*.html stays out because
+          # those are Jinja2 templates, not plain HTML.
+          - id: prettier
+            name: prettier
+            entry: prettier --write
+            language: node
+            additional_dependencies:
+                - prettier@3.9.6
+            files: ^((src/web|tests)/.*\.(js|mjs|html)|.*\.(yml|yaml))$
+
+    # Shell style comes from this hook's args, not from .prettierrc: -i 4 matches
+    # its tabWidth, and -ci indents case bodies. The python language vendors a
+    # prebuilt shfmt binary, so no Go toolchain is needed.
+    - repo: https://github.com/scop/pre-commit-shfmt
+      rev: 479be5958357ba5ab65ce47172117348516860e9 # v3.14.1-1
+      hooks:
+          - id: shfmt
+            args: [--write, -i, '4', -ci]

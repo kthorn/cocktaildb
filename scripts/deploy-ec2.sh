@@ -24,7 +24,7 @@ while [[ $# -gt 0 ]]; do
             PROVISION=true
             shift
             ;;
-        dev|prod)
+        dev | prod)
             ENVIRONMENT="$1"
             shift
             ;;
@@ -55,7 +55,7 @@ echo "Release:     $RELEASE_ID"
 echo ""
 
 # Check if Ansible is installed
-if ! command -v ansible-playbook &> /dev/null; then
+if ! command -v ansible-playbook &>/dev/null; then
     echo "Error: ansible-playbook not found"
     echo "Install with: pip install ansible"
     exit 1
