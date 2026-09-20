@@ -23,7 +23,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
 fi
 
 # Check if config points to localhost (local development)
-if ! grep -Eq "appUrl[[:space:]]*:[[:space:]]*['\"]?http://localhost:8000" "$CONFIG_FILE"; then
+if ! grep -Eq '"appUrl"[[:space:]]*:[[:space:]]*"http://localhost:8000"' "$CONFIG_FILE"; then
     echo "⚠️  Warning: config.js is remote configuration, not local appUrl http://localhost:8000"
     echo "Run './scripts/local-config.sh' to generate local config"
     echo ""

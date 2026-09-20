@@ -1,9 +1,1 @@
-{%- set public_config = {
-    "apiUrl": "https://" ~ domain_name ~ "/api",
-    "userPoolId": user_pool_id,
-    "clientId": app_client_id,
-    "cognitoDomain": cognito_domain,
-    "appUrl": "https://" ~ domain_name,
-    "appName": "Cocktail Database (" ~ (app_env | default("dev")) ~ ")"
-} -%}
-export default {{ public_config | to_json }};
+export default {{ public_frontend_config | to_json }};

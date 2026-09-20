@@ -1,7 +1,12 @@
 import json
+import os
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 from scripts.generate_config import render_public_config
 
@@ -110,29 +115,183 @@ def test_generator_maps_cloudformation_names_to_public_names(tmp_path):
     }
 
 
-def test_config_template_serializes_explicit_public_dictionary():
+def test_config_template_serializes_validated_public_dictionary():
     template = (ROOT / "infrastructure/ansible/files/config.js.j2").read_text(
         encoding="utf-8"
     )
+    playbook = yaml.safe_load(
+        (ROOT / "infrastructure/ansible/playbooks/deploy.yml").read_text(
+            encoding="utf-8"
+        )
+    )[0]
 
-    assert "to_json" in template
-    for field in VALID_CONFIG:
-        assert field in template
+    assert "public_frontend_config | to_json" in template
+    assert set(playbook["vars"]["public_frontend_config"]) == set(VALID_CONFIG)
     for secret in ("DB_PASSWORD", "AWS_SECRET_ACCESS_KEY", "client_secret"):
         assert secret not in template
 
 
-def test_ansible_validates_public_config_before_frontend_staging():
-    playbook = (ROOT / "infrastructure/ansible/playbooks/deploy.yml").read_text(
-        encoding="utf-8"
+def _ansible_public_config_validation_task():
+    playbook = yaml.safe_load(
+        (ROOT / "infrastructure/ansible/playbooks/deploy.yml").read_text(
+            encoding="utf-8"
+        )
+    )[0]
+    for task in playbook["tasks"]:
+        if task.get("name") == "Validate generated public frontend configuration":
+            return task
+    raise AssertionError("shared public-config validation task is missing")
+
+
+def _run_ansible_public_config_validation(tmp_path, config):
+    task = _ansible_public_config_validation_task()
+    task["ansible.builtin.command"]["chdir"] = str(ROOT)
+    playbook = tmp_path / "validate-public-config.yml"
+    playbook.write_text(
+        yaml.safe_dump(
+            [
+                {
+                    "hosts": "localhost",
+                    "connection": "local",
+                    "gather_facts": False,
+                    "vars": {"public_frontend_config": config},
+                    "tasks": [task],
+                }
+            ],
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    ansible_playbook = Path(sys.executable).with_name("ansible-playbook")
+    return subprocess.run(
+        [str(ansible_playbook), "-i", "localhost,", str(playbook)],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
     )
 
-    assert "ansible.builtin.assert" in playbook
-    assert playbook.index("ansible.builtin.assert") < playbook.index(
-        "name: Stage frontend code"
+
+def _ansible_candidate_config(**overrides):
+    config = {
+        "apiUrl": "https://dev.example/api",
+        "userPoolId": "pool",
+        "clientId": "client",
+        "cognitoDomain": "https://auth.example",
+        "appUrl": "https://dev.example",
+        "appName": "Cocktail Database (dev)",
+    }
+    config.update(overrides)
+    return config
+
+
+def test_ansible_validates_public_config_before_frontend_staging():
+    playbook = yaml.safe_load(
+        (ROOT / "infrastructure/ansible/playbooks/deploy.yml").read_text(
+            encoding="utf-8"
+        )
+    )[0]
+    task_names = [task["name"] for task in playbook["tasks"]]
+
+    assert task_names.index("Validate generated public frontend configuration") < (
+        task_names.index("Create staged release directories")
     )
+    assert task_names.index("Validate generated public frontend configuration") < (
+        task_names.index("Stage frontend code")
+    )
+    assert any("ansible.builtin.assert" in task for task in playbook["tasks"])
     for variable in ("domain_name", "user_pool_id", "app_client_id", "cognito_domain"):
-        assert variable in playbook
+        assert variable in (
+            ROOT / "infrastructure/ansible/playbooks/deploy.yml"
+        ).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        _ansible_candidate_config(cognitoDomain="ftp://auth.example"),
+        _ansible_candidate_config(cognitoDomain="https:///missing-host"),
+        _ansible_candidate_config(apiUrl="https:///missing-host/api"),
+        _ansible_candidate_config(appUrl="https:///missing-host"),
+    ],
+)
+def test_ansible_preflight_rejects_concrete_malformed_public_urls(tmp_path, config):
+    result = _run_ansible_public_config_validation(tmp_path, config)
+
+    assert result.returncode != 0
+    assert "Validate generated public frontend configuration" in (
+        result.stdout + result.stderr
+    )
+
+
+def test_ansible_preflight_accepts_renderer_valid_public_urls(tmp_path):
+    result = _run_ansible_public_config_validation(
+        tmp_path, _ansible_candidate_config()
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def _serve_fixture(tmp_path, config):
+    project = tmp_path / "serve-project"
+    (project / "scripts").mkdir(parents=True)
+    (project / "src" / "web" / "js").mkdir(parents=True)
+    shutil.copy2(ROOT / "scripts/serve.sh", project / "scripts/serve.sh")
+    (project / "src" / "web" / "js" / "config.js").write_text(
+        render_public_config(config), encoding="utf-8"
+    )
+
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    npm_log = tmp_path / "npm-args.txt"
+    fake_npm = fake_bin / "npm"
+    fake_npm.write_text(
+        '#!/bin/sh\nprintf \'%s\\n\' "$*" > "$FAKE_NPM_LOG"\n', encoding="utf-8"
+    )
+    fake_npm.chmod(0o755)
+    environment = {
+        **os.environ,
+        "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+        "FAKE_NPM_LOG": str(npm_log),
+    }
+    return project, environment, npm_log
+
+
+def test_serve_accepts_renderer_generated_local_config_without_prompt(tmp_path):
+    project, environment, npm_log = _serve_fixture(tmp_path, VALID_CONFIG)
+
+    result = subprocess.run(
+        ["bash", str(project / "scripts" / "serve.sh")],
+        cwd=project,
+        env=environment,
+        stdin=subprocess.DEVNULL,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Continue anyway?" not in result.stdout
+    assert npm_log.read_text(encoding="utf-8").strip() == "run dev"
+
+
+def test_serve_warns_before_declining_remote_renderer_config(tmp_path):
+    remote_config = dict(VALID_CONFIG, appUrl="https://dev.example")
+    project, environment, npm_log = _serve_fixture(tmp_path, remote_config)
+
+    result = subprocess.run(
+        ["bash", str(project / "scripts" / "serve.sh")],
+        cwd=project,
+        env=environment,
+        input="n\n",
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "remote configuration" in result.stdout
+    assert not npm_log.exists()
 
 
 def test_local_development_uses_fixed_vite_port_and_shared_generator():
