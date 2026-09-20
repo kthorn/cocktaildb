@@ -34,6 +34,20 @@
         </div>
         {% endif %}
 
+        {% if recipe.abv %}
+        <div class="recipe-abv">
+            <strong>ABV before dilution: </strong><span>{{ recipe.abv.display }}</span>
+            {% if recipe.abv.notes %}
+            <details>
+                <summary>Calculation notes</summary>
+                <ul>
+                    {% for note in recipe.abv.notes %}<li>{{ note }}</li>{% endfor %}
+                </ul>
+            </details>
+            {% endif %}
+        </div>
+        {% endif %}
+
         {% if recipe.description %}
         <p>{{ recipe.description }}</p>
         {% endif %}
