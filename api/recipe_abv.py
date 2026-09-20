@@ -185,8 +185,9 @@ def calculate_recipe_abv(
         if volume is None:
             continue
 
+        ingredient_id = ingredient.get("ingredient_id")
         try:
-            strength = ranges.get(ingredient.get("ingredient_id"))
+            strength = ranges.get(ingredient_id) if ingredient_id is not None else None
         except TypeError:
             strength = None
         if not isinstance(strength, dict):

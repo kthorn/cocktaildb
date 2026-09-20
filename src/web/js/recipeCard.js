@@ -120,6 +120,30 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
         </div>
     `;
 
+    if (recipe.abv) {
+        const abvBlock = document.createElement('div');
+        abvBlock.className = 'recipe-abv';
+        const label = document.createElement('strong');
+        label.textContent = 'ABV before dilution: ';
+        const value = document.createElement('span');
+        value.textContent = recipe.abv.display;
+        abvBlock.append(label, value);
+        if (recipe.abv.notes.length) {
+            const details = document.createElement('details');
+            const summary = document.createElement('summary');
+            summary.textContent = 'Calculation notes';
+            const notes = document.createElement('ul');
+            for (const note of recipe.abv.notes) {
+                const item = document.createElement('li');
+                item.textContent = note;
+                notes.append(item);
+            }
+            details.append(summary, notes);
+            abvBlock.append(details);
+        }
+        card.querySelector('.recipe-meta').after(abvBlock);
+    }
+
     // Add rating component
     const ratingContainer = card.querySelector(`#rating-container-${recipe.id}`);
     if (ratingContainer) {
@@ -175,7 +199,7 @@ export function createRecipeCard(recipe, showActions = true, onRecipeDeleted = n
                 return;
             }
             const interactiveTarget = event.target.closest(
-                'a, button, input, textarea, select, .tag-chip',
+                'a, button, input, textarea, select, details, summary, .tag-chip',
             );
             if (interactiveTarget) {
                 return;
