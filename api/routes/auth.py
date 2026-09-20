@@ -1,9 +1,9 @@
 """Authentication endpoints for the CocktailDB API"""
 
 import logging
-from fastapi import APIRouter, Depends
 
 from dependencies.auth import UserInfo, require_authentication
+from fastapi import APIRouter, Depends
 from models.responses import UserInfoResponse
 
 logger = logging.getLogger(__name__)

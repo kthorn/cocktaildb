@@ -4,12 +4,7 @@ Tests for utility functions in db_utils.py including ingredient ID extraction
 and full name assembly algorithms
 """
 
-import pytest
-import os
-from typing import Dict, Any, List
-from unittest.mock import patch
-
-from api.db.db_utils import extract_all_ingredient_ids, assemble_ingredient_full_names
+from api.db.db_utils import assemble_ingredient_full_names, extract_all_ingredient_ids
 
 
 class TestExtractAllIngredientIds:

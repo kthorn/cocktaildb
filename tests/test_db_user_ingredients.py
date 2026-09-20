@@ -4,8 +4,6 @@ Tests the Database class methods for user ingredient inventory management
 """
 
 import pytest
-from unittest.mock import patch
-from api.db.db_core import Database
 
 
 class TestDatabaseUserIngredients:

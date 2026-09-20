@@ -3,18 +3,20 @@ Model Tests for User Ingredients
 Tests the Pydantic request and response models for user ingredient functionality
 """
 
+from datetime import datetime
+
 import pytest
 from pydantic import ValidationError
-from datetime import datetime
+
 from api.models.requests import (
     UserIngredientAdd,
     UserIngredientBulkAdd,
     UserIngredientBulkRemove,
 )
 from api.models.responses import (
-    UserIngredientResponse,
-    UserIngredientListResponse,
     UserIngredientBulkResponse,
+    UserIngredientListResponse,
+    UserIngredientResponse,
 )
 
 
@@ -543,7 +545,7 @@ class TestUserIngredientModelSerialization:
 
         # Since not all fields are required, this should work if defaults are properly set
         try:
-            model = UserIngredientBulkResponse(**data)
+            UserIngredientBulkResponse(**data)
             # This will pass if the model has proper defaults
         except ValidationError:
             # This is expected if no defaults are set and all fields are required

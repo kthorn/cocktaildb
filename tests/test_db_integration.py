@@ -4,15 +4,11 @@ Tests for cross-system integration scenarios, transaction consistency,
 and complex database operations spanning multiple tables
 """
 
-import pytest
+import concurrent.futures
+
 import psycopg2
 import psycopg2.errors
-import os
-from typing import Dict, Any, List
-from unittest.mock import patch
-import concurrent.futures
-import threading
-import time
+import pytest
 
 from api.db.db_core import Database
 
@@ -28,7 +24,7 @@ class TestTransactionConsistency:
         gin = db.create_ingredient(
             {"name": "Test", "description": "Test", "parent_id": None}
         )
-        vermouth = db.create_ingredient(
+        db.create_ingredient(
             {"name": "Vermouth", "description": "Vermouth", "parent_id": None}
         )
 

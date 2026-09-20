@@ -4,11 +4,8 @@ Comprehensive tests for recipe CRUD operations, ingredient relationships,
 and complex query scenarios
 """
 
+import psycopg2
 import pytest
-import psycopg2.errors
-from typing import Dict, Any, List
-
-from api.db.db_core import Database
 from core.exceptions import ConflictException
 
 
@@ -541,14 +538,14 @@ class TestRecipeEdgeCases:
         """Test creating recipe with empty name"""
         db = db_instance
 
-        with pytest.raises(Exception):
+        with pytest.raises(psycopg2.errors.NotNullViolation):
             db.create_recipe({"name": "", "instructions": "Test"})
 
     def test_recipe_none_name(self, db_instance):
         """Test creating recipe with None name"""
         db = db_instance
 
-        with pytest.raises(Exception):
+        with pytest.raises(psycopg2.errors.NotNullViolation):
             db.create_recipe({"name": None, "instructions": "Test"})
 
     def test_recipe_very_long_name(self, db_instance):

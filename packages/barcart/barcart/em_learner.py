@@ -1,14 +1,15 @@
 import os
+
 import numpy as np
 from tqdm.auto import tqdm
 
 from barcart.distance import (
+    emd_candidates,
     emd_matrix,
     emd_matrix_constrained,
-    emd_candidates,
     expected_ingredient_match_matrix,
-    manhattan_candidates,
     m_step_blosum,
+    manhattan_candidates,
 )
 
 
@@ -182,6 +183,9 @@ def em_fit(
     outer_bar = tqdm(
         range(iters), disable=not verbose, desc="EM fit", position=0, leave=False
     )
+    # Both are bound by the E-step on the first iteration and read on later
+    # ones: iteration 0 selects candidates by Manhattan distance instead.
+    distance_matrix = None
     last_plans = None
     for t in outer_bar:
         # Show only outer loop progress (convergence), not inner loop (recipe pairs)

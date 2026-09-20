@@ -5,9 +5,6 @@ recipe associations, and user ownership validation
 """
 
 import pytest
-from typing import Dict, Any, List
-
-from api.db.db_core import Database
 
 
 class TestPublicTagCRUD:
@@ -578,7 +575,7 @@ class TestTagEdgeCases:
         """Test creating tag with empty name"""
         db = db_instance
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             db.create_public_tag("")
 
     def test_tag_very_long_name(self, db_instance):
@@ -605,19 +602,23 @@ class TestTagEdgeCases:
         tag = db.create_public_tag(special_name)
         assert tag["name"] == special_name
 
+    # These two tests called create_private_tag with three arguments. The
+    # cognito_username parameter was removed (migrations/03 and 10), so the
+    # TypeError they caught came from the argument count, not from validation,
+    # and neither test exercised the empty-input paths they are named for.
     def test_private_tag_empty_user_id(self, db_instance):
         """Test creating private tag with empty user ID"""
         db = db_instance
 
-        with pytest.raises(Exception):
-            db.create_private_tag("test", "", "username")
+        with pytest.raises(ValueError):
+            db.create_private_tag("test", "")
 
-    def test_private_tag_empty_username(self, db_instance):
-        """Test creating private tag with empty username"""
+    def test_private_tag_empty_name(self, db_instance):
+        """Test creating private tag with empty name"""
         db = db_instance
 
-        with pytest.raises(Exception):
-            db.create_private_tag("test", "user123", "")
+        with pytest.raises(ValueError):
+            db.create_private_tag("", "user123")
 
 
 class TestComplexTagScenarios:

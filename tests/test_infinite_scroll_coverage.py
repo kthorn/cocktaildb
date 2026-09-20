@@ -7,7 +7,6 @@ focusing on response structure validation, pagination consistency, sorting, and 
 
 import pytest
 from fastapi import status
-from conftest import assert_valid_response_structure
 
 pytestmark = pytest.mark.asyncio
 

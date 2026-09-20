@@ -9,8 +9,9 @@ import httpx
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport
-from api.main import app
+
 from api.db.database import get_database
+from api.main import app
 
 
 class TestSubstitutionAPI:

@@ -248,9 +248,9 @@ class TestRecipeSearchRequestValidation:
     )
     async def test_invalid_pagination_parameters_return_422(self, query, monkeypatch):
         import httpx
+        from db.database import get_database
 
         from api.main import app
-        from db.database import get_database
 
         monkeypatch.setitem(app.dependency_overrides, get_database, lambda: object())
         transport = httpx.ASGITransport(app=app)

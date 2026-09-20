@@ -4,11 +4,8 @@ All operations use one transaction-scoped lock. Helpers accept its cursor so
 membership checks and the operation cannot be separated by a concurrent move.
 """
 
-from contextlib import contextmanager
 import secrets
-
-from psycopg2 import IntegrityError
-from psycopg2.extras import RealDictCursor
+from contextlib import contextmanager
 
 from core.exceptions import (
     CocktailDBException,
@@ -16,6 +13,8 @@ from core.exceptions import (
     NotFoundException,
     ValidationException,
 )
+from psycopg2 import IntegrityError
+from psycopg2.extras import RealDictCursor
 
 
 class GroupInventoryMixin:

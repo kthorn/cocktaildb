@@ -5,11 +5,12 @@ Verifies that the migration script properly adds the substitution_level column
 and sets appropriate default values.
 """
 
-import pytest
+import os
 import sqlite3
 import tempfile
-import os
 from pathlib import Path
+
+import pytest
 
 
 class TestSubstitutionMigration:
@@ -43,7 +44,7 @@ class TestSubstitutionMigration:
             # Insert some test data
             cursor.execute("""
                 INSERT INTO ingredients (name, description, parent_id, path, created_by)
-                VALUES 
+                VALUES
                 ('Whiskey', 'Base whiskey category', NULL, '/1/', 'test'),
                 ('Bourbon', 'American bourbon', 1, '/1/2/', 'test'),
                 ('Rum', 'Base rum category', NULL, '/3/', 'test')
@@ -66,7 +67,7 @@ class TestSubstitutionMigration:
             )
 
             if migration_path.exists():
-                with open(migration_path, "r") as f:
+                with open(migration_path) as f:
                     migration_sql = f.read()
 
                 # Execute migration (split by semicolon to handle multiple statements)
@@ -171,7 +172,7 @@ class TestSubstitutionMigration:
             )
 
             if migration_path.exists():
-                with open(migration_path, "r") as f:
+                with open(migration_path) as f:
                     migration_sql = f.read()
 
                 for statement in migration_sql.split(";"):
@@ -197,7 +198,7 @@ class TestSubstitutionMigration:
                 )
                 sub_level_data = cursor.fetchall()
 
-                for id_, name, sub_level in sub_level_data:
+                for _id, name, sub_level in sub_level_data:
                     assert sub_level is not None, (
                         f"substitution_level should not be NULL for {name}"
                     )
@@ -258,7 +259,7 @@ class TestSubstitutionMigration:
             )
 
             if migration_path.exists():
-                with open(migration_path, "r") as f:
+                with open(migration_path) as f:
                     migration_sql = f.read()
 
                 # Apply migration first time

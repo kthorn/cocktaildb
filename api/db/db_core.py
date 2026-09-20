@@ -3,23 +3,23 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Union, Tuple, cast
+from typing import Any, cast
 
 import psycopg2
-from psycopg2.extras import RealDictCursor
+from core.exceptions import ConflictException, ValidationException
 from psycopg2 import pool
+from psycopg2.extras import RealDictCursor
+from recipe_abv import calculate_recipe_abv
 
+from .db_utils import assemble_ingredient_full_names, extract_all_ingredient_ids
 from .group_inventory import GroupInventoryMixin
-from .db_utils import extract_all_ingredient_ids, assemble_ingredient_full_names
 from .sql_queries import (
-    get_recipe_by_id_sql,
-    get_recipes_count_sql,
-    get_ingredients_count_sql,
     INGREDIENT_SELECT_FIELDS,
     RESOLVE_INGREDIENT_ABV_SQL,
+    get_ingredients_count_sql,
+    get_recipe_by_id_sql,
+    get_recipes_count_sql,
 )
-from recipe_abv import calculate_recipe_abv
-from core.exceptions import ConflictException, ValidationException
 
 # Configure logging
 logger = logging.getLogger()
@@ -28,7 +28,7 @@ logger.setLevel(logging.DEBUG)
 
 class Database(GroupInventoryMixin):
     # Class-level connection pool (shared across instances)
-    _pool: Optional[pool.ThreadedConnectionPool] = None
+    _pool: pool.ThreadedConnectionPool | None = None
 
     def __init__(self):
         """Initialize the database connection to PostgreSQL"""
@@ -91,8 +91,8 @@ class Database(GroupInventoryMixin):
             Database._pool.putconn(conn)
 
     def execute_query(
-        self, sql: str, parameters: Optional[Union[Dict[str, Any], Tuple]] = None
-    ) -> Union[List[Dict[str, Any]], Dict[str, int]]:
+        self, sql: str, parameters: dict[str, Any] | tuple | None = None
+    ) -> list[dict[str, Any]] | dict[str, int]:
         """Execute a SQL query using PostgreSQL"""
         conn = None
         try:
@@ -125,7 +125,7 @@ class Database(GroupInventoryMixin):
             if conn:
                 self._return_connection(conn)
 
-    def create_ingredient(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_ingredient(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create a new ingredient"""
         try:
             # Validate required data types
@@ -156,7 +156,7 @@ class Database(GroupInventoryMixin):
             if data.get("parent_id"):
                 # Get parent's path
                 parent = cast(
-                    List[Dict[str, Any]],
+                    list[dict[str, Any]],
                     self.execute_query(
                         "SELECT path FROM ingredients WHERE id = %(parent_id)s",
                         {"parent_id": data.get("parent_id")},
@@ -215,7 +215,7 @@ class Database(GroupInventoryMixin):
 
                 # Fetch the created ingredient
                 ingredient = cast(
-                    List[Dict[str, Any]],
+                    list[dict[str, Any]],
                     self.execute_query(
                         "SELECT id, name, description, parent_id, path, allow_substitution, percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url, created_by FROM ingredients WHERE id = %(id)s",
                         {"id": new_id},
@@ -231,7 +231,7 @@ class Database(GroupInventoryMixin):
                     raise ConflictException(
                         f"An ingredient with the name '{data.get('name')}' already exists. Please use a different name.",
                         detail=str(e),
-                    )
+                    ) from e
                 # Re-raise other integrity errors
                 raise
             except Exception:
@@ -249,14 +249,14 @@ class Database(GroupInventoryMixin):
             raise
 
     def update_ingredient(
-        self, ingredient_id: int, data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+        self, ingredient_id: int, data: dict[str, Any]
+    ) -> dict[str, Any] | None:
         """Update an existing ingredient"""
         try:
             # Check if changing parent_id, as this affects the path
             if "parent_id" in data:
                 old_ingredient = cast(
-                    List[Dict[str, Any]],
+                    list[dict[str, Any]],
                     self.execute_query(
                         "SELECT parent_id, path FROM ingredients WHERE id = %(id)s",
                         {"id": ingredient_id},
@@ -276,7 +276,7 @@ class Database(GroupInventoryMixin):
 
                     # Check if new parent exists
                     parent = cast(
-                        List[Dict[str, Any]],
+                        list[dict[str, Any]],
                         self.execute_query(
                             "SELECT path FROM ingredients WHERE id = %(id)s",
                             {"id": new_parent_id},
@@ -372,7 +372,7 @@ class Database(GroupInventoryMixin):
 
             # Fetch the updated ingredient
             result = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT id, name, description, parent_id, path, allow_substitution, percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url, created_by FROM ingredients WHERE id = %(id)s",
                     {"id": ingredient_id},
@@ -390,7 +390,7 @@ class Database(GroupInventoryMixin):
         try:
             # Check if ingredient exists
             ingredient = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT id FROM ingredients WHERE id = %(id)s",
                     {"id": ingredient_id},
@@ -401,7 +401,7 @@ class Database(GroupInventoryMixin):
 
             # Check if it has children
             children = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT id FROM ingredients WHERE parent_id = %(parent_id)s",
                     {"parent_id": ingredient_id},
@@ -412,7 +412,7 @@ class Database(GroupInventoryMixin):
 
             # Check if it's used in recipes
             used_in_recipes = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT recipe_id FROM recipe_ingredients WHERE ingredient_id = %(ingredient_id)s LIMIT 1",
                     {"ingredient_id": ingredient_id},
@@ -430,11 +430,11 @@ class Database(GroupInventoryMixin):
             logger.error(f"Error deleting ingredient {ingredient_id}: {str(e)}")
             raise
 
-    def get_ingredients(self) -> List[Dict[str, Any]]:
+    def get_ingredients(self) -> list[dict[str, Any]]:
         """Get all ingredients"""
         try:
             result = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT id, name, description, parent_id, path, allow_substitution, percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url, created_by FROM ingredients ORDER BY path"
                 ),
@@ -444,11 +444,11 @@ class Database(GroupInventoryMixin):
             logger.error(f"Error getting ingredients: {str(e)}")
             raise
 
-    def get_ingredient_by_name(self, ingredient_name: str) -> Optional[Dict[str, Any]]:
+    def get_ingredient_by_name(self, ingredient_name: str) -> dict[str, Any] | None:
         """Get a single ingredient by name (case-insensitive)"""
         try:
             result = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT id, name, description, parent_id, path, allow_substitution, percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url, created_by FROM ingredients WHERE name = %s",
                     (ingredient_name,),
@@ -461,11 +461,11 @@ class Database(GroupInventoryMixin):
             )
             return None
 
-    def search_ingredients(self, search_term: str) -> List[Dict[str, Any]]:
+    def search_ingredients(self, search_term: str) -> list[dict[str, Any]]:
         """Search ingredients by name - first exact match, then partial match (case-insensitive)"""
         try:
             exact_result = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT id, name, description, parent_id, path, allow_substitution, percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url, created_by FROM ingredients WHERE name = %s",
                     (search_term,),
@@ -478,7 +478,7 @@ class Database(GroupInventoryMixin):
                 return exact_result
             # Otherwise, fall back to partial match (ILIKE for case-insensitive)
             partial_result = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT id, name, description, parent_id, path, allow_substitution, percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url, created_by FROM ingredients WHERE name ILIKE %s ORDER BY name",
                     (f"%{search_term}%",),
@@ -495,8 +495,8 @@ class Database(GroupInventoryMixin):
             raise
 
     def search_ingredients_batch(
-        self, ingredient_names: List[str]
-    ) -> Dict[str, Dict[str, Any]]:
+        self, ingredient_names: list[str]
+    ) -> dict[str, dict[str, Any]]:
         """Batch search for ingredients by name - returns mapping of names to ingredient data"""
         try:
             if not ingredient_names:
@@ -507,7 +507,7 @@ class Database(GroupInventoryMixin):
             )
 
             exact_results = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT id, name, description, parent_id, path, allow_substitution, percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url, created_by FROM ingredients WHERE name = ANY(%s::citext[])",
                     (unique_names,),
@@ -533,8 +533,8 @@ class Database(GroupInventoryMixin):
             raise
 
     def check_ingredient_names_batch(
-        self, ingredient_names: List[str]
-    ) -> Dict[str, bool]:
+        self, ingredient_names: list[str]
+    ) -> dict[str, bool]:
         """Batch check for duplicate ingredient names - returns mapping of names to exists status"""
         try:
             if not ingredient_names:
@@ -545,7 +545,7 @@ class Database(GroupInventoryMixin):
             )
 
             existing_results = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT name FROM ingredients WHERE name = ANY(%s::citext[])",
                     (unique_names,),
@@ -563,11 +563,11 @@ class Database(GroupInventoryMixin):
             logger.error(f"Error in batch ingredient name check: {str(e)}")
             raise
 
-    def get_ingredient(self, ingredient_id: int) -> Optional[Dict[str, Any]]:
+    def get_ingredient(self, ingredient_id: int) -> dict[str, Any] | None:
         """Get a single ingredient by ID"""
         try:
             result = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT id, name, description, parent_id, path, allow_substitution, percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url, created_by FROM ingredients WHERE id = %(id)s",
                     {"id": ingredient_id},
@@ -580,12 +580,12 @@ class Database(GroupInventoryMixin):
             logger.error(f"Error getting ingredient {ingredient_id}: {str(e)}")
             raise
 
-    def get_ingredient_descendants(self, ingredient_id: int) -> List[Dict[str, Any]]:
+    def get_ingredient_descendants(self, ingredient_id: int) -> list[dict[str, Any]]:
         """Get all descendants of an ingredient"""
         try:
             # Get the ingredient's path
             ingredient = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT path FROM ingredients WHERE id = %(id)s",
                     {"id": ingredient_id},
@@ -598,7 +598,7 @@ class Database(GroupInventoryMixin):
 
             # Get all ingredients where path starts with this path but is not this path
             result = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     """
                 SELECT id, name, description, parent_id, path,
@@ -617,7 +617,7 @@ class Database(GroupInventoryMixin):
             )
             raise
 
-    def _validate_recipe_ingredients(self, ingredients: List[Dict[str, Any]]) -> None:
+    def _validate_recipe_ingredients(self, ingredients: list[dict[str, Any]]) -> None:
         """Validate recipe ingredients before database operations"""
         if not ingredients:
             return
@@ -643,10 +643,10 @@ class Database(GroupInventoryMixin):
                     ingredient["ingredient_id"] = (
                         ingredient_id  # Update the dict with converted value
                     )
-                except (ValueError, TypeError):
+                except (ValueError, TypeError) as e:
                     raise ValueError(
                         f"Ingredient {i + 1}: 'ingredient_id' must be an integer, got {type(ingredient_id).__name__}"
-                    )
+                    ) from e
 
             ingredient_ids.append(ingredient_id)
 
@@ -659,10 +659,10 @@ class Database(GroupInventoryMixin):
                         ingredient["amount"] = (
                             amount  # Update the dict with converted value
                         )
-                    except (ValueError, TypeError):
+                    except (ValueError, TypeError) as e:
                         raise ValueError(
                             f"Ingredient {i + 1}: 'amount' must be numeric, got {type(amount).__name__}: '{amount}'"
-                        )
+                        ) from e
 
                 # Validate amount is not negative
                 if amount < 0:
@@ -679,28 +679,28 @@ class Database(GroupInventoryMixin):
                         ingredient["unit_id"] = (
                             unit_id  # Update the dict with converted value
                         )
-                    except (ValueError, TypeError):
+                    except (ValueError, TypeError) as e:
                         raise ValueError(
                             f"Ingredient {i + 1}: 'unit_id' must be an integer, got {type(unit_id).__name__}"
-                        )
+                        ) from e
 
         # Batch validate that all ingredient IDs exist
         if ingredient_ids:
             self._validate_ingredients_exist(ingredient_ids)
 
-    def _validate_ingredients_exist(self, ingredient_ids: List[int]) -> None:
+    def _validate_ingredients_exist(self, ingredient_ids: list[int]) -> None:
         """Validate that all ingredient IDs exist in the database"""
         try:
             placeholders = ",".join("%s" for _ in ingredient_ids)
             existing_ids_result = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     f"SELECT id FROM ingredients WHERE id IN ({placeholders})",
                     tuple(ingredient_ids),
                 ),
             )
 
-            existing_ids = set(row["id"] for row in existing_ids_result)
+            existing_ids = {row["id"] for row in existing_ids_result}
             missing_ids = set(ingredient_ids) - existing_ids
 
             if missing_ids:
@@ -711,9 +711,9 @@ class Database(GroupInventoryMixin):
             if "Invalid ingredient IDs" in str(e):
                 raise  # Re-raise our custom validation error
             logger.error(f"Error validating ingredient existence: {str(e)}")
-            raise ValueError("Failed to validate ingredient existence")
+            raise ValueError("Failed to validate ingredient existence") from e
 
-    def create_recipe(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_recipe(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create a new recipe with its ingredients"""
         # Check for case-insensitive duplicate name
         recipe_name = data.get("name")
@@ -798,8 +798,8 @@ class Database(GroupInventoryMixin):
                 self._return_connection(conn)
 
     def bulk_create_recipes(
-        self, recipes_data: List[Dict[str, Any]], user_id: str
-    ) -> List[Dict[str, Any]]:
+        self, recipes_data: list[dict[str, Any]], user_id: str
+    ) -> list[dict[str, Any]]:
         """Create multiple recipes in a single transaction (optimized for bulk uploads)"""
         conn = None
         created_recipes = []
@@ -912,14 +912,14 @@ class Database(GroupInventoryMixin):
             recipe["abv"] = calculate_recipe_abv(recipe.get("ingredients", []), ranges)
 
     def get_recipe(
-        self, recipe_id: int, cognito_user_id: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, recipe_id: int, cognito_user_id: str | None = None
+    ) -> dict[str, Any] | None:
         """Get a single recipe by ID with its ingredients and tags using GROUP_CONCAT for efficiency."""
         try:
             logger.info(f"Getting recipe {recipe_id} for user_id: {cognito_user_id}")
             params = {"recipe_id": recipe_id, "cognito_user_id": cognito_user_id}
             rows = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(get_recipe_by_id_sql, params),
             )
             if (
@@ -1007,11 +1007,11 @@ class Database(GroupInventoryMixin):
             )
             raise
 
-    def _get_recipe_ingredients(self, recipe_id: int) -> List[Dict[str, Any]]:
+    def _get_recipe_ingredients(self, recipe_id: int) -> list[dict[str, Any]]:
         """Helper method to get ingredients for a recipe, optimized for ancestor lookup"""
         # Fetch direct ingredients for the recipe
         direct_ingredients = cast(
-            List[Dict[str, Any]],
+            list[dict[str, Any]],
             self.execute_query(
                 f"""
                 SELECT {INGREDIENT_SELECT_FIELDS}
@@ -1038,7 +1038,7 @@ class Database(GroupInventoryMixin):
         if all_needed_ids:
             placeholders = ",".join("%s" for _ in all_needed_ids)
             names_result = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     f"SELECT id, name FROM ingredients WHERE id IN ({placeholders})",
                     tuple(all_needed_ids),
@@ -1055,11 +1055,11 @@ class Database(GroupInventoryMixin):
 
         return direct_ingredients
 
-    def get_units(self) -> List[Dict[str, Any]]:
+    def get_units(self) -> list[dict[str, Any]]:
         """Get all measurement units"""
         try:
             result = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT id, name, abbreviation, conversion_to_ml FROM units ORDER BY name"
                 ),
@@ -1069,7 +1069,7 @@ class Database(GroupInventoryMixin):
             logger.error(f"Error getting units: {str(e)}")
             raise
 
-    def get_units_by_type(self, unit_type: str) -> List[Dict[str, Any]]:
+    def get_units_by_type(self, unit_type: str) -> list[dict[str, Any]]:
         """Get units filtered by type (this implementation returns all units since there's no type column)"""
         try:
             # Since the units table doesn't have a type column, we'll return all units
@@ -1082,11 +1082,11 @@ class Database(GroupInventoryMixin):
             logger.error(f"Error getting units by type {unit_type}: {str(e)}")
             raise
 
-    def get_unit_by_name(self, unit_name: str) -> Optional[Dict[str, Any]]:
+    def get_unit_by_name(self, unit_name: str) -> dict[str, Any] | None:
         """Get a unit by exact name match (case-insensitive)"""
         try:
             result = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT id, name, abbreviation, conversion_to_ml FROM units WHERE LOWER(name) = LOWER(%s)",
                     (unit_name,),
@@ -1097,13 +1097,11 @@ class Database(GroupInventoryMixin):
             logger.error(f"Error getting unit by name '{unit_name}': {str(e)}")
             raise
 
-    def get_unit_by_abbreviation(
-        self, unit_abbreviation: str
-    ) -> Optional[Dict[str, Any]]:
+    def get_unit_by_abbreviation(self, unit_abbreviation: str) -> dict[str, Any] | None:
         """Get a unit by exact name match (case-insensitive)"""
         try:
             result = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT id, name, abbreviation, conversion_to_ml FROM units WHERE LOWER(abbreviation) = LOWER(%s)",
                     (unit_abbreviation,),
@@ -1116,22 +1114,22 @@ class Database(GroupInventoryMixin):
             )
             raise
 
-    def validate_units_batch(self, unit_names: List[str]) -> Dict[str, Dict[str, Any]]:
+    def validate_units_batch(self, unit_names: list[str]) -> dict[str, dict[str, Any]]:
         """Batch validate units by name or abbreviation - returns mapping of names to unit data"""
         try:
             if not unit_names:
                 return {}
             # Create case-insensitive lookup for exact matches by name or abbreviation
-            unique_names = list(set(name.lower() for name in unit_names))
+            unique_names = list({name.lower() for name in unit_names})
             placeholders = ",".join("%s" for _ in unique_names)
 
             # Query for both name and abbreviation matches
             unit_results = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     f"""
-                    SELECT id, name, abbreviation, conversion_to_ml 
-                    FROM units 
+                    SELECT id, name, abbreviation, conversion_to_ml
+                    FROM units
                     WHERE LOWER(name) IN ({placeholders}) OR LOWER(abbreviation) IN ({placeholders})
                     """,
                     tuple(unique_names)
@@ -1163,7 +1161,7 @@ class Database(GroupInventoryMixin):
             logger.error(f"Error in batch unit validation: {str(e)}")
             raise
 
-    def check_recipe_names_batch(self, recipe_names: List[str]) -> Dict[str, bool]:
+    def check_recipe_names_batch(self, recipe_names: list[str]) -> dict[str, bool]:
         """Batch check for duplicate recipe names - returns mapping of names to exists status"""
         try:
             if not recipe_names:
@@ -1174,7 +1172,7 @@ class Database(GroupInventoryMixin):
             )
 
             existing_results = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT name FROM recipes WHERE name = ANY(%s::citext[])",
                     (unique_names,),
@@ -1202,7 +1200,7 @@ class Database(GroupInventoryMixin):
 
             # Check if recipe exists
             recipe = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT id FROM recipes WHERE id = %(id)s", {"id": recipe_id}
                 ),
@@ -1226,8 +1224,8 @@ class Database(GroupInventoryMixin):
                 self._return_connection(conn)
 
     def update_recipe(
-        self, recipe_id: int, data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+        self, recipe_id: int, data: dict[str, Any]
+    ) -> dict[str, Any] | None:
         """Update an existing recipe"""
         conn = None
         try:
@@ -1301,11 +1299,11 @@ class Database(GroupInventoryMixin):
             if conn:
                 self._return_connection(conn)
 
-    def get_user_rating(self, recipe_id: int, user_id: str) -> Optional[Dict[str, Any]]:
+    def get_user_rating(self, recipe_id: int, user_id: str) -> dict[str, Any] | None:
         """Get a specific user's rating for a recipe"""
         try:
             result = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     """
                     SELECT id, cognito_user_id, recipe_id, rating
@@ -1322,7 +1320,7 @@ class Database(GroupInventoryMixin):
             )
             raise
 
-    def set_rating(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def set_rating(self, data: dict[str, Any]) -> dict[str, Any]:
         """Set (add or update) a rating for a recipe"""
         conn = None
         try:
@@ -1336,7 +1334,7 @@ class Database(GroupInventoryMixin):
 
             # Check if recipe exists
             recipe = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT id FROM recipes WHERE id = %(id)s",
                     {"id": data["recipe_id"]},
@@ -1347,7 +1345,7 @@ class Database(GroupInventoryMixin):
 
             # Check if user already rated this recipe
             existing_rating = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     """
                     SELECT id FROM ratings
@@ -1405,7 +1403,7 @@ class Database(GroupInventoryMixin):
 
             # Fetch the created/updated rating
             rating = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     """
                     SELECT id, cognito_user_id, recipe_id, rating
@@ -1418,7 +1416,7 @@ class Database(GroupInventoryMixin):
 
             # Also fetch the updated average rating and count
             recipe_updated = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT avg_rating, rating_count FROM recipes WHERE id = %(id)s",
                     {"id": data["recipe_id"]},
@@ -1447,7 +1445,7 @@ class Database(GroupInventoryMixin):
         try:
             # Check if the rating exists
             existing_rating = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     """
                     SELECT id FROM ratings
@@ -1485,7 +1483,7 @@ class Database(GroupInventoryMixin):
 
     # --- Tag Management ---
 
-    def create_public_tag(self, name: str) -> Dict[str, Any]:
+    def create_public_tag(self, name: str) -> dict[str, Any]:
         """Creates a new public tag. Returns the created tag."""
         if not name:
             raise ValueError("Tag name cannot be empty")
@@ -1497,7 +1495,7 @@ class Database(GroupInventoryMixin):
             )
             # Re-fetch the tag to get its ID
             tag = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT id, name FROM tags WHERE name = %(name)s AND created_by IS NULL",
                     {"name": name},
@@ -1521,11 +1519,11 @@ class Database(GroupInventoryMixin):
             logger.error(f"Error creating public tag '{name}': {str(e)}")
             raise
 
-    def get_public_tag_by_name(self, name: str) -> Optional[Dict[str, Any]]:
+    def get_public_tag_by_name(self, name: str) -> dict[str, Any] | None:
         """Gets a public tag by its name."""
         try:
             tag = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     "SELECT id, name FROM tags WHERE name = %(name)s AND created_by IS NULL",
                     {"name": name},
@@ -1536,7 +1534,7 @@ class Database(GroupInventoryMixin):
             logger.error(f"Error getting public tag by name '{name}': {str(e)}")
             raise
 
-    def create_private_tag(self, name: str, cognito_user_id: str) -> Dict[str, Any]:
+    def create_private_tag(self, name: str, cognito_user_id: str) -> dict[str, Any]:
         """Creates a new private tag for a user. Returns the created tag."""
         # Validate inputs
         if not name or not name.strip():
@@ -1556,7 +1554,7 @@ class Database(GroupInventoryMixin):
                 },
             )
             tag = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     """
                     SELECT id, name, created_by as cognito_user_id FROM tags
@@ -1586,11 +1584,11 @@ class Database(GroupInventoryMixin):
 
     def get_private_tag_by_name_and_user(
         self, name: str, cognito_user_id: str
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Gets a private tag by its name and user ID."""
         try:
             tag = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     """
                     SELECT id, name, created_by as cognito_user_id FROM tags
@@ -1606,20 +1604,20 @@ class Database(GroupInventoryMixin):
             )
             raise
 
-    def get_public_tags(self) -> List[Dict[str, Any]]:
+    def get_public_tags(self) -> list[dict[str, Any]]:
         """Get all public tags with usage count."""
         try:
             return cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT 
-                        t.id, 
-                        t.name, 
+                    SELECT
+                        t.id,
+                        t.name,
                         COALESCE(COUNT(rt.recipe_id), 0) as usage_count
                     FROM tags t
                     LEFT JOIN recipe_tags rt ON t.id = rt.tag_id
-                    WHERE t.created_by IS NULL 
+                    WHERE t.created_by IS NULL
                     GROUP BY t.id, t.name
                     ORDER BY t.name
                     """
@@ -1629,11 +1627,11 @@ class Database(GroupInventoryMixin):
             logger.error(f"Error getting public tags: {str(e)}")
             raise
 
-    def get_private_tags(self, cognito_user_id: str) -> List[Dict[str, Any]]:
+    def get_private_tags(self, cognito_user_id: str) -> list[dict[str, Any]]:
         """Get all private tags for a specific user."""
         try:
             return cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     """
                     SELECT id, name, created_by as cognito_user_id FROM tags
@@ -1668,7 +1666,7 @@ class Database(GroupInventoryMixin):
                 """,
                 {"recipe_id": recipe_id, "tag_id": tag_id},
             )
-            rows_affected = cast(Dict[str, int], result).get("rowCount", 0)
+            rows_affected = cast(dict[str, int], result).get("rowCount", 0)
             if rows_affected > 0:
                 logger.info(
                     f"DB: Successfully added tag {tag_id} to recipe {recipe_id}"
@@ -1689,7 +1687,7 @@ class Database(GroupInventoryMixin):
                 "DELETE FROM recipe_tags WHERE recipe_id = %(recipe_id)s AND tag_id = %(tag_id)s",
                 {"recipe_id": recipe_id, "tag_id": tag_id},
             )
-            return cast(Dict[str, int], result).get("rowCount", 0) > 0
+            return cast(dict[str, int], result).get("rowCount", 0) > 0
         except Exception as e:
             logger.error(
                 f"Error removing public tag {tag_id} from recipe {recipe_id}: {str(e)}"
@@ -1714,18 +1712,18 @@ class Database(GroupInventoryMixin):
                     "cognito_user_id": cognito_user_id,
                 },
             )
-            return cast(Dict[str, int], result).get("rowCount", 0) > 0
+            return cast(dict[str, int], result).get("rowCount", 0) > 0
         except Exception as e:
             logger.error(
                 f"Error removing private tag {tag_id} from recipe {recipe_id} for user {cognito_user_id}: {str(e)}"
             )
             raise
 
-    def get_tag(self, tag_id: int) -> Optional[Dict[str, Any]]:
+    def get_tag(self, tag_id: int) -> dict[str, Any] | None:
         """Gets a tag by its ID from the unified tags table."""
         try:
             tag = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     """SELECT id, name,
                        CASE WHEN created_by IS NULL THEN 0 ELSE 1 END as is_private,
@@ -1790,7 +1788,7 @@ class Database(GroupInventoryMixin):
                 "DELETE FROM tags WHERE id = %(tag_id)s AND created_by IS NULL",
                 {"tag_id": tag_id},
             )
-            success = cast(Dict[str, int], result).get("rowCount", 0) > 0
+            success = cast(dict[str, int], result).get("rowCount", 0) > 0
             if success:
                 logger.info(f"Successfully deleted public tag {tag_id}")
             return success
@@ -1815,7 +1813,7 @@ class Database(GroupInventoryMixin):
                 "DELETE FROM tags WHERE id = %(tag_id)s AND created_by = %(user_id)s",
                 {"tag_id": tag_id, "user_id": user_id},
             )
-            success = cast(Dict[str, int], result).get("rowCount", 0) > 0
+            success = cast(dict[str, int], result).get("rowCount", 0) > 0
             if success:
                 logger.info(
                     f"Successfully deleted private tag {tag_id} for user {user_id}"
@@ -1874,23 +1872,23 @@ class Database(GroupInventoryMixin):
 
     def _search_recipes_paginated(
         self,
-        search_params: Dict[str, Any],
+        search_params: dict[str, Any],
         limit: int = 20,
         offset: int = 0,
         sort_by: str = "name",
         sort_order: str = "asc",
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
         rating_type: str = "average",
-        cursor: Optional[str] = None,
+        cursor: str | None = None,
         return_pagination: bool = False,
         db_cursor=None,
         group_id=None,
-    ) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
+    ) -> list[dict[str, Any]] | dict[str, Any]:
         """Search recipes with pagination"""
 
-        def execute_query(sql, params) -> List[Dict[str, Any]]:
+        def execute_query(sql, params) -> list[dict[str, Any]]:
             if db_cursor is None:
-                return cast(List[Dict[str, Any]], self.execute_query(sql, params))
+                return cast(list[dict[str, Any]], self.execute_query(sql, params))
             db_cursor.execute(sql, params)
             return [dict(row) for row in db_cursor.fetchall()]
 
@@ -1900,8 +1898,8 @@ class Database(GroupInventoryMixin):
 
         try:
             from .sql_queries import (
-                build_search_recipes_paginated_sql,
                 build_search_recipes_keyset_sql,
+                build_search_recipes_paginated_sql,
             )
 
             # Build query parameters
@@ -2074,7 +2072,7 @@ class Database(GroupInventoryMixin):
                 )
             # Get paginated results
             rows = cast(
-                List[Dict[str, Any]], execute_query(paginated_sql, query_params)
+                list[dict[str, Any]], execute_query(paginated_sql, query_params)
             )
 
             # Debug: Log the number of rows returned from database
@@ -2155,7 +2153,7 @@ class Database(GroupInventoryMixin):
             if all_needed_ingredient_ids:
                 placeholders = ",".join("%s" for _ in all_needed_ingredient_ids)
                 names_result = cast(
-                    List[Dict[str, Any]],
+                    list[dict[str, Any]],
                     execute_query(
                         f"SELECT id, name FROM ingredients WHERE id IN ({placeholders})",
                         tuple(all_needed_ingredient_ids),
@@ -2224,7 +2222,7 @@ class Database(GroupInventoryMixin):
 
     def _decode_search_cursor(
         self, cursor: str, sort_by: str, sort_order: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         try:
             padding = "=" * (-len(cursor) % 4)
             decoded = base64.urlsafe_b64decode(cursor + padding).decode("utf-8")
@@ -2262,7 +2260,7 @@ class Database(GroupInventoryMixin):
         """Get total count of recipes"""
         try:
             result = cast(
-                List[Dict[str, Any]], self.execute_query(get_recipes_count_sql)
+                list[dict[str, Any]], self.execute_query(get_recipes_count_sql)
             )
             return result[0]["total_count"] if result else 0
         except Exception as e:
@@ -2273,7 +2271,7 @@ class Database(GroupInventoryMixin):
         """Get total count of ingredients"""
         try:
             result = cast(
-                List[Dict[str, Any]], self.execute_query(get_ingredients_count_sql)
+                list[dict[str, Any]], self.execute_query(get_ingredients_count_sql)
             )
             return result[0]["total_count"] if result else 0
         except Exception as e:
@@ -2284,11 +2282,11 @@ class Database(GroupInventoryMixin):
 
     # --- Recipe Similarity Methods ---
 
-    def get_recipe_similarity(self, recipe_id: int) -> Optional[Dict[str, Any]]:
+    def get_recipe_similarity(self, recipe_id: int) -> dict[str, Any] | None:
         """Get pre-computed similar recipes for a given recipe_id"""
         try:
             result = cast(
-                List[Dict[str, Any]],
+                list[dict[str, Any]],
                 self.execute_query(
                     """
                     SELECT recipe_id, recipe_name, neighbors
@@ -2311,7 +2309,7 @@ class Database(GroupInventoryMixin):
             logger.error(f"Error getting recipe similarity for {recipe_id}: {str(e)}")
             raise
 
-    def upsert_recipe_similarity_batch(self, similarities: List[Dict[str, Any]]) -> int:
+    def upsert_recipe_similarity_batch(self, similarities: list[dict[str, Any]]) -> int:
         """
         Batch upsert recipe similarities during analytics refresh.
 

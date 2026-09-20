@@ -1,7 +1,7 @@
 """Analytics-specific database queries for CocktailDB"""
 
 import logging
-from typing import TYPE_CHECKING, Dict, List, Any, Optional, cast
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -21,8 +21,8 @@ class AnalyticsQueries:
         self.db = db
 
     def get_ingredient_usage_stats(
-        self, parent_id: Optional[int] = None, all_ingredients: bool = False
-    ) -> List[Dict[str, Any]]:
+        self, parent_id: int | None = None, all_ingredients: bool = False
+    ) -> list[dict[str, Any]]:
         """Get ingredient usage statistics with hierarchical aggregation
 
         Args:
@@ -66,13 +66,13 @@ class AnalyticsQueries:
             ORDER BY hierarchical_usage DESC
             """
 
-            result = cast(List[Dict[str, Any]], self.db.execute_query(sql, params))
+            result = cast(list[dict[str, Any]], self.db.execute_query(sql, params))
             return result
         except Exception as e:
             logger.error(f"Error getting ingredient usage stats: {str(e)}")
             raise
 
-    def get_recipe_complexity_distribution(self) -> List[Dict[str, Any]]:
+    def get_recipe_complexity_distribution(self) -> list[dict[str, Any]]:
         """Get recipe complexity distribution by ingredient count
 
         Returns:
@@ -94,7 +94,7 @@ class AnalyticsQueries:
             ORDER BY ingredient_count
             """
 
-            result = cast(List[Dict[str, Any]], self.db.execute_query(sql))
+            result = cast(list[dict[str, Any]], self.db.execute_query(sql))
             return result
         except Exception as e:
             logger.error(f"Error getting recipe complexity distribution: {str(e)}")
@@ -102,7 +102,7 @@ class AnalyticsQueries:
 
     def get_recipe_ingredient_matrix(
         self,
-    ) -> tuple[Dict[int, int], "pd.DataFrame", List[str]]:
+    ) -> tuple[dict[int, int], "pd.DataFrame", list[str]]:
         """Build normalized recipe-ingredient matrix for distance calculations
 
         Returns:
@@ -176,7 +176,11 @@ class AnalyticsQueries:
                 "recipe_id"
             )
             recipe_id_to_name = dict(
-                zip(recipe_id_to_name["recipe_name"], recipe_id_to_name["recipe_id"])
+                zip(
+                    recipe_id_to_name["recipe_name"],
+                    recipe_id_to_name["recipe_id"],
+                    strict=True,
+                )
             )
 
             # Create mapping from matrix row index to recipe ID
@@ -201,8 +205,8 @@ class AnalyticsQueries:
         Returns dict with 'data' key containing list of:
             {recipe_id, recipe_name, x, y, ingredients: [sorted ingredient names]}
         """
-        from sklearn.metrics import pairwise_distances
         from barcart import compute_umap_embedding
+        from sklearn.metrics import pairwise_distances
 
         try:
             # Get normalized recipe-ingredient matrix
@@ -420,18 +424,19 @@ class AnalyticsQueries:
         Returns:
             List of dicts with {recipe_id, recipe_name, x, y, ingredients: [...]}
         """
-        import numpy as np
         import os
-        from scipy import sparse as sp
+
+        import numpy as np
         from barcart import (
-            build_ingredient_tree,
             build_ingredient_distance_matrix,
+            build_ingredient_tree,
             build_recipe_volume_matrix,
-            em_fit,
             compute_umap_embedding,
+            em_fit,
         )
-        from barcart.rollup import create_rollup_mapping, apply_rollup_to_recipes
         from barcart.reporting import build_recipe_similarity
+        from barcart.rollup import apply_rollup_to_recipes, create_rollup_mapping
+        from scipy import sparse as sp
         from utils.analytics_files import (
             save_em_distance_matrix,
             save_em_ingredient_distance_matrix,
@@ -501,7 +506,7 @@ class AnalyticsQueries:
             logger.info("Building ingredient distance matrix")
 
             # Find all ancestors of ingredients in rolled recipes to preserve tree connectivity
-            ingredients_with_ancestors = set(["root"])
+            ingredients_with_ancestors = {"root"}
             for ing_id in unique_ingredients_after_rollup:
                 current_id = str(ing_id)
                 # Walk up the tree to root, adding all ancestors
@@ -527,7 +532,9 @@ class AnalyticsQueries:
             id_to_name = {
                 str(ing_id): name
                 for ing_id, name in zip(
-                    ingredients_df["id"], ingredients_df["ingredient_name"]
+                    ingredients_df["id"],
+                    ingredients_df["ingredient_name"],
+                    strict=True,
                 )
                 if str(ing_id) in ingredients_with_ancestors
                 or ing_id in unique_ingredients_after_rollup

@@ -1,25 +1,24 @@
 """Tags endpoints for the CocktailDB API"""
 
 import logging
-from typing import List
-from fastapi import APIRouter, Depends, status
 
+from core.exceptions import DatabaseException, NotFoundException
+from db.database import get_database as get_db
+from db.db_core import Database
 from dependencies.auth import (
     UserInfo,
     require_authentication,
 )
-from db.database import get_database as get_db
-from db.db_core import Database
-from models.requests import TagCreate, RecipeTagAssociation
-from models.responses import PublicTagResponse, PrivateTagResponse, MessageResponse
-from core.exceptions import NotFoundException, DatabaseException
+from fastapi import APIRouter, Depends, status
+from models.requests import RecipeTagAssociation, TagCreate
+from models.responses import MessageResponse, PrivateTagResponse, PublicTagResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/tags", tags=["tags"])
 
 
-@router.get("/public", response_model=List[PublicTagResponse])
+@router.get("/public", response_model=list[PublicTagResponse])
 async def get_public_tags(db: Database = Depends(get_db)):
     """Get all public tags"""
     try:
@@ -28,7 +27,7 @@ async def get_public_tags(db: Database = Depends(get_db)):
         return [PublicTagResponse(**tag) for tag in tags]
     except Exception as e:
         logger.error(f"Error getting public tags: {str(e)}")
-        raise DatabaseException("Failed to retrieve public tags", detail=str(e))
+        raise DatabaseException("Failed to retrieve public tags", detail=str(e)) from e
 
 
 @router.post(
@@ -70,10 +69,10 @@ async def create_public_tag(
 
     except Exception as e:
         logger.error(f"Error creating public tag: {str(e)}")
-        raise DatabaseException("Failed to create public tag", detail=str(e))
+        raise DatabaseException("Failed to create public tag", detail=str(e)) from e
 
 
-@router.get("/private", response_model=List[PrivateTagResponse])
+@router.get("/private", response_model=list[PrivateTagResponse])
 async def get_private_tags(
     db: Database = Depends(get_db), user: UserInfo = Depends(require_authentication)
 ):
@@ -84,7 +83,7 @@ async def get_private_tags(
         return [PrivateTagResponse(**tag) for tag in tags]
     except Exception as e:
         logger.error(f"Error getting private tags: {str(e)}")
-        raise DatabaseException("Failed to retrieve private tags", detail=str(e))
+        raise DatabaseException("Failed to retrieve private tags", detail=str(e)) from e
 
 
 @router.post(
@@ -123,7 +122,7 @@ async def create_private_tag(
 
     except Exception as e:
         logger.error(f"Error creating private tag: {str(e)}")
-        raise DatabaseException("Failed to create private tag", detail=str(e))
+        raise DatabaseException("Failed to create private tag", detail=str(e)) from e
 
 
 @router.delete("/public/{tag_id}", response_model=MessageResponse)
@@ -149,7 +148,7 @@ async def delete_public_tag(
         raise
     except Exception as e:
         logger.error(f"Error deleting public tag: {str(e)}")
-        raise DatabaseException("Failed to delete public tag", detail=str(e))
+        raise DatabaseException("Failed to delete public tag", detail=str(e)) from e
 
 
 @router.delete("/private/{tag_id}", response_model=MessageResponse)
@@ -174,7 +173,7 @@ async def delete_private_tag(
         raise
     except Exception as e:
         logger.error(f"Error deleting private tag: {str(e)}")
-        raise DatabaseException("Failed to delete private tag", detail=str(e))
+        raise DatabaseException("Failed to delete private tag", detail=str(e)) from e
 
 
 # Recipe tag association endpoints
@@ -250,7 +249,9 @@ async def add_public_tag_to_recipe(
         raise
     except Exception as e:
         logger.error(f"Error adding public tag to recipe: {str(e)}")
-        raise DatabaseException("Failed to add public tag to recipe", detail=str(e))
+        raise DatabaseException(
+            "Failed to add public tag to recipe", detail=str(e)
+        ) from e
 
 
 @recipe_tags_router.delete(
@@ -280,7 +281,7 @@ async def remove_public_tag_from_recipe(
         logger.error(f"Error removing public tag from recipe: {str(e)}")
         raise DatabaseException(
             "Failed to remove public tag from recipe", detail=str(e)
-        )
+        ) from e
 
 
 @recipe_tags_router.post(
@@ -322,7 +323,9 @@ async def add_private_tag_to_recipe(
         raise
     except Exception as e:
         logger.error(f"Error adding private tag to recipe: {str(e)}")
-        raise DatabaseException("Failed to add private tag to recipe", detail=str(e))
+        raise DatabaseException(
+            "Failed to add private tag to recipe", detail=str(e)
+        ) from e
 
 
 @recipe_tags_router.delete(
@@ -352,4 +355,4 @@ async def remove_private_tag_from_recipe(
         logger.error(f"Error removing private tag from recipe: {str(e)}")
         raise DatabaseException(
             "Failed to remove private tag from recipe", detail=str(e)
-        )
+        ) from e

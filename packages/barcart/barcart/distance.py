@@ -485,6 +485,7 @@ def compute_emd(
                 support_idx[cols].astype(int).tolist(),
                 flows.astype(float).tolist(),
                 flow_costs.astype(float).tolist(),
+                strict=True,
             )
         )
 
@@ -554,10 +555,10 @@ def emd_matrix(
         return (emd_matrix, plans) if return_plans else emd_matrix
 
     # Parallel path (shared memory threads to avoid copying large matrices)
-    from joblib import Parallel, delayed
-
     # Log parallel execution configuration
     import logging
+
+    from joblib import Parallel, delayed
 
     logger = logging.getLogger(__name__)
     n_pairs = n_recipes * (n_recipes - 1) // 2

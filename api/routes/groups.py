@@ -1,27 +1,27 @@
 """Authenticated bar membership and shared inventory routes."""
 
-from fastapi import APIRouter, Depends, HTTPException, Response
-from dependencies.auth import UserInfo, require_authentication
+from core.exceptions import NotFoundException
 from db.database import get_database
 from db.db_core import Database
+from dependencies.auth import UserInfo, require_authentication
+from fastapi import APIRouter, Depends, HTTPException, Response
 from models.requests import (
     GroupCreate,
-    GroupUpdate,
     GroupJoin,
     GroupLeave,
+    GroupUpdate,
     UserIngredientAdd,
     UserIngredientBulkAdd,
     UserIngredientBulkRemove,
 )
 from models.responses import (
     GroupDetailResponse,
-    UserIngredientResponse,
-    UserIngredientListResponse,
-    UserIngredientBulkResponse,
     IngredientRecommendationListResponse,
     MessageResponse,
+    UserIngredientBulkResponse,
+    UserIngredientListResponse,
+    UserIngredientResponse,
 )
-from core.exceptions import NotFoundException
 
 
 def private_response(response: Response):
