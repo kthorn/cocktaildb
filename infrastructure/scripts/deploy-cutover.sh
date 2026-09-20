@@ -336,7 +336,7 @@ run_phase stop
 WRITERS_STOPPED=true
 run_phase verify_stopped
 if [[ "$migration_15_was_pending" == true ]]; then
-    if ! printf '%s\n' "$RELEASE_ID" > "$PARITY_MARKER"; then
+    if ! printf '%s\n' "$RELEASE_ID" >"$PARITY_MARKER"; then
         fail_cutover recovery_marker 1
     fi
 fi

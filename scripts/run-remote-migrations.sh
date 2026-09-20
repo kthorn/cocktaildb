@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 show_help() {
-  cat << EOT
+    cat <<EOT
 Usage: $0 [dev|prod]
 
 Runs /opt/cocktaildb/scripts/run-migrations.sh over SSH.
@@ -22,36 +22,36 @@ EOT
 }
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-  show_help
-  exit 0
+    show_help
+    exit 0
 fi
 
 if [ "${1:-}" = "dev" ] || [ "${1:-}" = "prod" ]; then
-  TARGET_ENV="$1"
+    TARGET_ENV="$1"
 fi
 
 if [ "$TARGET_ENV" = "prod" ]; then
-  HOST="ec2-user@mixology.tools"
+    HOST="ec2-user@mixology.tools"
 else
-  HOST="ec2-user@dev.mixology.tools"
+    HOST="ec2-user@dev.mixology.tools"
 fi
 
 SSH_OPTS=()
 if [ -n "$SSH_KEY" ]; then
-  SSH_OPTS+=("-i" "$SSH_KEY")
+    SSH_OPTS+=("-i" "$SSH_KEY")
 fi
 
 if [ -z "$MIGRATION_FILE" ]; then
-  MIGRATION_FILE=$(ls -1 "$REPO_ROOT"/migrations/*.sql 2>/dev/null | sort | tail -n 1)
+    MIGRATION_FILE=$(ls -1 "$REPO_ROOT"/migrations/*.sql 2>/dev/null | sort | tail -n 1)
 fi
 
 if [ -n "$MIGRATION_FILE" ] && [ -f "$MIGRATION_FILE" ]; then
-  remote_tmp="/tmp/$(basename "$MIGRATION_FILE")"
-  scp "${SSH_OPTS[@]}" "$MIGRATION_FILE" "$HOST:$remote_tmp"
-  ssh "${SSH_OPTS[@]}" "$HOST" "sudo -u cocktaildb mkdir -p $APP_DIR/migrations && sudo mv $remote_tmp $APP_DIR/migrations/ && sudo chown cocktaildb:cocktaildb $APP_DIR/migrations/$(basename "$MIGRATION_FILE")"
+    remote_tmp="/tmp/$(basename "$MIGRATION_FILE")"
+    scp "${SSH_OPTS[@]}" "$MIGRATION_FILE" "$HOST:$remote_tmp"
+    ssh "${SSH_OPTS[@]}" "$HOST" "sudo -u cocktaildb mkdir -p $APP_DIR/migrations && sudo mv $remote_tmp $APP_DIR/migrations/ && sudo chown cocktaildb:cocktaildb $APP_DIR/migrations/$(basename "$MIGRATION_FILE")"
 else
-  echo "No migration file found to upload. Set COCKTAILDB_MIGRATION_FILE or ensure $REPO_ROOT/migrations exists."
-  exit 1
+    echo "No migration file found to upload. Set COCKTAILDB_MIGRATION_FILE or ensure $REPO_ROOT/migrations exists."
+    exit 1
 fi
 
 ssh "${SSH_OPTS[@]}" "$HOST" "cd $APP_DIR && sudo -u cocktaildb ./scripts/run-migrations.sh"

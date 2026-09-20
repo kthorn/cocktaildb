@@ -51,7 +51,7 @@ fi
 
 REMOTE_CMD="${REMOTE_SCRIPT}"
 case "${ACTION}" in
-    --bg|--status|"")
+    --bg | --status | "")
         if [[ -n "${ACTION}" ]]; then
             REMOTE_CMD="sudo -n ${REMOTE_SCRIPT} ${ACTION}"
         else
@@ -61,7 +61,7 @@ case "${ACTION}" in
     --progress)
         REMOTE_CMD="EM_PROGRESS=1 sudo -n -u cocktaildb ${REMOTE_SCRIPT}"
         ;;
-    --help|-h)
+    --help | -h)
         REMOTE_CMD="sudo -n ${REMOTE_SCRIPT} --help"
         ;;
     *)

@@ -66,7 +66,7 @@ fi
 
 # Create backup using pg_dump
 echo "Creating backup..."
-pg_dump -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" | gzip > "$BACKUP_PATH"
+pg_dump -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" | gzip >"$BACKUP_PATH"
 
 # Get backup size
 BACKUP_SIZE=$(du -h "$BACKUP_PATH" | cut -f1)
@@ -82,8 +82,8 @@ if [ -n "$BACKUP_BUCKET" ] && [ "$LOCAL_ONLY" = false ]; then
     LATEST_JSON_PATH="${BACKUP_DIR}/latest.json"
     BACKUP_SIZE_BYTES=$(stat -c %s "$BACKUP_PATH")
 
-    printf '%s\n' "$BACKUP_FILE" > "$LATEST_TXT_PATH"
-    cat > "$LATEST_JSON_PATH" <<JSON
+    printf '%s\n' "$BACKUP_FILE" >"$LATEST_TXT_PATH"
+    cat >"$LATEST_JSON_PATH" <<JSON
 {"filename":"$BACKUP_FILE","timestamp":"$TIMESTAMP","size_bytes":$BACKUP_SIZE_BYTES}
 JSON
 
@@ -100,14 +100,14 @@ fi
 # Clean up old local backups
 echo ""
 echo "Cleaning up local backups older than ${RETENTION_DAYS} days..."
-find "$BACKUP_DIR" -name "backup-*.sql.gz" -type f -mtime +${RETENTION_DAYS} -delete -print 2>/dev/null | \
+find "$BACKUP_DIR" -name "backup-*.sql.gz" -type f -mtime +${RETENTION_DAYS} -delete -print 2>/dev/null |
     while read -r deleted; do echo "  Deleted: $deleted"; done || true
 
 # Clean up old S3 backups (if bucket is configured)
 if [ -n "$BACKUP_BUCKET" ] && [ "$LOCAL_ONLY" = false ]; then
     echo "Cleaning up S3 backups older than ${RETENTION_DAYS} days..."
-    CUTOFF_DATE=$(date -u -d "${RETENTION_DAYS} days ago" +"%Y-%m-%d" 2>/dev/null || \
-                  date -u -v-${RETENTION_DAYS}d +"%Y-%m-%d")
+    CUTOFF_DATE=$(date -u -d "${RETENTION_DAYS} days ago" +"%Y-%m-%d" 2>/dev/null ||
+        date -u -v-${RETENTION_DAYS}d +"%Y-%m-%d")
 
     aws s3 ls "s3://${BACKUP_BUCKET}/" 2>/dev/null | while read -r line; do
         FILE_DATE=$(echo "$line" | awk '{print $1}')

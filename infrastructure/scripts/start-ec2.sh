@@ -11,7 +11,7 @@ echo "=== Starting CocktailDB $ENVIRONMENT Instance ==="
 # Find instance by tags
 INSTANCE_ID=$(aws ec2 describe-instances \
     --filters "Name=tag:Name,Values=cocktaildb-${ENVIRONMENT}" \
-              "Name=instance-state-name,Values=stopped" \
+    "Name=instance-state-name,Values=stopped" \
     --query 'Reservations[0].Instances[0].InstanceId' \
     --output text)
 
@@ -24,7 +24,7 @@ if [ "$INSTANCE_ID" = "None" ] || [ -z "$INSTANCE_ID" ]; then
 fi
 
 echo "Starting instance: $INSTANCE_ID"
-aws ec2 start-instances --instance-ids "$INSTANCE_ID" > /dev/null
+aws ec2 start-instances --instance-ids "$INSTANCE_ID" >/dev/null
 
 echo "Waiting for instance to be running..."
 aws ec2 wait instance-running --instance-ids "$INSTANCE_ID"

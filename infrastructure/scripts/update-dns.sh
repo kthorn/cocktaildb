@@ -58,7 +58,8 @@ fi
 
 # Create appropriate change batch based on record type
 if [ "$TARGET_TYPE" = "A" ]; then
-    CHANGE_BATCH=$(cat <<EOF
+    CHANGE_BATCH=$(
+        cat <<EOF
 {
   "Changes": [
     {
@@ -75,9 +76,10 @@ if [ "$TARGET_TYPE" = "A" ]; then
   ]
 }
 EOF
-)
+    )
 else
-    CHANGE_BATCH=$(cat <<EOF
+    CHANGE_BATCH=$(
+        cat <<EOF
 {
   "Changes": [
     {
@@ -94,7 +96,7 @@ else
   ]
 }
 EOF
-)
+    )
 fi
 
 # Submit change
