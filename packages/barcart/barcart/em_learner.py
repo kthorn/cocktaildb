@@ -1,14 +1,15 @@
 import os
+
 import numpy as np
 from tqdm.auto import tqdm
 
 from barcart.distance import (
+    emd_candidates,
     emd_matrix,
     emd_matrix_constrained,
-    emd_candidates,
     expected_ingredient_match_matrix,
-    manhattan_candidates,
     m_step_blosum,
+    manhattan_candidates,
 )
 
 

@@ -5,15 +5,15 @@ to their parent categories, reducing the ingredient space while preserving
 recipe semantics.
 """
 
-from typing import Dict
+
 import pandas as pd
 
 
 def create_rollup_mapping(
     ingredients: pd.DataFrame,
-    parent_map: Dict[str, tuple],
+    parent_map: dict[str, tuple],
     allow_substitution_col: str = "allow_substitution",
-) -> Dict[int, int]:
+) -> dict[int, int]:
     """Map substitutable leaf ingredients to their parents.
 
     Args:
@@ -61,7 +61,7 @@ def create_rollup_mapping(
 
 def apply_rollup_to_recipes(
     recipes: pd.DataFrame,
-    rollup_map: Dict[int, int],
+    rollup_map: dict[int, int],
     ingredient_id_col: str = "ingredient_id",
     volume_col: str = "volume_fraction",
 ) -> pd.DataFrame:
