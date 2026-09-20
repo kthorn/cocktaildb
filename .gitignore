@@ -173,10 +173,13 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+node_modules/
 *.txt
-!src/web/robots.txt
-!src/web/llms.txt
+!src/web/public/robots.txt
+!src/web/public/llms.txt
 *.json
+!package.json
+!package-lock.json
 src/web/js/config.js
 *.db
 *.csv
