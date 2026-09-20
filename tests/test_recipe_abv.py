@@ -175,6 +175,18 @@ def test_each_is_excluded_for_missing_zero_or_positive_amount(amount):
 
 
 @pytest.mark.parametrize("unit", ["each", "to top", "to rinse"])
+def test_negative_special_unit_quantity_invalidates_recipe(unit):
+    result = calculate_recipe_abv(
+        [row(1, -1, unit=unit), row(2, 10)],
+        {1: strength(0, 0), 2: strength(40, 40)},
+    )
+    assert result["status"] == "unknown"
+    assert result["min_percent"] is None
+    assert result["max_percent"] is None
+    assert any("Ingredient 1" in note for note in result["notes"])
+
+
+@pytest.mark.parametrize("unit", ["each", "to top", "to rinse"])
 def test_special_units_with_explicit_zero_contribute_nothing(unit):
     result = calculate_recipe_abv(
         [row(1, 0, unit=unit), row(2, 10)],

@@ -137,10 +137,23 @@ def _set_recorded_abv(db, ingredient_name, percent):
     [("name", False), ("name", True), ("random", True)],
 )
 def test_get_and_search_paths_include_matching_abv_payload(
-    db_instance_with_data, sort_by, return_pagination
+    db_instance, sort_by, return_pagination
 ):
-    db = db_instance_with_data
-    _set_recorded_abv(db, "Bourbon", 40)
+    db = db_instance
+    known = db.create_ingredient({"name": "Recorded spirit", "percent_abv": 40})
+    unknown = db.create_ingredient({"name": "Unobserved ingredient"})
+    unit_id = db.execute_query("SELECT id FROM units WHERE name = 'milliliter'")[0][
+        "id"
+    ]
+    created = db.create_recipe(
+        {
+            "name": "Small unknown contribution",
+            "ingredients": [
+                {"ingredient_id": known["id"], "unit_id": unit_id, "amount": 60},
+                {"ingredient_id": unknown["id"], "unit_id": unit_id, "amount": 5},
+            ],
+        }
+    )
     recipes = db.search_recipes_paginated(
         {},
         limit=100,
@@ -149,13 +162,15 @@ def test_get_and_search_paths_include_matching_abv_payload(
         return_pagination=return_pagination,
     )
     listed = recipes["recipes"] if return_pagination else recipes
-    assert listed
-    for recipe in listed:
-        assert recipe["abv"]["status"] in {"calculated", "estimated", "unknown"}
-
-    target = db.get_recipe(1)
-    searched = next(recipe for recipe in listed if recipe["id"] == 1)
-    assert searched["abv"] == target["abv"]
+    assert len(listed) == 1
+    target = db.get_recipe(created["id"])
+    for recipe in (created, target, listed[0]):
+        assert recipe["abv"]["status"] == "estimated"
+        assert recipe["abv"]["display"] == "Estimated 36–45%"
+        assert recipe["abv"]["min_percent"] == pytest.approx(36.9230769231)
+        assert recipe["abv"]["max_percent"] == pytest.approx(44.6153846154)
+        assert any("Unobserved ingredient" in note for note in recipe["abv"]["notes"])
+    assert listed[0]["abv"] == target["abv"]
 
 
 def test_keyset_and_offset_searches_enrich_after_trimming(db_instance_with_data):
