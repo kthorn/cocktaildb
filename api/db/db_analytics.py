@@ -179,7 +179,7 @@ class AnalyticsQueries:
                 zip(
                     recipe_id_to_name["recipe_name"],
                     recipe_id_to_name["recipe_id"],
-                    strict=False,
+                    strict=True,
                 )
             )
 
@@ -534,7 +534,7 @@ class AnalyticsQueries:
                 for ing_id, name in zip(
                     ingredients_df["id"],
                     ingredients_df["ingredient_name"],
-                    strict=False,
+                    strict=True,
                 )
                 if str(ing_id) in ingredients_with_ancestors
                 or ing_id in unique_ingredients_after_rollup

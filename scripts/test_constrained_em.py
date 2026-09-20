@@ -802,7 +802,7 @@ def prepare_matrices(ingredients_df, recipes_df):
     id_to_name = {
         str(ing_id): name
         for ing_id, name in zip(
-            ingredients_df["id"], ingredients_df["ingredient_name"], strict=False
+            ingredients_df["id"], ingredients_df["ingredient_name"], strict=True
         )
         if str(ing_id) in ingredients_with_ancestors or ing_id in unique_ingredients
     }
