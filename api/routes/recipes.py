@@ -1,31 +1,30 @@
 """Recipes endpoints for the CocktailDB API"""
 
 import logging
-from typing import Optional
-from fastapi import APIRouter, Depends, Query, Response, status
 
+from core.exceptions import DatabaseException, NotFoundException, ValidationException
+from db.database import get_database as get_db
+from db.db_core import Database
 from dependencies.auth import (
     UserInfo,
     get_current_user_optional,
     require_authentication,
     require_editor_access,
 )
-from db.database import get_database as get_db
-from db.db_core import Database
+from fastapi import APIRouter, Depends, Query, Response, status
 from models.requests import (
+    BulkRecipeUpload,
     RecipeCreate,
     RecipeUpdate,
-    BulkRecipeUpload,
 )
 from models.responses import (
-    RecipeResponse,
+    BulkUploadResponse,
+    BulkUploadValidationError,
     MessageResponse,
     PaginatedSearchResponse,
     PaginationMetadata,
-    BulkUploadResponse,
-    BulkUploadValidationError,
+    RecipeResponse,
 )
-from core.exceptions import NotFoundException, DatabaseException, ValidationException
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +60,7 @@ def check_duplicate_ingredients(ingredients: list) -> list[int]:
 
 @router.get("/search", response_model=PaginatedSearchResponse)
 async def search_recipes(
-    q: Optional[str] = Query(None, description="Search query"),
+    q: str | None = Query(None, description="Search query"),
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     limit: int = Query(20, ge=1, le=1000, description="Number of items per page"),
     sort_by: str = Query(
@@ -69,28 +68,28 @@ async def search_recipes(
         description="Sort field: name, created_at, avg_rating, rating_count, random",
     ),
     sort_order: str = Query("asc", description="Sort order: asc, desc"),
-    cursor: Optional[str] = Query(None, description="Cursor for pagination"),
-    min_rating: Optional[float] = Query(
+    cursor: str | None = Query(None, description="Cursor for pagination"),
+    min_rating: float | None = Query(
         None, description="Minimum rating (type depends on rating_type)", ge=0, le=5
     ),
-    max_rating: Optional[float] = Query(
+    max_rating: float | None = Query(
         None, description="Maximum rating (type depends on rating_type)", ge=0, le=5
     ),
     rating_type: str = Query(
         "average",
         description="Rating filter type: 'average' (avg_rating) or 'user' (user's personal rating)",
     ),
-    tags: Optional[str] = Query(None, description="Comma-separated list of tags"),
-    ingredients: Optional[str] = Query(
+    tags: str | None = Query(None, description="Comma-separated list of tags"),
+    ingredients: str | None = Query(
         None,
         description="Comma-separated ingredient names with optional operators (e.g., 'Vodka,Gin:MUST,Vermouth:MUST_NOT')",
     ),
-    inventory: Optional[bool] = Query(
+    inventory: bool | None = Query(
         None,
         description="Filter recipes that can be made with user's ingredient inventory",
     ),
     db: Database = Depends(get_db),
-    user: Optional[UserInfo] = Depends(get_current_user_optional),
+    user: UserInfo | None = Depends(get_current_user_optional),
 ):
     """Search recipes with pagination and filters"""
     try:
@@ -209,7 +208,7 @@ async def search_recipes(
 
 @router.get("/search/authenticated", response_model=PaginatedSearchResponse)
 async def search_recipes_authenticated(
-    q: Optional[str] = Query(None, description="Search query"),
+    q: str | None = Query(None, description="Search query"),
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     limit: int = Query(20, ge=1, le=1000, description="Number of items per page"),
     sort_by: str = Query(
@@ -217,23 +216,23 @@ async def search_recipes_authenticated(
         description="Sort field: name, created_at, avg_rating, rating_count, random",
     ),
     sort_order: str = Query("asc", description="Sort order: asc, desc"),
-    cursor: Optional[str] = Query(None, description="Cursor for pagination"),
-    min_rating: Optional[float] = Query(
+    cursor: str | None = Query(None, description="Cursor for pagination"),
+    min_rating: float | None = Query(
         None, description="Minimum rating (type depends on rating_type)", ge=0, le=5
     ),
-    max_rating: Optional[float] = Query(
+    max_rating: float | None = Query(
         None, description="Maximum rating (type depends on rating_type)", ge=0, le=5
     ),
     rating_type: str = Query(
         "average",
         description="Rating filter type: 'average' (avg_rating) or 'user' (user's personal rating)",
     ),
-    tags: Optional[str] = Query(None, description="Comma-separated list of tags"),
-    ingredients: Optional[str] = Query(
+    tags: str | None = Query(None, description="Comma-separated list of tags"),
+    ingredients: str | None = Query(
         None,
         description="Comma-separated ingredient names with optional operators (e.g., 'Vodka,Gin:MUST,Vermouth:MUST_NOT')",
     ),
-    inventory: Optional[bool] = Query(
+    inventory: bool | None = Query(
         False,
         description="Filter recipes that can be made with user's ingredient inventory",
     ),
@@ -309,7 +308,7 @@ async def get_recipe(
     recipe_id: int,
     response: Response,
     db: Database = Depends(get_db),
-    user: Optional[UserInfo] = Depends(get_current_user_optional),
+    user: UserInfo | None = Depends(get_current_user_optional),
 ):
     """Get a specific recipe by ID
 

@@ -6,7 +6,7 @@ through recipe search with user inventory.
 """
 
 import pytest
-from api.db.database import get_database
+
 from api.db.db_core import Database
 
 
@@ -127,7 +127,7 @@ class TestSubstitutionIntegration:
 
         # User only has Buffalo Trace bourbon
         db.add_user_ingredient(user_id, buffalo["id"])
-        print(f"Added Test Buffalo Trace to user inventory")
+        print("Added Test Buffalo Trace to user inventory")
 
         # Step 4: Test recipe search with substitution
         print("\n=== Testing recipe search ===")
@@ -265,7 +265,7 @@ class TestSubstitutionIntegration:
 
         # Give user the exact amaro needed
         db.add_user_ingredient(user_id, nonino["id"])
-        print(f"Added Amaro Nonino to user inventory")
+        print("Added Amaro Nonino to user inventory")
 
         # Search again
         search_results = db.search_recipes_paginated(
@@ -377,7 +377,7 @@ class TestSubstitutionIntegration:
             }
         )
 
-        print(f"Created Boulevardier requiring Bourbon + Amaro Nonino")
+        print("Created Boulevardier requiring Bourbon + Amaro Nonino")
 
         # Test 1: User has wrong combination
         user_id = "test-mixed-user"

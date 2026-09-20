@@ -1,11 +1,12 @@
 import logging
 import os
 import time
-from typing import Optional, Dict, Any
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from typing import Any
+
 import jwt
 import requests
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer(auto_error=False)
 
 # Cache for Cognito JWKS (JSON Web Key Set)
-_jwks_cache: Dict[str, Any] = {}
+_jwks_cache: dict[str, Any] = {}
 _jwks_cache_time: float = 0
 JWKS_CACHE_DURATION = 3600  # 1 hour
 
@@ -24,10 +25,10 @@ class UserInfo:
     def __init__(
         self,
         user_id: str,
-        username: Optional[str] = None,
-        email: Optional[str] = None,
-        groups: Optional[list] = None,
-        claims: Optional[Dict[str, Any]] = None,
+        username: str | None = None,
+        email: str | None = None,
+        groups: list | None = None,
+        claims: dict[str, Any] | None = None,
     ):
         self.user_id = user_id
         self.username = username
@@ -36,7 +37,7 @@ class UserInfo:
         self.claims = claims or {}
 
 
-def get_cognito_jwks() -> Dict[str, Any]:
+def get_cognito_jwks() -> dict[str, Any]:
     """Fetch and cache Cognito JWKS for JWT validation"""
     global _jwks_cache, _jwks_cache_time
 
@@ -84,7 +85,7 @@ def get_signing_key(token: str) -> Any:
         raise
 
 
-def validate_jwt_token(token: str) -> Optional[Dict[str, Any]]:
+def validate_jwt_token(token: str) -> dict[str, Any] | None:
     """Validate a Cognito JWT token and return claims"""
     try:
         user_pool_id = os.environ.get("USER_POOL_ID")
@@ -132,8 +133,8 @@ def validate_jwt_token(token: str) -> Optional[Dict[str, Any]]:
 
 
 def get_user_from_jwt(
-    request: Request, credentials: Optional[HTTPAuthorizationCredentials]
-) -> Optional[UserInfo]:
+    request: Request, credentials: HTTPAuthorizationCredentials | None
+) -> UserInfo | None:
     """Extract user information from JWT Bearer token"""
     if not credentials:
         logger.debug("No authorization credentials provided")
@@ -170,8 +171,8 @@ def get_user_from_jwt(
 
 async def get_current_user_optional(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-) -> Optional[UserInfo]:
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> UserInfo | None:
     """Get current user information if available (optional authentication)
 
     Validates JWT from Authorization header.
@@ -181,7 +182,7 @@ async def get_current_user_optional(
 
 async def get_current_user(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> UserInfo:
     """Get current user information (required authentication)"""
     user = await get_current_user_optional(request, credentials)
@@ -196,7 +197,7 @@ async def get_current_user(
 
 async def require_authentication(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> UserInfo:
     """Require authentication - raises exception if user is not authenticated"""
     return await get_current_user(request, credentials)
@@ -219,7 +220,7 @@ def is_editor_or_admin(user: UserInfo) -> bool:
 
 async def require_editor_access(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> UserInfo:
     """Require editor or admin access - raises exception if user is not authorized"""
     user = await get_current_user(request, credentials)

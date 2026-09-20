@@ -6,10 +6,9 @@ import logging
 import os
 import resource
 import sys
-from typing import Dict, Any
+from typing import Any
 
 import pandas as pd
-
 from db.database import get_database
 from db.db_analytics import AnalyticsQueries
 from utils.analytics_cache import AnalyticsStorage
@@ -29,9 +28,9 @@ def log_memory(stage: str) -> None:
 
 
 def enrich_tree_with_recipe_counts(
-    tree_node: Dict[str, Any],
-    recipe_counts: Dict[str, Dict[str, int]],
-) -> Dict[str, Any]:
+    tree_node: dict[str, Any],
+    recipe_counts: dict[str, dict[str, int]],
+) -> dict[str, Any]:
     """Recursively enrich tree nodes with recipe count data."""
     node_id = str(tree_node["id"])
 
@@ -54,7 +53,7 @@ def enrich_tree_with_recipe_counts(
     return tree_node
 
 
-def regenerate_analytics() -> Dict[str, Any]:
+def regenerate_analytics() -> dict[str, Any]:
     """
     Core analytics regeneration logic.
 

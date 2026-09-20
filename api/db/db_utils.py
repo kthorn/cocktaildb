@@ -1,7 +1,7 @@
 """Database utility functions"""
 
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -24,7 +24,7 @@ def build_recipe_sort_spec(sort_by: str, sort_order: str) -> RecipeSortSpec:
     return RecipeSortSpec(sort_expr, direction)
 
 
-def extract_all_ingredient_ids(ingredients_list: List[Dict[str, Any]]) -> set[int]:
+def extract_all_ingredient_ids(ingredients_list: list[dict[str, Any]]) -> set[int]:
     """Extracts all unique ingredient IDs (direct and ancestors) from a list of ingredient data.
 
     Args:
@@ -60,7 +60,7 @@ def extract_all_ingredient_ids(ingredients_list: List[Dict[str, Any]]) -> set[in
 
 
 def assemble_ingredient_full_names(
-    ingredients_list: List[Dict[str, Any]], ingredient_names_map: Dict[int, str]
+    ingredients_list: list[dict[str, Any]], ingredient_names_map: dict[int, str]
 ) -> None:
     """Helper to assemble the 'full_name' and 'hierarchy' for a list of ingredients.
 

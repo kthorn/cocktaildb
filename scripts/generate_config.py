@@ -5,10 +5,10 @@ Retrieves configuration values from CloudFormation outputs and generates the con
 """
 
 import argparse
-import boto3
-import sys
 import os
-from pathlib import Path
+import sys
+
+import boto3
 
 
 def get_cloudformation_output(stack_name, output_key, region="us-east-1"):

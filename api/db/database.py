@@ -1,13 +1,12 @@
 import logging
 import os
-from typing import Optional
 
 from .db_core import Database
 
 logger = logging.getLogger(__name__)
 
 # Singleton database instance
-_DB_INSTANCE: Optional[Database] = None
+_DB_INSTANCE: Database | None = None
 
 
 def get_database() -> Database:

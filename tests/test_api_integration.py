@@ -4,13 +4,13 @@ Tests end-to-end functionality with realistic data scenarios and production data
 """
 
 import pytest
-from fastapi import status
 from conftest import (
     assert_ingredient_structure,
     assert_recipe_structure,
     assert_unit_structure,
     assert_valid_response_structure,
 )
+from fastapi import status
 
 pytestmark = pytest.mark.asyncio
 

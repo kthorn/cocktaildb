@@ -5,17 +5,14 @@ Uses PostgreSQL via testcontainers for realistic database testing
 
 import gzip
 import os
-import shutil
-import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
+import httpx
 import psycopg2
-from psycopg2.extras import RealDictCursor
 import pytest
 import pytest_asyncio
-import httpx
 from httpx import ASGITransport
 from testcontainers.postgres import PostgresContainer
 
@@ -37,8 +34,8 @@ PROD_BACKUP_PATH = Path(_backup_env) if _backup_env else None
 
 def _reset_database_singleton():
     """Reset the database singleton to force new connection"""
-    from api.db.db_core import Database
     from api.db import database as db_module
+    from api.db.db_core import Database
 
     # Clear the singleton instance
     db_module._DB_INSTANCE = None
@@ -197,7 +194,7 @@ def pg_db_with_data(pg_db_with_schema):
 def pg_db_with_prod_data(postgres_container, postgres_connection_params):
     """PostgreSQL database loaded with production backup - session scoped for efficiency"""
     if PROD_BACKUP_PATH is None or not PROD_BACKUP_PATH.exists():
-        pytest.skip(f"Production backup not found (set PROD_BACKUP_PATH env var)")
+        pytest.skip("Production backup not found (set PROD_BACKUP_PATH env var)")
 
     conn = psycopg2.connect(**postgres_connection_params)
     conn.autocommit = True
@@ -604,20 +601,20 @@ def sample_recipe_data():
 # ============================================================================
 
 
-def assert_valid_response_structure(response_data: Dict[str, Any], expected_keys: list):
+def assert_valid_response_structure(response_data: dict[str, Any], expected_keys: list):
     """Assert that response has expected structure"""
     assert isinstance(response_data, dict)
     for key in expected_keys:
         assert key in response_data, f"Expected key '{key}' not found in response"
 
 
-def assert_ingredient_structure(ingredient: Dict[str, Any]):
+def assert_ingredient_structure(ingredient: dict[str, Any]):
     """Assert that ingredient has expected structure"""
     expected_keys = ["id", "name", "description", "parent_id", "path"]
     assert_valid_response_structure(ingredient, expected_keys)
 
 
-def assert_recipe_structure(recipe: Dict[str, Any]):
+def assert_recipe_structure(recipe: dict[str, Any]):
     """Assert that recipe has expected structure"""
     expected_keys = [
         "id",
@@ -632,14 +629,14 @@ def assert_recipe_structure(recipe: Dict[str, Any]):
     assert_valid_response_structure(recipe, expected_keys)
 
 
-def assert_unit_structure(unit: Dict[str, Any]):
+def assert_unit_structure(unit: dict[str, Any]):
     """Assert that unit has expected structure"""
     expected_keys = ["id", "name", "abbreviation", "conversion_to_ml"]
     assert_valid_response_structure(unit, expected_keys)
 
 
 def assert_complete_recipe_structure(
-    recipe: Dict[str, Any], include_user_fields: bool = False
+    recipe: dict[str, Any], include_user_fields: bool = False
 ):
     """Assert that recipe has complete structure required for infinite scroll (no N+1 queries)"""
     # Core recipe fields
@@ -686,7 +683,7 @@ def assert_complete_recipe_structure(
 
 
 def assert_search_response_structure(
-    response_data: Dict[str, Any], include_user_fields: bool = False
+    response_data: dict[str, Any], include_user_fields: bool = False
 ):
     """Assert that search response has complete structure required by API_SPEC.md"""
     # Top-level response structure
@@ -715,7 +712,7 @@ def assert_search_response_structure(
     assert query is None or isinstance(query, str), "query field must be null or string"
 
 
-def assert_pagination_mathematical_consistency(pagination: Dict[str, Any]):
+def assert_pagination_mathematical_consistency(pagination: dict[str, Any]):
     """Assert that pagination metadata is mathematically consistent"""
     page = pagination["page"]
     limit = pagination["limit"]
@@ -764,7 +761,7 @@ def assert_sort_order_correctness(recipes: list, sort_by: str, sort_order: str =
     )
 
 
-def assert_tag_structure(tag: Dict[str, Any]):
+def assert_tag_structure(tag: dict[str, Any]):
     """Assert that tag object has expected structure"""
     if isinstance(tag, dict):
         required_fields = ["id", "name"]

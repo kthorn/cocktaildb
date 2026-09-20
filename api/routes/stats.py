@@ -1,11 +1,11 @@
 """Stats endpoints for the CocktailDB API"""
 
 import logging
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
 
 from db.database import get_database as get_db
 from db.db_core import Database
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 

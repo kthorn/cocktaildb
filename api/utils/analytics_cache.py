@@ -1,10 +1,10 @@
 """Local storage manager for pre-generated analytics data"""
 
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any
-import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ class AnalyticsStorage:
         """Generate file path for analytics type"""
         return self.storage_path / self.storage_version / f"{analytics_type}.json"
 
-    def get_analytics(self, analytics_type: str) -> Optional[Dict[Any, Any]]:
+    def get_analytics(self, analytics_type: str) -> dict[Any, Any] | None:
         """Retrieve pre-generated analytics data from storage"""
         try:
             file_path = self._get_file_path(analytics_type)
@@ -30,7 +30,7 @@ class AnalyticsStorage:
                 logger.info(f"No analytics data found for {analytics_type}")
                 return None
 
-            with open(file_path, "r", encoding="utf-8") as file_handle:
+            with open(file_path, encoding="utf-8") as file_handle:
                 data = json.load(file_handle)
             logger.info(f"Retrieved analytics data for {analytics_type}")
             return data
@@ -41,7 +41,7 @@ class AnalyticsStorage:
             )
             return None
 
-    def put_analytics(self, analytics_type: str, data: Dict[Any, Any]) -> bool:
+    def put_analytics(self, analytics_type: str, data: dict[Any, Any]) -> bool:
         """Store pre-generated analytics data in storage"""
         try:
             file_path = self._get_file_path(analytics_type)

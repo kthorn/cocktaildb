@@ -1,19 +1,18 @@
 """Shared rating handlers to avoid code duplication between routes"""
 
 import logging
-from typing import Optional
 
-from dependencies.auth import UserInfo
+from core.exceptions import DatabaseException, NotFoundException
 from db.db_core import Database
+from dependencies.auth import UserInfo
 from models.requests import RatingCreate
-from models.responses import RatingSummaryResponse, RatingResponse, MessageResponse
-from core.exceptions import NotFoundException, DatabaseException
+from models.responses import MessageResponse, RatingResponse, RatingSummaryResponse
 
 logger = logging.getLogger(__name__)
 
 
 async def get_recipe_ratings_handler(
-    recipe_id: int, db: Database, user: Optional[UserInfo] = None
+    recipe_id: int, db: Database, user: UserInfo | None = None
 ) -> RatingSummaryResponse:
     """Get ratings for a specific recipe"""
     try:

@@ -5,10 +5,6 @@ and complex query scenarios
 """
 
 import pytest
-import psycopg2.errors
-from typing import Dict, Any, List
-
-from api.db.db_core import Database
 from core.exceptions import ConflictException
 
 

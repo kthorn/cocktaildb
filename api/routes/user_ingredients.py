@@ -1,25 +1,25 @@
 """User ingredient endpoints for the CocktailDB API"""
 
 import logging
-from fastapi import APIRouter, Depends, status, HTTPException
 
-from dependencies.auth import UserInfo, require_authentication
+from core.exceptions import DatabaseException, NotFoundException
 from db.database import get_database as get_db
 from db.db_core import Database
+from dependencies.auth import UserInfo, require_authentication
+from fastapi import APIRouter, Depends, HTTPException, status
 from models.requests import (
     UserIngredientAdd,
     UserIngredientBulkAdd,
     UserIngredientBulkRemove,
 )
 from models.responses import (
-    UserIngredientResponse,
-    UserIngredientListResponse,
-    UserIngredientBulkResponse,
-    MessageResponse,
-    IngredientRecommendationResponse,
     IngredientRecommendationListResponse,
+    IngredientRecommendationResponse,
+    MessageResponse,
+    UserIngredientBulkResponse,
+    UserIngredientListResponse,
+    UserIngredientResponse,
 )
-from core.exceptions import NotFoundException, DatabaseException
 
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,3 @@
-from typing import List
-
 from .db_utils import build_recipe_sort_spec
 
 # Shared SQL fragments for ingredient queries
@@ -96,9 +94,9 @@ get_ingredients_count_sql = """
 
 
 def build_search_recipes_paginated_sql(
-    must_conditions: List[str],
-    must_not_conditions: List[str],
-    tag_conditions: List[str] = None,
+    must_conditions: list[str],
+    must_not_conditions: list[str],
+    tag_conditions: list[str] = None,
     sort_by: str = "name",
     sort_order: str = "asc",
     inventory_filter: bool = False,
@@ -245,9 +243,9 @@ def build_search_recipes_paginated_sql(
 
 
 def build_search_recipes_keyset_sql(
-    must_conditions: List[str],
-    must_not_conditions: List[str],
-    tag_conditions: List[str] = None,
+    must_conditions: list[str],
+    must_not_conditions: list[str],
+    tag_conditions: list[str] = None,
     sort_by: str = "name",
     sort_order: str = "asc",
     inventory_filter: bool = False,

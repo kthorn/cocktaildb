@@ -6,7 +6,7 @@ for ingredient search and recipe matching scenarios.
 """
 
 import pytest
-from api.db.database import get_database
+
 from api.db.db_core import Database
 
 

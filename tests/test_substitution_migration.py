@@ -5,11 +5,12 @@ Verifies that the migration script properly adds the substitution_level column
 and sets appropriate default values.
 """
 
-import pytest
+import os
 import sqlite3
 import tempfile
-import os
 from pathlib import Path
+
+import pytest
 
 
 class TestSubstitutionMigration:
@@ -66,7 +67,7 @@ class TestSubstitutionMigration:
             )
 
             if migration_path.exists():
-                with open(migration_path, "r") as f:
+                with open(migration_path) as f:
                     migration_sql = f.read()
 
                 # Execute migration (split by semicolon to handle multiple statements)
@@ -171,7 +172,7 @@ class TestSubstitutionMigration:
             )
 
             if migration_path.exists():
-                with open(migration_path, "r") as f:
+                with open(migration_path) as f:
                     migration_sql = f.read()
 
                 for statement in migration_sql.split(";"):
@@ -258,7 +259,7 @@ class TestSubstitutionMigration:
             )
 
             if migration_path.exists():
-                with open(migration_path, "r") as f:
+                with open(migration_path) as f:
                     migration_sql = f.read()
 
                 # Apply migration first time

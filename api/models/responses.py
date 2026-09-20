@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -9,25 +8,23 @@ class IngredientResponse(BaseModel):
 
     id: int = Field(..., description="Ingredient ID")
     name: str = Field(..., description="Ingredient name")
-    description: Optional[str] = Field(None, description="Ingredient description")
-    parent_id: Optional[int] = Field(None, description="Parent ingredient ID")
-    path: Optional[str] = Field(None, description="Ingredient hierarchy path")
+    description: str | None = Field(None, description="Ingredient description")
+    parent_id: int | None = Field(None, description="Parent ingredient ID")
+    path: str | None = Field(None, description="Ingredient hierarchy path")
     allow_substitution: bool = Field(
         ...,
         description="Whether this ingredient can be substituted with siblings/ancestors",
     )
-    percent_abv: Optional[float] = Field(
-        None, description="Alcohol by volume percentage"
-    )
-    sugar_g_per_l: Optional[float] = Field(None, description="Sugar grams per liter")
-    titratable_acidity_g_per_l: Optional[float] = Field(
+    percent_abv: float | None = Field(None, description="Alcohol by volume percentage")
+    sugar_g_per_l: float | None = Field(None, description="Sugar grams per liter")
+    titratable_acidity_g_per_l: float | None = Field(
         None, description="Titratable acidity grams per liter"
     )
-    url: Optional[str] = Field(None, description="Reference URL")
-    exact_match: Optional[bool] = Field(
+    url: str | None = Field(None, description="Reference URL")
+    exact_match: bool | None = Field(
         None, description="Whether this was an exact match for search queries"
     )
-    created_by: Optional[str] = Field(
+    created_by: str | None = Field(
         None, description="User ID who created this ingredient"
     )
 
@@ -40,8 +37,8 @@ class UnitResponse(BaseModel):
 
     id: int = Field(..., description="Unit ID")
     name: str = Field(..., description="Unit name")
-    abbreviation: Optional[str] = Field(None, description="Unit abbreviation")
-    conversion_to_ml: Optional[float] = Field(
+    abbreviation: str | None = Field(None, description="Unit abbreviation")
+    conversion_to_ml: float | None = Field(
         None, description="Conversion factor to milliliters"
     )
 
@@ -54,19 +51,15 @@ class RecipeIngredientResponse(BaseModel):
 
     ingredient_id: int = Field(..., description="Ingredient ID")
     ingredient_name: str = Field(..., description="Ingredient name")
-    ingredient_path: Optional[str] = Field(
-        None, description="Ingredient hierarchy path"
-    )
-    full_name: Optional[str] = Field(
-        None, description="Full hierarchical ingredient name"
-    )
-    hierarchy: Optional[List[str]] = Field(
+    ingredient_path: str | None = Field(None, description="Ingredient hierarchy path")
+    full_name: str | None = Field(None, description="Full hierarchical ingredient name")
+    hierarchy: list[str] | None = Field(
         None, description="Ingredient hierarchy array from root to leaf (for tooltips)"
     )
-    amount: Optional[float] = Field(None, description="Ingredient amount")
-    unit_id: Optional[int] = Field(None, description="Unit ID")
-    unit_name: Optional[str] = Field(None, description="Unit name")
-    unit_abbreviation: Optional[str] = Field(None, description="Unit abbreviation")
+    amount: float | None = Field(None, description="Ingredient amount")
+    unit_id: int | None = Field(None, description="Unit ID")
+    unit_name: str | None = Field(None, description="Unit name")
+    unit_abbreviation: str | None = Field(None, description="Unit abbreviation")
 
     class Config:
         from_attributes = True
@@ -110,31 +103,29 @@ class RecipeResponse(BaseModel):
 
     id: int = Field(..., description="Recipe ID")
     name: str = Field(..., description="Recipe name")
-    instructions: Optional[str] = Field(None, description="Recipe instructions")
-    description: Optional[str] = Field(None, description="Recipe description")
-    image_url: Optional[str] = Field(None, description="Recipe image URL")
-    source: Optional[str] = Field(None, description="Recipe source")
-    source_url: Optional[str] = Field(None, description="Recipe source URL")
-    avg_rating: Optional[float] = Field(None, description="Average rating")
-    rating_count: Optional[int] = Field(None, description="Number of ratings")
-    user_rating: Optional[int] = Field(
+    instructions: str | None = Field(None, description="Recipe instructions")
+    description: str | None = Field(None, description="Recipe description")
+    image_url: str | None = Field(None, description="Recipe image URL")
+    source: str | None = Field(None, description="Recipe source")
+    source_url: str | None = Field(None, description="Recipe source URL")
+    avg_rating: float | None = Field(None, description="Average rating")
+    rating_count: int | None = Field(None, description="Number of ratings")
+    user_rating: int | None = Field(
         None,
         description="Current user's rating for this recipe (1-5, null if not rated)",
     )
-    created_by: Optional[str] = Field(
-        None, description="User ID who created this recipe"
-    )
-    ingredients: List[RecipeIngredientResponse] = Field(
+    created_by: str | None = Field(None, description="User ID who created this recipe")
+    ingredients: list[RecipeIngredientResponse] = Field(
         default=[], description="Recipe ingredients"
     )
-    tags: List[TagResponse] = Field(
+    tags: list[TagResponse] = Field(
         default=[], description="Unified tags with type field"
     )
     # Legacy fields for backward compatibility (can be removed when frontend is updated)
-    public_tags: List[PublicTagResponse] = Field(
+    public_tags: list[PublicTagResponse] = Field(
         default=[], description="Public tags (deprecated)"
     )
-    private_tags: List[PrivateTagResponse] = Field(
+    private_tags: list[PrivateTagResponse] = Field(
         default=[], description="Private tags (deprecated)"
     )
 
@@ -148,7 +139,7 @@ class RatingResponse(BaseModel):
     recipe_id: int = Field(..., description="Recipe ID")
     user_id: str = Field(..., description="User ID")
     rating: int = Field(..., description="Rating value (1-5)")
-    comment: Optional[str] = Field(None, description="Optional comment")
+    comment: str | None = Field(None, description="Optional comment")
     # Note: created_at field removed as it doesn't exist in current database schema
 
     class Config:
@@ -159,9 +150,9 @@ class RatingSummaryResponse(BaseModel):
     """Response model for rating summary data"""
 
     recipe_id: int = Field(..., description="Recipe ID")
-    avg_rating: Optional[float] = Field(None, description="Average rating")
+    avg_rating: float | None = Field(None, description="Average rating")
     rating_count: int = Field(..., description="Number of ratings")
-    user_rating: Optional[RatingResponse] = Field(
+    user_rating: RatingResponse | None = Field(
         None, description="Current user's rating (if authenticated)"
     )
 
@@ -173,9 +164,9 @@ class UserInfoResponse(BaseModel):
     """Response model for user information"""
 
     user_id: str = Field(..., description="User ID")
-    username: Optional[str] = Field(None, description="Username")
-    email: Optional[str] = Field(None, description="Email address")
-    groups: List[str] = Field(default=[], description="User groups")
+    username: str | None = Field(None, description="Username")
+    email: str | None = Field(None, description="Email address")
+    groups: list[str] = Field(default=[], description="User groups")
 
     class Config:
         from_attributes = True
@@ -194,9 +185,7 @@ class ErrorResponse(BaseModel):
     """Response model for error messages"""
 
     error: str = Field(..., description="Error message")
-    detail: Optional[str | List[str]] = Field(
-        None, description="Additional error details"
-    )
+    detail: str | list[str] | None = Field(None, description="Additional error details")
 
     class Config:
         from_attributes = True
@@ -210,7 +199,7 @@ class PaginationMetadata(BaseModel):
     total_count: int = Field(..., description="Total number of items", ge=0)
     has_next: bool = Field(..., description="Whether there is a next page")
     has_previous: bool = Field(..., description="Whether there is a previous page")
-    next_cursor: Optional[str] = Field(
+    next_cursor: str | None = Field(
         None, description="Opaque cursor for the next page (cursor-based pagination)"
     )
 
@@ -221,11 +210,11 @@ class PaginationMetadata(BaseModel):
 class PaginatedSearchResponse(BaseModel):
     """Response model for paginated search results"""
 
-    recipes: List[RecipeResponse] = Field(
+    recipes: list[RecipeResponse] = Field(
         ..., description="List of matching recipes with full details"
     )
     pagination: PaginationMetadata = Field(..., description="Pagination metadata")
-    query: Optional[str] = Field(None, description="Search query used")
+    query: str | None = Field(None, description="Search query used")
 
     class Config:
         from_attributes = True
@@ -268,10 +257,10 @@ class BulkUploadResponse(BaseModel):
     failed_count: int = Field(
         ..., description="Number of recipes that failed validation"
     )
-    validation_errors: List[BulkUploadValidationError] = Field(
+    validation_errors: list[BulkUploadValidationError] = Field(
         default=[], description="List of validation errors"
     )
-    uploaded_recipes: List[RecipeResponse] = Field(
+    uploaded_recipes: list[RecipeResponse] = Field(
         default=[], description="List of successfully uploaded recipes"
     )
 
@@ -288,10 +277,10 @@ class BulkIngredientUploadResponse(BaseModel):
     failed_count: int = Field(
         ..., description="Number of ingredients that failed validation"
     )
-    validation_errors: List[BulkIngredientUploadValidationError] = Field(
+    validation_errors: list[BulkIngredientUploadValidationError] = Field(
         default=[], description="List of validation errors"
     )
-    uploaded_ingredients: List[IngredientResponse] = Field(
+    uploaded_ingredients: list[IngredientResponse] = Field(
         default=[], description="List of successfully uploaded ingredients"
     )
 
@@ -304,9 +293,9 @@ class UserIngredientResponse(BaseModel):
 
     ingredient_id: int = Field(..., description="Ingredient ID")
     name: str = Field(..., description="Ingredient name")
-    description: Optional[str] = Field(None, description="Ingredient description")
-    parent_id: Optional[int] = Field(None, description="Parent ingredient ID")
-    path: Optional[str] = Field(None, description="Ingredient hierarchy path")
+    description: str | None = Field(None, description="Ingredient description")
+    parent_id: int | None = Field(None, description="Parent ingredient ID")
+    path: str | None = Field(None, description="Ingredient hierarchy path")
     added_at: datetime = Field(
         ..., description="When ingredient was added to user's inventory"
     )
@@ -318,7 +307,7 @@ class UserIngredientResponse(BaseModel):
 class UserIngredientListResponse(BaseModel):
     """Response model for list of user ingredients"""
 
-    ingredients: List[UserIngredientResponse] = Field(
+    ingredients: list[UserIngredientResponse] = Field(
         default=[], description="List of user's ingredients"
     )
     total_count: int = Field(
@@ -332,20 +321,18 @@ class UserIngredientListResponse(BaseModel):
 class UserIngredientBulkResponse(BaseModel):
     """Response model for bulk user ingredient operations"""
 
-    added_count: Optional[int] = Field(None, description="Number of ingredients added")
-    already_exists_count: Optional[int] = Field(
+    added_count: int | None = Field(None, description="Number of ingredients added")
+    already_exists_count: int | None = Field(
         None, description="Number of ingredients already in inventory"
     )
-    removed_count: Optional[int] = Field(
-        None, description="Number of ingredients removed"
-    )
-    not_found_count: Optional[int] = Field(
+    removed_count: int | None = Field(None, description="Number of ingredients removed")
+    not_found_count: int | None = Field(
         None, description="Number of ingredients not found in inventory"
     )
-    failed_count: Optional[int] = Field(
+    failed_count: int | None = Field(
         None, description="Number of ingredients that failed to process"
     )
-    errors: List[str] = Field(default=[], description="List of error messages")
+    errors: list[str] = Field(default=[], description="List of error messages")
 
     class Config:
         from_attributes = True
@@ -356,9 +343,9 @@ class IngredientRecommendationResponse(BaseModel):
 
     id: int = Field(..., description="Ingredient ID")
     name: str = Field(..., description="Ingredient name")
-    description: Optional[str] = Field(None, description="Ingredient description")
-    parent_id: Optional[int] = Field(None, description="Parent ingredient ID")
-    path: Optional[str] = Field(None, description="Ingredient hierarchy path")
+    description: str | None = Field(None, description="Ingredient description")
+    parent_id: int | None = Field(None, description="Parent ingredient ID")
+    path: str | None = Field(None, description="Ingredient hierarchy path")
     allow_substitution: bool = Field(
         ...,
         description="Whether this ingredient can be substituted with siblings/ancestors",
@@ -366,7 +353,7 @@ class IngredientRecommendationResponse(BaseModel):
     recipes_unlocked: int = Field(
         ..., description="Number of recipes that would be unlocked"
     )
-    recipe_names: List[str] = Field(
+    recipe_names: list[str] = Field(
         default=[], description="Names of recipes that would be unlocked"
     )
 
@@ -377,7 +364,7 @@ class IngredientRecommendationResponse(BaseModel):
 class IngredientRecommendationListResponse(BaseModel):
     """Response model for list of ingredient recommendations"""
 
-    recommendations: List[IngredientRecommendationResponse] = Field(
+    recommendations: list[IngredientRecommendationResponse] = Field(
         default=[], description="List of recommended ingredients"
     )
     total_count: int = Field(..., description="Total number of recommendations")
@@ -394,9 +381,9 @@ class GroupMemberResponse(BaseModel):
 class GroupDetailResponse(BaseModel):
     id: int
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     invite_code: str
     created_at: datetime
     updated_at: datetime
-    members: List[GroupMemberResponse] = Field(default_factory=list)
+    members: list[GroupMemberResponse] = Field(default_factory=list)
     member_count: int

@@ -1,25 +1,24 @@
 """Tags endpoints for the CocktailDB API"""
 
 import logging
-from typing import List
-from fastapi import APIRouter, Depends, status
 
+from core.exceptions import DatabaseException, NotFoundException
+from db.database import get_database as get_db
+from db.db_core import Database
 from dependencies.auth import (
     UserInfo,
     require_authentication,
 )
-from db.database import get_database as get_db
-from db.db_core import Database
-from models.requests import TagCreate, RecipeTagAssociation
-from models.responses import PublicTagResponse, PrivateTagResponse, MessageResponse
-from core.exceptions import NotFoundException, DatabaseException
+from fastapi import APIRouter, Depends, status
+from models.requests import RecipeTagAssociation, TagCreate
+from models.responses import MessageResponse, PrivateTagResponse, PublicTagResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/tags", tags=["tags"])
 
 
-@router.get("/public", response_model=List[PublicTagResponse])
+@router.get("/public", response_model=list[PublicTagResponse])
 async def get_public_tags(db: Database = Depends(get_db)):
     """Get all public tags"""
     try:
@@ -73,7 +72,7 @@ async def create_public_tag(
         raise DatabaseException("Failed to create public tag", detail=str(e))
 
 
-@router.get("/private", response_model=List[PrivateTagResponse])
+@router.get("/private", response_model=list[PrivateTagResponse])
 async def get_private_tags(
     db: Database = Depends(get_db), user: UserInfo = Depends(require_authentication)
 ):

@@ -1,7 +1,5 @@
 """Custom exceptions for the CocktailDB API"""
 
-from typing import Optional
-
 
 class CocktailDBException(Exception):
     """Base exception for CocktailDB API"""
@@ -10,7 +8,7 @@ class CocktailDBException(Exception):
         self,
         message: str,
         status_code: int = 500,
-        detail: Optional[str | list[str]] = None,
+        detail: str | list[str] | None = None,
     ):
         self.message = message
         self.status_code = status_code
@@ -22,7 +20,7 @@ class DatabaseException(CocktailDBException):
     """Database-related exceptions"""
 
     def __init__(
-        self, message: str = "Database operation failed", detail: Optional[str] = None
+        self, message: str = "Database operation failed", detail: str | None = None
     ):
         super().__init__(message, status_code=500, detail=detail)
 
@@ -30,18 +28,14 @@ class DatabaseException(CocktailDBException):
 class ValidationException(CocktailDBException):
     """Validation-related exceptions"""
 
-    def __init__(
-        self, message: str = "Validation failed", detail: Optional[str] = None
-    ):
+    def __init__(self, message: str = "Validation failed", detail: str | None = None):
         super().__init__(message, status_code=400, detail=detail)
 
 
 class NotFoundException(CocktailDBException):
     """Resource not found exceptions"""
 
-    def __init__(
-        self, message: str = "Resource not found", detail: Optional[str] = None
-    ):
+    def __init__(self, message: str = "Resource not found", detail: str | None = None):
         super().__init__(message, status_code=404, detail=detail)
 
 
@@ -51,6 +45,6 @@ class ConflictException(CocktailDBException):
     def __init__(
         self,
         message: str = "Resource conflict",
-        detail: Optional[str | list[str]] = None,
+        detail: str | list[str] | None = None,
     ):
         super().__init__(message, status_code=409, detail=detail)

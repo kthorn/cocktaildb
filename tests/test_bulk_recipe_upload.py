@@ -2,10 +2,9 @@
 Tests for bulk recipe upload functionality
 """
 
-import pytest
 import json
-from typing import Dict, Any
-from unittest.mock import patch
+
+import pytest
 
 pytestmark = pytest.mark.asyncio
 
@@ -120,7 +119,7 @@ class TestBulkUploadModels:
 
     async def test_bulk_recipe_create_model(self):
         """Test BulkRecipeCreate model validation"""
-        from api.models.requests import BulkRecipeCreate, BulkRecipeIngredient
+        from api.models.requests import BulkRecipeCreate
 
         # Valid recipe data
         recipe_data = {
@@ -776,13 +775,12 @@ class TestBulkUploadDocumentation:
 
     async def test_bulk_upload_template_structure(self):
         """Test that the bulk upload template has correct structure"""
-        import json
         from pathlib import Path
 
         template_path = Path(__file__).parent.parent / "bulk_upload_template.json"
         assert template_path.exists(), "bulk_upload_template.json should exist"
 
-        with open(template_path, "r") as f:
+        with open(template_path) as f:
             template_data = json.load(f)
 
         # Validate template structure
@@ -807,12 +805,12 @@ class TestBulkUploadDocumentation:
 
     async def test_bulk_upload_model_matches_template(self):
         """Test that the bulk upload models match the template format"""
-        from api.models.requests import BulkRecipeUpload
-        import json
         from pathlib import Path
 
+        from api.models.requests import BulkRecipeUpload
+
         template_path = Path(__file__).parent.parent / "bulk_upload_template.json"
-        with open(template_path, "r") as f:
+        with open(template_path) as f:
             template_data = json.load(f)
 
         # This should not raise a validation error
@@ -848,8 +846,6 @@ class TestBulkUploadPerformance:
         """Test the bulk upload validation logic without HTTP client"""
         from api.models.requests import (
             BulkRecipeUpload,
-            BulkRecipeCreate,
-            BulkRecipeIngredient,
         )
 
         # Test data that should pass validation

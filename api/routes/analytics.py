@@ -2,15 +2,15 @@
 
 import logging
 import os
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, cast
+
+from core.exceptions import DatabaseException, NotFoundException
+from db.database import get_database as get_db
+from db.db_analytics import AnalyticsQueries
+from db.db_core import Database
+from dependencies.auth import UserInfo, get_current_user_optional
 from fastapi import APIRouter, Depends, Query, Response
 from fastapi.responses import FileResponse
-
-from dependencies.auth import UserInfo, get_current_user_optional
-from db.database import get_database as get_db
-from db.db_core import Database
-from db.db_analytics import AnalyticsQueries
-from core.exceptions import DatabaseException, NotFoundException
 from utils.analytics_cache import AnalyticsStorage
 from utils.analytics_files import get_em_distance_matrix_path
 
@@ -41,7 +41,7 @@ def _load_cached_analytics(storage_key: str) -> dict:
 
 
 def add_cocktail_space_ratings(
-    stored_data: dict, db: Database, user: Optional[UserInfo]
+    stored_data: dict, db: Database, user: UserInfo | None
 ) -> dict:
     """Add live personal or average ratings to cached UMAP coordinates."""
     recipe_ids = [point["recipe_id"] for point in stored_data.get("data", [])]
@@ -63,7 +63,7 @@ def add_cocktail_space_ratings(
                 WHERE r.id = ANY(%(recipe_ids)s)
             """
             params = {"recipe_ids": recipe_ids}
-        rows = cast(List[Dict[str, Any]], db.execute_query(query, params))
+        rows = cast(list[dict[str, Any]], db.execute_query(query, params))
         ratings = {row["recipe_id"]: row["rating"] or None for row in rows}
 
     return {
@@ -81,10 +81,10 @@ def add_cocktail_space_ratings(
 
 @router.get("/ingredient-usage")
 async def get_ingredient_usage_analytics(
-    level: Optional[int] = None,
-    parent_id: Optional[int] = None,
+    level: int | None = None,
+    parent_id: int | None = None,
     db: Database = Depends(get_db),
-    user: Optional[UserInfo] = Depends(get_current_user_optional),
+    user: UserInfo | None = Depends(get_current_user_optional),
 ):
     """Get ingredient usage statistics with hierarchical aggregation
 
@@ -124,7 +124,7 @@ async def get_ingredient_usage_analytics(
 @router.get("/recipe-complexity")
 async def get_recipe_complexity_analytics(
     db: Database = Depends(get_db),
-    user: Optional[UserInfo] = Depends(get_current_user_optional),
+    user: UserInfo | None = Depends(get_current_user_optional),
 ):
     """Get recipe complexity distribution"""
     try:
@@ -144,7 +144,7 @@ async def get_recipe_complexity_analytics(
 async def get_cocktail_space_analytics(
     response: Response,
     db: Database = Depends(get_db),
-    user: Optional[UserInfo] = Depends(get_current_user_optional),
+    user: UserInfo | None = Depends(get_current_user_optional),
 ):
     """Get UMAP embedding of recipe space based on ingredient similarity"""
     response.headers["Cache-Control"] = PRIVATE_CACHE_CONTROL
@@ -165,7 +165,7 @@ async def get_cocktail_space_analytics(
 async def get_cocktail_space_em_analytics(
     response: Response,
     db: Database = Depends(get_db),
-    user: Optional[UserInfo] = Depends(get_current_user_optional),
+    user: UserInfo | None = Depends(get_current_user_optional),
 ):
     """Get UMAP embedding of recipe space based on EM-learned distances with ingredient rollup"""
     response.headers["Cache-Control"] = PRIVATE_CACHE_CONTROL
@@ -187,7 +187,7 @@ async def get_recipe_similar(
     recipe_id: int = Query(..., description="Recipe ID to fetch similar cocktails for"),
     limit: int = Query(5, ge=1, description="Number of similar cocktails to return"),
     db: Database = Depends(get_db),
-    user: Optional[UserInfo] = Depends(get_current_user_optional),
+    user: UserInfo | None = Depends(get_current_user_optional),
 ):
     """Get similar cocktails for a recipe from PostgreSQL."""
     try:
@@ -220,7 +220,7 @@ async def get_recipe_similar(
 @router.get("/ingredient-tree")
 async def get_ingredient_tree_analytics(
     db: Database = Depends(get_db),
-    user: Optional[UserInfo] = Depends(get_current_user_optional),
+    user: UserInfo | None = Depends(get_current_user_optional),
 ):
     """Get hierarchical ingredient tree with recipe counts
 

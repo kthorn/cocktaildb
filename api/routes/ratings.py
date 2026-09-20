@@ -1,20 +1,21 @@
 """Ratings endpoints for the CocktailDB API"""
 
 import logging
-from fastapi import APIRouter, Depends, status
 
+from db.database import get_database as get_db
+from db.db_core import Database
 from dependencies.auth import (
     UserInfo,
     get_current_user_optional,
     require_authentication,
 )
-from db.database import get_database as get_db
-from db.db_core import Database
+from fastapi import APIRouter, Depends, status
 from models.requests import RatingCreate
-from models.responses import RatingSummaryResponse, RatingResponse
+from models.responses import RatingResponse, RatingSummaryResponse
+
 from .rating_handlers import (
-    get_recipe_ratings_handler,
     create_or_update_rating_handler,
+    get_recipe_ratings_handler,
 )
 
 logger = logging.getLogger(__name__)

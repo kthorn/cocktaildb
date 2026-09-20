@@ -4,14 +4,10 @@ Comprehensive tests for error scenarios, edge cases, data validation,
 and recovery mechanisms in the database layer
 """
 
-import pytest
-import psycopg2
-import os
-import tempfile
-import shutil
-from typing import Dict, Any, List
-from unittest.mock import patch, MagicMock
 import time
+
+import psycopg2
+import pytest
 
 from api.db.db_core import Database
 
@@ -122,7 +118,6 @@ class TestConcurrencyAndLockingErrors:
         recipe = db.create_recipe({"name": "Test Recipe", "instructions": "Test"})
 
         import threading
-        import time
 
         errors = []
         success_count = [0]

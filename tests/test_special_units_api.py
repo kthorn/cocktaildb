@@ -3,7 +3,7 @@ Special Units API Testing
 Tests for recipes containing special units like "to top", "to rinse", and "each"
 """
 
-from typing import Dict, Any
+from typing import Any
 
 from api.db.db_core import Database
 
@@ -11,7 +11,7 @@ from api.db.db_core import Database
 class TestSpecialUnitsInRecipes:
     """Test recipes containing special units"""
 
-    def setup_test_data(self, db: Database) -> Dict[str, Any]:
+    def setup_test_data(self, db: Database) -> dict[str, Any]:
         """Set up test data with ingredients and special units"""
         # Use existing ingredients or create new ones with unique names
         all_ingredients = db.get_ingredients()

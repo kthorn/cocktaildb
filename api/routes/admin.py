@@ -46,9 +46,7 @@ async def download_database(
     """
     try:
         # Generate backup filename
-        timestamp = datetime.datetime.now(datetime.timezone.utc).strftime(
-            "%Y-%m-%d_%H-%M-%S"
-        )
+        timestamp = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d_%H-%M-%S")
         backup_filename = f"backup-{timestamp}.sql"
         temp_backup_path = f"/tmp/{backup_filename}"
 
