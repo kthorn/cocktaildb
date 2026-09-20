@@ -1,2 +1,31 @@
+# Lint policy for the CocktailDB repository.
+#
+# The rule set is declared explicitly rather than left to ruff's built-in
+# defaults, so that upgrading ruff cannot silently activate new rules and
+# rewrite unrelated code. This mirrors packages/barcart/pyproject.toml, which
+# declares the same house set.
+#
+# required-version pins the rule set to one ruff release: selecting a family
+# such as "B", "C4" or "UP" selects every rule in it, so a newer ruff adds
+# findings with no config change. It also catches entry points that bypass
+# .pre-commit-config.yaml and requirements-test.txt, such as an editor
+# extension's bundled binary.
+required-version = "==0.16.5"
+
 line-length = 88
 target-version = "py311"
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long - the formatter owns line length
+    "B008",  # function call in argument default - the FastAPI Depends() idiom
+]

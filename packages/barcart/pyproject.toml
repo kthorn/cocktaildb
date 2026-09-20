@@ -25,7 +25,7 @@ dependencies = [
 dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
-    "ruff>=0.1.0",
+    "ruff==0.16.5",
     "mypy>=1.5.0",
     "sphinx>=7.0.0",
     "sphinx-rtd-theme>=2.0.0",
@@ -51,7 +51,11 @@ addopts = [
     "--cov-report=term-missing",
 ]
 
+# Kept in step with the repository root's ruff.toml. required-version matters
+# here too: ruff resolves the nearest config, so a barcart file is linted by this
+# file, not by the root one.
 [tool.ruff]
+required-version = "==0.16.5"
 line-length = 88
 target-version = "py311"
 
