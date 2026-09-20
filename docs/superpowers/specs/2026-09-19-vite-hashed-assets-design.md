@@ -1,6 +1,6 @@
 # Vite and content-hashed frontend assets
 
-**Status:** Draft — reconciled with main at 0fd4cb0; independent refinement completion and user approval pending
+**Status:** User-approved on 2026-09-20 — reconciled with main at 0fd4cb0. Automated refinement remains incomplete due to recorded runner/tool-loading failures; approval does not reclassify those failures as passed reviews.
 
 ## Goal and approved scope
 
@@ -98,4 +98,4 @@ Replace source-directory deployment and obsolete static-server guidance. Update 
 
 ## Remaining gate
 
-Independent codebase-grounded refinement and final user approval are required before implementation planning. TypeScript remains a separate future decision.
+The user approved proceeding to implementation planning on 2026-09-20 after the automated-review blocker was disclosed. The implementation plan is `docs/superpowers/plans/2026-09-20-vite-hashed-assets.md`; plan review and execution-method confirmation remain before implementation. Independent implementation reviews require repairing reviewer tool loading. TypeScript remains a separate future decision.
