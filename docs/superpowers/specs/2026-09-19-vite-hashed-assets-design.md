@@ -15,7 +15,7 @@ No TypeScript conversion, UI framework, SPA routing, new staging infrastructure,
 - `api/templates/base.html`, `recipe.html` and `ingredient.html` render HTML through `api/routes/pages.py`. The base template references source CSS; recipe pages additionally reference source JavaScript. Ingredient and 404 pages inherit the base stylesheet links.
 - `infrastructure/ansible/playbooks/deploy.yml` copies frontend sources and generates environment-specific `web/js/config.js`.
 - `infrastructure/scripts/deploy-cutover.sh` locks deployment, backs up, builds the API image, stops writers, runs migrations, starts/checks the API, then publishes the frontend by moving directories. The new API can render pages before that final publication.
-- Both Caddy configurations currently revalidate unversioned HTML/JS/CSS. The Ansible template and standalone configuration must remain aligned.
+- `infrastructure/caddy/Caddyfile` is the single Caddy configuration, published by both deploy.yml and deploy-caddy.yml after the deploy cleanup in commit 57658c0. It currently revalidates unversioned HTML/JS/CSS. Keep both HTTP/domain blocks aligned; do not recreate the deleted Caddyfile.j2 template.
 - Analytics loads D3 from a CDN. This migration leaves that dependency unchanged; content-hashing guarantees apply to application build assets, not that external resource.
 
 ## Build and runtime configuration
@@ -47,6 +47,8 @@ Successful hashed asset responses receive `Cache-Control: public, max-age=315360
 Build on the deployment/controller machine, not EC2. A deployment can consume an explicitly supplied, already-built frontend artifact directory; the normal wrapper may build one when none is supplied. Ansible stages that artifact instead of `src/web/`. Both paths validate it before touching the live application. This supports promoting identical bytes to a second environment without rebuilding.
 
 The artifact contains built HTML/public files, hashed assets and manifest, but no environment-specific runtime configuration. Record an inventory of all emitted `/assets/` files as part of the artifact, including transitive chunks and CSS-referenced files; retention must not rely only on top-level manifest entries. Validate inventory paths remain inside the asset directory. Stage a copy of the matching manifest at `api/frontend-manifest.json` within the release build context, so the existing `COPY api/ .` includes it at `/app/frontend-manifest.json`. Keep this generated file out of Git while explicitly allowing it through Docker ignore rules. Validate that the built image contains it; do not depend on ignored `dist/` or a `*.manifest` filename.
+
+The deployment now copies an explicit host-script list. Reuse deploy-cutover.sh for release logic; if a separate host-invoked helper is necessary, add it to deploy.yml's copy loop and preserve `tests/test_deploy_config_sources.py` coverage. Do not reinstate whole-directory script copying or the removed Galaxy dependencies. Retain the single DOMAIN_NAME systemd override source used by both Caddy deployment paths.
 
 Under the existing deployment lock:
 

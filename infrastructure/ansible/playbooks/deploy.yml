@@ -131,12 +131,17 @@
 
     - name: Copy deployment scripts
       ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../../scripts/"
+        src: "{{ playbook_dir }}/../../scripts/{{ item }}"
         dest: "{{ app_home }}/scripts/"
         owner: "{{ app_user }}"
         group: "{{ app_group }}"
         mode: '0755'
-        directory_mode: '0755'
+      loop:
+        - analytics-debounce-check.sh
+        - backup-postgres.sh
+        - deploy-cutover.sh
+        - run-migrations.sh
+        - trigger-analytics.sh
 
     # Copy systemd units
     - name: Copy systemd service units
@@ -212,14 +217,6 @@
         owner: "1000"
         group: "1000"
         mode: '0755'
-
-    # Ensure correct ownership
-    - name: Set ownership of app directory
-      file:
-        path: "{{ app_home }}"
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
-        recurse: yes
 
     - name: Stage migrations
       ansible.builtin.synchronize:
