@@ -1,6 +1,6 @@
 # Ingredient-only recipe ABV
 
-**Status:** Refined
+**Status:** Approved — display precision updated to whole-percent ABV at the owner's request
 
 ## Goal and scope
 
@@ -248,7 +248,7 @@ The result object contains:
 - `min_percent` and `max_percent`: unrounded numeric bounds, or both null when
   volumes cannot be resolved or there is no modeled volume. When the width
   exceeds 20, preserve computed bounds here but set status to `unknown`.
-- `display`: a backend-formatted value, such as `26.7%`, `Estimated 20.0–30.0%`,
+- `display`: a backend-formatted value, such as `27%`, `Estimated 20–30%`,
   or `Unknown`. Include the `Estimated` prefix here for estimated results.
   Both renderers use it verbatim, without duplicating status or formatting logic.
 - `notes`: ordered, deduplicated strings identifying the ingredients/families and
@@ -260,9 +260,9 @@ top-up/rinse assumption, or excluded counted ingredient, unless an Unknown rule
 wins. Existing volume-unit conversion factors are accepted as the project's
 standard, even where they approximate dashes or drops.
 
-Format point values to one decimal place. For a nonzero point below 0.1%, use
-`<0.1%` rather than suggesting zero alcohol. Format interval lower bounds downward
-and upper bounds upward to one decimal place so rounding does not shrink the
+Format point values to the nearest whole percentage point (half up). For a nonzero
+point below 1%, use `<1%` rather than suggesting zero alcohol. Format interval
+lower bounds downward and upper bounds upward to whole percentages so rounding does not shrink the
 interval or collapse a nonzero-width interval into a point. Decide Unknown using
 the raw width, not this rounded display. Include `Estimated` in the backend
 formatted string; a single-observation point must not appear as recorded strength.

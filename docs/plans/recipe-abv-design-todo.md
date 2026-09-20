@@ -7,8 +7,12 @@
 - [x] Present design sections and obtain approval of calculation rules.
 - [x] Write and commit the design specification (`42d3c2a`).
 - [x] Self-review and refine the exact specification with pi-refine (converged after three reviews; owner-approved rollup fix included; see `recipe-abv-review-log.md`).
-- [ ] Obtain user approval of the refined specification.
-- [ ] Create implementation plan using writing-plans.
+- [x] Obtain user approval of the refined specification (whole-percent display requested; implementation authorized).
+- [x] Create implementation plan using writing-plans (`docs/superpowers/plans/2026-09-19-recipe-abv.md`).
+- [ ] Implement Task 1: live ranges and last-child correction; independent task review.
+- [ ] Implement Task 2: calculator and recipe enrichment; independent task review.
+- [ ] Implement Task 3: recipe display and validation; independent task review.
+- [ ] Complete whole-branch review and report verification.
 
 Spec: `docs/superpowers/specs/2026-09-19-recipe-abv-design.md`.
 Dilution and structured preparation are deferred to GitHub issue #70.
