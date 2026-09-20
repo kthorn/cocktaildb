@@ -133,7 +133,10 @@ export class CocktailAPI {
     // Recipes API
 
     async getRecipe(id) {
-        return this._request(`/recipes/${id}`);
+        // Personalised read: /recipes/{id} accepts an optional identity and returns
+        // the caller's private tags and their own rating when a session is presented.
+        // Same shape as getCocktailSpaceAnalytics; anonymous callers stay anonymous.
+        return this._request(`/recipes/${id}`, 'GET', null, this.isAuthenticated());
     }
 
     async createRecipe(recipeData) {

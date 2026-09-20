@@ -240,3 +240,41 @@ test('authenticated search refreshes before choosing its endpoint', async () => 
     assert.match(requests[1].url, /\/recipes\/search\/authenticated/);
     assert.match(requests[1].options.headers.Authorization, /^Bearer /);
 });
+
+test('recipe detail read carries the caller identity for private tags and own rating', async () => {
+    const { c, seed } = harness();
+    seed();
+    const requests = [];
+    const renewed = jwt(future());
+    c.fetch = async (url, options) => {
+        requests.push({ url, options });
+        return {
+            ok: true,
+            status: 200,
+            json: async () =>
+                url.includes('/oauth2/token')
+                    ? { access_token: renewed, id_token: renewed }
+                    : { id: 7, tags: [] },
+        };
+    };
+    const recipe = await vm.runInContext(
+        "new CocktailAPI('https://api.example.test').getRecipe(7)",
+        c,
+    );
+    assert.equal(recipe.id, 7);
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1].url, 'https://api.example.test/recipes/7');
+    assert.equal(requests[1].options.headers.Authorization, `Bearer ${renewed}`);
+});
+
+test('recipe detail read stays public for signed-out visitors', async () => {
+    const { c } = harness();
+    const requests = [];
+    c.fetch = async (url, options) => {
+        requests.push({ url, options });
+        return { ok: true, status: 200, json: async () => ({ id: 7 }) };
+    };
+    await vm.runInContext("new CocktailAPI('https://api.example.test').getRecipe(7)", c);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].options.headers.Authorization, undefined);
+});
