@@ -169,6 +169,21 @@ async function validateManifest(file, inventoryFiles, assetsDirectory) {
                 );
             }
         }
+        for (const field of ['imports', 'dynamicImports']) {
+            if (!(field in entry)) continue;
+            if (!Array.isArray(entry[field]))
+                fail(`Vite manifest ${entryName}.${field} must be an array`);
+            for (const [index, reference] of entry[field].entries()) {
+                if (typeof reference !== 'string') {
+                    fail(`Vite manifest ${entryName}.${field}[${index}] is invalid`);
+                }
+                if (!Object.hasOwn(manifest, reference)) {
+                    fail(
+                        `Vite manifest ${entryName}.${field}[${index}] references missing manifest entry: ${reference}`,
+                    );
+                }
+            }
+        }
     }
 }
 

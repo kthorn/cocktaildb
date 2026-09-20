@@ -3,6 +3,7 @@ import {
     access,
     appendFile,
     cp,
+    mkdir,
     mkdtemp,
     readFile,
     readdir,
@@ -15,6 +16,7 @@ import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { validateArtifact } from '../scripts/frontend-artifact.mjs';
 
 const execFileAsync = promisify(execFile);
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -31,6 +33,44 @@ async function exists(file) {
 
 async function copyIfPresent(source, destination, options = {}) {
     if (await exists(source)) await cp(source, destination, options);
+}
+
+async function assertManifestReferenceValidation() {
+    const artifact = await mkdtemp(path.join(tmpdir(), 'cocktaildb-artifact-'));
+    try {
+        const assets = path.join(artifact, 'web', 'assets');
+        await mkdir(assets, { recursive: true });
+        await writeFile(path.join(assets, 'main.js'), '');
+        await writeFile(
+            path.join(artifact, 'asset-inventory.json'),
+            JSON.stringify({ version: 1, files: ['main.js'] }),
+        );
+        const invalidEntries = [
+            { field: 'imports', value: 'entry', message: /must be an array/ },
+            { field: 'dynamicImports', value: 'entry', message: /must be an array/ },
+            { field: 'imports', value: [42], message: /is invalid/ },
+            { field: 'dynamicImports', value: [42], message: /is invalid/ },
+            {
+                field: 'imports',
+                value: ['missing'],
+                message: /references missing manifest entry/,
+            },
+            {
+                field: 'dynamicImports',
+                value: ['missing'],
+                message: /references missing manifest entry/,
+            },
+        ];
+        for (const { field, value, message } of invalidEntries) {
+            await writeFile(
+                path.join(artifact, 'manifest.json'),
+                JSON.stringify({ entry: { file: 'assets/main.js', [field]: value } }),
+            );
+            await assert.rejects(() => validateArtifact(artifact), message);
+        }
+    } finally {
+        await rm(artifact, { recursive: true, force: true });
+    }
 }
 
 async function createFixture() {
@@ -160,6 +200,20 @@ async function assertConfigExternalized(fixture) {
     await assert.rejects(access(path.join(fixture, 'dist', 'web', 'js', 'config.js')));
 }
 
+async function assertSentinelConfigExternalized(fixture) {
+    const web = path.join(fixture, 'dist', 'web');
+    const textFiles = (await listFiles(web)).filter((name) => /\.(?:html|js|css)$/i.test(name));
+    let configImportFound = false;
+    for (const name of textFiles) {
+        const source = await readFile(path.join(web, name), 'utf8');
+        for (const sentinel of sentinelValues)
+            assert(!source.includes(sentinel), `${name} embeds ${sentinel}`);
+        if (source.includes('/js/config.js')) configImportFound = true;
+    }
+    assert(configImportFound, 'sentinel build has no external config import');
+    await assert.rejects(access(path.join(web, 'js', 'config.js')));
+}
+
 async function assertInventory(fixture) {
     const inventory = JSON.parse(
         await readFile(path.join(fixture, 'dist', 'asset-inventory.json'), 'utf8'),
@@ -199,11 +253,25 @@ async function buildTwiceAndCheck(fixture) {
 }
 
 async function main() {
+    await assertManifestReferenceValidation();
     const fixture = await createFixture();
     try {
         const originalCss = await readFile(path.join(fixture, 'src', 'web', 'styles.css'));
         const originalJs = await readFile(path.join(fixture, 'src', 'web', 'js', 'common.js'));
         const baseline = await buildTwiceAndCheck(fixture);
+
+        const sentinelConfig = path.join(fixture, 'src', 'web', 'js', 'config.js');
+        await writeFile(
+            sentinelConfig,
+            `export default {
+    apiUrl: '${sentinelValues[0]}',
+    clientId: '${sentinelValues[1]}',
+};
+`,
+        );
+        await runBuild(fixture);
+        await assertSentinelConfigExternalized(fixture);
+        await rm(sentinelConfig, { force: true });
 
         await appendFile(
             path.join(fixture, 'src', 'web', 'styles.css'),
