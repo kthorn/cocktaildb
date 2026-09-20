@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 import {
     access,
     appendFile,
@@ -233,6 +234,109 @@ function assertChangedAssetNames(before, after, extension) {
     assert.notDeepEqual(changed, original, `${extension} asset names did not change`);
 }
 
+async function serveDirectory(directory) {
+    const server = createServer(async (request, response) => {
+        const pathname = decodeURIComponent(
+            new URL(request.url, 'http://localhost').pathname,
+        ).replace(/^\/+/, '');
+        const root = path.resolve(directory);
+        const file = path.resolve(root, pathname);
+        if (file !== root && !file.startsWith(`${root}${path.sep}`)) {
+            response.writeHead(403);
+            response.end();
+            return;
+        }
+        try {
+            response.writeHead(200);
+            response.end(await readFile(file));
+        } catch {
+            response.writeHead(404);
+            response.end();
+        }
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    return {
+        server,
+        url: `http://127.0.0.1:${address.port}`,
+    };
+}
+
+async function assertRuntimeConfigCopies(fixture, baseline) {
+    const copies = await mkdtemp(path.join(tmpdir(), 'cocktaildb-config-copies-'));
+    const configs = [
+        {
+            apiUrl: 'https://dev.example/api',
+            userPoolId: 'dev-pool',
+            clientId: 'dev-client',
+            cognitoDomain: 'https://dev.example.auth',
+            appUrl: 'http://localhost:8000',
+            appName: 'Cocktail Database (dev)',
+        },
+        {
+            apiUrl: 'https://prod.example/api',
+            userPoolId: 'prod-pool',
+            clientId: 'prod-client',
+            cognitoDomain: 'https://prod.example.auth',
+            appUrl: 'https://prod.example',
+            appName: 'Cocktail Database (prod)',
+        },
+    ];
+    const servers = [];
+    try {
+        for (const [index, config] of configs.entries()) {
+            const served = path.join(copies, `copy-${index}`);
+            await cp(path.join(fixture, 'dist', 'web'), served, { recursive: true });
+            await mkdir(path.join(served, 'js'), { recursive: true });
+            await writeFile(
+                path.join(served, 'js', 'config.js'),
+                `export default ${JSON.stringify(config)};\n`,
+            );
+            assertStableSnapshots(baseline, await snapshotTree(path.join(served, 'assets')));
+
+            const running = await serveDirectory(served);
+            servers.push(running.server);
+            const configResponse = await fetch(`${running.url}/js/config.js`);
+            assert.equal(configResponse.status, 200);
+            const configSource = await configResponse.text();
+            assert(configSource.includes(config.apiUrl));
+            assert(configSource.includes(config.userPoolId));
+            assert(configSource.includes(config.clientId));
+            assert(configSource.includes(config.cognitoDomain));
+
+            const assetName = baseline.names[0];
+            const assetResponse = await fetch(`${running.url}/assets/${assetName}`);
+            assert.equal(assetResponse.status, 200);
+            assert.deepEqual(
+                Buffer.from(await assetResponse.arrayBuffer()),
+                baseline.bytes.get(assetName),
+            );
+        }
+    } finally {
+        await Promise.all(
+            servers.map(
+                (server) =>
+                    new Promise((resolve) => {
+                        server.close(resolve);
+                    }),
+            ),
+        );
+        await rm(copies, { recursive: true, force: true });
+    }
+}
+
+async function assertConfigIsNotStaged() {
+    await execFileAsync('git', ['check-ignore', '--no-index', '-q', 'src/web/js/config.js'], {
+        cwd: repository,
+    });
+    const { stdout } = await execFileAsync(
+        'git',
+        ['diff', '--cached', '--name-only', '--', 'src/web/js/config.js'],
+        { cwd: repository },
+    );
+    assert.equal(stdout.trim(), '');
+}
+
 async function buildTwiceAndCheck(fixture) {
     await runBuild(fixture);
     const first = await snapshotAssets(fixture);
@@ -259,6 +363,8 @@ async function main() {
         const originalCss = await readFile(path.join(fixture, 'src', 'web', 'styles.css'));
         const originalJs = await readFile(path.join(fixture, 'src', 'web', 'js', 'common.js'));
         const baseline = await buildTwiceAndCheck(fixture);
+        await assertRuntimeConfigCopies(fixture, baseline);
+        await assertConfigIsNotStaged();
 
         const sentinelConfig = path.join(fixture, 'src', 'web', 'js', 'config.js');
         await writeFile(

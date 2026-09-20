@@ -22,8 +22,16 @@ const explicitEntries = [
     'js/recipe.js',
 ].map((entry) => [entry, path.join(webRoot, entry)]);
 const outputDirectory = path.join(projectRoot, 'dist', 'web');
+const ssrProxyTarget = 'http://localhost:8001';
 
 export default defineConfig({
+    server: {
+        proxy: {
+            '/recipe': { target: ssrProxyTarget },
+            '/ingredient': { target: ssrProxyTarget },
+            '/sitemap.xml': { target: ssrProxyTarget },
+        },
+    },
     plugins: [
         {
             name: 'move-frontend-manifest',

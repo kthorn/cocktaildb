@@ -5,10 +5,23 @@ Retrieves configuration values from CloudFormation outputs and generates the con
 """
 
 import argparse
-import boto3
+import json
 import sys
-import os
 from pathlib import Path
+from urllib.parse import urlparse
+
+import boto3
+
+
+PUBLIC_CONFIG_FIELDS = (
+    "apiUrl",
+    "userPoolId",
+    "clientId",
+    "cognitoDomain",
+    "appUrl",
+    "appName",
+)
+PUBLIC_URL_FIELDS = ("apiUrl", "cognitoDomain", "appUrl")
 
 
 def get_cloudformation_output(stack_name, output_key, region="us-east-1"):
@@ -34,11 +47,38 @@ def get_cloudformation_output(stack_name, output_key, region="us-east-1"):
         return None
 
 
-def has_problematic_characters(value):
-    """Check if a value contains problematic characters like parentheses."""
-    if not value:
-        return False
-    return "(" in value or ")" in value
+def render_public_config(config: dict) -> str:
+    """Validate and serialize the browser-visible runtime configuration."""
+    if not isinstance(config, dict):
+        raise ValueError("public configuration must be a dictionary")
+
+    missing = [field for field in PUBLIC_CONFIG_FIELDS if field not in config]
+    if missing:
+        raise ValueError(f"missing required public configuration fields: {missing}")
+
+    unexpected = sorted(set(config) - set(PUBLIC_CONFIG_FIELDS))
+    if unexpected:
+        raise ValueError(f"unexpected public configuration fields: {unexpected}")
+
+    for field in PUBLIC_CONFIG_FIELDS:
+        value = config[field]
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{field} must be a non-blank string")
+
+    for field in PUBLIC_URL_FIELDS:
+        value = config[field]
+        try:
+            parsed = urlparse(value)
+            has_supported_scheme = parsed.scheme in {"http", "https"}
+            has_hostname = bool(parsed.hostname)
+        except ValueError:
+            has_supported_scheme = False
+            has_hostname = False
+        if not has_supported_scheme or not has_hostname:
+            raise ValueError(f"{field} must use http or https and include a hostname")
+
+    public_config = {field: config[field] for field in PUBLIC_CONFIG_FIELDS}
+    return f"export default {json.dumps(public_config)};\n"
 
 
 def get_app_url(stack_name, target_env, region):
@@ -49,80 +89,32 @@ def get_app_url(stack_name, target_env, region):
             stack_name, "CustomDomainURL", region
         )
 
-        if (
-            custom_domain_url
-            and custom_domain_url != "N/A (dev environment)"
-            and not has_problematic_characters(custom_domain_url)
-        ):
+        if custom_domain_url and custom_domain_url != "N/A (dev environment)":
             return custom_domain_url
-        else:
-            # Fall back to CloudFront URL for prod
-            cloudfront_url = get_cloudformation_output(
-                stack_name, "CloudFrontURL", region
-            )
-            if has_problematic_characters(cloudfront_url):
-                print(
-                    f"WARNING: CloudFrontURL contains problematic characters: {cloudfront_url}"
-                )
-                return None
-            return cloudfront_url
-    else:
-        # For dev, always use CloudFront URL
-        cloudfront_url = get_cloudformation_output(stack_name, "CloudFrontURL", region)
-        if has_problematic_characters(cloudfront_url):
-            print(
-                f"WARNING: CloudFrontURL contains problematic characters: {cloudfront_url}"
-            )
-            return None
-        return cloudfront_url
 
+        # Fall back to CloudFront URL for prod.
+        return get_cloudformation_output(stack_name, "CloudFrontURL", region)
 
-def validate_value(value, name):
-    """Validate a configuration value and clear it if it has problematic characters."""
-    if not value:
-        return value
-
-    if has_problematic_characters(value):
-        print(
-            f"WARNING: {name} contains parentheses, likely an error. Clearing {name}."
-        )
-        return None
-    return value
+    # For dev, always use CloudFront URL.
+    return get_cloudformation_output(stack_name, "CloudFrontURL", region)
 
 
 def generate_config_js(config_values, target_env, output_path):
     """Generate the config.js file with the provided configuration values."""
-    config_content = f"""// Configuration for the Cocktail Database application ({target_env} environment)
-const config = {{
-    // API endpoint
-    apiUrl: '{config_values["api_url"]}',
-
-    // Cognito configuration
-    userPoolId: '{config_values["user_pool_id"]}',
-    clientId: '{config_values["client_id"]}',
-    cognitoDomain: '{config_values["cognito_domain"]}', // This is the base Cognito Hosted UI domain
-
-    // Application URL (for redirects, etc.)
-    appUrl: '{config_values["app_url"]}',
-
-    // General settings
-    appName: 'Cocktail Database ({target_env})'
-}};
-
-// Export the configuration
-export default config;
-"""
-
     try:
-        # Ensure the directory exists
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(config_content)
-
+        config = {
+            "apiUrl": config_values["api_url"],
+            "userPoolId": config_values["user_pool_id"],
+            "clientId": config_values["client_id"],
+            "cognitoDomain": config_values["cognito_domain"],
+            "appUrl": config_values["app_url"],
+            "appName": f"Cocktail Database ({target_env})",
+        }
+        config_content = render_public_config(config)
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(output_path).write_text(config_content, encoding="utf-8")
         print(f"config.js updated successfully for {target_env}")
         return True
-
     except Exception as e:
         print(f"Error writing config.js: {e}")
         return False
@@ -158,34 +150,20 @@ def main():
     config_values["api_url"] = get_cloudformation_output(
         args.stack_name, "ApiEndpoint", args.region
     )
-    config_values["api_url"] = validate_value(config_values["api_url"], "API_URL")
-
     # Get Cognito configuration
     config_values["user_pool_id"] = get_cloudformation_output(
         args.stack_name, "UserPoolId", args.region
     )
-    config_values["user_pool_id"] = validate_value(
-        config_values["user_pool_id"], "USER_POOL_ID"
-    )
-
     config_values["client_id"] = get_cloudformation_output(
         args.stack_name, "UserPoolClientId", args.region
     )
-    config_values["client_id"] = validate_value(config_values["client_id"], "CLIENT_ID")
-
     config_values["cognito_domain"] = get_cloudformation_output(
         args.stack_name, "CognitoDomainURLV3", args.region
     )
-    config_values["cognito_domain"] = validate_value(
-        config_values["cognito_domain"], "COGNITO_DOMAIN_OUTPUT_URL"
-    )
-
     # Get App URL
     config_values["app_url"] = get_app_url(
         args.stack_name, args.target_env, args.region
     )
-    config_values["app_url"] = validate_value(config_values["app_url"], "APP_URL")
-
     # Check if we have all required values
     missing_values = [key for key, value in config_values.items() if not value]
     if missing_values:
