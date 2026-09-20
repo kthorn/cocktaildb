@@ -229,7 +229,7 @@ class Database(GroupInventoryMixin):
                     raise ConflictException(
                         f"An ingredient with the name '{data.get('name')}' already exists. Please use a different name.",
                         detail=str(e),
-                    )
+                    ) from e
                 # Re-raise other integrity errors
                 raise
             except Exception:
@@ -641,10 +641,10 @@ class Database(GroupInventoryMixin):
                     ingredient["ingredient_id"] = (
                         ingredient_id  # Update the dict with converted value
                     )
-                except (ValueError, TypeError):
+                except (ValueError, TypeError) as e:
                     raise ValueError(
                         f"Ingredient {i + 1}: 'ingredient_id' must be an integer, got {type(ingredient_id).__name__}"
-                    )
+                    ) from e
 
             ingredient_ids.append(ingredient_id)
 
@@ -657,10 +657,10 @@ class Database(GroupInventoryMixin):
                         ingredient["amount"] = (
                             amount  # Update the dict with converted value
                         )
-                    except (ValueError, TypeError):
+                    except (ValueError, TypeError) as e:
                         raise ValueError(
                             f"Ingredient {i + 1}: 'amount' must be numeric, got {type(amount).__name__}: '{amount}'"
-                        )
+                        ) from e
 
                 # Validate amount is not negative
                 if amount < 0:
@@ -677,10 +677,10 @@ class Database(GroupInventoryMixin):
                         ingredient["unit_id"] = (
                             unit_id  # Update the dict with converted value
                         )
-                    except (ValueError, TypeError):
+                    except (ValueError, TypeError) as e:
                         raise ValueError(
                             f"Ingredient {i + 1}: 'unit_id' must be an integer, got {type(unit_id).__name__}"
-                        )
+                        ) from e
 
         # Batch validate that all ingredient IDs exist
         if ingredient_ids:
@@ -709,7 +709,7 @@ class Database(GroupInventoryMixin):
             if "Invalid ingredient IDs" in str(e):
                 raise  # Re-raise our custom validation error
             logger.error(f"Error validating ingredient existence: {str(e)}")
-            raise ValueError("Failed to validate ingredient existence")
+            raise ValueError("Failed to validate ingredient existence") from e
 
     def create_recipe(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create a new recipe with its ingredients"""

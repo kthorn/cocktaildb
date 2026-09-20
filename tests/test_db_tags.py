@@ -575,7 +575,7 @@ class TestTagEdgeCases:
         """Test creating tag with empty name"""
         db = db_instance
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             db.create_public_tag("")
 
     def test_tag_very_long_name(self, db_instance):
@@ -606,14 +606,14 @@ class TestTagEdgeCases:
         """Test creating private tag with empty user ID"""
         db = db_instance
 
-        with pytest.raises(Exception):
+        with pytest.raises(TypeError):
             db.create_private_tag("test", "", "username")
 
     def test_private_tag_empty_username(self, db_instance):
         """Test creating private tag with empty username"""
         db = db_instance
 
-        with pytest.raises(Exception):
+        with pytest.raises(TypeError):
             db.create_private_tag("test", "user123", "")
 
 

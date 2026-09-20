@@ -92,10 +92,10 @@ async def download_database(
                 cleanup_path=temp_backup_path,
             )
 
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as e:
             if os.path.exists(temp_backup_path):
                 os.unlink(temp_backup_path)
-            raise Exception("Database backup timed out")
+            raise Exception("Database backup timed out") from e
 
         except Exception:
             # Clean up temp file only if backup failed
@@ -106,4 +106,4 @@ async def download_database(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error creating database backup: {str(e)}"
-        )
+        ) from e

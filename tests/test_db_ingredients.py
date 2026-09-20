@@ -497,7 +497,7 @@ class TestIngredientEdgeCases:
         """Test creating ingredient with None name"""
         db = db_instance
 
-        with pytest.raises(Exception):  # Should fail due to NOT NULL constraint
+        with pytest.raises(TypeError):  # name must be a str, not None
             db.create_ingredient(
                 {"name": None, "description": "Test", "parent_id": None}
             )

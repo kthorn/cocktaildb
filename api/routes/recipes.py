@@ -203,7 +203,7 @@ async def search_recipes(
         raise
     except Exception as e:
         logger.error(f"Error searching recipes: {str(e)}")
-        raise DatabaseException("Failed to search recipes", detail=str(e))
+        raise DatabaseException("Failed to search recipes", detail=str(e)) from e
 
 
 @router.get("/search/authenticated", response_model=PaginatedSearchResponse)
@@ -300,7 +300,7 @@ async def create_recipe(
         raise  # Re-raise ValidationException without wrapping
     except Exception as e:
         logger.error(f"Error creating recipe: {str(e)}")
-        raise DatabaseException("Failed to create recipe", detail=str(e))
+        raise DatabaseException("Failed to create recipe", detail=str(e)) from e
 
 
 @router.get("/{recipe_id}", response_model=RecipeResponse)
@@ -333,7 +333,7 @@ async def get_recipe(
         raise
     except Exception as e:
         logger.error(f"Error getting recipe {recipe_id}: {str(e)}", exc_info=True)
-        raise DatabaseException("Failed to retrieve recipe", detail=str(e))
+        raise DatabaseException("Failed to retrieve recipe", detail=str(e)) from e
 
 
 @router.put("/{recipe_id}", response_model=RecipeResponse)
@@ -367,7 +367,7 @@ async def update_recipe(
         raise
     except Exception as e:
         logger.error(f"Error updating recipe {recipe_id}: {str(e)}")
-        raise DatabaseException("Failed to update recipe", detail=str(e))
+        raise DatabaseException("Failed to update recipe", detail=str(e)) from e
 
 
 @router.delete("/{recipe_id}", response_model=MessageResponse)
@@ -393,7 +393,7 @@ async def delete_recipe(
         raise
     except Exception as e:
         logger.error(f"Error deleting recipe {recipe_id}: {str(e)}")
-        raise DatabaseException("Failed to delete recipe", detail=str(e))
+        raise DatabaseException("Failed to delete recipe", detail=str(e)) from e
 
 
 @router.post(
@@ -755,4 +755,4 @@ async def bulk_upload_recipes(
     except Exception as e:
         total_duration = time.time() - start_time
         logger.error(f"Error in bulk upload after {total_duration:.3f}s: {str(e)}")
-        raise DatabaseException("Failed to bulk upload recipes", detail=str(e))
+        raise DatabaseException("Failed to bulk upload recipes", detail=str(e)) from e

@@ -43,7 +43,7 @@ async def get_recipe_ratings_handler(
         raise
     except Exception as e:
         logger.error(f"Error getting ratings for recipe {recipe_id}: {str(e)}")
-        raise DatabaseException("Failed to retrieve ratings", detail=str(e))
+        raise DatabaseException("Failed to retrieve ratings", detail=str(e)) from e
 
 
 async def create_or_update_rating_handler(
@@ -76,7 +76,7 @@ async def create_or_update_rating_handler(
         raise
     except Exception as e:
         logger.error(f"Error setting rating for recipe {recipe_id}: {str(e)}")
-        raise DatabaseException("Failed to set rating", detail=str(e))
+        raise DatabaseException("Failed to set rating", detail=str(e)) from e
 
 
 async def delete_rating_handler(
@@ -105,4 +105,4 @@ async def delete_rating_handler(
         raise
     except Exception as e:
         logger.error(f"Error deleting rating for recipe {recipe_id}: {str(e)}")
-        raise DatabaseException("Failed to delete rating", detail=str(e))
+        raise DatabaseException("Failed to delete rating", detail=str(e)) from e

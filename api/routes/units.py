@@ -36,4 +36,4 @@ async def get_units(
 
     except Exception as e:
         logger.error(f"Error getting units: {str(e)}")
-        raise DatabaseException("Failed to retrieve units", detail=str(e))
+        raise DatabaseException("Failed to retrieve units", detail=str(e)) from e

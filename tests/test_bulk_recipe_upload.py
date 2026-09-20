@@ -5,6 +5,7 @@ Tests for bulk recipe upload functionality
 import json
 
 import pytest
+from pydantic import ValidationError
 
 pytestmark = pytest.mark.asyncio
 
@@ -166,7 +167,7 @@ class TestBulkUploadModels:
         assert upload.recipes[1].name == "Test Recipe 2"
 
         # Test validation error for empty recipes list
-        with pytest.raises(Exception):  # Pydantic validation error
+        with pytest.raises(ValidationError):  # Pydantic validation error
             BulkRecipeUpload(recipes=[])
 
     async def test_bulk_upload_response_models(self):
@@ -884,7 +885,7 @@ class TestBulkUploadPerformance:
         from api.models.requests import BulkRecipeUpload
 
         # Test empty recipes list (should fail)
-        with pytest.raises(Exception):  # Pydantic validation error
+        with pytest.raises(ValidationError):  # Pydantic validation error
             BulkRecipeUpload(recipes=[])
 
         # Test missing required fields
@@ -904,5 +905,5 @@ class TestBulkUploadPerformance:
             ]
         }
 
-        with pytest.raises(Exception):  # Pydantic validation error
+        with pytest.raises(ValidationError):  # Pydantic validation error
             BulkRecipeUpload(**invalid_data)

@@ -198,7 +198,7 @@ class TestSubstitutionMigration:
                 )
                 sub_level_data = cursor.fetchall()
 
-                for id_, name, sub_level in sub_level_data:
+                for _id, name, sub_level in sub_level_data:
                     assert sub_level is not None, (
                         f"substitution_level should not be NULL for {name}"
                     )

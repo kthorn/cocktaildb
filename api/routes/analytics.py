@@ -118,7 +118,7 @@ async def get_ingredient_usage_analytics(
         logger.error(f"Error getting ingredient usage analytics: {str(e)}")
         raise DatabaseException(
             "Failed to retrieve ingredient usage analytics", detail=str(e)
-        )
+        ) from e
 
 
 @router.get("/recipe-complexity")
@@ -137,7 +137,7 @@ async def get_recipe_complexity_analytics(
         logger.error(f"Error getting recipe complexity analytics: {str(e)}")
         raise DatabaseException(
             "Failed to retrieve recipe complexity analytics", detail=str(e)
-        )
+        ) from e
 
 
 @router.get("/cocktail-space")
@@ -158,7 +158,7 @@ async def get_cocktail_space_analytics(
         logger.error(f"Error getting cocktail space analytics: {str(e)}")
         raise DatabaseException(
             "Failed to retrieve cocktail space analytics", detail=str(e)
-        )
+        ) from e
 
 
 @router.get("/cocktail-space-em")
@@ -179,7 +179,7 @@ async def get_cocktail_space_em_analytics(
         logger.error(f"Error getting EM cocktail space analytics: {str(e)}")
         raise DatabaseException(
             "Failed to retrieve EM cocktail space analytics", detail=str(e)
-        )
+        ) from e
 
 
 @router.get("/recipe-similar")
@@ -214,7 +214,9 @@ async def get_recipe_similar(
         raise
     except Exception as e:
         logger.error(f"Error getting similar recipes: {str(e)}")
-        raise DatabaseException("Failed to retrieve similar recipes", detail=str(e))
+        raise DatabaseException(
+            "Failed to retrieve similar recipes", detail=str(e)
+        ) from e
 
 
 @router.get("/ingredient-tree")
@@ -237,7 +239,7 @@ async def get_ingredient_tree_analytics(
         logger.error(f"Error getting ingredient tree analytics: {str(e)}")
         raise DatabaseException(
             "Failed to retrieve ingredient tree analytics", detail=str(e)
-        )
+        ) from e
 
 
 @router.get("/recipe-distances-em/download")
@@ -264,4 +266,6 @@ async def download_recipe_distances_em():
         raise
     except Exception as e:
         logger.error(f"Error downloading EM distance matrix: {str(e)}")
-        raise DatabaseException("Failed to download EM distance matrix", detail=str(e))
+        raise DatabaseException(
+            "Failed to download EM distance matrix", detail=str(e)
+        ) from e
