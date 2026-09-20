@@ -5,7 +5,6 @@ to their parent categories, reducing the ingredient space while preserving
 recipe semantics.
 """
 
-
 import pandas as pd
 
 
@@ -32,7 +31,7 @@ def create_rollup_mapping(
 
     # Get all ingredient IDs that have children (i.e., they are parents)
     parent_ids = set()
-    for child_id, (parent_id, cost) in parent_map.items():
+    for parent_id, _ in parent_map.values():
         if parent_id is not None:
             parent_ids.add(parent_id)
 

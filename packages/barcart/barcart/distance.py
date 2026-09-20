@@ -485,6 +485,7 @@ def compute_emd(
                 support_idx[cols].astype(int).tolist(),
                 flows.astype(float).tolist(),
                 flow_costs.astype(float).tolist(),
+                strict=True,
             )
         )
 
