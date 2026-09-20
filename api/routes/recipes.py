@@ -2,7 +2,7 @@
 
 import logging
 from typing import Optional
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from dependencies.auth import (
     UserInfo,
@@ -30,6 +30,10 @@ from core.exceptions import NotFoundException, DatabaseException, ValidationExce
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
+
+# A personalised recipe view carries private tags and the caller's own rating,
+# so it must never be reused by another session on the same browser.
+PRIVATE_CACHE_CONTROL = "private, no-store"
 
 
 def check_duplicate_ingredients(ingredients: list) -> list[int]:
@@ -303,10 +307,15 @@ async def create_recipe(
 @router.get("/{recipe_id}", response_model=RecipeResponse)
 async def get_recipe(
     recipe_id: int,
+    response: Response,
     db: Database = Depends(get_db),
     user: Optional[UserInfo] = Depends(get_current_user_optional),
 ):
-    """Get a specific recipe by ID"""
+    """Get a specific recipe by ID
+
+    Accepts an optional identity: signed-in callers additionally receive their
+    private tags and their own rating for the recipe.
+    """
     try:
         user_id = user.user_id if user else None
         recipe = db.get_recipe(recipe_id, user_id)
@@ -314,6 +323,9 @@ async def get_recipe(
         if not recipe:
             logger.warning(f"Recipe {recipe_id} not found")
             raise NotFoundException(f"Recipe with ID {recipe_id} not found")
+
+        if user_id:
+            response.headers["Cache-Control"] = PRIVATE_CACHE_CONTROL
 
         return RecipeResponse(**recipe)
 
