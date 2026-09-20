@@ -79,9 +79,10 @@ const note = '<script>alert(1)</script>: assumed 1 mL rinse';
 for (const compact of [false, true]) {
     for (const [status, display, notes] of [
         ['calculated', '27%', []],
-        ['estimated', 'Estimated 20–30%', [note]],
+        ['estimated', '20–30%', ['Blanc Vermouth: 15–16%', note]],
         ['unknown', 'Unknown', ['Ingredient volume unavailable']],
-        ['estimated', 'Estimated <1%', [note]],
+        ['estimated', '<1%', []],
+        ['estimated', '31%', []],
     ]) {
         const card = context.createRecipeCard(
             { id: 42, name: 'Test drink', ingredients: [], abv: { status, display, notes } },

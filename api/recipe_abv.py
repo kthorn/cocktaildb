@@ -226,12 +226,10 @@ def calculate_recipe_abv(
                     f"Unknown strength for {label}; assuming 0–100%.",
                 )
             else:
-                family_name = strength.get("family_name")
-                if family_name:
-                    note = f"Estimated strength for {label} from {family_name}."
-                else:
-                    note = f"Estimated strength for {label}."
-                _append_note(notes, seen_notes, note)
+                ingredient_display = (
+                    _point_display(low) if low == high else _interval_display(low, high)
+                )
+                _append_note(notes, seen_notes, f"{label}: {ingredient_display}")
 
         contributions.append((volume, low, high))
 
@@ -293,13 +291,14 @@ def calculate_recipe_abv(
                 "notes": notes,
             }
 
+        narrow = width_sum <= total_volume
         display = (
-            _point_display(low_percent)
-            if low_percent == high_percent
+            _point_display((low_percent + high_percent) / 2)
+            if narrow
             else _interval_display(low_percent, high_percent)
         )
-        if estimated:
-            display = f"Estimated {display}"
+        if narrow:
+            notes = []
         return {
             "status": "estimated" if estimated else "calculated",
             "min_percent": min_percent,
