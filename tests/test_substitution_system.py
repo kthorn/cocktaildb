@@ -227,7 +227,7 @@ class TestIngredientSubstitution:
         bourbons = self.setup_bourbon_hierarchy(db)
 
         # Create a recipe that calls for bourbon (parent category) with ingredients included
-        recipe = db.create_recipe(
+        db.create_recipe(
             {
                 "name": "Old Fashioned",
                 "instructions": "Muddle sugar with bitters, add bourbon, stir",
@@ -266,7 +266,7 @@ class TestIngredientSubstitution:
         bourbons = self.setup_bourbon_hierarchy(db)
 
         # Create recipe that calls for specific Maker's Mark with ingredients included
-        recipe = db.create_recipe(
+        db.create_recipe(
             {
                 "name": "Maker's Mark Manhattan",
                 "instructions": "Stir with vermouth and bitters",
@@ -304,7 +304,7 @@ class TestIngredientSubstitution:
         amaros = self.setup_amaro_hierarchy(db)
 
         # Create recipe that calls for Amaro Nonino specifically with ingredients included
-        recipe = db.create_recipe(
+        db.create_recipe(
             {
                 "name": "Paper Plane",
                 "instructions": "Shake all ingredients",
@@ -341,7 +341,7 @@ class TestIngredientSubstitution:
         amaros = self.setup_amaro_hierarchy(db)
 
         # Create recipe with Amaro Montenegro with ingredients included
-        recipe = db.create_recipe(
+        db.create_recipe(
             {
                 "name": "Montenegro Spritz",
                 "instructions": "Build in glass with prosecco",
@@ -375,7 +375,7 @@ class TestIngredientSubstitution:
         bourbons = self.setup_bourbon_hierarchy(db)
 
         # Create recipe that calls for general "Bourbon" category with ingredients included
-        recipe = db.create_recipe(
+        db.create_recipe(
             {
                 "name": "Bourbon Sour",
                 "instructions": "Shake with lemon and simple syrup",
@@ -413,7 +413,7 @@ class TestIngredientSubstitution:
         amaros = self.setup_amaro_hierarchy(db)
 
         # Create recipe with both bourbon (substitutable) and specific amaro (not substitutable) with ingredients included
-        recipe = db.create_recipe(
+        db.create_recipe(
             {
                 "name": "Boulevardier Variation",
                 "instructions": "Stir with sweet vermouth",
@@ -521,7 +521,7 @@ class TestIngredientSubstitution:
         )
 
         # Create recipe calling for bourbon with ingredients included
-        recipe = db.create_recipe(
+        db.create_recipe(
             {
                 "name": "Flexible Spirit Cocktail",
                 "instructions": "Mix with other ingredients",
@@ -567,7 +567,7 @@ class TestIngredientSubstitution:
     def test_search_ingredients_includes_allow_substitution(self, db: Database):
         """Test that search_ingredients returns allow_substitution"""
         # Create test ingredients
-        bourbons = self.setup_bourbon_hierarchy(db)
+        self.setup_bourbon_hierarchy(db)
 
         # Search for bourbon
         results = db.search_ingredients("bourbon")
@@ -620,7 +620,7 @@ class TestSubstitutionAPI:
         )
 
         # Create recipe requiring Old Tom Gin
-        recipe = db.create_recipe(
+        db.create_recipe(
             {
                 "name": "Martinez",
                 "instructions": "Stir with ice and strain",
@@ -690,7 +690,7 @@ class TestSubstitutionAPI:
         )
 
         # Create recipe requiring Wray And Nephew
-        recipe = db.create_recipe(
+        db.create_recipe(
             {
                 "name": "Zombie",
                 "instructions": "Mix all ingredients",

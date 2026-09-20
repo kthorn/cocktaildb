@@ -545,7 +545,7 @@ class TestUserIngredientModelSerialization:
 
         # Since not all fields are required, this should work if defaults are properly set
         try:
-            model = UserIngredientBulkResponse(**data)
+            UserIngredientBulkResponse(**data)
             # This will pass if the model has proper defaults
         except ValidationError:
             # This is expected if no defaults are set and all fields are required

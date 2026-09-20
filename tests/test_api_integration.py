@@ -161,9 +161,9 @@ class TestDataConsistencyAndIntegrity:
 
         # Test ingredient parent references
         cursor.execute("""
-            SELECT i1.id, i1.name, i1.parent_id 
-            FROM ingredients i1 
-            LEFT JOIN ingredients i2 ON i1.parent_id = i2.id 
+            SELECT i1.id, i1.name, i1.parent_id
+            FROM ingredients i1
+            LEFT JOIN ingredients i2 ON i1.parent_id = i2.id
             WHERE i1.parent_id IS NOT NULL AND i2.id IS NULL
             LIMIT 5
         """)
@@ -174,9 +174,9 @@ class TestDataConsistencyAndIntegrity:
 
         # Test recipe-ingredient references
         cursor.execute("""
-            SELECT ri.recipe_id, ri.ingredient_id 
-            FROM recipe_ingredients ri 
-            LEFT JOIN ingredients i ON ri.ingredient_id = i.id 
+            SELECT ri.recipe_id, ri.ingredient_id
+            FROM recipe_ingredients ri
+            LEFT JOIN ingredients i ON ri.ingredient_id = i.id
             WHERE i.id IS NULL
             LIMIT 5
         """)
@@ -187,9 +187,9 @@ class TestDataConsistencyAndIntegrity:
 
         # Test recipe-unit references
         cursor.execute("""
-            SELECT ri.recipe_id, ri.unit_id 
-            FROM recipe_ingredients ri 
-            LEFT JOIN units u ON ri.unit_id = u.id 
+            SELECT ri.recipe_id, ri.unit_id
+            FROM recipe_ingredients ri
+            LEFT JOIN units u ON ri.unit_id = u.id
             WHERE ri.unit_id IS NOT NULL AND u.id IS NULL
             LIMIT 5
         """)

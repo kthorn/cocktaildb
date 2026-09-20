@@ -89,7 +89,7 @@ class TestSubstitutionIntegration:
         print("\n=== Creating recipes ===")
 
         # Recipe 1: Calls for general "Bourbon" category
-        old_fashioned = db.create_recipe(
+        db.create_recipe(
             {
                 "name": "Old Fashioned",
                 "instructions": "Muddle sugar with bitters, add bourbon, stir with ice",
@@ -105,7 +105,7 @@ class TestSubstitutionIntegration:
         )
 
         # Recipe 2: Calls for specific "Maker's Mark"
-        makers_manhattan = db.create_recipe(
+        db.create_recipe(
             {
                 "name": "Test Maker's Manhattan",
                 "instructions": "Stir Test Maker's Mark with sweet vermouth and bitters",
@@ -224,7 +224,7 @@ class TestSubstitutionIntegration:
         )
 
         # Create recipe requiring specific Amaro Nonino
-        paper_plane = db.create_recipe(
+        db.create_recipe(
             {
                 "name": "Paper Plane",
                 "instructions": "Shake equal parts bourbon, Aperol, Amaro Nonino, lemon juice",
@@ -310,7 +310,7 @@ class TestSubstitutionIntegration:
             }
         )
 
-        makers_mixed = db.create_ingredient(
+        db.create_ingredient(
             {
                 "name": "Mixed Test Maker's Mark",
                 "parent_id": bourbon_mixed["id"],
@@ -356,7 +356,7 @@ class TestSubstitutionIntegration:
         )
 
         # Create recipe requiring both
-        boulevardier = db.create_recipe(
+        db.create_recipe(
             {
                 "name": "Boulevardier Variation",
                 "instructions": "Stir bourbon with sweet vermouth and Amaro Nonino",

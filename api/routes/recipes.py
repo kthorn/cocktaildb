@@ -433,19 +433,19 @@ async def bulk_upload_recipes(
             name for name, count in recipe_name_counts.items() if count > 1
         }
         all_ingredient_names = list(
-            set(
+            {
                 ingredient.ingredient_name
                 for recipe in bulk_data.recipes
                 for ingredient in recipe.ingredients
-            )
+            }
         )
         all_unit_names = list(
-            set(
+            {
                 ingredient.unit_name
                 for recipe in bulk_data.recipes
                 for ingredient in recipe.ingredients
                 if ingredient.unit_name is not None
-            )
+            }
         )
         all_unit_ids = sorted(
             {
@@ -546,7 +546,7 @@ async def bulk_upload_recipes(
                     continue
 
                 # Check if all ingredients exist by name (using batch results)
-                for ingredient_idx, ingredient in enumerate(recipe_data.ingredients):
+                for _ingredient_idx, ingredient in enumerate(recipe_data.ingredients):
                     if ingredient.ingredient_name not in valid_ingredients:
                         validation_errors.append(
                             BulkUploadValidationError(

@@ -44,7 +44,7 @@ class TestSubstitutionMigration:
             # Insert some test data
             cursor.execute("""
                 INSERT INTO ingredients (name, description, parent_id, path, created_by)
-                VALUES 
+                VALUES
                 ('Whiskey', 'Base whiskey category', NULL, '/1/', 'test'),
                 ('Bourbon', 'American bourbon', 1, '/1/2/', 'test'),
                 ('Rum', 'Base rum category', NULL, '/3/', 'test')

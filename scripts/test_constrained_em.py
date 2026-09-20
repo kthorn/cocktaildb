@@ -209,7 +209,6 @@ def constrained_em_fit(
 
     cost_matrix = np.asarray(initial_cost_matrix, dtype=np.float32)
 
-    n_recipes = volume_matrix.shape[0]
     total_pairs = 0
     log = {"delta": []}
 
@@ -220,7 +219,7 @@ def constrained_em_fit(
     distance_matrix, plans = constrained_emd_matrix(
         volume_matrix, cost_matrix, candidates, return_plans=True
     )
-    total_pairs += len([p for p in plans.keys()])
+    total_pairs += len(list(plans.keys()))
 
     # M-step
     T_sum, n_pairs = expected_ingredient_match_matrix(
@@ -254,7 +253,7 @@ def constrained_em_fit(
         distance_matrix, plans = constrained_emd_matrix(
             volume_matrix, cost_matrix, candidates, return_plans=True
         )
-        total_pairs += len([p for p in plans.keys()])
+        total_pairs += len(list(plans.keys()))
 
         # M-step
         T_sum, n_pairs = expected_ingredient_match_matrix(
@@ -784,7 +783,7 @@ def prepare_matrices(ingredients_df, recipes_df):
     unique_ingredients = set(recipes_rolled_df["ingredient_id"].unique())
 
     # Find ancestors
-    ingredients_with_ancestors = set(["root"])
+    ingredients_with_ancestors = {"root"}
     for ing_id in unique_ingredients:
         current_id = str(ing_id)
         while current_id in parent_map and current_id != "root":
@@ -802,7 +801,9 @@ def prepare_matrices(ingredients_df, recipes_df):
 
     id_to_name = {
         str(ing_id): name
-        for ing_id, name in zip(ingredients_df["id"], ingredients_df["ingredient_name"])
+        for ing_id, name in zip(
+            ingredients_df["id"], ingredients_df["ingredient_name"], strict=False
+        )
         if str(ing_id) in ingredients_with_ancestors or ing_id in unique_ingredients
     }
 

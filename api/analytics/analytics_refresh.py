@@ -128,12 +128,12 @@ def regenerate_analytics() -> dict[str, Any]:
     # Compute candidate_k based on recipe count: k = 0.15 * n_recipes
     # This is the benchmarked runtime/fidelity balance for the current dataset.
     n_recipes = len(
-        set(
+        {
             r["recipe_id"]
             for r in analytics_queries.db.execute_query(
                 "SELECT DISTINCT recipe_id FROM recipe_ingredients"
             )
-        )
+        }
     )
     candidate_k = max(
         10, int(EM_CANDIDATE_K_FRACTION * n_recipes)

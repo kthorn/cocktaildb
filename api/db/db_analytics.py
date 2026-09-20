@@ -176,7 +176,11 @@ class AnalyticsQueries:
                 "recipe_id"
             )
             recipe_id_to_name = dict(
-                zip(recipe_id_to_name["recipe_name"], recipe_id_to_name["recipe_id"])
+                zip(
+                    recipe_id_to_name["recipe_name"],
+                    recipe_id_to_name["recipe_id"],
+                    strict=False,
+                )
             )
 
             # Create mapping from matrix row index to recipe ID
@@ -502,7 +506,7 @@ class AnalyticsQueries:
             logger.info("Building ingredient distance matrix")
 
             # Find all ancestors of ingredients in rolled recipes to preserve tree connectivity
-            ingredients_with_ancestors = set(["root"])
+            ingredients_with_ancestors = {"root"}
             for ing_id in unique_ingredients_after_rollup:
                 current_id = str(ing_id)
                 # Walk up the tree to root, adding all ancestors
@@ -528,7 +532,9 @@ class AnalyticsQueries:
             id_to_name = {
                 str(ing_id): name
                 for ing_id, name in zip(
-                    ingredients_df["id"], ingredients_df["ingredient_name"]
+                    ingredients_df["id"],
+                    ingredients_df["ingredient_name"],
+                    strict=False,
                 )
                 if str(ing_id) in ingredients_with_ancestors
                 or ing_id in unique_ingredients_after_rollup

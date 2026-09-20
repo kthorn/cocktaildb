@@ -71,7 +71,7 @@ class TestRatingCRUD:
             "recipe_id": recipe["id"],
             "rating": 4,
         }
-        result1 = db.set_rating(rating1_data)
+        db.set_rating(rating1_data)
 
         # User 2 rates 2
         rating2_data = {
@@ -540,8 +540,7 @@ class TestRatingEdgeCases:
 
         recipe = db.create_recipe({"name": "Test Recipe", "instructions": "Test"})
 
-        unicode_username = "用户名🍸"
-        result = db.set_rating(
+        db.set_rating(
             {
                 "cognito_user_id": "user1",
                 "recipe_id": recipe["id"],

@@ -213,11 +213,7 @@ def pg_db_with_prod_data(postgres_container, postgres_connection_params):
     cursor.close()
     conn.close()
 
-    # Load production backup using psql
-    host = postgres_connection_params["host"]
-    port = postgres_connection_params["port"]
-
-    # Decompress and pipe to psql
+    # Decompress the production backup and replay it into the test database
     with gzip.open(PROD_BACKUP_PATH, "rt") as f:
         sql_content = f.read()
 

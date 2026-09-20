@@ -24,7 +24,7 @@ class TestTransactionConsistency:
         gin = db.create_ingredient(
             {"name": "Test", "description": "Test", "parent_id": None}
         )
-        vermouth = db.create_ingredient(
+        db.create_ingredient(
             {"name": "Vermouth", "description": "Vermouth", "parent_id": None}
         )
 

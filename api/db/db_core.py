@@ -698,7 +698,7 @@ class Database(GroupInventoryMixin):
                 ),
             )
 
-            existing_ids = set(row["id"] for row in existing_ids_result)
+            existing_ids = {row["id"] for row in existing_ids_result}
             missing_ids = set(ingredient_ids) - existing_ids
 
             if missing_ids:
@@ -1092,7 +1092,7 @@ class Database(GroupInventoryMixin):
             if not unit_names:
                 return {}
             # Create case-insensitive lookup for exact matches by name or abbreviation
-            unique_names = list(set(name.lower() for name in unit_names))
+            unique_names = list({name.lower() for name in unit_names})
             placeholders = ",".join("%s" for _ in unique_names)
 
             # Query for both name and abbreviation matches
@@ -1100,8 +1100,8 @@ class Database(GroupInventoryMixin):
                 list[dict[str, Any]],
                 self.execute_query(
                     f"""
-                    SELECT id, name, abbreviation, conversion_to_ml 
-                    FROM units 
+                    SELECT id, name, abbreviation, conversion_to_ml
+                    FROM units
                     WHERE LOWER(name) IN ({placeholders}) OR LOWER(abbreviation) IN ({placeholders})
                     """,
                     tuple(unique_names)
@@ -1583,13 +1583,13 @@ class Database(GroupInventoryMixin):
                 list[dict[str, Any]],
                 self.execute_query(
                     """
-                    SELECT 
-                        t.id, 
-                        t.name, 
+                    SELECT
+                        t.id,
+                        t.name,
                         COALESCE(COUNT(rt.recipe_id), 0) as usage_count
                     FROM tags t
                     LEFT JOIN recipe_tags rt ON t.id = rt.tag_id
-                    WHERE t.created_by IS NULL 
+                    WHERE t.created_by IS NULL
                     GROUP BY t.id, t.name
                     ORDER BY t.name
                     """
