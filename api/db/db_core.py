@@ -16,7 +16,9 @@ from .sql_queries import (
     get_recipes_count_sql,
     get_ingredients_count_sql,
     INGREDIENT_SELECT_FIELDS,
+    RESOLVE_INGREDIENT_ABV_SQL,
 )
+from recipe_abv import calculate_recipe_abv
 from core.exceptions import ConflictException, ValidationException
 
 # Configure logging
@@ -881,6 +883,31 @@ class Database(GroupInventoryMixin):
             if conn:
                 self._return_connection(conn)
 
+    def _add_recipe_abv(self, recipes: list[dict], execute_query) -> None:
+        """Add one bulk-resolved ABV result to each recipe in a collection."""
+        ingredient_ids = sorted(
+            {
+                ingredient.get("ingredient_id")
+                for recipe in recipes
+                for ingredient in recipe.get("ingredients", [])
+                if ingredient.get("ingredient_id") is not None
+            }
+        )
+        ranges: dict[int, dict] = {}
+        if ingredient_ids:
+            rows = execute_query(
+                RESOLVE_INGREDIENT_ABV_SQL,
+                {"ingredient_ids": ingredient_ids},
+            )
+            ranges = {
+                row["ingredient_id"]: row
+                for row in rows
+                if row.get("ingredient_id") is not None
+            }
+
+        for recipe in recipes:
+            recipe["abv"] = calculate_recipe_abv(recipe.get("ingredients", []), ranges)
+
     def get_recipe(
         self, recipe_id: int, cognito_user_id: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
@@ -961,6 +988,7 @@ class Database(GroupInventoryMixin):
                         )
             # Fetch ingredients separately
             recipe["ingredients"] = self._get_recipe_ingredients(recipe_id)
+            self._add_recipe_abv([recipe], self.execute_query)
 
             # Log final tag list
             logger.info(
@@ -2109,6 +2137,7 @@ class Database(GroupInventoryMixin):
                         "unit_id": row.get("unit_id"),
                         "unit_name": row.get("unit_name"),
                         "unit_abbreviation": row.get("unit_abbreviation"),
+                        "conversion_to_ml": row.get("conversion_to_ml"),
                     }
                     recipes[recipe_id]["ingredients"].append(ingredient)
 
@@ -2140,6 +2169,7 @@ class Database(GroupInventoryMixin):
             if not return_pagination:
                 for recipe in result:
                     recipe.pop("_sort_value", None)
+                self._add_recipe_abv(result, execute_query)
                 return result
 
             has_next = False
@@ -2162,6 +2192,7 @@ class Database(GroupInventoryMixin):
                 for recipe in result:
                     recipe.pop("_sort_value", None)
 
+            self._add_recipe_abv(result, execute_query)
             return {
                 "recipes": result,
                 "has_next": has_next,
