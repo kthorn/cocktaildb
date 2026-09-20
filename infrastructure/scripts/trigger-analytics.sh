@@ -66,7 +66,7 @@ case "${1:-}" in
     --status)
         show_status
         ;;
-    --help|-h)
+    --help | -h)
         usage
         ;;
     "")

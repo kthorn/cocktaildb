@@ -23,7 +23,8 @@
 - Install hooks with `~/miniforge3/envs/cocktaildb/bin/python -m pip install pre-commit==4.6.2 && ~/miniforge3/envs/cocktaildb/bin/python -m pre_commit install`.
 - Run every formatter check with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run --all-files`.
 - Format/check Python only with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run ruff-format --all-files`.
-- Format/check static frontend JS/MJS/HTML and all YAML (Ansible, Compose, CloudFormation, CI) with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run prettier --all-files`. `api/templates/*.html` is excluded because those are Jinja2 templates, and shell files are not covered yet.
+- Format/check static frontend JS/MJS/HTML and all YAML (Ansible, Compose, CloudFormation, CI) with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run prettier --all-files`. `api/templates/*.html` is excluded because those are Jinja2 templates.
+- Format/check shell with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run shfmt --all-files`. Its style comes from the hook's own args, not `.prettierrc`: `-i 4 -ci` matches `tabWidth: 4` and indents `case` bodies. Do not add `*.md` to the prettier hook yet — the specs under `docs/superpowers/` are under active edit and a repo-wide markdown reformat would conflict with every open workstream.
 - Ruff and Prettier editor extensions use `ruff.toml` and `.prettierrc`; CI is authoritative. `.prettierrc` governs every format Prettier touches, including YAML: 4-space indent, single quotes, 100-column print width.
 
 ## Coding Style & Naming Conventions

@@ -7,7 +7,7 @@ MIGRATIONS_DIR="migrations"
 DRY_RUN=false
 
 show_help() {
-  cat << EOT
+    cat <<EOT
 Usage: $0 [dev|prod] [--dry-run]
 
 Runs pending SQL migrations using psql and records them in schema_migrations.
@@ -15,25 +15,25 @@ EOT
 }
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-  show_help
-  exit 0
+    show_help
+    exit 0
 fi
 
 if [ "${1:-}" = "dev" ] || [ "${1:-}" = "prod" ]; then
-  ENVIRONMENT="$1"
-  shift
+    ENVIRONMENT="$1"
+    shift
 fi
 
 if [ "${1:-}" = "--dry-run" ]; then
-  DRY_RUN=true
+    DRY_RUN=true
 fi
 
 ENV_FILE="$APP_DIR/.env"
 if [ -f "$ENV_FILE" ]; then
-  set -a
-  # shellcheck disable=SC1090
-  . "$ENV_FILE"
-  set +a
+    set -a
+    # shellcheck disable=SC1090
+    . "$ENV_FILE"
+    set +a
 fi
 
 : "${DB_HOST:?Missing DB_HOST}"
@@ -54,24 +54,24 @@ SQL
 mapfile -t files < <(ls -1 "$MIGRATIONS_DIR"/*.sql 2>/dev/null | sort)
 
 if [ "${#files[@]}" -eq 0 ]; then
-  echo "No migrations found in $MIGRATIONS_DIR"
-  exit 0
+    echo "No migrations found in $MIGRATIONS_DIR"
+    exit 0
 fi
 
 for file in "${files[@]}"; do
-  filename=$(basename "$file")
-  applied=$(psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -tAc "SELECT 1 FROM schema_migrations WHERE filename = '$filename';")
-  if [ "$applied" = "1" ]; then
-    continue
-  fi
+    filename=$(basename "$file")
+    applied=$(psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -tAc "SELECT 1 FROM schema_migrations WHERE filename = '$filename';")
+    if [ "$applied" = "1" ]; then
+        continue
+    fi
 
-  if [ "$DRY_RUN" = true ]; then
-    echo "Would apply: $filename"
-    continue
-  fi
+    if [ "$DRY_RUN" = true ]; then
+        echo "Would apply: $filename"
+        continue
+    fi
 
-  echo "Applying: $filename"
-  psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$file"
-  psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -c "INSERT INTO schema_migrations (filename) VALUES ('$filename');"
-  echo "Applied: $filename"
+    echo "Applying: $filename"
+    psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$file"
+    psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -c "INSERT INTO schema_migrations (filename) VALUES ('$filename');"
+    echo "Applied: $filename"
 done

@@ -14,11 +14,6 @@ repos:
           # owns: Ansible, Compose, CloudFormation and CI. Style comes from
           # .prettierrc, not from this hook. api/templates/*.html stays out because
           # those are Jinja2 templates, not plain HTML.
-          #
-          # Shell is not covered yet: prettier needs prettier-plugin-sh for it, and
-          # prettier resolves --plugin relative to the repository, not to this
-          # hook's node environment, so a bare plugin specifier cannot be found.
-          # Add it once a root package.json and node_modules exist.
           - id: prettier
             name: prettier
             entry: prettier --write
@@ -26,3 +21,12 @@ repos:
             additional_dependencies:
                 - prettier@3.9.6
             files: ^((src/web|tests)/.*\.(js|mjs|html)|.*\.(yml|yaml))$
+
+    # Shell style comes from this hook's args, not from .prettierrc: -i 4 matches
+    # its tabWidth, and -ci indents case bodies. The python language vendors a
+    # prebuilt shfmt binary, so no Go toolchain is needed.
+    - repo: https://github.com/scop/pre-commit-shfmt
+      rev: 479be5958357ba5ab65ce47172117348516860e9 # v3.14.1-1
+      hooks:
+          - id: shfmt
+            args: [--write, -i, '4', -ci]

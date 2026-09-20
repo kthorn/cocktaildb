@@ -13,9 +13,9 @@ mkdir -p tests/fixtures
 # Get backup bucket name from CloudFormation
 echo "Finding backup bucket..."
 BACKUP_BUCKET=$(aws cloudformation describe-stacks \
-  --stack-name cocktail-db-prod \
-  --query "Stacks[0].Outputs[?OutputKey=='BackupBucketName'].OutputValue" \
-  --output text)
+    --stack-name cocktail-db-prod \
+    --query "Stacks[0].Outputs[?OutputKey=='BackupBucketName'].OutputValue" \
+    --output text)
 
 if [ -z "$BACKUP_BUCKET" ] || [ "$BACKUP_BUCKET" = "None" ]; then
     echo "Error: Could not find backup bucket from cocktail-db-prod stack"
