@@ -5,6 +5,7 @@ from pathlib import Path
 from xml.etree.ElementTree import Element, SubElement, tostring
 
 from core.config import settings
+from core.frontend_assets import FrontendAssets
 from db.database import get_database
 from db.db_core import Database
 from fastapi import APIRouter, Depends, Query, Request
@@ -17,6 +18,8 @@ router = APIRouter()
 templates = Jinja2Templates(
     directory=str(Path(__file__).resolve().parents[1] / "templates")
 )
+frontend_assets = FrontendAssets(settings.frontend_asset_mode)
+templates.env.globals["frontend_assets"] = frontend_assets
 
 
 def _safe_source_url(url: str | None) -> str | None:

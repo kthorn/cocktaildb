@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     # Environment
     environment: str = Field(default="dev", description="Environment (dev/prod)")
     debug: bool = Field(default=False, description="Debug mode")
+    frontend_asset_mode: str = Field(
+        default="built", description="Frontend asset mode (built/development)"
+    )
 
     # Logging
     log_level: str = Field(default="INFO", description="Logging level")

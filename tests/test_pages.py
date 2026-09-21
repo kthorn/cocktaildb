@@ -2,7 +2,18 @@
 
 import pytest
 
+from api.core.frontend_assets import FrontendAssets
+from routes import pages
+
 pytestmark = pytest.mark.asyncio
+
+
+@pytest.fixture(autouse=True)
+def source_asset_mode(monkeypatch):
+    """Page integration tests explicitly exercise source asset URLs."""
+    assets = FrontendAssets("development")
+    monkeypatch.setattr(pages, "frontend_assets", assets)
+    monkeypatch.setitem(pages.templates.env.globals, "frontend_assets", assets)
 
 
 class TestRecipePage:
