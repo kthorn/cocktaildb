@@ -57,9 +57,14 @@ async def test_revolver_page_renders_with_request_first_template_api(page_app):
     ("status", "display", "notes"),
     [
         ("calculated", "27%", []),
-        ("estimated", "Estimated 20–30%", ["<script>alert(1)</script>: 1 mL rinse"]),
+        (
+            "estimated",
+            "20–30%",
+            ["Blanc Vermouth: 15–16%", "<script>alert(1)</script>: 1 mL rinse"],
+        ),
         ("unknown", "Unknown", ["Ingredient volume unavailable"]),
-        ("estimated", "Estimated <1%", ["Single family observation"]),
+        ("estimated", "<1%", []),
+        ("estimated", "31%", []),
     ],
 )
 async def test_recipe_abv_renders_backend_display_and_safe_notes(

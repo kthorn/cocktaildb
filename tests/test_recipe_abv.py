@@ -34,7 +34,7 @@ def test_small_unknown_has_useful_integer_range():
         {1: strength(40, 40), 2: strength(0, 100, "unknown")},
     )
     assert result["status"] == "estimated"
-    assert result["display"] == "Estimated 36–45%"
+    assert result["display"] == "36–45%"
     assert result["min_percent"] > 36
 
 
@@ -43,7 +43,7 @@ def test_exactly_twenty_points_is_displayable():
         [row(1, 80), row(2, 20)],
         {1: strength(0, 0), 2: strength(0, 100, "unknown")},
     )
-    assert result["display"] == "Estimated 0–20%"
+    assert result["display"] == "0–20%"
     assert result["status"] == "estimated"
 
 
@@ -58,7 +58,7 @@ def test_point_display_rounds_half_up_and_protects_small_positive(value, display
 
 @pytest.mark.parametrize(
     ("lo", "hi", "display"),
-    [(Decimal("10.1"), Decimal("20.1"), "Estimated 10–21%"), (0, 0, "Estimated 0%")],
+    [(Decimal("10.1"), Decimal("20.1"), "10–21%"), (0, 0, "0%")],
 )
 def test_interval_display_rounds_outward(lo, hi, display):
     result = calculate_recipe_abv([row(1, 10)], {1: strength(lo, hi, "family")})
@@ -94,7 +94,8 @@ def test_inferred_point_is_estimated_even_when_endpoints_match_recorded_point():
     assert recorded["status"] == "calculated"
     assert inferred["status"] == "estimated"
     assert recorded["display"] == "40%"
-    assert inferred["display"] == "Estimated 40%"
+    assert inferred["display"] == "40%"
+    assert inferred["notes"] == []
 
 
 @pytest.mark.parametrize("amount", [float("nan"), float("inf"), -1, Decimal("-0.1")])
@@ -145,7 +146,7 @@ def test_top_uses_the_approved_per_row_volume(unit):
     expected = Decimal("88.7205") * Decimal("40") / (Decimal("88.7205") + Decimal("10"))
     assert result["min_percent"] == pytest.approx(float(expected))
     assert result["max_percent"] == pytest.approx(float(expected))
-    assert any("88.7205" in note for note in result["notes"])
+    assert result["notes"] == []
 
 
 def test_rinse_uses_one_ml_per_row_without_multiplying_positive_amount():
@@ -156,7 +157,7 @@ def test_rinse_uses_one_ml_per_row_without_multiplying_positive_amount():
     expected = Decimal("40") / Decimal("11")
     assert result["min_percent"] == pytest.approx(float(expected))
     assert result["max_percent"] == pytest.approx(float(expected))
-    assert any("1 mL" in note for note in result["notes"])
+    assert result["notes"] == []
 
 
 @pytest.mark.parametrize("amount", [None, 0, 1])
@@ -167,11 +168,8 @@ def test_each_is_excluded_for_missing_zero_or_positive_amount(amount):
     )
     expected_status = "estimated" if amount in (None, 1) else "calculated"
     assert result["status"] == expected_status
-    assert result["display"] == (
-        "Estimated 40%" if expected_status == "estimated" else "40%"
-    )
-    if amount in (1, None):
-        assert any("counted" in note.lower() for note in result["notes"])
+    assert result["display"] == "40%"
+    assert result["notes"] == []
 
 
 @pytest.mark.parametrize("unit", ["each", "to top", "to rinse"])
@@ -219,7 +217,7 @@ def test_names_are_preserved_as_text_and_duplicate_notes_are_deduplicated():
     name = "<Gin & Tonic>"
     result = calculate_recipe_abv(
         [row(1, None, unit="to top", name=name), row(1, 2, unit="to top", name=name)],
-        {1: strength(40, 40)},
+        {1: strength(39, 41, "family")},
     )
     assert any(name in note for note in result["notes"])
     assert len(result["notes"]) == len(set(result["notes"]))
@@ -234,6 +232,66 @@ def test_wide_interval_preserves_raw_bounds_and_reports_unknown():
     assert result["min_percent"] == 0
     assert result["max_percent"] == pytest.approx(50)
     assert result["display"] == "Unknown"
+
+
+@pytest.mark.parametrize(
+    ("lo", "hi", "display", "has_notes"),
+    [
+        ("30", "30.9999", "30%", False),
+        ("30", "31", "31%", False),
+        ("30", "31.0001", "30–32%", True),
+        ("0", "1", "<1%", False),
+        ("0", "0", "0%", False),
+    ],
+)
+def test_narrow_ranges_collapse_using_raw_width(lo, hi, display, has_notes):
+    result = calculate_recipe_abv(
+        [row(1, 10)], {1: strength(Decimal(lo), Decimal(hi), "family")}
+    )
+    assert result["display"] == display
+    assert bool(result["notes"]) is has_notes
+    assert result["status"] == "estimated"
+    assert result["min_percent"] == float(lo)
+    assert result["max_percent"] == float(hi)
+
+
+def test_narrow_cutoff_uses_volume_weighted_recipe_range():
+    result = calculate_recipe_abv(
+        [row(1, 99), row(2, 1)],
+        {1: strength(30, 30), 2: strength(0, 100, "unknown")},
+    )
+    assert result == {
+        "status": "estimated",
+        "min_percent": pytest.approx(29.7),
+        "max_percent": pytest.approx(30.7),
+        "display": "30%",
+        "notes": [],
+    }
+
+
+def test_notes_list_estimated_ingredients_and_their_ranges_not_family_names():
+    result = calculate_recipe_abv(
+        [row(1, 10, name="Blanc Vermouth"), row(2, 10, name="Gin")],
+        {
+            1: strength(15, 16, "family", family_name="Blanc Vermouth"),
+            2: strength(40, 44, "family", family_name="Gin"),
+        },
+    )
+    assert result["display"] == "27–30%"
+    assert result["notes"] == ["Blanc Vermouth: 15–16%", "Gin: 40–44%"]
+
+
+@pytest.mark.parametrize(
+    ("unit", "note"),
+    [("to top", "88.7205 mL"), ("to rinse", "1 mL"), ("each", "counted ingredient")],
+)
+def test_volume_notes_remain_for_wider_cocktail_ranges(unit, note):
+    result = calculate_recipe_abv(
+        [row(1, None, unit=unit), row(2, 10)],
+        {1: strength(10, 20, "family"), 2: strength(10, 20, "family")},
+    )
+    assert result["display"] == "10–20%"
+    assert any(note in text for text in result["notes"])
 
 
 def test_invalid_strength_is_unknown_without_invented_bounds():

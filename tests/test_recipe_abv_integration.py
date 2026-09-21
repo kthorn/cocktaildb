@@ -99,7 +99,7 @@ def test_recipe_abv_response_serializes_additive_contract():
         status="estimated",
         min_percent=Decimal("36.9"),
         max_percent=44.6,
-        display="Estimated 36–45%",
+        display="36–45%",
         notes=["Unknown strength for Ingredient 2"],
     )
     response = RecipeResponse(id=1, name="Test", abv=abv)
@@ -110,7 +110,7 @@ def test_recipe_abv_response_serializes_additive_contract():
         "status": "estimated",
         "min_percent": pytest.approx(36.9),
         "max_percent": pytest.approx(44.6),
-        "display": "Estimated 36–45%",
+        "display": "36–45%",
         "notes": ["Unknown strength for Ingredient 2"],
     }
 
@@ -166,7 +166,7 @@ def test_get_and_search_paths_include_matching_abv_payload(
     target = db.get_recipe(created["id"])
     for recipe in (created, target, listed[0]):
         assert recipe["abv"]["status"] == "estimated"
-        assert recipe["abv"]["display"] == "Estimated 36–45%"
+        assert recipe["abv"]["display"] == "36–45%"
         assert recipe["abv"]["min_percent"] == pytest.approx(36.9230769231)
         assert recipe["abv"]["max_percent"] == pytest.approx(44.6153846154)
         assert any("Unobserved ingredient" in note for note in recipe["abv"]["notes"])
