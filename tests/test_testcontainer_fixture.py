@@ -2,6 +2,9 @@ import conftest
 
 
 class FailingPostgresContainer:
+    def waiting_for(self, _strategy):
+        return self
+
     def __enter__(self):
         raise RuntimeError("Docker daemon unavailable")
 
@@ -10,6 +13,9 @@ class FailingPostgresContainer:
 
 
 class FailingOnExitPostgresContainer:
+    def waiting_for(self, _strategy):
+        return self
+
     def __enter__(self):
         return self
 
