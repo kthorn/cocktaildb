@@ -6,7 +6,8 @@ Quick reference for CocktailDB infrastructure operations (EC2, CloudFormation, P
 
 - AWS CLI configured with deployment credentials
 - Ansible
-- Docker for the pre-deployment test suite
+- Docker for the pre-deployment test suite and real-Caddy release checks
+- Node 22.22.2 and npm for the configuration-free frontend artifact
 - SSH access configured by `infrastructure/ansible/inventory/{dev,prod}.yml` and `infrastructure/ansible/ansible.cfg`
 - The deployed database password in `COCKTAILDB_DB_PASSWORD`
 
@@ -18,25 +19,113 @@ The database password (`COCKTAILDB_DB_PASSWORD`) must **not contain `$` characte
 
 ## 1. Routine Redeployment
 
-The deployment script is the normal path for both environments. It deploys the current working tree, applies pending database migrations, rebuilds the API container, syncs the frontend and Caddy configuration, and restarts affected services.
+The deployment script is the normal path for both environments. Production deployment is an explicit human action after review and merge; CI builds and tests but never deploys.
 
-Choose the target environment and run from the repository root with the intended revision checked out. Use `TARGET=dev` and `BASE_URL=https://dev.mixology.tools` when staging a release in dev first.
+Build or select one artifact on the controller, then validate and promote those exact bytes:
 
 ```bash
-export TARGET=prod
-export BASE_URL=https://mixology.tools
+export TARGET=dev
+export BASE_URL=https://dev.mixology.tools
 export COCKTAILDB_DB_PASSWORD='<database-password>'
 
-python -m pytest tests/ -q &&
-  ./scripts/deploy-ec2.sh "$TARGET" &&
-  curl --max-time 30 --fail --silent --show-error "$BASE_URL/health"
+npm ci && npm run build && npm run test:build
+./scripts/deploy-ec2.sh "$TARGET" --frontend-artifact dist
+curl --max-time 30 --fail --silent --show-error "$BASE_URL/health"
 ```
 
-A routine redeployment does not require provisioning or separate migration/Caddy commands. New-environment bootstrap is intentionally omitted because it is not a routine operation and the current scripts do not fully automate it.
+Without `--frontend-artifact`, the wrapper runs the same `npm ci && npm run build`
+gate before passing the resulting `dist/` directory to Ansible. Ansible
+validates the artifact and public config before remote mutation, stages the API
+manifest and frontend, and preserves the existing Caddy configuration.
 
-If rollback is needed, check out the last known-good revision and run the same deployment command. Database migrations are not automatically reversed; confirm that the older application is compatible with the migrated schema before rolling back.
+The cutover helper validates the staged release, writes the pending frontend
+publication marker, publishes immutable hashed assets before API start, runs the
+existing backup/build/migration checks, starts and health-checks the matching
+API image, publishes the release web/config symlink, and smoke-checks static and
+SSR pages through Caddy. Only after smoke succeeds does it commit the current /
+previous frontend record. It then verifies API and symlink identity before
+pruning retired frontend directories and assets outside the union of the two
+retained inventories. Docker image/builder cleanup remains a separate phase.
+
+The first hashed deployment preserves the existing real web directory as an
+explicit legacy previous record while converting `/opt/cocktaildb/web` to a
+symlink. That first conversion is guarded and restorable but is not atomic.
+Later releases use a temporary symlink followed by atomic replacement. Existing
+unversioned tabs may need an immediate refresh after the first cutover; tabs
+older than the retained two-generation window may also require refresh.
+
+A known rating aggregation failure is tracked in
+`docs/plans/vite-validation-followups.md`; report it separately from release
+gate failures rather than repairing the database or retrying until green.
+
+If rollback is needed, check out the last known-good revision and run the same
+reviewed deployment path. Database migrations are not automatically reversed,
+and a frontend/API rollback is not a promise that database writes can be undone;
+use the coordinated post-write recovery procedure below.
 
 ---
+
+## Frontend artifact, local workflow, and recovery
+
+### Local frontend-only workflow
+
+```bash
+./scripts/local-config.sh
+./scripts/serve.sh
+```
+
+Vite listens on strict `http://localhost:8000`; the generated config uses the
+remote development API and local FastAPI/database are optional. For integrated
+SSR development, start FastAPI on port 8001 with
+`FRONTEND_ASSET_MODE=development`, then browse recipe, ingredient, and sitemap
+routes through Vite on port 8000. Direct browser access to port 8001 is not a
+supported frontend asset flow. A disposable built preview uses an explicitly
+selected config and does not modify `dist/`:
+
+```bash
+npm ci
+npm run build
+npm run preview -- dist /path/to/config.js
+```
+
+No browser automation is installed. Manually check `/`, search, analytics and
+D3, nested recipe/ingredient pages, and login/callback/logout while watching
+that hashed assets return 200 and runtime requests use the selected API/auth
+configuration.
+
+### Pending publication and cleanup recovery
+
+`/opt/cocktaildb/frontend-pending.json` is a hard preflight gate. Never delete
+it to bypass reconciliation. First inspect the marker, active Compose API
+container image ID, `/opt/cocktaildb/web` symlink target, current/previous
+records, and Caddy health/smoke responses. Recover only with the matching
+candidate release and image:
+
+```bash
+APP_HOME=/opt/cocktaildb \
+  /opt/cocktaildb/scripts/deploy-cutover.sh recover \
+  /opt/cocktaildb/releases/<release-id> \
+  cocktaildb-api:release-<release-id>
+```
+
+Recovery verifies the candidate API image and served symlink, reruns health and
+frontend smoke, reconciles identities, commits the successful state, and then
+retries frontend retention. It never automatically restarts an old API after
+possible writes. If publication and state commit succeeded but cleanup failed,
+the release remains healthy and current; verify identities and rerun the
+cleanup path. Cleanup retains current plus one previous successful generation
+and the union of both inventories, and never removes API, migration, backup,
+Docker, or migration-parity data.
+
+### Frontend release paths
+
+| Path | Contents |
+| --- | --- |
+| `/opt/cocktaildb/web` | Active release symlink (or the pre-migration real directory) |
+| `/opt/cocktaildb/releases/<id>/web` | Release HTML and generated public config |
+| `/opt/cocktaildb/frontend-assets` | Shared immutable hashed assets |
+| `/opt/cocktaildb/frontend-state.json` | Committed current/previous/retired frontend identities |
+| `/opt/cocktaildb/frontend-pending.json` | In-progress publication marker requiring recovery |
 
 ## 2. Day-to-Day Operations
 

@@ -375,41 +375,37 @@ python -m pytest tests/test_api_integration.py -v
 
 ## Frontend/UI Testing
 
-### Local Development Testing
+### Build and runtime gate
 
-For testing frontend changes without deploying:
+The root package is intentionally typeless and Node 22.22.2 is the tested
+runtime. Run the configuration-free artifact gate before browser smoke:
 
 ```bash
-# Generate local config (points to dev API)
+npm ci
+npm run build
+npm run test:build
+```
+
+The automated runtime check serves two copies of the same hashed build with
+separate `config.js` files, verifies API/auth URLs, nested asset references,
+inline login/callback/logout modules, common-module loading, and the unchanged
+D3 CDN URL. It does not execute a browser.
+
+### Manual browser smoke
+
+For local frontend-only testing:
+
+```bash
 ./scripts/local-config.sh
-
-# Start local server
-./scripts/serve.sh
-
-# Open browser to http://localhost:8000
+./scripts/serve.sh                 # http://localhost:8000
 ```
 
-**What to test:**
-- UI/UX changes
-- Navigation and routing
-- Form submissions
-- Authentication flows
-- Responsive design (mobile, tablet, desktop)
-- Accessibility (keyboard navigation, screen readers)
-
-**Testing workflow:**
-1. Make changes to HTML/CSS/JS in `src/web/`
-2. Refresh browser to see changes
-3. Test across different user roles (guest, user, editor, admin)
-4. Test across different viewports/devices
-5. Check browser console for JavaScript errors
-
-**Enhanced testing with live-reload:**
-```bash
-npx live-server src/web --port=8000
-```
-
-See [docs/local-development.md](docs/local-development.md) for detailed frontend testing setup and troubleshooting.
+Check index, search, and analytics; exercise an API request; open nested recipe
+and ingredient URLs; and walk through login, callback, and logout while watching
+network requests and console errors. For SSR development, run FastAPI on port
+8001 with `FRONTEND_ASSET_MODE=development` and browse through Vite on port
+8000. Verify styles, hashed scripts, runtime config, and D3 load once. Browser
+automation is not installed in this repository.
 
 ## Additional Resources
 
@@ -417,4 +413,4 @@ See [docs/local-development.md](docs/local-development.md) for detailed frontend
 - [FastAPI Testing Guide](https://fastapi.tiangolo.com/tutorial/testing/)
 - [pytest-mock Documentation](https://pytest-mock.readthedocs.io/)
 - [Project CLAUDE.md](./CLAUDE.md) - Development commands and architecture
-- [Local Development Guide](./docs/local-development.md) - Frontend testing setup
+- [Frontend scripts](./scripts/README.md) - Artifact, preview, config, and local workflow

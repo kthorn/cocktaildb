@@ -28,6 +28,15 @@ jobs:
               with:
                   node-version: 22.22.2
 
+            - name: Install frontend dependencies
+              run: npm ci
+
+            - name: Build and test frontend artifact
+              run: |
+                  test ! -e src/web/js/config.js
+                  npm run build
+                  npm run test:build
+
             - name: Install pre-commit
               run: python -m pip install pre-commit==4.6.2
 

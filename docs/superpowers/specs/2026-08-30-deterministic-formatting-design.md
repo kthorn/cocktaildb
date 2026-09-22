@@ -48,7 +48,7 @@ The Biome archive used a `biome.json` with `formatter.indentStyle = "space"`, `f
 - Format Jinja templates in `api/templates/`; Prettier is not Jinja-aware.
 - Format CSS, JSON, SVG, YAML, Markdown, generated files, or vendored artifacts.
 - Refactor or semantically change application code while creating the baseline.
-- Add `package.json`, ESLint, Biome, Husky, Lefthook, or another hook manager.
+- Add `package.json`, ESLint, Biome, Husky, Lefthook, or another hook manager. **Superseded for the root package by the approved Vite migration (2026-09-20):** the root now has a typeless `package.json` and committed lockfile for the Vite artifact gate; this historical formatting decision remains unchanged for its original pre-Vite scope.
 
 ## Tooling Decisions
 
@@ -87,11 +87,11 @@ pre-commit 4.6.2 is the only developer-installed orchestration dependency. `.pre
 - `ruff-format`: `language: python`, `entry: ruff format`, `additional_dependencies: [ruff==0.16.5]`, Python file types only.
 - `prettier`: `language: node`, `entry: prettier --write`, `additional_dependencies: [prettier@3.9.6]`, limited to `^(src/web/.*\.(js|mjs|html)|tests/.*\.(js|mjs))$`.
 
-This avoids global Ruff or Prettier installation, avoids a root Node package, and keeps exact tool pins in one executable configuration. `pre-commit run --all-files` bootstraps both isolated tool environments. Node 22.7 or newer is still a local prerequisite for the Node hook and for `node --check`; without a root `package.json`, Node's default module-syntax detection introduced in 22.7 is what lets `node --check` parse the frontend's ESM `.js` files. Node 22.22.2 is the documented and CI-tested version.
+This avoids global Ruff or Prettier installation and keeps exact tool pins in one executable configuration. `pre-commit run --all-files` bootstraps both isolated tool environments. **Superseded root-package rationale:** the later Vite migration adds a typeless root `package.json` and committed lockfile, while deliberately preserving the Node 22.7+ syntax-detection behavior that lets `node --check` parse frontend ESM `.js` files alongside existing CommonJS scripts. Node 22.22.2 is the documented and CI-tested version.
 
 ## Developer and Editor Workflow
 
-`AGENTS.md` documents the Node 22.7+ prerequisite (22.22.2 tested) and these commands:
+`AGENTS.md` documents the Node 22.7+ prerequisite (22.22.2 tested), the later typeless Vite package arrangement, and these formatter commands:
 
 ```bash
 node --version
