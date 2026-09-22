@@ -3,8 +3,8 @@ from testcontainers.core.wait_strategies import PortWaitStrategy
 import conftest
 
 
-def test_postgres_fixture_waits_for_mapped_host_port(monkeypatch):
-    calls = {}
+def test_postgres_fixture_waits_for_mapped_host_port_before_yield(monkeypatch):
+    calls = {"events": []}
 
     class FakePostgresContainer:
         def __init__(self, **kwargs):
@@ -12,15 +12,19 @@ def test_postgres_fixture_waits_for_mapped_host_port(monkeypatch):
 
         def waiting_for(self, strategy):
             calls["strategy"] = strategy
+            calls["events"].append("waiting_for")
             return self
 
         def __enter__(self):
+            calls["events"].append("enter")
             return self
 
         def __exit__(self, exc_type, exc_value, traceback):
+            calls["events"].append("exit")
             return False
 
         def get_connection_url(self):
+            calls["events"].append("connection_url")
             return "unused"
 
     monkeypatch.setattr(conftest, "PostgresContainer", FakePostgresContainer)
@@ -36,3 +40,4 @@ def test_postgres_fixture_waits_for_mapped_host_port(monkeypatch):
     )
     assert isinstance(calls["strategy"], PortWaitStrategy)
     assert calls["strategy"]._port == 5432
+    assert calls["events"] == ["waiting_for", "enter", "connection_url", "exit"]
