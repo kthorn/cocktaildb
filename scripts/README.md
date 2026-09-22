@@ -32,8 +32,10 @@ dist/
   asset-inventory.json  # every file beneath web/assets; not served
 ```
 
-Runtime configuration is deliberately absent. Validate an existing artifact
-without rebuilding, or run a disposable preview with a selected config:
+Runtime configuration is deliberately absent. `npm run test:build` performs
+source/config externalization and HTTP artifact-fetch checks only; it does not
+execute browser behavior, built API/auth modules, or SSR. Validate an existing
+artifact without rebuilding, or run a disposable preview with a selected config:
 
 ```bash
 node scripts/frontend-artifact.mjs validate dist

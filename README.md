@@ -67,8 +67,11 @@ No browser automation is installed in this repository. Manual smoke steps are:
 4. Open `/login.html`, `/callback.html`, and `/logout.html`; verify the Cognito
    client/domain and callback/logout origin come from `config.js`.
 
-The automated build/runtime checks exercise the same configuration-free artifact
-with two runtime configurations, but do not claim to execute a browser.
+The automated gate performs source-module/config externalization checks and
+HTTP artifact checks: it serves two copies of the same built assets, fetches
+static HTML references, and verifies each copy's runtime config text. It does
+not execute built application modules, make API/auth requests, render SSR, or
+drive a browser. Those browser-only behaviors are manual smoke checks.
 
 ## Deployment and artifact promotion
 

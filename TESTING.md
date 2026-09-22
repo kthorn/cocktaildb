@@ -386,10 +386,14 @@ npm run build
 npm run test:build
 ```
 
-The automated runtime check serves two copies of the same hashed build with
-separate `config.js` files, verifies API/auth URLs, nested asset references,
-inline login/callback/logout modules, common-module loading, and the unchanged
-D3 CDN URL. It does not execute a browser.
+The automated check is limited to source/config and HTTP artifact assertions.
+It serves two copies of the same hashed build with separate `config.js` files,
+checks exact API/auth values in the fetched config artifacts, fetches static
+HTML references, verifies the built external-config reference, and preserves
+the unchanged D3 URL in the artifact. It does not execute source or built API/
+auth modules, render SSR fixtures, make application requests, or drive a
+browser; SSR, login/callback/logout behavior, nested routes, and initialization
+remain manual browser checks.
 
 ### Manual browser smoke
 

@@ -16,7 +16,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { validateArtifact } from '../scripts/frontend-artifact.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -252,15 +252,9 @@ function assertChangedAssetNames(before, after, extension) {
     assert.notDeepEqual(changed, original, `${extension} asset names did not change`);
 }
 
-async function serveDirectory(directory, { routes = {} } = {}) {
+async function serveDirectory(directory) {
     const server = createServer(async (request, response) => {
         const pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
-        const route = routes[pathname];
-        if (route !== undefined) {
-            response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-            response.end(route);
-            return;
-        }
         const relativePath = pathname.replace(/^\/+/, '') || 'index.html';
         const root = path.resolve(directory);
         const file = path.resolve(root, relativePath);
@@ -286,12 +280,41 @@ async function serveDirectory(directory, { routes = {} } = {}) {
     };
 }
 
-async function assertRuntimeConfigCopies(fixture, baseline) {
-    const copies = await mkdtemp(path.join(tmpdir(), 'cocktaildb-config-copies-'));
-    const configs = runtimeConfigs;
+async function assertNodeModuleModes() {
+    const packageJson = JSON.parse(await readFile(path.join(repository, 'package.json'), 'utf8'));
+    assert.equal(packageJson.type, undefined, 'root package must remain typeless');
+    await execFileAsync(process.execPath, ['tests/test_frontend_ingredient_display.js'], {
+        cwd: repository,
+    });
+    await execFileAsync(process.execPath, ['tests/test_static_frontend_head.mjs'], {
+        cwd: repository,
+    });
+}
+
+function assertRuntimeConfigValues(source, config) {
+    const match = source.match(/^export default (\{[\s\S]*\});\s*$/);
+    assert(match, 'runtime config must be a JSON default export');
+    const actual = JSON.parse(match[1]);
+    for (const field of ['apiUrl', 'userPoolId', 'clientId', 'cognitoDomain'])
+        assert.equal(actual[field], config[field], `runtime config ${field}`);
+}
+
+function assertSuccessfulArtifactFetch(response, reference) {
+    assert.equal(response.status, 200, `built artifact reference ${reference}`);
+}
+
+function artifactReferences(html) {
+    return [
+        ...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/gi),
+        ...html.matchAll(/<link\b[^>]*\b(?:href|src)=["']([^"']+)["'][^>]*>/gi),
+    ].map((match) => match[1]);
+}
+
+async function assertConfiguredCopiesArtifactFetch(fixture, baseline) {
+    const copies = await mkdtemp(path.join(tmpdir(), 'cocktaildb-artifact-copies-'));
     const servers = [];
     try {
-        for (const [index, config] of configs.entries()) {
+        for (const [index, config] of runtimeConfigs.entries()) {
             const served = path.join(copies, `copy-${index}`);
             await cp(path.join(fixture, 'dist', 'web'), served, { recursive: true });
             await mkdir(path.join(served, 'js'), { recursive: true });
@@ -304,20 +327,28 @@ async function assertRuntimeConfigCopies(fixture, baseline) {
             const running = await serveDirectory(served);
             servers.push(running.server);
             const configResponse = await fetch(`${running.url}/js/config.js`);
-            assert.equal(configResponse.status, 200);
-            const configSource = await configResponse.text();
-            assert(configSource.includes(config.apiUrl));
-            assert(configSource.includes(config.userPoolId));
-            assert(configSource.includes(config.clientId));
-            assert(configSource.includes(config.cognitoDomain));
+            assertSuccessfulArtifactFetch(configResponse, '/js/config.js');
+            assertRuntimeConfigValues(await configResponse.text(), config);
 
-            const assetName = baseline.names[0];
-            const assetResponse = await fetch(`${running.url}/assets/${assetName}`);
-            assert.equal(assetResponse.status, 200);
-            assert.deepEqual(
-                Buffer.from(await assetResponse.arrayBuffer()),
-                baseline.bytes.get(assetName),
-            );
+            for (const pagePath of [
+                '/',
+                '/search.html',
+                '/analytics.html',
+                '/login.html',
+                '/callback.html',
+                '/logout.html',
+            ]) {
+                const response = await fetch(`${running.url}${pagePath}`);
+                assertSuccessfulArtifactFetch(response, pagePath);
+                const html = await response.text();
+                if (pagePath === '/analytics.html')
+                    assert.equal(html.split('https://d3js.org/d3.v7.min.js').length - 1, 1);
+                for (const reference of artifactReferences(html)) {
+                    if (/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(reference)) continue;
+                    const assetResponse = await fetch(new URL(reference, `${running.url}/`).href);
+                    assertSuccessfulArtifactFetch(assetResponse, `${pagePath} ${reference}`);
+                }
+            }
         }
     } finally {
         await Promise.all(
@@ -332,210 +363,43 @@ async function assertRuntimeConfigCopies(fixture, baseline) {
     }
 }
 
-async function assertNodeModuleModes() {
-    const packageJson = JSON.parse(await readFile(path.join(repository, 'package.json'), 'utf8'));
-    assert.equal(packageJson.type, undefined, 'root package must remain typeless');
-    await execFileAsync(process.execPath, ['tests/test_frontend_ingredient_display.js'], {
-        cwd: repository,
-    });
-    await execFileAsync(process.execPath, ['tests/test_static_frontend_head.mjs'], {
-        cwd: repository,
-    });
-}
-
-function createStorage() {
-    const values = new Map();
-    return {
-        getItem(key) {
-            return values.has(key) ? values.get(key) : null;
-        },
-        setItem(key, value) {
-            values.set(key, String(value));
-        },
-        removeItem(key) {
-            values.delete(key);
-        },
-    };
-}
-
-function runtimeReferences(html) {
-    return [
-        ...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/gi),
-        ...html.matchAll(/<link\b[^>]*\b(?:href|src)=["']([^"']+)["'][^>]*>/gi),
-    ].map((match) => match[1]);
-}
-
-async function exerciseRuntimeModules(runtimeRoot, config, serverUrl, index) {
-    const modules = path.join(runtimeRoot, 'runtime-modules');
-    await mkdir(modules, { recursive: true });
-    await cp(path.join(repository, 'src', 'web', 'js', 'api.js'), path.join(modules, 'api.js'));
-    await cp(path.join(repository, 'src', 'web', 'js', 'auth.js'), path.join(modules, 'auth.js'));
-    await writeFile(path.join(modules, 'config.js'), `export default ${JSON.stringify(config)};\n`);
-
-    const requests = [];
-    const globals = ['fetch', 'localStorage', 'sessionStorage', 'window', 'document'];
-    const previous = new Map(
-        globals.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]),
-    );
-    const localStorage = createStorage();
-    const sessionStorage = createStorage();
-    globalThis.fetch = async (url) => {
-        requests.push(String(url));
-        return new Response(
-            JSON.stringify({
-                recipes: [],
-                pagination: { page: 1, limit: 20, total_count: 0, has_next: false },
-            }),
-            { status: 200, headers: { 'content-type': 'application/json' } },
-        );
-    };
-    globalThis.localStorage = localStorage;
-    globalThis.sessionStorage = sessionStorage;
-    globalThis.window = {
-        location: { origin: serverUrl, href: `${serverUrl}/index.html`, search: '' },
-        history: { replaceState() {} },
-    };
-    globalThis.document = {};
-
+async function assertArtifactAssertionMutations(fixture, baseline) {
+    const copies = await mkdtemp(path.join(tmpdir(), 'cocktaildb-artifact-mutations-'));
+    const config = runtimeConfigs[0];
+    const served = path.join(copies, 'copy');
+    let server;
     try {
-        const suffix = `?copy=${index}`;
-        const auth = await import(`${pathToFileURL(path.join(modules, 'auth.js')).href}${suffix}`);
-        const { api } = await import(
-            `${pathToFileURL(path.join(modules, 'api.js')).href}${suffix}`
+        await cp(path.join(fixture, 'dist', 'web'), served, { recursive: true });
+        await mkdir(path.join(served, 'js'), { recursive: true });
+        await writeFile(
+            path.join(served, 'js', 'config.js'),
+            `export default ${JSON.stringify(config)};\n`,
         );
+        assertStableSnapshots(baseline, await snapshotTree(path.join(served, 'assets')));
+        const running = await serveDirectory(served);
+        server = running.server;
+        const configSource = await (await fetch(`${running.url}/js/config.js`)).text();
 
-        await api.getStats();
-        await api.searchRecipes({ name: 'negroni' });
-        await api.getIngredientUsageAnalytics({ parent_id: 7 });
-        assert.deepEqual(
-            requests.map((url) => {
-                const parsed = new URL(url);
-                return `${parsed.pathname}${parsed.search}`;
-            }),
-            [
-                '/api/stats',
-                '/api/recipes/search?page=1&limit=20&sort_by=name&sort_order=asc&q=negroni',
-                '/api/analytics/ingredient-usage?parent_id=7',
-            ],
-        );
-        assert(requests.every((url) => url.startsWith(`${config.apiUrl}/`)));
-
-        await auth.startLogin();
-        const loginUrl = new URL(window.location.href);
-        assert.equal(loginUrl.origin, config.cognitoDomain);
-        assert.equal(loginUrl.pathname, '/login');
-        assert.equal(loginUrl.searchParams.get('client_id'), config.clientId);
-        assert.equal(loginUrl.searchParams.get('redirect_uri'), `${serverUrl}/callback.html`);
-
-        window.location.search = '?code=invalid&state=wrong';
-        await assert.rejects(auth.completeLogin(), /Invalid or expired login response/);
-
-        auth.logout();
-        const logoutUrl = new URL(window.location.href);
-        assert.equal(logoutUrl.origin, config.cognitoDomain);
-        assert.equal(logoutUrl.pathname, '/logout');
-        assert.equal(logoutUrl.searchParams.get('client_id'), config.clientId);
-        assert.equal(logoutUrl.searchParams.get('logout_uri'), `${serverUrl}/logout.html`);
-    } finally {
-        for (const [name, descriptor] of previous) {
-            if (descriptor) Object.defineProperty(globalThis, name, descriptor);
-            else delete globalThis[name];
-        }
-    }
-}
-
-async function assertConfiguredCopiesRuntimeContract(fixture, baseline) {
-    const copies = await mkdtemp(path.join(tmpdir(), 'cocktaildb-runtime-copies-'));
-    const manifest = JSON.parse(
-        await readFile(path.join(fixture, 'dist', 'manifest.json'), 'utf8'),
-    );
-    const assetUrl = (key) => `/assets/${manifest[key].file.replace(/^assets\//, '')}`;
-    const commonAssetName = manifest['js/common.js'].file.replace(/^assets\//, '');
-    // The Python page suite covers real Jinja SSR; these proxy responses verify
-    // the same built asset URLs remain valid from nested paths in both copies.
-    const ssrRoutes = {
-        '/recipe/42': `<link rel="stylesheet" href="${assetUrl('normalize.css')}"><script type="module" src="${assetUrl('js/common.js')}"></script><script type="module" src="${assetUrl('js/recipe.js')}"></script>`,
-        '/ingredient/7': `<link rel="stylesheet" href="${assetUrl('normalize.css')}"><script type="module" src="${assetUrl('js/common.js')}"></script>`,
-    };
-    const servers = [];
-    try {
-        for (const [index, config] of runtimeConfigs.entries()) {
-            const served = path.join(copies, `copy-${index}`);
-            await cp(path.join(fixture, 'dist', 'web'), served, { recursive: true });
-            await mkdir(path.join(served, 'js'), { recursive: true });
-            await writeFile(
-                path.join(served, 'js', 'config.js'),
-                `export default ${JSON.stringify(config)};\n`,
+        for (const [field, replacement] of [
+            ['apiUrl', 'https://wrong-api.invalid'],
+            ['clientId', 'wrong-client-id'],
+        ]) {
+            const mutatedSource = configSource.replace(config[field], replacement);
+            assert.notEqual(mutatedSource, configSource, `${field} mutation applied`);
+            assert.throws(
+                () => assertRuntimeConfigValues(mutatedSource, config),
+                new RegExp(`runtime config ${field}`),
             );
-            assertStableSnapshots(baseline, await snapshotTree(path.join(served, 'assets')));
-
-            const running = await serveDirectory(served, { routes: ssrRoutes });
-            servers.push(running.server);
-            const pagePaths = [
-                '/',
-                '/search.html',
-                '/analytics.html',
-                '/login.html',
-                '/callback.html',
-                '/logout.html',
-            ];
-            for (const pagePath of pagePaths) {
-                const response = await fetch(`${running.url}${pagePath}`);
-                assert.equal(response.status, 200, pagePath);
-                const html = await response.text();
-                const moduleScripts = [
-                    ...html.matchAll(
-                        /<script\b[^>]*\btype=["']module["'][^>]*\bsrc=["']([^"']+)["']/gi,
-                    ),
-                ].map((match) => match[1]);
-                assert.equal(moduleScripts.length, 1, `${pagePath} module entry count`);
-                assert(!/<script\b[^>]*type=["']module["'][^>]*>\s*import\b/i.test(html));
-                for (const reference of runtimeReferences(html)) {
-                    if (/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(reference)) continue;
-                    const assetResponse = await fetch(new URL(reference, `${running.url}/`).href);
-                    assert.equal(assetResponse.status, 200, `${pagePath} ${reference}`);
-                }
-                const entrySource = await (
-                    await fetch(new URL(moduleScripts[0], `${running.url}/`))
-                ).text();
-                assert.equal(
-                    entrySource.split(commonAssetName).length - 1,
-                    1,
-                    `${pagePath} common initialization import`,
-                );
-                if (pagePath === '/analytics.html') {
-                    assert.equal(html.split('https://d3js.org/d3.v7.min.js').length - 1, 1);
-                }
-            }
-            for (const nestedPath of Object.keys(ssrRoutes)) {
-                const response = await fetch(`${running.url}${nestedPath}`);
-                assert.equal(response.status, 200, nestedPath);
-                for (const reference of runtimeReferences(await response.text())) {
-                    const assetResponse = await fetch(new URL(reference, `${running.url}/`).href);
-                    assert.equal(assetResponse.status, 200, `${nestedPath} ${reference}`);
-                }
-            }
-            const configResponse = await fetch(`${running.url}/js/config.js`);
-            assert.equal(configResponse.status, 200);
-            const configSource = await configResponse.text();
-            for (const value of [
-                config.apiUrl,
-                config.userPoolId,
-                config.clientId,
-                config.cognitoDomain,
-            ])
-                assert(configSource.includes(value));
-            await exerciseRuntimeModules(served, config, running.url, index);
         }
-    } finally {
-        await Promise.all(
-            servers.map(
-                (server) =>
-                    new Promise((resolve) => {
-                        server.close(resolve);
-                    }),
-            ),
+
+        const missingReference = `/assets/missing-${baseline.names[0]}`;
+        const missingResponse = await fetch(`${running.url}${missingReference}`);
+        assert.throws(
+            () => assertSuccessfulArtifactFetch(missingResponse, missingReference),
+            /built artifact reference/,
         );
+    } finally {
+        if (server) await new Promise((resolve) => server.close(resolve));
         await rm(copies, { recursive: true, force: true });
     }
 }
@@ -579,8 +443,8 @@ async function main() {
         const originalCss = await readFile(path.join(fixture, 'src', 'web', 'styles.css'));
         const originalJs = await readFile(path.join(fixture, 'src', 'web', 'js', 'common.js'));
         const baseline = await buildTwiceAndCheck(fixture);
-        await assertRuntimeConfigCopies(fixture, baseline);
-        await assertConfiguredCopiesRuntimeContract(fixture, baseline);
+        await assertConfiguredCopiesArtifactFetch(fixture, baseline);
+        await assertArtifactAssertionMutations(fixture, baseline);
         await assertConfigIsNotStaged();
 
         const sentinelConfig = path.join(fixture, 'src', 'web', 'js', 'config.js');

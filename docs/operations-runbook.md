@@ -88,7 +88,9 @@ npm run build
 npm run preview -- dist /path/to/config.js
 ```
 
-No browser automation is installed. Manually check `/`, search, analytics and
+No browser automation is installed. The Node gate checks source/config
+externalization and fetches static artifact references, but does not execute
+built application modules or SSR. Manually check `/`, search, analytics and
 D3, nested recipe/ingredient pages, and login/callback/logout while watching
 that hashed assets return 200 and runtime requests use the selected API/auth
 configuration.

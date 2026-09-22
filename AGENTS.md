@@ -22,7 +22,7 @@
 
 ## Formatting
 
-- Requires Node 22.7 or newer; Node 22.22.2 is the tested version. The root package remains typeless so existing CommonJS scripts and Vite's frontend ESM syntax continue to execute; the build/runtime test asserts both modes.
+- Frontend builds require Node 22.12.0 or newer because the pinned Vite 8.3.0 declares that floor; Node 22.22.2 is the tested version. The root package remains typeless so existing CommonJS scripts and Node's formatter-era 22.7+ syntax detection for frontend ESM continue to execute; the build/artifact test asserts both modes.
 - Install hooks with `~/miniforge3/envs/cocktaildb/bin/python -m pip install pre-commit==4.6.2 && ~/miniforge3/envs/cocktaildb/bin/python -m pre_commit install`.
 - Run every formatter check with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run --all-files`.
 - Format/check Python only with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run ruff-format --all-files`.

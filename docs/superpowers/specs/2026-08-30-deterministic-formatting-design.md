@@ -87,7 +87,7 @@ pre-commit 4.6.2 is the only developer-installed orchestration dependency. `.pre
 - `ruff-format`: `language: python`, `entry: ruff format`, `additional_dependencies: [ruff==0.16.5]`, Python file types only.
 - `prettier`: `language: node`, `entry: prettier --write`, `additional_dependencies: [prettier@3.9.6]`, limited to `^(src/web/.*\.(js|mjs|html)|tests/.*\.(js|mjs))$`.
 
-This avoids global Ruff or Prettier installation and keeps exact tool pins in one executable configuration. `pre-commit run --all-files` bootstraps both isolated tool environments. **Superseded root-package rationale:** the later Vite migration adds a typeless root `package.json` and committed lockfile, while deliberately preserving the Node 22.7+ syntax-detection behavior that lets `node --check` parse frontend ESM `.js` files alongside existing CommonJS scripts. Node 22.22.2 is the documented and CI-tested version.
+This avoids global Ruff or Prettier installation and keeps exact tool pins in one executable configuration. `pre-commit run --all-files` bootstraps both isolated tool environments. **Superseded root-package rationale:** the later Vite migration adds a typeless root `package.json` and committed lockfile, while deliberately preserving the formatter workflow's Node 22.7+ syntax-detection floor that lets `node --check` parse frontend ESM `.js` files alongside existing CommonJS scripts. The pinned Vite 8.3.0 build separately requires Node 22.12.0 or newer; Node 22.22.2 is the documented and CI-tested version.
 
 ## Developer and Editor Workflow
 
