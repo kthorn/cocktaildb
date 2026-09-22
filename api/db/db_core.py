@@ -702,9 +702,12 @@ class Database(GroupInventoryMixin):
             return
 
         placeholders = ",".join("%s" for _ in unit_ids)
-        units = self.execute_query(
-            f"SELECT id, name, conversion_to_ml FROM units WHERE id IN ({placeholders})",
-            tuple(unit_ids),
+        units = cast(
+            list[dict[str, Any]],
+            self.execute_query(
+                f"SELECT id, name, conversion_to_ml FROM units WHERE id IN ({placeholders})",
+                tuple(unit_ids),
+            ),
         )
         units_by_id = {unit["id"]: unit for unit in units}
         for i, ingredient in enumerate(ingredients):
