@@ -688,6 +688,36 @@ class Database(GroupInventoryMixin):
         if ingredient_ids:
             self._validate_ingredients_exist(ingredient_ids)
 
+        self._validate_convertible_recipe_ingredient_amounts(ingredients)
+
+    def _validate_convertible_recipe_ingredient_amounts(
+        self, ingredients: list[dict[str, Any]]
+    ) -> None:
+        unit_ids = {
+            ingredient["unit_id"]
+            for ingredient in ingredients
+            if ingredient.get("unit_id") is not None
+        }
+        if not unit_ids:
+            return
+
+        placeholders = ",".join("%s" for _ in unit_ids)
+        units = self.execute_query(
+            f"SELECT id, name, conversion_to_ml FROM units WHERE id IN ({placeholders})",
+            tuple(unit_ids),
+        )
+        units_by_id = {unit["id"]: unit for unit in units}
+        for i, ingredient in enumerate(ingredients):
+            unit = units_by_id.get(ingredient.get("unit_id"))
+            if (
+                unit is not None
+                and unit["conversion_to_ml"] is not None
+                and ingredient.get("amount") is None
+            ):
+                raise ValueError(
+                    f"Ingredient {i + 1}: amount is required for unit '{unit['name']}'"
+                )
+
     def _validate_ingredients_exist(self, ingredient_ids: list[int]) -> None:
         """Validate that all ingredient IDs exist in the database"""
         try:
@@ -1235,6 +1265,10 @@ class Database(GroupInventoryMixin):
             )
             if not existing:
                 return None
+            if "ingredients" in data and data["ingredients"] is not None:
+                self._validate_convertible_recipe_ingredient_amounts(
+                    data["ingredients"]
+                )
             conn = self._get_connection()
             cursor = conn.cursor()
             cursor.execute("BEGIN")

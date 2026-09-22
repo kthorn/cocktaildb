@@ -308,6 +308,29 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Require a quantity whenever the selected unit has an mL conversion.
+CREATE OR REPLACE FUNCTION require_convertible_recipe_ingredient_amount()
+RETURNS TRIGGER AS $$
+DECLARE
+  unit_name TEXT;
+BEGIN
+  IF NEW.amount IS NULL AND NEW.unit_id IS NOT NULL THEN
+    SELECT u.name INTO unit_name
+    FROM units AS u
+    WHERE u.id = NEW.unit_id
+      AND u.conversion_to_ml IS NOT NULL;
+
+    IF unit_name IS NOT NULL THEN
+      RAISE EXCEPTION 'Recipe ingredient % requires an amount for unit %',
+        NEW.ingredient_id, unit_name
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Create Triggers
 
 -- Keep derived ingredient measurements current for every write path.
@@ -327,6 +350,12 @@ CREATE TRIGGER clear_empty_ingredient_parent_abv_after_change
 AFTER DELETE OR UPDATE OF parent_id ON ingredients
 FOR EACH ROW
 EXECUTE FUNCTION clear_empty_ingredient_parent_abv();
+
+-- Reject unmeasured ingredients when their unit can be converted to mL.
+CREATE TRIGGER require_convertible_recipe_ingredient_amount
+BEFORE INSERT OR UPDATE OF amount, unit_id ON recipe_ingredients
+FOR EACH ROW
+EXECUTE FUNCTION require_convertible_recipe_ingredient_amount();
 
 -- Analytics refresh triggers
 CREATE TRIGGER analytics_recipes_dirty
