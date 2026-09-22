@@ -1,0 +1,862 @@
+#!/usr/bin/env python3
+"""Publish and retain the verified frontend generations.
+
+The deployment shell owns ordering and the deployment lock.  This module owns
+only JSON/path validation and filesystem publication so shell interpolation
+cannot turn a release record into an arbitrary deletion.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import posixpath
+import shutil
+import stat as stat_module
+import sys
+import tempfile
+from pathlib import Path
+from typing import Any
+
+STATE_VERSION = 1
+ASSET_INVENTORY = "asset-inventory.json"
+FRONTEND_INVENTORY = "frontend-assets.json"
+
+
+class FrontendReleaseError(RuntimeError):
+    """A release failed a fail-closed validation or filesystem operation."""
+
+
+def _error(message: str) -> FrontendReleaseError:
+    return FrontendReleaseError(message)
+
+
+def _lstat(path: Path, label: str):
+    try:
+        return path.lstat()
+    except FileNotFoundError as exc:
+        raise _error(f"{label} is missing: {path}") from exc
+
+
+def _regular_file(path: Path, label: str) -> None:
+    stat = _lstat(path, label)
+    if stat_module.S_ISLNK(stat.st_mode):
+        raise _error(f"{label} must not be a symlink: {path}")
+    if not stat_module.S_ISREG(stat.st_mode):
+        raise _error(f"{label} must be a regular file: {path}")
+
+
+def _directory(path: Path, label: str, *, missing_ok: bool = False) -> None:
+    try:
+        stat = path.lstat()
+    except FileNotFoundError:
+        if missing_ok:
+            return
+        raise _error(f"{label} is missing: {path}") from None
+    if stat_module.S_ISLNK(stat.st_mode):
+        raise _error(f"{label} must not be a symlink: {path}")
+    if not stat_module.S_ISDIR(stat.st_mode):
+        raise _error(f"{label} must be a directory: {path}")
+
+
+def _ensure_directory(path: Path, label: str) -> None:
+    if path.exists() or path.is_symlink():
+        _directory(path, label)
+        return
+    path.mkdir(parents=True, exist_ok=True)
+    _directory(path, label)
+
+
+def _safe_relative(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not value or "\x00" in value:
+        raise _error(f"{label} must be a non-empty string")
+    if "\\" in value or value.startswith("/"):
+        raise _error(f"{label} is not a safe relative path: {value}")
+    parts = value.split("/")
+    if any(not part or part in {".", ".."} for part in parts):
+        raise _error(f"{label} is not a safe relative path: {value}")
+    if posixpath.normpath(value) != value:
+        raise _error(f"{label} is not normalized: {value}")
+    return value
+
+
+def _safe_asset_path(root: Path, relative: str, label: str) -> Path:
+    relative = _safe_relative(relative, label)
+    path = root.joinpath(*relative.split("/"))
+    try:
+        path.relative_to(root)
+    except ValueError as exc:  # defensive even after lexical validation
+        raise _error(f"{label} escapes its root: {relative}") from exc
+    return path
+
+
+def _assert_no_symlink_parents(path: Path, root: Path, label: str) -> None:
+    try:
+        relative = path.relative_to(root)
+    except ValueError as exc:
+        raise _error(f"{label} escapes its root: {path}") from exc
+    current = root
+    for component in relative.parts[:-1]:
+        current = current / component
+        if current.is_symlink():
+            raise _error(f"{label} contains a symlink parent: {current}")
+        if current.exists() and not current.is_dir():
+            raise _error(f"{label} parent is not a directory: {current}")
+
+
+def _validate_tree(root: Path, label: str) -> None:
+    _directory(root, label)
+    for entry in root.iterdir():
+        stat = entry.lstat()
+        if stat_module.S_ISLNK(stat.st_mode):
+            raise _error(f"{label} contains a symlink: {entry}")
+        if stat_module.S_ISDIR(stat.st_mode):
+            _validate_tree(entry, label)
+        elif not stat_module.S_ISREG(stat.st_mode):
+            raise _error(f"{label} contains non-regular data: {entry}")
+
+
+def _enumerate_files(root: Path) -> list[str]:
+    _directory(root, "asset directory")
+    result: list[str] = []
+
+    def visit(directory: Path, prefix: str) -> None:
+        for entry in sorted(directory.iterdir(), key=lambda item: item.name):
+            relative = f"{prefix}/{entry.name}" if prefix else entry.name
+            _safe_relative(relative, "asset path")
+            stat = entry.lstat()
+            if stat_module.S_ISLNK(stat.st_mode):
+                raise _error(f"symlinks are not allowed in assets: {relative}")
+            if stat_module.S_ISDIR(stat.st_mode):
+                visit(entry, relative)
+            elif stat_module.S_ISREG(stat.st_mode):
+                result.append(relative)
+            else:
+                raise _error(
+                    f"asset entry is not a regular file or directory: {relative}"
+                )
+
+    visit(root, "")
+    return result
+
+
+def _read_json(path: Path, label: str) -> Any:
+    _regular_file(path, label)
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise _error(f"{label} is not valid JSON: {path}: {exc}") from exc
+
+
+def _read_inventory(path: Path, label: str = "asset inventory") -> list[str]:
+    value = _read_json(path, label)
+    if not isinstance(value, dict) or value.get("version") != STATE_VERSION:
+        raise _error(f"{label} version must be 1: {path}")
+    files = value.get("files")
+    if not isinstance(files, list):
+        raise _error(f"{label} files must be an array: {path}")
+    result = [
+        _safe_relative(item, f"{label} files[{index}]")
+        for index, item in enumerate(files)
+    ]
+    if len(set(result)) != len(result):
+        raise _error(f"{label} contains duplicate files: {path}")
+    if result != sorted(result):
+        raise _error(f"{label} files must be sorted: {path}")
+    if any(item == "config.js" or item.endswith("/config.js") for item in result):
+        raise _error(f"runtime config must not be in {label}: {path}")
+    return result
+
+
+def _manifest_asset(value: Any, label: str) -> str:
+    _safe_relative(value, label)
+    if not value.startswith("assets/"):
+        raise _error(f"{label} must be beneath assets/: {value}")
+    relative = value[len("assets/") :]
+    if not relative:
+        raise _error(f"{label} cannot refer to the assets directory")
+    return _safe_relative(relative, label)
+
+
+def _validate_manifest(value: Any, inventory: set[str], label: str) -> None:
+    if not isinstance(value, dict) or isinstance(value, list):
+        raise _error(f"{label} must be an object")
+    for entry_name, entry in value.items():
+        if not isinstance(entry, dict) or isinstance(entry, list):
+            raise _error(f"{label} entry is invalid: {entry_name}")
+        for field in ("file", "css", "assets"):
+            if field not in entry:
+                continue
+            references = entry[field] if field != "file" else [entry[field]]
+            if field != "file" and not isinstance(references, list):
+                raise _error(f"{label} {entry_name}.{field} must be an array")
+            for index, reference in enumerate(references):
+                reference_label = f"{label} {entry_name}.{field}"
+                if field != "file":
+                    reference_label += f"[{index}]"
+                relative = _manifest_asset(reference, reference_label)
+                if relative not in inventory:
+                    raise _error(
+                        f"{reference_label} is absent from asset inventory: {reference}"
+                    )
+        for field in ("imports", "dynamicImports"):
+            if field not in entry:
+                continue
+            references = entry[field]
+            if not isinstance(references, list):
+                raise _error(f"{label} {entry_name}.{field} must be an array")
+            for index, reference in enumerate(references):
+                if not isinstance(reference, str) or reference not in value:
+                    raise _error(
+                        f"{label} {entry_name}.{field}[{index}] references missing entry: {reference}"
+                    )
+
+
+def _inventory_paths(release: Path, *, require_assets: bool) -> tuple[list[str], Path]:
+    source = release / ASSET_INVENTORY
+    retained = release / FRONTEND_INVENTORY
+    source_exists = source.exists() or source.is_symlink()
+    retained_exists = retained.exists() or retained.is_symlink()
+    if not source_exists and not retained_exists:
+        raise _error(f"asset inventory is missing from release: {release}")
+    source_files = _read_inventory(source) if source_exists else None
+    retained_files = _read_inventory(retained) if retained_exists else None
+    if (
+        source_files is not None
+        and retained_files is not None
+        and source_files != retained_files
+    ):
+        raise _error(f"release inventories disagree: {release}")
+    files = source_files if source_files is not None else retained_files
+    assert files is not None
+    assets = release / "web" / "assets"
+    if require_assets:
+        actual = _enumerate_files(assets)
+        if actual != files:
+            raise _error(
+                f"asset inventory does not match regular files under web/assets: {release}"
+            )
+    return files, retained
+
+
+def validate_release(release: Path, *, require_assets: bool = True) -> list[str]:
+    release = Path(release)
+    _directory(release, "release")
+    web = release / "web"
+    _validate_tree(web, "release web directory")
+    _regular_file(web / "js" / "config.js", "generated frontend config")
+    files, _ = _inventory_paths(release, require_assets=require_assets)
+    manifest = _read_json(release / "manifest.json", "Vite manifest")
+    _validate_manifest(manifest, set(files), "Vite manifest")
+    if not require_assets and (web / "assets").exists():
+        raise _error(f"served release must not contain web/assets: {release}")
+    return files
+
+
+def _same_bytes(left: Path, right: Path) -> bool:
+    try:
+        if left.stat().st_size != right.stat().st_size:
+            return False
+        with left.open("rb") as left_file, right.open("rb") as right_file:
+            while True:
+                left_chunk = left_file.read(1024 * 1024)
+                right_chunk = right_file.read(1024 * 1024)
+                if left_chunk != right_chunk:
+                    return False
+                if not left_chunk:
+                    return True
+    except OSError:
+        return False
+
+
+def _fsync_directory(directory: Path) -> None:
+    try:
+        descriptor = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    except OSError:
+        return
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _atomic_json(path: Path, value: Any) -> None:
+    _ensure_directory(path.parent, "JSON destination directory")
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(value, stream, sort_keys=True, separators=(",", ":"))
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        _fsync_directory(path.parent)
+    except BaseException:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _atomic_copy(source: Path, destination: Path) -> bool:
+    if destination.exists() or destination.is_symlink():
+        _regular_file(destination, "existing shared asset")
+        if not _same_bytes(source, destination):
+            raise _error(f"immutable asset has different bytes: {destination}")
+        return False
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    _assert_no_symlink_parents(destination, destination.parent, "shared asset")
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as output, source.open("rb") as input_file:
+            shutil.copyfileobj(input_file, output)
+            output.flush()
+            os.fsync(output.fileno())
+        if destination.exists() or destination.is_symlink():
+            _regular_file(destination, "existing shared asset")
+            if not _same_bytes(source, destination):
+                raise _error(f"immutable asset has different bytes: {destination}")
+            temporary.unlink()
+            return False
+        os.replace(temporary, destination)
+        _fsync_directory(destination.parent)
+        return True
+    except BaseException:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def publish_assets(release: Path, app_home: Path) -> list[str]:
+    release = Path(release)
+    app_home = Path(app_home)
+    files = validate_release(release, require_assets=True)
+    source_root = release / "web" / "assets"
+    destination_root = app_home / "frontend-assets"
+    _ensure_directory(destination_root, "shared frontend asset directory")
+
+    sources: list[tuple[str, Path, Path]] = []
+    for relative in files:
+        source = _safe_asset_path(source_root, relative, "asset inventory path")
+        destination = _safe_asset_path(
+            destination_root, relative, "asset inventory path"
+        )
+        _regular_file(source, "staged frontend asset")
+        _assert_no_symlink_parents(destination, destination_root, "shared asset")
+        if destination.exists() or destination.is_symlink():
+            _regular_file(destination, "existing shared asset")
+            if not _same_bytes(source, destination):
+                raise _error(f"immutable asset has different bytes: {destination}")
+        sources.append((relative, source, destination))
+
+    created: list[Path] = []
+    try:
+        for _, source, destination in sources:
+            if _atomic_copy(source, destination):
+                created.append(destination)
+        inventory = {"version": STATE_VERSION, "files": files}
+        retained = release / FRONTEND_INVENTORY
+        if retained.exists() or retained.is_symlink():
+            existing = _read_inventory(retained, "release frontend inventory")
+            if existing != files:
+                raise _error(f"release frontend inventory disagrees: {retained}")
+        else:
+            _atomic_json(retained, inventory)
+        shutil.rmtree(source_root)
+        _fsync_directory(source_root.parent)
+    except BaseException:
+        for destination in reversed(created):
+            try:
+                destination.unlink()
+            except FileNotFoundError:
+                pass
+        raise
+    return files
+
+
+def prune_assets(asset_root: Path, keep: set[str]) -> None:
+    asset_root = Path(asset_root)
+    _directory(asset_root, "shared frontend asset directory")
+    safe_keep = {_safe_relative(item, "retained asset") for item in keep}
+    actual = _enumerate_files(asset_root)
+    for relative in actual:
+        if relative not in safe_keep:
+            _safe_asset_path(asset_root, relative, "asset deletion path").unlink()
+    directories = sorted(
+        (
+            path
+            for path in asset_root.rglob("*")
+            if path.is_dir() and not path.is_symlink()
+        ),
+        key=lambda path: len(path.parts),
+        reverse=True,
+    )
+    for directory in directories:
+        if not any(directory.iterdir()):
+            directory.rmdir()
+    _fsync_directory(asset_root)
+
+
+def _relative_to_app(path: Path, app_home: Path) -> str:
+    try:
+        relative = path.absolute().relative_to(app_home.absolute())
+    except ValueError as exc:
+        raise _error(f"managed path is outside APP_HOME: {path}") from exc
+    return _safe_relative(relative.as_posix(), "managed state path")
+
+
+def _state_path(app_home: Path) -> Path:
+    return Path(app_home) / "frontend-state.json"
+
+
+def _pending_path(app_home: Path) -> Path:
+    return Path(app_home) / "frontend-pending.json"
+
+
+def _record(release: Path, app_home: Path, api_image: str) -> dict[str, Any]:
+    if not isinstance(api_image, str) or not api_image:
+        raise _error("API image identity must be non-empty")
+    return {
+        "id": release.name,
+        "web": _relative_to_app(release / "web", app_home),
+        "inventory": _relative_to_app(release / FRONTEND_INVENTORY, app_home),
+        "image": api_image,
+        "legacy": False,
+    }
+
+
+def _validate_record_shape(record: Any, label: str) -> dict[str, Any]:
+    if not isinstance(record, dict):
+        raise _error(f"{label} must be an object")
+    identifier = record.get("id")
+    if (
+        not isinstance(identifier, str)
+        or not identifier
+        or identifier in {".", ".."}
+        or "/" in identifier
+        or "\\" in identifier
+    ):
+        raise _error(f"{label}.id is invalid")
+    web = _safe_relative(record.get("web"), f"{label}.web")
+    if not web.startswith("releases/"):
+        raise _error(f"{label}.web is outside managed releases: {web}")
+    legacy = record.get("legacy")
+    if not isinstance(legacy, bool):
+        raise _error(f"{label}.legacy must be boolean")
+    inventory = record.get("inventory")
+    if inventory is None:
+        if not legacy:
+            raise _error(f"{label}.inventory is required for hashed releases")
+    else:
+        inventory = _safe_relative(inventory, f"{label}.inventory")
+        if not inventory.startswith("releases/"):
+            raise _error(f"{label}.inventory is outside managed releases: {inventory}")
+        if (
+            Path(inventory).parent.as_posix() != Path(web).parent.as_posix()
+            or Path(inventory).name != FRONTEND_INVENTORY
+        ):
+            raise _error(f"{label}.inventory is not the matching release metadata path")
+    image = record.get("image")
+    if not isinstance(image, str) and not (legacy and image is None):
+        raise _error(f"{label}.image is invalid")
+    return {
+        "id": identifier,
+        "web": web,
+        "inventory": inventory,
+        "image": image,
+        "legacy": legacy,
+    }
+
+
+def _load_state(app_home: Path) -> dict[str, Any] | None:
+    path = _state_path(app_home)
+    if not path.exists() and not path.is_symlink():
+        return None
+    value = _read_json(path, "frontend state")
+    if not isinstance(value, dict) or value.get("version") != STATE_VERSION:
+        raise _error(f"frontend state version must be 1: {path}")
+    if "current" not in value or "retired" not in value:
+        raise _error(f"frontend state is missing required fields: {path}")
+    current = _validate_record_shape(value["current"], "frontend state current")
+    previous_value = value.get("previous")
+    previous = (
+        None
+        if previous_value is None
+        else _validate_record_shape(previous_value, "frontend state previous")
+    )
+    retired_value = value["retired"]
+    if not isinstance(retired_value, list):
+        raise _error(f"frontend state retired must be an array: {path}")
+    retired = [
+        _validate_record_shape(record, f"frontend state retired[{index}]")
+        for index, record in enumerate(retired_value)
+    ]
+    return {
+        "version": STATE_VERSION,
+        "current": current,
+        "previous": previous,
+        "retired": retired,
+    }
+
+
+def _load_pending(app_home: Path) -> dict[str, Any]:
+    path = _pending_path(app_home)
+    if not path.exists() and not path.is_symlink():
+        raise _error(f"frontend pending marker is missing: {path}")
+    value = _read_json(path, "frontend pending marker")
+    if not isinstance(value, dict) or value.get("version") != STATE_VERSION:
+        raise _error(f"frontend pending marker version must be 1: {path}")
+    candidate = _validate_record_shape(value.get("candidate"), "pending candidate")
+    previous = value.get("previous")
+    if previous is not None:
+        previous = _validate_record_shape(previous, "pending previous")
+    legacy = value.get("legacy_previous_web")
+    if legacy is not None:
+        legacy = _safe_relative(legacy, "pending legacy_previous_web")
+    return {
+        "version": STATE_VERSION,
+        "candidate": candidate,
+        "previous": previous,
+        "legacy_previous_web": legacy,
+    }
+
+
+def _validate_state_files(app_home: Path, state: dict[str, Any]) -> set[str]:
+    keep: set[str] = set()
+    asset_root = app_home / "frontend-assets"
+    for label in ("current", "previous"):
+        record = state.get(label)
+        if record is None:
+            continue
+        web = app_home / record["web"]
+        _directory(web, f"retained {label} web")
+        inventory = record["inventory"]
+        if inventory is None:
+            if not record["legacy"]:
+                raise _error(f"retained {label} has no inventory")
+            continue
+        files = _read_inventory(app_home / inventory, f"retained {label} inventory")
+        keep.update(files)
+        _directory(asset_root, "shared frontend asset directory")
+        for relative in files:
+            _regular_file(
+                _safe_asset_path(asset_root, relative, "retained asset path"),
+                f"retained {label} asset",
+            )
+    return keep
+
+
+def begin(
+    release: Path, api_image: str, app_home: Path | None = None
+) -> dict[str, Any]:
+    release = Path(release)
+    app_home = Path(app_home or os.environ.get("APP_HOME", "/opt/cocktaildb"))
+    if _pending_path(app_home).exists() or _pending_path(app_home).is_symlink():
+        raise _error(
+            f"unresolved frontend pending marker blocks deployment: {_pending_path(app_home)}"
+        )
+    if (release / "web" / "assets").exists():
+        validate_release(release, require_assets=True)
+    else:
+        validate_release(release, require_assets=False)
+    state = _load_state(app_home)
+    if state is not None:
+        _validate_state_files(app_home, state)
+    candidate = _record(release, app_home, api_image)
+    pending = {
+        "version": STATE_VERSION,
+        "candidate": candidate,
+        "previous": state["current"] if state else None,
+        "legacy_previous_web": None,
+    }
+    _atomic_json(_pending_path(app_home), pending)
+    return pending
+
+
+def _served_path_from_environment(app_home: Path | None = None) -> Path:
+    app_home = Path(app_home or os.environ.get("APP_HOME", "/opt/cocktaildb"))
+    return Path(os.environ.get("SERVED_WEB", str(app_home / "web")))
+
+
+def publish_web(
+    release: Path, served: Path, app_home: Path | None = None
+) -> Path | None:
+    release = Path(release)
+    served = Path(served)
+    app_home = Path(app_home or release.parent.parent)
+    release_web = release / "web"
+    _validate_tree(release_web, "release web directory")
+    if (release_web / "assets").exists() or (release_web / "assets").is_symlink():
+        raise _error(f"release web directory still contains assets: {release_web}")
+    _ensure_directory(served.parent, "served web parent")
+
+    existing = served.exists() or served.is_symlink()
+    backup: Path | None = None
+    moved = False
+    if existing:
+        stat = served.lstat()
+        if stat_module.S_ISLNK(stat.st_mode):
+            pass
+        elif stat_module.S_ISDIR(stat.st_mode):
+            backup = release.parent / f"previous-web-{release.name}"
+            if backup.exists() or backup.is_symlink():
+                raise _error(f"refusing to overwrite preserved frontend: {backup}")
+        else:
+            raise _error(f"served web path is not a directory or symlink: {served}")
+
+    temporary = (
+        served.parent
+        / f".{served.name}.frontend-{os.getpid()}-{next(tempfile._get_candidate_names())}"
+    )
+    target = os.path.relpath(release_web, served.parent)
+    try:
+        if backup is not None:
+            os.replace(served, backup)
+            moved = True
+        os.symlink(target, temporary)
+        os.replace(temporary, served)
+        if backup is not None:
+            _fsync_directory(backup.parent)
+        _fsync_directory(served.parent)
+        return backup
+    except BaseException:
+        try:
+            if temporary.is_symlink() or temporary.exists():
+                temporary.unlink()
+        except FileNotFoundError:
+            pass
+        if moved:
+            try:
+                if not (served.exists() or served.is_symlink()):
+                    os.replace(backup, served)
+            except OSError as restore_error:
+                raise _error(
+                    f"frontend publication failed and restoration failed: {restore_error}"
+                ) from restore_error
+        raise
+
+
+def publish(
+    release: Path, served: Path | None = None, app_home: Path | None = None
+) -> dict[str, Any]:
+    release = Path(release)
+    app_home = Path(app_home or os.environ.get("APP_HOME", "/opt/cocktaildb"))
+    served = Path(served or _served_path_from_environment())
+    pending = _load_pending(app_home)
+    candidate = pending["candidate"]
+    if candidate["id"] != release.name or candidate["web"] != _relative_to_app(
+        release / "web", app_home
+    ):
+        raise _error("release identity does not match the pending candidate")
+    validate_release(release, require_assets=False)
+    state = _load_state(app_home)
+    legacy_backup = None
+    if served.exists() and not served.is_symlink():
+        if state is not None and state.get("current") is not None:
+            raise _error("committed frontend state requires a served symlink")
+        legacy_backup = release.parent / f"previous-web-{release.name}"
+        pending["legacy_previous_web"] = _relative_to_app(legacy_backup, app_home)
+        _atomic_json(_pending_path(app_home), pending)
+    backup = publish_web(release, served, app_home)
+    if backup is not None:
+        if legacy_backup is not None and backup != legacy_backup:
+            raise _error("preserved legacy frontend path changed during publication")
+        pending["legacy_previous_web"] = _relative_to_app(backup, app_home)
+        _atomic_json(_pending_path(app_home), pending)
+    return pending
+
+
+def _same_record(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    return all(
+        left.get(key) == right.get(key)
+        for key in ("id", "web", "inventory", "image", "legacy")
+    )
+
+
+def _served_matches(app_home: Path, candidate: dict[str, Any]) -> None:
+    served = _served_path_from_environment(app_home)
+    expected = (app_home / candidate["web"]).absolute()
+    if not served.is_symlink():
+        raise _error(f"served web is not the pending release symlink: {served}")
+    try:
+        actual = (served.parent / os.readlink(served)).resolve()
+    except OSError as exc:
+        raise _error(f"cannot inspect served web symlink: {served}") from exc
+    if actual != expected.resolve():
+        raise _error(
+            f"served web identity does not match pending candidate: {actual} != {expected}"
+        )
+
+
+def commit(
+    release: Path, api_image: str, app_home: Path | None = None
+) -> dict[str, Any]:
+    release = Path(release)
+    app_home = Path(app_home or os.environ.get("APP_HOME", "/opt/cocktaildb"))
+    pending = _load_pending(app_home)
+    candidate = pending["candidate"]
+    if candidate["id"] != release.name or candidate["image"] != api_image:
+        raise _error("commit identity does not match pending candidate")
+    expected = _record(release, app_home, api_image)
+    if not _same_record(candidate, expected):
+        raise _error("commit release identity is inconsistent with pending marker")
+    state = _load_state(app_home)
+    if state is not None and _same_record(state["current"], candidate):
+        _validate_state_files(app_home, state)
+        _served_matches(app_home, candidate)
+        _pending_path(app_home).unlink()
+        _fsync_directory(app_home)
+        return state
+
+    validate_release(release, require_assets=False)
+    _served_matches(app_home, candidate)
+    if state is not None:
+        _validate_state_files(app_home, state)
+
+    old_current = state["current"] if state else None
+    if old_current is not None:
+        previous = old_current
+        retired = list(state["retired"])
+        if state.get("previous") is not None:
+            retired.append(state["previous"])
+    else:
+        retired = []
+        legacy_path = pending.get("legacy_previous_web")
+        if legacy_path is not None:
+            if not (app_home / legacy_path).exists():
+                raise _error(
+                    f"preserved legacy frontend is missing: {app_home / legacy_path}"
+                )
+            previous = {
+                "id": "legacy",
+                "web": legacy_path,
+                "inventory": None,
+                "image": None,
+                "legacy": True,
+            }
+        else:
+            previous = None
+    next_state = {
+        "version": STATE_VERSION,
+        "current": candidate,
+        "previous": previous,
+        "retired": retired,
+    }
+    _atomic_json(_state_path(app_home), next_state)
+    _pending_path(app_home).unlink()
+    _fsync_directory(app_home)
+    return next_state
+
+
+def _remove_owned_path(path: Path, label: str) -> None:
+    if not (path.exists() or path.is_symlink()):
+        return
+    stat = path.lstat()
+    if stat_module.S_ISLNK(stat.st_mode):
+        raise _error(f"{label} must not be a symlink: {path}")
+    if stat_module.S_ISDIR(stat.st_mode):
+        for child in path.rglob("*"):
+            if child.is_symlink():
+                raise _error(f"{label} contains a symlink: {child}")
+        shutil.rmtree(path)
+    elif stat_module.S_ISREG(stat.st_mode):
+        path.unlink()
+    else:
+        raise _error(f"{label} is not removable regular data: {path}")
+
+
+def prune(app_home: Path | None = None) -> dict[str, Any] | None:
+    app_home = Path(app_home or os.environ.get("APP_HOME", "/opt/cocktaildb"))
+    if _pending_path(app_home).exists() or _pending_path(app_home).is_symlink():
+        raise _error(
+            f"unresolved frontend pending marker blocks pruning: {_pending_path(app_home)}"
+        )
+    state = _load_state(app_home)
+    if state is None:
+        return None
+    keep = _validate_state_files(app_home, state)
+    prune_assets(app_home / "frontend-assets", keep)
+
+    remaining = list(state["retired"])
+    for index, record in enumerate(list(remaining)):
+        _remove_owned_path(app_home / record["web"], "retired frontend web")
+        if record["inventory"] is not None:
+            _remove_owned_path(
+                app_home / record["inventory"], "retired frontend inventory"
+            )
+        remaining.remove(record)
+        state["retired"] = remaining
+        _atomic_json(_state_path(app_home), state)
+    return state
+
+
+def recover(
+    release: Path, api_image: str, app_home: Path | None = None
+) -> dict[str, Any]:
+    release = Path(release)
+    app_home = Path(app_home or os.environ.get("APP_HOME", "/opt/cocktaildb"))
+    pending = _load_pending(app_home)
+    candidate = pending["candidate"]
+    expected = _record(release, app_home, api_image)
+    if not _same_record(candidate, expected):
+        raise _error("recovery identity does not match pending candidate")
+    state = _load_state(app_home)
+    if state is not None and _same_record(state["current"], candidate):
+        _validate_state_files(app_home, state)
+        _served_matches(app_home, candidate)
+        _pending_path(app_home).unlink()
+        _fsync_directory(app_home)
+        return state
+    return commit(release, api_image, app_home)
+
+
+def _usage() -> str:
+    return (
+        "usage: frontend-release.py <validate|assets|begin|publish|commit|prune|recover> "
+        "[RELEASE_ROOT] [API_IMAGE]"
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if not arguments:
+        print(_usage(), file=sys.stderr)
+        return 2
+    command = arguments.pop(0)
+    app_home = Path(os.environ.get("APP_HOME", "/opt/cocktaildb"))
+    served = Path(os.environ.get("SERVED_WEB", str(app_home / "web")))
+    try:
+        if command == "validate" and len(arguments) == 1:
+            validate_release(Path(arguments[0]))
+        elif command == "assets" and len(arguments) == 1:
+            publish_assets(Path(arguments[0]), app_home)
+        elif command == "begin" and len(arguments) == 2:
+            begin(Path(arguments[0]), arguments[1], app_home)
+        elif command == "publish" and len(arguments) == 1:
+            publish(Path(arguments[0]), served, app_home)
+        elif command == "commit" and len(arguments) == 2:
+            commit(Path(arguments[0]), arguments[1], app_home)
+        elif command == "prune" and not arguments:
+            prune(app_home)
+        elif command == "recover" and len(arguments) == 2:
+            recover(Path(arguments[0]), arguments[1], app_home)
+        else:
+            print(_usage(), file=sys.stderr)
+            return 2
+    except (FrontendReleaseError, OSError, ValueError) as exc:
+        print(f"frontend release error: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

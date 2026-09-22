@@ -81,6 +81,9 @@ case "$operation" in
       printf 'Would apply: 16_future.sql\n'
     } | tee "$STATE_DIR/pending_output"
     ;;
+  validate_frontend)
+    touch "$STATE_DIR/frontend_validated"
+    ;;
   cleanup)
     ;;
   backup)
@@ -88,6 +91,13 @@ case "$operation" in
     ;;
   build)
     touch "$STATE_DIR/previous_image_preserved" "$STATE_DIR/new_image_built"
+    ;;
+  begin)
+    touch "$STATE_DIR/frontend_pending"
+    ;;
+  assets)
+    test -f "$STATE_DIR/frontend_pending"
+    touch "$STATE_DIR/frontend_assets_published"
     ;;
   stop)
     if [[ -f "$STATE_DIR/request_in_flight" ]]; then
@@ -131,6 +141,19 @@ case "$operation" in
     rm -f "$STATE_DIR/old_frontend_served"
     touch "$STATE_DIR/frontend_published"
     ;;
+  smoke)
+    test -f "$STATE_DIR/frontend_published"
+    touch "$STATE_DIR/frontend_smoke_verified"
+    ;;
+  commit)
+    test -f "$STATE_DIR/frontend_smoke_verified"
+    rm -f "$STATE_DIR/frontend_pending"
+    touch "$STATE_DIR/frontend_state_committed"
+    ;;
+  prune)
+    test -f "$STATE_DIR/frontend_state_committed"
+    touch "$STATE_DIR/frontend_pruned"
+    ;;
   *)
     printf 'unexpected operation: %s\n' "$operation" >&2
     exit 64
@@ -140,9 +163,12 @@ esac
     )
     for operation in (
         "pending",
+        "validate_frontend",
         "cleanup",
         "backup",
         "build",
+        "begin",
+        "assets",
         "stop",
         "verify_stopped",
         "migrate",
@@ -152,6 +178,9 @@ esac
         "health",
         "stop_new",
         "publish",
+        "smoke",
+        "commit",
+        "prune",
     ):
         (ops / operation).symlink_to(dispatcher)
 
@@ -215,10 +244,18 @@ def test_failed_backup_command_cannot_fall_through_to_an_older_archive(tmp_path)
     release_root = app_home / "releases" / "release"
     (release_root / "migrations").mkdir(parents=True)
     (release_root / "web" / "js").mkdir(parents=True)
+    (release_root / "web" / "assets").mkdir(parents=True)
     (app_home / "scripts").mkdir()
     (app_home / "backups").mkdir()
     (release_root / "migrations" / MIGRATION_15).write_text("-- migration\n")
     (release_root / "web" / "js" / "config.js").write_text("// config\n")
+    (release_root / "web" / "assets" / "test-A.js").write_text("export default 1;\n")
+    (release_root / "manifest.json").write_text(
+        json.dumps({"index.html": {"file": "assets/test-A.js"}})
+    )
+    (release_root / "asset-inventory.json").write_text(
+        json.dumps({"version": 1, "files": ["test-A.js"]})
+    )
     (app_home / ".env").write_text(
         "DB_HOST=localhost\nDB_PORT=5432\nDB_USER=test\nDB_PASSWORD=test\nDB_NAME=test\n"
     )
@@ -237,6 +274,10 @@ def test_failed_backup_command_cannot_fall_through_to_an_older_archive(tmp_path)
         "RELEASE_ROOT": str(release_root),
         "DEPLOY_LOCK_FILE": str(tmp_path / "deploy.lock"),
         "DOCKER_BIN": "/bin/true",
+        "PYTHON_BIN": sys.executable,
+        "FRONTEND_RELEASE_SCRIPT": str(
+            ROOT / "infrastructure" / "scripts" / "frontend-release.py"
+        ),
     }
 
     result = subprocess.run(
@@ -259,12 +300,20 @@ def test_corrupt_new_backup_stops_before_build(tmp_path):
     for directory in (
         release_root / "migrations",
         release_root / "web" / "js",
+        release_root / "web" / "assets",
         app_home / "scripts",
         app_home / "backups",
     ):
         directory.mkdir(parents=True, exist_ok=True)
     (release_root / "migrations" / MIGRATION_15).write_text("-- migration\n")
     (release_root / "web" / "js" / "config.js").write_text("// config\n")
+    (release_root / "web" / "assets" / "test-A.js").write_text("export default 1;\n")
+    (release_root / "manifest.json").write_text(
+        json.dumps({"index.html": {"file": "assets/test-A.js"}})
+    )
+    (release_root / "asset-inventory.json").write_text(
+        json.dumps({"version": 1, "files": ["test-A.js"]})
+    )
     (app_home / ".env").write_text(
         "DB_HOST=localhost\nDB_PORT=5432\nDB_USER=test\nDB_PASSWORD=test\nDB_NAME=test\n"
     )
@@ -282,6 +331,10 @@ def test_corrupt_new_backup_stops_before_build(tmp_path):
         "RELEASE_ROOT": str(release_root),
         "DEPLOY_LOCK_FILE": str(tmp_path / "deploy.lock"),
         "DOCKER_BIN": "/bin/true",
+        "PYTHON_BIN": sys.executable,
+        "FRONTEND_RELEASE_SCRIPT": str(
+            ROOT / "infrastructure" / "scripts" / "frontend-release.py"
+        ),
     }
 
     result = subprocess.run(
@@ -305,6 +358,7 @@ def _run_default_operations(tmp_path: Path, docker_body: str, curl_body: str = "
     for directory in (
         release_root / "migrations",
         release_root / "web" / "js",
+        release_root / "web" / "assets",
         release_root / "api",
         app_home / "scripts",
         app_home / "backups",
@@ -313,6 +367,13 @@ def _run_default_operations(tmp_path: Path, docker_body: str, curl_body: str = "
         directory.mkdir(parents=True, exist_ok=True)
     (release_root / "migrations" / MIGRATION_15).write_text("-- migration\n")
     (release_root / "web" / "js" / "config.js").write_text("// config\n")
+    (release_root / "web" / "assets" / "test-A.js").write_text("export default 1;\n")
+    (release_root / "manifest.json").write_text(
+        json.dumps({"index.html": {"file": "assets/test-A.js"}})
+    )
+    (release_root / "asset-inventory.json").write_text(
+        json.dumps({"version": 1, "files": ["test-A.js"]})
+    )
     (release_root / "api" / "Dockerfile.prod").write_text("FROM scratch\n")
     (app_home / ".env").write_text(
         "DB_HOST=localhost\nDB_PORT=5432\nDB_USER=test\nDB_PASSWORD=test\nDB_NAME=test\n"
@@ -365,6 +426,11 @@ printf 'curl %s\n' "$*" >> "$DOCKER_CALLS"
         "CURL_BIN": curl_bin,
         "DOCKER_CALLS": str(docker_calls),
         "RELEASE_ID": "release",
+        "PYTHON_BIN": sys.executable,
+        "FRONTEND_RELEASE_SCRIPT": str(
+            ROOT / "infrastructure" / "scripts" / "frontend-release.py"
+        ),
+        "SMOKE_TEST_BIN": "/bin/true",
     }
     result = subprocess.run(
         ["bash", str(CUTOVER)],
@@ -487,9 +553,12 @@ def test_first_cutover_orders_writer_shutdown_migration_readiness_and_publicatio
     assert "Would apply: 16_future.sql" in (state / "pending_output").read_text()
     assert _events(state) == [
         "pending",
+        "validate_frontend",
         "cleanup",
         "backup",
         "build",
+        "begin",
+        "assets",
         "stop",
         "verify_stopped",
         "migrate",
@@ -498,6 +567,9 @@ def test_first_cutover_orders_writer_shutdown_migration_readiness_and_publicatio
         "start",
         "health",
         "publish",
+        "smoke",
+        "commit",
+        "prune",
         "cleanup",
     ]
     assert (state / "previous_image_preserved").exists()
@@ -507,6 +579,30 @@ def test_first_cutover_orders_writer_shutdown_migration_readiness_and_publicatio
     assert (state / "new_api_running").exists()
     assert (state / "frontend_published").exists()
     assert not (state / "old_frontend_served").exists()
+
+
+def test_frontend_prune_failure_keeps_committed_release_running(cutover_harness):
+    run, state = cutover_harness
+
+    result = run(fail_phase="prune")
+
+    assert result.returncode != 0
+    assert _events(state)[-1] == "prune"
+    assert (state / "new_api_running").exists()
+    assert (state / "frontend_state_committed").exists()
+    assert not (state / "new_api_stopped").exists()
+    assert "frontend retention cleanup failed" in result.stdout
+
+
+def test_unresolved_frontend_marker_blocks_preflight(cutover_harness):
+    run, state = cutover_harness
+    (state.parent / "app" / "frontend-pending.json").write_text("pending")
+
+    result = run()
+
+    assert result.returncode != 0
+    assert not _events(state)
+    assert "unresolved frontend publication marker blocks deployment" in result.stdout
 
 
 @pytest.mark.parametrize(
@@ -590,9 +686,12 @@ def test_host_lock_rejects_an_overlapping_cutover(cutover_harness):
 @pytest.mark.parametrize(
     ("failed_phase", "last_event", "old_running", "new_running", "new_stopped"),
     [
+        ("validate_frontend", "validate_frontend", True, False, False),
         ("cleanup", "cleanup", True, False, False),
         ("backup", "backup", True, False, False),
         ("build", "build", True, False, False),
+        ("begin", "begin", True, False, False),
+        ("assets", "assets", True, False, False),
         ("stop", "stop", True, False, False),
         ("migrate", "migrate", False, False, False),
         ("verify_recorded", "verify_recorded", False, False, False),
@@ -600,6 +699,8 @@ def test_host_lock_rejects_an_overlapping_cutover(cutover_harness):
         ("start", "stop_new", False, False, True),
         ("health", "stop_new", False, False, True),
         ("publish", "publish", False, True, False),
+        ("smoke", "smoke", False, True, False),
+        ("commit", "commit", False, True, False),
     ],
 )
 def test_cutover_failure_states(
@@ -614,14 +715,21 @@ def test_cutover_failure_states(
     assert (state / "old_api_running").exists() is old_running
     assert (state / "new_api_running").exists() is new_running
     assert (state / "new_api_stopped").exists() is new_stopped
-    assert (state / "old_frontend_served").exists()
-    assert not (state / "frontend_published").exists()
+    assert (state / "old_frontend_served").exists() is (
+        failed_phase not in {"smoke", "commit"}
+    )
+    assert (state / "frontend_published").exists() is (
+        failed_phase in {"smoke", "commit"}
+    )
     assert "Cutover failed during" in result.stdout
 
     events = _events(state)
     if failed_phase in {
+        "validate_frontend",
         "backup",
         "build",
+        "begin",
+        "assets",
         "stop",
         "migrate",
         "verify_recorded",

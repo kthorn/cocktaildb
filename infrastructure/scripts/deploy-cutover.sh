@@ -15,6 +15,10 @@ MIGRATION_15="15_migration_add_user_groups.sql"
 DOCKER_BIN="${DOCKER_BIN:-docker}"
 CURL_BIN="${CURL_BIN:-curl}"
 PSQL_BIN="${PSQL_BIN:-psql}"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+FRONTEND_RELEASE_SCRIPT="${FRONTEND_RELEASE_SCRIPT:-${APP_HOME}/scripts/frontend-release.py}"
+SMOKE_TEST_BIN="${SMOKE_TEST_BIN:-${APP_HOME}/scripts/smoke-test.sh}"
+SMOKE_BASE_URL="${SMOKE_BASE_URL:-http://127.0.0.1:80}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8000/health}"
 HEALTH_ATTEMPTS="${HEALTH_ATTEMPTS:-15}"
 HEALTH_DELAY_SECONDS="${HEALTH_DELAY_SECONDS:-2}"
@@ -222,40 +226,65 @@ op_stop_new() {
     compose_current stop --timeout "$STOP_TIMEOUT_SECONDS" api
 }
 
+op_validate_frontend() {
+    "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" validate "$RELEASE_ROOT"
+}
+
+op_begin() {
+    "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" begin "$RELEASE_ROOT" "$NEW_IMAGE"
+}
+
+op_assets() {
+    "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" assets "$RELEASE_ROOT"
+}
+
 op_publish() {
-    local previous_web
+    "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" publish "$RELEASE_ROOT"
+}
 
-    previous_web="$APP_HOME/releases/previous-web-${RELEASE_ID}"
-    if [[ -e "$previous_web" ]]; then
-        say "Refusing to overwrite preserved frontend: $previous_web"
-        return 1
-    fi
+op_smoke() {
+    "$SMOKE_TEST_BIN" "$SMOKE_BASE_URL"
+}
 
-    if [[ -e "$SERVED_WEB" || -L "$SERVED_WEB" ]]; then
-        mv "$SERVED_WEB" "$previous_web" || return
-    fi
-    if ! mv "$RELEASE_ROOT/web" "$SERVED_WEB"; then
-        if [[ -e "$previous_web" || -L "$previous_web" ]]; then
-            mv "$previous_web" "$SERVED_WEB"
-        fi
-        return 1
-    fi
-    say "Previous frontend preserved at $previous_web"
+op_commit() {
+    "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" commit "$RELEASE_ROOT" "$NEW_IMAGE"
+}
+
+op_prune() {
+    "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" prune
+}
+
+op_recover() {
+    "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" recover "$RELEASE_ROOT" "$NEW_IMAGE"
 }
 
 run_operation() {
     local operation="$1"
+    shift || true
 
     if [[ -n "$CUTOVER_OPS_DIR" ]]; then
-        "$CUTOVER_OPS_DIR/$operation"
+        "$CUTOVER_OPS_DIR/$operation" "$@"
     else
-        "op_$operation"
+        "op_$operation" "$@"
     fi
+}
+
+report_serving_state() {
+    local serving_target
+
+    serving_target=$(readlink -f "$SERVED_WEB" 2>/dev/null || printf '%s' '<unresolved>')
+    say "Serving frontend: $serving_target"
+    say "Pending API image: $NEW_IMAGE"
 }
 
 fail_cutover() {
     local failed_phase="$1"
     local status="$2"
+
+    if [[ "$failed_phase" == preflight && -e "$APP_HOME/frontend-pending.json" ]]; then
+        say "An unresolved frontend publication marker blocks deployment: $APP_HOME/frontend-pending.json"
+        say "Verify the active API image and served frontend, then run recovery; do not delete the marker."
+    fi
 
     if [[ ("$failed_phase" == start || "$failed_phase" == health) && "$NEW_API_STARTED" == true ]]; then
         if run_operation stop_new; then
@@ -266,6 +295,9 @@ fail_cutover() {
     fi
 
     say "Cutover failed during ${failed_phase}."
+    if [[ "$failed_phase" == publish || "$failed_phase" == smoke || "$failed_phase" == commit ]]; then
+        report_serving_state
+    fi
     if [[ "$WRITERS_STOPPED" == false ]]; then
         say "The old API and served frontend were left in place. Fix the failure and rerun the normal deploy."
     elif [[ "$NEW_API_MAY_HAVE_WRITTEN" == true ]]; then
@@ -289,10 +321,89 @@ run_phase() {
     fi
 }
 
+run_frontend_prune() {
+    local status
+
+    say "CUTOVER phase=frontend-prune"
+    run_operation prune
+    status=$?
+    if [[ "$status" == 0 ]]; then
+        return 0
+    fi
+    say "Release is deployed, but frontend retention cleanup failed; keep the healthy API running and retry cleanup after verifying identities."
+    exit "$status"
+}
+
+recover_cutover() {
+    local recovery_root="$1"
+    local recovery_image="$2"
+    local container_id running_image expected_image_id actual_image_id served_target expected_target
+
+    RELEASE_ROOT="$recovery_root"
+    NEW_IMAGE="$recovery_image"
+    if [[ ! -f "$APP_HOME/frontend-pending.json" ]]; then
+        say "No frontend pending marker exists; nothing to recover."
+        return 1
+    fi
+    container_id=$(compose_current ps -q api) || {
+        say "Unable to inspect the active API container; recover manually without deleting the marker."
+        return 1
+    }
+    if [[ -z "$container_id" ]]; then
+        say "No active API container matches the pending frontend candidate; recover manually without restarting the old API."
+        return 1
+    fi
+    running_image=$("$DOCKER_BIN" inspect --format '{{.Config.Image}}' "$container_id") || return
+    if [[ "$running_image" != "$recovery_image" ]]; then
+        expected_image_id=$("$DOCKER_BIN" image inspect --format '{{.Id}}' "$recovery_image") || {
+            say "Pending API image is unavailable: $recovery_image"
+            return 1
+        }
+        actual_image_id=$("$DOCKER_BIN" inspect --format '{{.Image}}' "$container_id") || return
+        if [[ "$actual_image_id" != "$expected_image_id" ]]; then
+            say "Active API image does not match pending candidate: active=$running_image pending=$recovery_image"
+            say "Inspect the running container and marker, then perform manual recovery; the old API will not be restarted automatically."
+            return 1
+        fi
+    fi
+
+    served_target=$(readlink -f "$SERVED_WEB" 2>/dev/null) || {
+        say "Unable to resolve served frontend link: $SERVED_WEB"
+        return 1
+    }
+    expected_target=$(readlink -f "$recovery_root/web" 2>/dev/null) || return
+    if [[ "$served_target" != "$expected_target" ]]; then
+        say "Served frontend does not match pending candidate: active=$served_target pending=$expected_target"
+        say "Inspect the running frontend and marker, then perform manual recovery; the old API will not be restarted automatically."
+        return 1
+    fi
+
+    say "CUTOVER phase=recovery-health"
+    run_operation health || return
+    say "CUTOVER phase=recovery-smoke"
+    run_operation smoke || return
+    say "CUTOVER phase=recovery-commit"
+    run_operation recover || return
+    run_frontend_prune
+    say "CUTOVER phase=cleanup"
+    if run_operation cleanup; then
+        say "Frontend recovery reconciled the published release and cleanup completed."
+    else
+        local status=$?
+        say "Release is healthy and reconciled, but Docker artifact cleanup failed; leave the healthy API running and investigate."
+        return "$status"
+    fi
+}
+
 mkdir -p "$(dirname "$DEPLOY_LOCK_FILE")"
 exec 9>"$DEPLOY_LOCK_FILE"
 if ! flock -n 9; then
     fail_cutover lock 73
+fi
+
+if [[ "${1:-}" == recover ]]; then
+    recover_cutover "${2:-$RELEASE_ROOT}" "${3:-$NEW_IMAGE}"
+    exit $?
 fi
 
 parity_recovery_at_start=false
@@ -304,6 +415,9 @@ if [[ ! -f "$RELEASE_ROOT/migrations/$MIGRATION_15" ]]; then
     fail_cutover preflight 1
 fi
 if [[ ! -d "$RELEASE_ROOT/web" || ! -f "$RELEASE_ROOT/web/js/config.js" ]]; then
+    fail_cutover preflight 1
+fi
+if [[ -e "$APP_HOME/frontend-pending.json" ]]; then
     fail_cutover preflight 1
 fi
 
@@ -329,9 +443,12 @@ else
     initial_parity_required=false
 fi
 
+run_phase validate_frontend
 run_phase cleanup
 run_phase backup
 run_phase build
+run_phase begin
+run_phase assets
 run_phase stop
 WRITERS_STOPPED=true
 run_phase verify_stopped
@@ -353,6 +470,9 @@ NEW_API_MAY_HAVE_WRITTEN=true
 run_phase start
 run_phase health
 run_phase publish
+run_phase smoke
+run_phase commit
+run_frontend_prune
 
 say "CUTOVER phase=cleanup"
 if run_operation cleanup; then

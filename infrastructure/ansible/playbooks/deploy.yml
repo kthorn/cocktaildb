@@ -213,7 +213,9 @@
             - analytics-debounce-check.sh
             - backup-postgres.sh
             - deploy-cutover.sh
+            - frontend-release.py
             - run-migrations.sh
+            - smoke-test.sh
             - trigger-analytics.sh
 
       # Copy systemd units
