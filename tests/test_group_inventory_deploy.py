@@ -361,6 +361,7 @@ def _run_default_operations(
     curl_body: str = "",
     *,
     gate_image_id: str = "sha256:current",
+    frontend_release_script: Path | None = None,
 ):
     app_home = tmp_path / "app"
     release_root = app_home / "releases" / "release"
@@ -453,7 +454,8 @@ printf 'curl %s\n' "$*" >> "$DOCKER_CALLS"
         "RELEASE_ID": "release",
         "PYTHON_BIN": sys.executable,
         "FRONTEND_RELEASE_SCRIPT": str(
-            ROOT / "infrastructure" / "scripts" / "frontend-release.py"
+            frontend_release_script
+            or ROOT / "infrastructure" / "scripts" / "frontend-release.py"
         ),
         "SMOKE_TEST_BIN": "/bin/true",
         "FRONTEND_GATE": "true",
@@ -577,6 +579,58 @@ def test_cleanup_retry_gate_rejects_committed_api_image_id_drift(tmp_path):
     assert result.returncode != 0
     assert "Committed API image ID does not match expected image" in result.stdout
     assert "CUTOVER phase=frontend-prune\n" not in result.stdout
+
+
+def test_cleanup_retry_gate_rejects_committed_served_link_drift(
+    tmp_path,
+):
+    app_home = tmp_path / "app"
+    other_web = app_home / "releases" / "other" / "web"
+    (other_web / "js").mkdir(parents=True)
+    (other_web / "js" / "config.js").write_text("// other frontend\n")
+    (other_web / "index.html").write_text("other frontend\n")
+    (app_home / "frontend-assets").mkdir()
+    (app_home / "frontend-assets" / "obsolete.js").write_text("obsolete\n")
+    helper_log = tmp_path / "frontend-helper.log"
+    wrapper = tmp_path / "frontend-release-wrapper"
+    real_helper = ROOT / "infrastructure" / "scripts" / "frontend-release.py"
+    _write_executable(
+        wrapper,
+        f"""#!/usr/bin/env python3
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+with Path({str(helper_log)!r}).open("a", encoding="utf-8") as stream:
+    stream.write(sys.argv[1] + "\\n")
+result = subprocess.run([sys.executable, {str(real_helper)!r}, *sys.argv[1:]], check=False)
+if result.returncode:
+    raise SystemExit(result.returncode)
+if sys.argv[1] == "commit":
+    served = Path(os.environ["APP_HOME"]) / "web"
+    if served.exists() or served.is_symlink():
+        served.unlink()
+    served.symlink_to({str(other_web)!r}, target_is_directory=True)
+""",
+    )
+
+    result, _ = _run_default_operations(
+        tmp_path,
+        "exit 0",
+        frontend_release_script=wrapper,
+    )
+
+    assert result.returncode != 0
+    assert "Served frontend does not match committed current" in result.stdout
+    assert "CUTOVER phase=frontend-prune\n" not in result.stdout
+    assert helper_log.read_text().splitlines()[-1] == "commit"
+    assert "prune" not in helper_log.read_text().splitlines()
+    assert (app_home / "frontend-assets" / "obsolete.js").exists()
+    assert (
+        json.loads((app_home / "frontend-state.json").read_text())["current"]["id"]
+        == "release"
+    )
 
 
 def test_first_cutover_orders_writer_shutdown_migration_readiness_and_publication(
@@ -1057,43 +1111,84 @@ def _recovery_harness(
 ):
     app_home = tmp_path / "app"
     release_root = app_home / "releases" / "candidate"
-    (release_root / "web").mkdir(parents=True)
-    (release_root / "web" / "index.html").write_text("candidate")
-    other_root = app_home / "releases" / "other" / "web"
-    other_root.mkdir(parents=True)
-    (other_root / "index.html").write_text("other")
+    previous_root = app_home / "releases" / "previous"
+    other_root = app_home / "releases" / "other"
+    for release_root_for_fixture, asset_name, page_name in (
+        (release_root, "candidate.js", "candidate"),
+        (previous_root, "previous.js", "previous"),
+        (other_root, "other.js", "other"),
+    ):
+        web = release_root_for_fixture / "web"
+        (web / "js").mkdir(parents=True)
+        (web / "index.html").write_text(f"{page_name} frontend")
+        (web / "js" / "config.js").write_text("export default {};\n")
+        (release_root_for_fixture / "frontend-assets.json").write_text(
+            json.dumps({"version": 1, "files": [asset_name]})
+        )
+        (release_root_for_fixture / "manifest.json").write_text(
+            json.dumps({"index.html": {"file": f"assets/{asset_name}"}})
+        )
+    asset_root = app_home / "frontend-assets"
+    asset_root.mkdir(parents=True)
+    for asset_name in ("candidate.js", "previous.js", "obsolete.js"):
+        (asset_root / asset_name).write_text(asset_name)
+
+    candidate = {
+        "id": "candidate",
+        "web": "releases/candidate/web",
+        "inventory": "releases/candidate/frontend-assets.json",
+        "image": "cocktaildb-api:release-candidate",
+        "legacy": False,
+    }
+    previous = {
+        "id": "previous",
+        "web": "releases/previous/web",
+        "inventory": "releases/previous/frontend-assets.json",
+        "image": "cocktaildb-api:release-previous",
+        "legacy": False,
+    }
+    (app_home / "frontend-state.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "current": previous,
+                "previous": None,
+                "retired": [],
+            }
+        )
+    )
+    (app_home / "frontend-pending.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "candidate": candidate,
+                "previous": previous,
+                "legacy_previous_web": None,
+            }
+        )
+    )
+    unrelated = app_home / "releases" / "unrelated" / "api" / "keep.txt"
+    unrelated.parent.mkdir(parents=True)
+    unrelated.write_text("must survive")
     served = app_home / "web"
     served.parent.mkdir(parents=True, exist_ok=True)
     served.symlink_to(
-        release_root / "web" if served_matches else other_root,
+        release_root / "web" if served_matches else other_root / "web",
         target_is_directory=True,
     )
-    (app_home / "frontend-pending.json").write_text("pending")
-    ops = tmp_path / "ops"
-    ops.mkdir()
-    dispatcher = ops / "operation"
-    _write_executable(
-        dispatcher,
-        """#!/bin/bash
-set -euo pipefail
-operation=$(basename "$0")
-printf '%s\\n' "$operation" >> "$STATE_DIR/events"
-case "$operation" in
-  health|smoke|recover|verify_prune_identity|prune|cleanup) ;;
-  *) printf 'unexpected operation: %s\\n' "$operation" >&2; exit 64 ;;
-esac
-""",
-    )
-    for operation in (
-        "health",
-        "smoke",
-        "recover",
-        "verify_prune_identity",
-        "prune",
-        "cleanup",
-    ):
-        (ops / operation).symlink_to(dispatcher)
 
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    health = tmp_path / "health"
+    _write_executable(
+        health,
+        "#!/bin/sh\nprintf 'health\\n' >> \"$STATE_DIR/events\"\n",
+    )
+    smoke = tmp_path / "smoke"
+    _write_executable(
+        smoke,
+        "#!/bin/sh\nprintf 'smoke\\n' >> \"$STATE_DIR/events\"\n",
+    )
     docker = tmp_path / "docker"
     _write_executable(
         docker,
@@ -1119,14 +1214,20 @@ fi
         "DEPLOY_LOCK_FILE": str(tmp_path / "deploy.lock"),
         "DOCKER_BIN": str(docker),
         "DOCKER_LOG": str(tmp_path / "docker.log"),
+        "PYTHON_BIN": sys.executable,
+        "FRONTEND_RELEASE_SCRIPT": str(
+            ROOT / "infrastructure" / "scripts" / "frontend-release.py"
+        ),
+        "CURL_BIN": str(health),
+        "SMOKE_TEST_BIN": str(smoke),
+        "HEALTH_ATTEMPTS": "1",
+        "HEALTH_DELAY_SECONDS": "0",
         "RUNNING_IMAGE_TAG": "cocktaildb-api:release-candidate",
         "ACTUAL_IMAGE_ID": actual_image_id,
         "EXPECTED_IMAGE_ID": "sha256:expected",
         "RELEASE_ID": "candidate",
-        "CUTOVER_OPS_DIR": str(ops),
-        "STATE_DIR": str(tmp_path / "state"),
+        "STATE_DIR": str(state_dir),
     }
-    Path(env["STATE_DIR"]).mkdir()
     return env, app_home, release_root
 
 
@@ -1178,33 +1279,60 @@ def test_recovery_rejects_served_frontend_mismatch(tmp_path):
 
 
 def test_recovery_reconciles_matching_api_and_frontend(tmp_path):
-    env, _, _ = _recovery_harness(tmp_path)
+    env, app_home, release_root = _recovery_harness(tmp_path)
 
-    result = subprocess.run(
-        [
-            "bash",
-            str(CUTOVER),
-            "recover",
-            env["RELEASE_ROOT"],
-            env["RUNNING_IMAGE_TAG"],
-        ],
-        cwd=ROOT,
-        env=env,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    def invoke_recovery():
+        return subprocess.run(
+            [
+                "bash",
+                str(CUTOVER),
+                "recover",
+                env["RELEASE_ROOT"],
+                env["RUNNING_IMAGE_TAG"],
+            ],
+            cwd=ROOT,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    result = invoke_recovery()
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert (Path(env["STATE_DIR"]) / "events").read_text().splitlines() == [
-        "health",
-        "smoke",
-        "recover",
-        "verify_prune_identity",
-        "prune",
-        "cleanup",
+    state_path = app_home / "frontend-state.json"
+    state = json.loads(state_path.read_text())
+    assert state["current"]["id"] == "candidate"
+    assert state["previous"]["id"] == "previous"
+    assert state["retired"] == []
+    assert not (app_home / "frontend-pending.json").exists()
+    assert sorted(path.name for path in (app_home / "frontend-assets").iterdir()) == [
+        "candidate.js",
+        "previous.js",
     ]
+    assert (release_root / "web" / "index.html").exists()
+    assert (app_home / state["previous"]["web"] / "index.html").exists()
+    assert (app_home / "releases" / "unrelated" / "api" / "keep.txt").exists()
     assert "reconciled" in result.stdout
+
+    for _ in range(2):
+        (app_home / "frontend-pending.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "candidate": state["current"],
+                    "previous": state["previous"],
+                    "legacy_previous_web": None,
+                }
+            )
+        )
+        repeated = invoke_recovery()
+        assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+        assert not (app_home / "frontend-pending.json").exists()
+        assert json.loads(state_path.read_text()) == state
+        assert sorted(
+            path.name for path in (app_home / "frontend-assets").iterdir()
+        ) == ["candidate.js", "previous.js"]
 
 
 def test_recovery_diagnoses_dangling_pending_marker(tmp_path):

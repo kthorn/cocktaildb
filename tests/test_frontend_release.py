@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -342,6 +343,111 @@ def test_rejected_cleanup_preserves_all_frontend_and_release_sentinels(
     assert (app_home / state["previous"]["web"] / "previous-sentinel.txt").exists()
     assert (app_home / "frontend-assets" / "obsolete.js").exists()
     assert json.loads((app_home / "frontend-state.json").read_text()) == state
+
+
+@pytest.mark.parametrize("invalid_label", ["current", "previous", "retired"])
+def test_regular_file_web_path_rejected_before_cleanup(
+    tmp_path, release_module, invalid_label
+):
+    app_home = tmp_path / "app"
+    app_home.mkdir()
+    records = {
+        "current": {
+            "id": "current",
+            "web": "releases/current/web",
+            "inventory": "releases/current/frontend-assets.json",
+            "image": "cocktaildb-api:release-current",
+            "legacy": False,
+        },
+        "previous": {
+            "id": "previous",
+            "web": "releases/previous/web",
+            "inventory": "releases/previous/frontend-assets.json",
+            "image": "cocktaildb-api:release-previous",
+            "legacy": False,
+        },
+        "retired": {
+            "id": "retired",
+            "web": "releases/retired/web",
+            "inventory": "releases/retired/frontend-assets.json",
+            "image": "cocktaildb-api:release-retired",
+            "legacy": False,
+        },
+    }
+    inventory_files = {
+        "current": ["current.js"],
+        "previous": ["previous.js"],
+        "retired": ["obsolete.js"],
+    }
+    for label, record in records.items():
+        web = app_home / record["web"]
+        web.parent.mkdir(parents=True, exist_ok=True)
+        if label == invalid_label:
+            web.write_text(f"{label} regular-file sentinel")
+        else:
+            web.mkdir()
+            (web / f"{label}-sentinel.txt").write_text(label)
+        inventory = app_home / record["inventory"]
+        inventory.parent.mkdir(parents=True, exist_ok=True)
+        inventory.write_text(
+            json.dumps({"version": 1, "files": inventory_files[label]})
+        )
+    release_data = app_home / "releases" / "retired"
+    (release_data / "api").mkdir(parents=True, exist_ok=True)
+    (release_data / "api" / "api-sentinel.txt").write_text("api")
+    (release_data / "migrations").mkdir(parents=True, exist_ok=True)
+    (release_data / "migrations" / "migration-sentinel.sql").write_text("migration")
+    asset_root = app_home / "frontend-assets"
+    asset_root.mkdir()
+    for name in ("current.js", "previous.js", "obsolete.js"):
+        (asset_root / name).write_text(name)
+    state = {
+        "version": 1,
+        "current": records["current"],
+        "previous": records["previous"],
+        "retired": [records["retired"]],
+    }
+    state_path = app_home / "frontend-state.json"
+    state_path.write_text(json.dumps(state))
+    before_state = state_path.read_text()
+
+    with pytest.raises(release_module.FrontendReleaseError, match="directory"):
+        release_module.prune(app_home)
+
+    assert sorted(path.name for path in asset_root.iterdir()) == [
+        "current.js",
+        "obsolete.js",
+        "previous.js",
+    ]
+    assert state_path.read_text() == before_state
+    assert (release_data / "api" / "api-sentinel.txt").exists()
+    assert (release_data / "migrations" / "migration-sentinel.sql").exists()
+    for label, record in records.items():
+        assert (app_home / record["inventory"]).exists()
+        web = app_home / record["web"]
+        assert web.exists()
+        if label != invalid_label:
+            assert (web / f"{label}-sentinel.txt").exists()
+
+
+@pytest.mark.parametrize("missing_label", ["current", "previous"])
+def test_missing_retained_web_path_rejected_before_cleanup(
+    tmp_path, release_module, missing_label
+):
+    app_home = tmp_path / "app"
+    app_home.mkdir()
+    state, _ = _write_prune_sentinels(app_home, release_module, "releases/retired/web")
+    missing_web = app_home / state[missing_label]["web"]
+    shutil.rmtree(missing_web)
+    state_path = app_home / "frontend-state.json"
+    before_state = state_path.read_text()
+
+    with pytest.raises(release_module.FrontendReleaseError, match="missing"):
+        release_module.prune(app_home)
+
+    assert (app_home / "frontend-assets" / "obsolete.js").exists()
+    assert state_path.read_text() == before_state
+    assert (app_home / "releases" / "retired" / "api" / "api-sentinel.txt").exists()
 
 
 def test_rejected_cleanup_does_not_follow_symlinked_release_ancestor(

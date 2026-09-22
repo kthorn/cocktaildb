@@ -554,21 +554,22 @@ def _load_pending(app_home: Path) -> dict[str, Any]:
 
 
 def _validate_owned_path(
-    path: Path, label: str, *, allow_missing: bool = False
+    path: Path,
+    label: str,
+    *,
+    kind: str,
+    allow_missing: bool = False,
 ) -> None:
     if not (path.exists() or path.is_symlink()):
         if allow_missing:
             return
         raise _error(f"{label} is missing: {path}")
-    stat = _lstat(path, label)
-    if stat_module.S_ISLNK(stat.st_mode):
-        raise _error(f"{label} must not be a symlink: {path}")
-    if stat_module.S_ISDIR(stat.st_mode):
+    if kind == "directory":
         _validate_tree(path, label)
-    elif stat_module.S_ISREG(stat.st_mode):
-        return
-    else:
-        raise _error(f"{label} is not an owned directory or regular file: {path}")
+    elif kind == "file":
+        _regular_file(path, label)
+    else:  # pragma: no cover - only callers in this module provide fixed kinds
+        raise ValueError(f"unknown owned path kind: {kind}")
 
 
 def _validate_record_paths(
@@ -581,13 +582,21 @@ def _validate_record_paths(
     _directory(app_home, "APP_HOME")
     web = app_home / record["web"]
     _assert_no_symlink_parents(web, app_home, f"{label}.web")
-    _validate_owned_path(web, f"{label} web", allow_missing=allow_missing)
+    _validate_owned_path(
+        web,
+        f"{label} web",
+        kind="directory",
+        allow_missing=allow_missing,
+    )
     inventory = record["inventory"]
     if inventory is not None:
         inventory_path = app_home / inventory
         _assert_no_symlink_parents(inventory_path, app_home, f"{label}.inventory")
         _validate_owned_path(
-            inventory_path, f"{label} inventory", allow_missing=allow_missing
+            inventory_path,
+            f"{label} inventory",
+            kind="file",
+            allow_missing=allow_missing,
         )
 
 
