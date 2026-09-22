@@ -191,6 +191,8 @@ def test_both_deployment_paths_prepare_shared_assets_and_guard_web_root():
             if task["name"] in {"Restart Caddy", "Ensure Caddy is running"}
         ]
         assert caddy_start
+        shared_assets_index = task_names.index(shared_assets[0]["name"])
+        assert shared_assets_index < min(caddy_start)
         assert guard_index < min(caddy_start)
 
 

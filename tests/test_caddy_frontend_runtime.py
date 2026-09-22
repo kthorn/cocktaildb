@@ -8,7 +8,9 @@ import socket
 import subprocess
 import threading
 import time
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from inspect import getsource
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -99,113 +101,254 @@ def _caddy_runner(tmp_path: Path, domain_port: int, http_port: int, upstream_por
         '<svg xmlns="http://www.w3.org/2000/svg"/>\n', encoding="utf-8"
     )
 
-    config = CADDYFILE.read_text(encoding="utf-8")
-    upstream_host = "host.docker.internal" if use_docker else "127.0.0.1"
-    config = config.replace("localhost:8000", f"{upstream_host}:{upstream_port}")
-    config = config.replace(":80 {", f":{http_port} {{")
-    config = config.replace("    admin off\n", "    admin off\n    auto_https off\n")
-    if use_docker:
-        # Docker Desktop reaches the published port from its bridge subnet;
-        # treat that owned loopback fixture as local for the HTTP block.
-        config = config.replace(
-            "not remote_ip 127.0.0.1", "not remote_ip 127.0.0.1 172.16.0.0/12"
-        )
-    else:
-        config = config.replace("/opt/cocktaildb/web", str(web))
-        config = config.replace("/opt/cocktaildb/frontend-assets", str(assets))
-        config = config.replace("/var/log/caddy/access.log", str(logs / "access.log"))
-    config_path = tmp_path / "Caddyfile"
-    config_path.write_text(config, encoding="utf-8")
+    network = None
+    upstream_name = None
+    upstream_process = None
+    caddy_name = None
+    caddy_process = None
 
-    environment = {
-        **os.environ,
-        "DOMAIN_NAME": f"http://domain.test:{domain_port}",
-        "ACME_EMAIL": "test@example.invalid",
+    def cleanup():
+        nonlocal caddy_process, upstream_process
+        for process in (caddy_process, upstream_process):
+            if process is not None and process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=15)
+        if use_docker:
+            for container in (caddy_name, upstream_name):
+                if container:
+                    subprocess.run(
+                        [docker, "rm", "-f", container],
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                    )
+            if network:
+                subprocess.run(
+                    [docker, "network", "rm", network],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+
+    try:
+        if use_docker:
+            network = f"cocktaildb-task4-{uuid.uuid4().hex}"
+            created = subprocess.run(
+                [docker, "network", "create", network],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            assert created.returncode == 0, created.stdout + created.stderr
+
+            upstream_config = tmp_path / "ssr-upstream.Caddyfile"
+            upstream_config.write_text(
+                """{
+    admin off
+    auto_https off
+}
+
+:8000 {
+    handle /recipe/test {
+        respond "SSR upstream: /recipe/test"
     }
-    if use_docker:
-        mounts = [
-            f"{config_path}:/etc/caddy/Caddyfile:ro",
-            f"{web}:/opt/cocktaildb/web:ro",
-            f"{assets}:/opt/cocktaildb/frontend-assets:ro",
-            f"{logs}:/var/log/caddy",
-        ]
-        command = [
-            docker,
-            "run",
-            "--rm",
-            "--add-host",
-            "host.docker.internal:host-gateway",
-            "-p",
-            f"127.0.0.1:{domain_port}:{domain_port}",
-            "-p",
-            f"127.0.0.1:{http_port}:{http_port}",
-            *[item for mount in mounts for item in ("-v", mount)],
-            "-e",
-            f"DOMAIN_NAME=http://domain.test:{domain_port}",
-            "-e",
-            "ACME_EMAIL=test@example.invalid",
-            CADDY_IMAGE,
-            "caddy",
-            "run",
-            "--config",
-            "/etc/caddy/Caddyfile",
-            "--adapter",
-            "caddyfile",
-        ]
-        validate = [
-            docker,
-            "run",
-            "--rm",
-            "--add-host",
-            "host.docker.internal:host-gateway",
-            "-v",
-            f"{config_path}:/etc/caddy/Caddyfile:ro",
-            "-e",
-            f"DOMAIN_NAME=http://domain.test:{domain_port}",
-            "-e",
-            "ACME_EMAIL=test@example.invalid",
-            CADDY_IMAGE,
-            "caddy",
-            "validate",
-            "--config",
-            "/etc/caddy/Caddyfile",
-            "--adapter",
-            "caddyfile",
-        ]
-    else:
-        command = [
-            binary,
-            "run",
-            "--config",
-            str(config_path),
-            "--adapter",
-            "caddyfile",
-        ]
-        validate = [
-            binary,
-            "validate",
-            "--config",
-            str(config_path),
-            "--adapter",
-            "caddyfile",
-        ]
 
-    checked = subprocess.run(
-        validate,
-        env=environment,
-        text=True,
-        capture_output=True,
-        check=False,
-        timeout=30,
-    )
-    assert checked.returncode == 0, checked.stdout + checked.stderr
-    return subprocess.Popen(
-        command,
-        env=environment,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
+    handle /ingredient/test {
+        respond "SSR upstream: /ingredient/test"
+    }
+}
+""",
+                encoding="utf-8",
+            )
+            upstream_name = f"cocktaildb-task4-upstream-{uuid.uuid4().hex}"
+            upstream_process = subprocess.Popen(
+                [
+                    docker,
+                    "run",
+                    "--rm",
+                    "--name",
+                    upstream_name,
+                    "--network",
+                    network,
+                    "--network-alias",
+                    "ssr-upstream",
+                    "-v",
+                    f"{upstream_config}:/etc/caddy/Caddyfile:ro",
+                    CADDY_IMAGE,
+                    "caddy",
+                    "run",
+                    "--config",
+                    "/etc/caddy/Caddyfile",
+                    "--adapter",
+                    "caddyfile",
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            deadline = time.monotonic() + 15
+            while time.monotonic() < deadline:
+                if upstream_process.poll() is not None:
+                    output = (
+                        upstream_process.stdout.read()
+                        if upstream_process.stdout
+                        else ""
+                    )
+                    raise AssertionError(
+                        f"SSR upstream exited during startup:\n{output}"
+                    )
+                ready = subprocess.run(
+                    [
+                        docker,
+                        "exec",
+                        upstream_name,
+                        "wget",
+                        "-qO-",
+                        "http://127.0.0.1:8000/recipe/test",
+                    ],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                if ready.returncode == 0:
+                    break
+                time.sleep(0.1)
+            else:
+                raise AssertionError("SSR upstream did not start before the timeout")
+            upstream_host = "ssr-upstream"
+            upstream_target_port = 8000
+        else:
+            upstream_host = "127.0.0.1"
+            upstream_target_port = upstream_port
+
+        config = CADDYFILE.read_text(encoding="utf-8")
+        config = config.replace(
+            "localhost:8000", f"{upstream_host}:{upstream_target_port}"
+        )
+        config = config.replace(":80 {", f":{http_port} {{")
+        config = config.replace(
+            "    admin off\n", "    admin off\n    auto_https off\n"
+        )
+        if use_docker:
+            config = config.replace(
+                "not remote_ip 127.0.0.1", "not remote_ip 127.0.0.1 172.16.0.0/12"
+            )
+        else:
+            config = config.replace("/opt/cocktaildb/web", str(web))
+            config = config.replace("/opt/cocktaildb/frontend-assets", str(assets))
+            config = config.replace(
+                "/var/log/caddy/access.log", str(logs / "access.log")
+            )
+        config_path = tmp_path / "Caddyfile"
+        config_path.write_text(config, encoding="utf-8")
+
+        environment = {
+            **os.environ,
+            "DOMAIN_NAME": f"http://domain.test:{domain_port}",
+            "ACME_EMAIL": "test@example.invalid",
+        }
+        if use_docker:
+            mounts = [
+                f"{config_path}:/etc/caddy/Caddyfile:ro",
+                f"{web}:/opt/cocktaildb/web:ro",
+                f"{assets}:/opt/cocktaildb/frontend-assets:ro",
+                f"{logs}:/var/log/caddy",
+            ]
+            caddy_name = f"cocktaildb-task4-caddy-{uuid.uuid4().hex}"
+            command = [
+                docker,
+                "run",
+                "--rm",
+                "--name",
+                caddy_name,
+                "--network",
+                network,
+                "-p",
+                f"127.0.0.1:{domain_port}:{domain_port}",
+                "-p",
+                f"127.0.0.1:{http_port}:{http_port}",
+                *[item for mount in mounts for item in ("-v", mount)],
+                "-e",
+                f"DOMAIN_NAME=http://domain.test:{domain_port}",
+                "-e",
+                "ACME_EMAIL=test@example.invalid",
+                CADDY_IMAGE,
+                "caddy",
+                "run",
+                "--config",
+                "/etc/caddy/Caddyfile",
+                "--adapter",
+                "caddyfile",
+            ]
+            validate = [
+                docker,
+                "run",
+                "--rm",
+                "--network",
+                network,
+                "-v",
+                f"{config_path}:/etc/caddy/Caddyfile:ro",
+                "-e",
+                f"DOMAIN_NAME=http://domain.test:{domain_port}",
+                "-e",
+                "ACME_EMAIL=test@example.invalid",
+                CADDY_IMAGE,
+                "caddy",
+                "validate",
+                "--config",
+                "/etc/caddy/Caddyfile",
+                "--adapter",
+                "caddyfile",
+            ]
+        else:
+            command = [
+                binary,
+                "run",
+                "--config",
+                str(config_path),
+                "--adapter",
+                "caddyfile",
+            ]
+            validate = [
+                binary,
+                "validate",
+                "--config",
+                str(config_path),
+                "--adapter",
+                "caddyfile",
+            ]
+
+        checked = subprocess.run(
+            validate,
+            env=environment,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+        assert checked.returncode == 0, checked.stdout + checked.stderr
+        caddy_process = subprocess.Popen(
+            command,
+            env=environment,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        return caddy_process, cleanup
+    except BaseException:
+        cleanup()
+        raise
+
+
+def test_docker_caddy_uses_owned_network_for_ssr_upstream():
+    runner = getsource(_caddy_runner)
+    assert "host.docker.internal" not in runner
+    assert '"--network"' in runner
+    assert '"--network-alias"' in runner
 
 
 def get(base_url: str, path: str, host: str):
@@ -233,15 +376,23 @@ def _wait_for_server(process: subprocess.Popen, base_url: str, host: str) -> Non
 
 
 def test_real_caddy_serves_hashed_assets_and_both_route_styles(tmp_path):
-    upstream = ThreadingHTTPServer(("127.0.0.1", 0), _SsrHandler)
-    upstream_thread = threading.Thread(target=upstream.serve_forever, daemon=True)
-    upstream_thread.start()
+    use_docker = (os.environ.get("CADDY_BIN") or shutil.which("caddy")) is None
+    upstream = None
+    upstream_thread = None
+    if not use_docker:
+        upstream = ThreadingHTTPServer(("127.0.0.1", 0), _SsrHandler)
+        upstream_thread = threading.Thread(target=upstream.serve_forever, daemon=True)
+        upstream_thread.start()
     process = None
+    cleanup = None
     domain_port = _free_port()
     http_port = _free_port()
     try:
-        process = _caddy_runner(
-            tmp_path, domain_port, http_port, upstream.server_address[1]
+        process, cleanup = _caddy_runner(
+            tmp_path,
+            domain_port,
+            http_port,
+            upstream.server_address[1] if upstream is not None else 0,
         )
         routes = (
             (f"http://127.0.0.1:{domain_port}", f"domain.test:{domain_port}"),
@@ -289,13 +440,10 @@ def test_real_caddy_serves_hashed_assets_and_both_route_styles(tmp_path):
             assert ssr.read().decode() == "SSR upstream: /recipe/test"
             ssr.close()
     finally:
-        if process is not None:
-            process.terminate()
-            try:
-                process.wait(timeout=15)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=15)
-        upstream.shutdown()
-        upstream.server_close()
-        upstream_thread.join(timeout=5)
+        if cleanup is not None:
+            cleanup()
+        if upstream is not None:
+            upstream.shutdown()
+            upstream.server_close()
+        if upstream_thread is not None:
+            upstream_thread.join(timeout=5)

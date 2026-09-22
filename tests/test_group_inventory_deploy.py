@@ -819,6 +819,63 @@ def test_deploy_wrapper_consumes_existing_artifact_without_npm_rebuild(tmp_path)
     assert any(f"frontend_artifact_dir={artifact.resolve()}" in line for line in logged)
 
 
+def test_deploy_wrapper_builds_default_artifact_and_passes_absolute_dist(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    calls = tmp_path / "calls"
+    _write_executable(
+        bin_dir / "npm",
+        """#!/bin/sh
+set -eu
+printf 'npm %s\\n' "$*" >> "$CALLS"
+if [ "$*" = "run build" ]; then
+  rm -rf dist
+  mkdir -p dist/web/assets
+  printf 'export default 1;\\n' > dist/web/assets/test-A.js
+  printf '{\"index.html\":{\"file\":\"assets/test-A.js\"}}\\n' > dist/manifest.json
+  printf '{\"version\":1,\"files\":[\"test-A.js\"]}\\n' > dist/asset-inventory.json
+fi
+""",
+    )
+    _write_executable(
+        bin_dir / "ansible-playbook",
+        """#!/bin/sh
+printf 'playbook %s\\n' "$*" >> "$CALLS"
+""",
+    )
+    env = os.environ.copy()
+    env.update(
+        {
+            "PATH": f"{bin_dir}:{env['PATH']}",
+            "CALLS": str(calls),
+            "COCKTAILDB_DB_PASSWORD": "test-only",
+        }
+    )
+
+    original_dist = ROOT / "dist"
+    saved_dist = tmp_path / "saved-dist"
+    if original_dist.exists():
+        shutil.copytree(original_dist, saved_dist)
+    try:
+        result = subprocess.run(
+            ["bash", "scripts/deploy-ec2.sh", "dev"],
+            cwd=ROOT,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    finally:
+        shutil.rmtree(original_dist, ignore_errors=True)
+        if saved_dist.exists():
+            shutil.copytree(saved_dist, original_dist)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    logged = calls.read_text().splitlines()
+    assert logged[:2] == ["npm ci", "npm run build"]
+    assert any(f"frontend_artifact_dir={ROOT / 'dist'}" in line for line in logged[2:])
+
+
 def test_deploy_wrapper_uses_normal_playbook(tmp_path):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
