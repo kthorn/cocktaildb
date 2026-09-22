@@ -150,6 +150,9 @@ case "$operation" in
     rm -f "$STATE_DIR/frontend_pending"
     touch "$STATE_DIR/frontend_state_committed"
     ;;
+  verify_prune_identity)
+    test -f "$STATE_DIR/frontend_state_committed"
+    ;;
   prune)
     test -f "$STATE_DIR/frontend_state_committed"
     touch "$STATE_DIR/frontend_pruned"
@@ -180,6 +183,7 @@ esac
         "publish",
         "smoke",
         "commit",
+        "verify_prune_identity",
         "prune",
     ):
         (ops / operation).symlink_to(dispatcher)
@@ -351,7 +355,13 @@ def test_corrupt_new_backup_stops_before_build(tmp_path):
     assert "CUTOVER phase=build" not in result.stdout
 
 
-def _run_default_operations(tmp_path: Path, docker_body: str, curl_body: str = ""):
+def _run_default_operations(
+    tmp_path: Path,
+    docker_body: str,
+    curl_body: str = "",
+    *,
+    gate_image_id: str = "sha256:current",
+):
     app_home = tmp_path / "app"
     release_root = app_home / "releases" / "release"
     bin_dir = tmp_path / "bin"
@@ -400,6 +410,21 @@ printf 'new backup' | gzip > "$BACKUP_DIR/backup-new.sql.gz"
         f"""#!/bin/bash
 set -euo pipefail
 printf '%s\n' "$*" >> "$DOCKER_CALLS"
+if [[ "${{FRONTEND_GATE:-}}" == true && -e "$APP_HOME/web/js/config.js" ]]; then
+  if [[ "$*" == *" ps -q api"* ]]; then
+    printf 'api-container\\n'
+    exit 0
+  elif [[ "$1" == inspect && "$3" == '{{{{.Config.Image}}}}' ]]; then
+    printf 'cocktaildb-api:release-release\\n'
+    exit 0
+  elif [[ "$1" == inspect && "$3" == '{{{{.Image}}}}' ]]; then
+    printf '%s\\n' "$FRONTEND_GATE_IMAGE_ID"
+    exit 0
+  elif [[ "$1" == image && "$2" == inspect ]]; then
+    printf 'sha256:current\\n'
+    exit 0
+  fi
+fi
 {docker_body}
 """,
     )
@@ -431,6 +456,8 @@ printf 'curl %s\n' "$*" >> "$DOCKER_CALLS"
             ROOT / "infrastructure" / "scripts" / "frontend-release.py"
         ),
         "SMOKE_TEST_BIN": "/bin/true",
+        "FRONTEND_GATE": "true",
+        "FRONTEND_GATE_IMAGE_ID": gate_image_id,
     }
     result = subprocess.run(
         ["bash", str(CUTOVER)],
@@ -542,6 +569,16 @@ fi
     assert "--max-time 5" in curl_call
 
 
+def test_cleanup_retry_gate_rejects_committed_api_image_id_drift(tmp_path):
+    result, _ = _run_default_operations(
+        tmp_path, "exit 0", gate_image_id="sha256:wrong"
+    )
+
+    assert result.returncode != 0
+    assert "Committed API image ID does not match expected image" in result.stdout
+    assert "CUTOVER phase=frontend-prune\n" not in result.stdout
+
+
 def test_first_cutover_orders_writer_shutdown_migration_readiness_and_publication(
     cutover_harness,
 ):
@@ -569,6 +606,7 @@ def test_first_cutover_orders_writer_shutdown_migration_readiness_and_publicatio
         "publish",
         "smoke",
         "commit",
+        "verify_prune_identity",
         "prune",
         "cleanup",
     ]
@@ -594,6 +632,18 @@ def test_frontend_prune_failure_keeps_committed_release_running(cutover_harness)
     assert "frontend retention cleanup failed" in result.stdout
 
 
+def test_frontend_prune_identity_failure_does_not_prune(cutover_harness):
+    run, state = cutover_harness
+
+    result = run(fail_phase="verify_prune_identity")
+
+    assert result.returncode != 0
+    assert _events(state)[-1] == "verify_prune_identity"
+    assert "frontend retention cleanup identity verification failed" in result.stdout
+    assert not (state / "frontend_pruned").exists()
+    assert (state / "new_api_running").exists()
+
+
 def test_unresolved_frontend_marker_blocks_preflight(cutover_harness):
     run, state = cutover_harness
     (state.parent / "app" / "frontend-pending.json").write_text("pending")
@@ -603,6 +653,21 @@ def test_unresolved_frontend_marker_blocks_preflight(cutover_harness):
     assert result.returncode != 0
     assert not _events(state)
     assert "unresolved frontend publication marker blocks deployment" in result.stdout
+
+
+def test_dangling_frontend_marker_blocks_before_any_mutation(cutover_harness):
+    run, state = cutover_harness
+    marker = state.parent / "app" / "frontend-pending.json"
+    marker.symlink_to(state.parent / "missing-pending.json")
+
+    result = run()
+
+    assert result.returncode != 0
+    assert not _events(state)
+    assert "unresolved frontend publication marker blocks deployment" in result.stdout
+    assert "CUTOVER phase=cleanup" not in result.stdout
+    assert "CUTOVER phase=backup" not in result.stdout
+    assert "CUTOVER phase=build" not in result.stdout
 
 
 @pytest.mark.parametrize(
@@ -982,6 +1047,191 @@ printf 'playbook %s\\n' "$*" >> "$CALLS"
     logged = calls.read_text().splitlines()
     assert logged[:2] == ["npm ci", "npm run build"]
     assert any(f"frontend_artifact_dir={ROOT / 'dist'}" in line for line in logged[2:])
+
+
+def _recovery_harness(
+    tmp_path: Path,
+    *,
+    actual_image_id: str = "sha256:expected",
+    served_matches: bool = True,
+):
+    app_home = tmp_path / "app"
+    release_root = app_home / "releases" / "candidate"
+    (release_root / "web").mkdir(parents=True)
+    (release_root / "web" / "index.html").write_text("candidate")
+    other_root = app_home / "releases" / "other" / "web"
+    other_root.mkdir(parents=True)
+    (other_root / "index.html").write_text("other")
+    served = app_home / "web"
+    served.parent.mkdir(parents=True, exist_ok=True)
+    served.symlink_to(
+        release_root / "web" if served_matches else other_root,
+        target_is_directory=True,
+    )
+    (app_home / "frontend-pending.json").write_text("pending")
+    ops = tmp_path / "ops"
+    ops.mkdir()
+    dispatcher = ops / "operation"
+    _write_executable(
+        dispatcher,
+        """#!/bin/bash
+set -euo pipefail
+operation=$(basename "$0")
+printf '%s\\n' "$operation" >> "$STATE_DIR/events"
+case "$operation" in
+  health|smoke|recover|verify_prune_identity|prune|cleanup) ;;
+  *) printf 'unexpected operation: %s\\n' "$operation" >&2; exit 64 ;;
+esac
+""",
+    )
+    for operation in (
+        "health",
+        "smoke",
+        "recover",
+        "verify_prune_identity",
+        "prune",
+        "cleanup",
+    ):
+        (ops / operation).symlink_to(dispatcher)
+
+    docker = tmp_path / "docker"
+    _write_executable(
+        docker,
+        """#!/bin/bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "$DOCKER_LOG"
+if [[ "$*" == *" ps -q api"* ]]; then
+  printf 'api-container\\n'
+elif [[ "$1" == inspect && "$3" == '{{.Config.Image}}' ]]; then
+  printf '%s\\n' "$RUNNING_IMAGE_TAG"
+elif [[ "$1" == inspect && "$3" == '{{.Image}}' ]]; then
+  printf '%s\\n' "$ACTUAL_IMAGE_ID"
+elif [[ "$1" == image && "$2" == inspect ]]; then
+  printf '%s\\n' "$EXPECTED_IMAGE_ID"
+fi
+""",
+    )
+    env = {
+        **os.environ,
+        "APP_HOME": str(app_home),
+        "RELEASE_ROOT": str(release_root),
+        "SERVED_WEB": str(served),
+        "DEPLOY_LOCK_FILE": str(tmp_path / "deploy.lock"),
+        "DOCKER_BIN": str(docker),
+        "DOCKER_LOG": str(tmp_path / "docker.log"),
+        "RUNNING_IMAGE_TAG": "cocktaildb-api:release-candidate",
+        "ACTUAL_IMAGE_ID": actual_image_id,
+        "EXPECTED_IMAGE_ID": "sha256:expected",
+        "RELEASE_ID": "candidate",
+        "CUTOVER_OPS_DIR": str(ops),
+        "STATE_DIR": str(tmp_path / "state"),
+    }
+    Path(env["STATE_DIR"]).mkdir()
+    return env, app_home, release_root
+
+
+@pytest.mark.parametrize("actual_image_id", ["sha256:wrong"])
+def test_recovery_rejects_active_api_image_id_mismatch(tmp_path, actual_image_id):
+    env, _, _ = _recovery_harness(tmp_path, actual_image_id=actual_image_id)
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(CUTOVER),
+            "recover",
+            env["RELEASE_ROOT"],
+            env["RUNNING_IMAGE_TAG"],
+        ],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "image ID does not match" in result.stdout
+    assert not (Path(env["STATE_DIR"]) / "events").exists()
+
+
+def test_recovery_rejects_served_frontend_mismatch(tmp_path):
+    env, _, _ = _recovery_harness(tmp_path, served_matches=False)
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(CUTOVER),
+            "recover",
+            env["RELEASE_ROOT"],
+            env["RUNNING_IMAGE_TAG"],
+        ],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "Served frontend does not match pending candidate" in result.stdout
+    assert not (Path(env["STATE_DIR"]) / "events").exists()
+
+
+def test_recovery_reconciles_matching_api_and_frontend(tmp_path):
+    env, _, _ = _recovery_harness(tmp_path)
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(CUTOVER),
+            "recover",
+            env["RELEASE_ROOT"],
+            env["RUNNING_IMAGE_TAG"],
+        ],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (Path(env["STATE_DIR"]) / "events").read_text().splitlines() == [
+        "health",
+        "smoke",
+        "recover",
+        "verify_prune_identity",
+        "prune",
+        "cleanup",
+    ]
+    assert "reconciled" in result.stdout
+
+
+def test_recovery_diagnoses_dangling_pending_marker(tmp_path):
+    env, app_home, _ = _recovery_harness(tmp_path)
+    marker = app_home / "frontend-pending.json"
+    marker.unlink()
+    marker.symlink_to(tmp_path / "missing-pending.json")
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(CUTOVER),
+            "recover",
+            env["RELEASE_ROOT"],
+            env["RUNNING_IMAGE_TAG"],
+        ],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "dangling" in result.stdout
+    assert "No frontend pending marker" not in result.stdout
+    assert not (Path(env["STATE_DIR"]) / "events").exists()
 
 
 def test_deploy_wrapper_uses_normal_playbook(tmp_path):

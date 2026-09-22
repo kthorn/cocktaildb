@@ -425,13 +425,15 @@ def _pending_path(app_home: Path) -> Path:
 def _record(release: Path, app_home: Path, api_image: str) -> dict[str, Any]:
     if not isinstance(api_image, str) or not api_image:
         raise _error("API image identity must be non-empty")
-    return {
+    _assert_no_symlink_parents(release / "web", app_home, "release candidate web")
+    record = {
         "id": release.name,
         "web": _relative_to_app(release / "web", app_home),
         "inventory": _relative_to_app(release / FRONTEND_INVENTORY, app_home),
         "image": api_image,
         "legacy": False,
     }
+    return _validate_record_shape(record, "release candidate")
 
 
 def _validate_record_shape(record: Any, label: str) -> dict[str, Any]:
@@ -447,26 +449,39 @@ def _validate_record_shape(record: Any, label: str) -> dict[str, Any]:
     ):
         raise _error(f"{label}.id is invalid")
     web = _safe_relative(record.get("web"), f"{label}.web")
-    if not web.startswith("releases/"):
-        raise _error(f"{label}.web is outside managed releases: {web}")
     legacy = record.get("legacy")
     if not isinstance(legacy, bool):
         raise _error(f"{label}.legacy must be boolean")
     inventory = record.get("inventory")
-    if inventory is None:
-        if not legacy:
-            raise _error(f"{label}.inventory is required for hashed releases")
-    else:
-        inventory = _safe_relative(inventory, f"{label}.inventory")
-        if not inventory.startswith("releases/"):
-            raise _error(f"{label}.inventory is outside managed releases: {inventory}")
+    if legacy:
         if (
-            Path(inventory).parent.as_posix() != Path(web).parent.as_posix()
-            or Path(inventory).name != FRONTEND_INVENTORY
+            identifier != "legacy"
+            or inventory is not None
+            or record.get("image") is not None
         ):
-            raise _error(f"{label}.inventory is not the matching release metadata path")
+            raise _error(f"{label} is not a valid legacy frontend record")
+        web_parts = web.split("/")
+        if (
+            len(web_parts) != 2
+            or web_parts[0] != "releases"
+            or not web_parts[1].startswith("previous-web-")
+            or web_parts[1] == "previous-web-"
+        ):
+            raise _error(f"{label}.web is not the preserved legacy frontend path")
+    else:
+        expected_web = f"releases/{identifier}/web"
+        expected_inventory = f"releases/{identifier}/{FRONTEND_INVENTORY}"
+        if web != expected_web:
+            raise _error(f"{label}.web is not the owned release web path: {web}")
+        if inventory is None:
+            raise _error(f"{label}.inventory is required for hashed releases")
+        inventory = _safe_relative(inventory, f"{label}.inventory")
+        if inventory != expected_inventory:
+            raise _error(
+                f"{label}.inventory is not the matching release metadata path: {inventory}"
+            )
     image = record.get("image")
-    if not isinstance(image, str) and not (legacy and image is None):
+    if not legacy and (not isinstance(image, str) or not image):
         raise _error(f"{label}.image is invalid")
     return {
         "id": identifier,
@@ -487,6 +502,8 @@ def _load_state(app_home: Path) -> dict[str, Any] | None:
     if "current" not in value or "retired" not in value:
         raise _error(f"frontend state is missing required fields: {path}")
     current = _validate_record_shape(value["current"], "frontend state current")
+    if current["legacy"]:
+        raise _error("frontend state current cannot be a legacy record")
     previous_value = value.get("previous")
     previous = (
         None
@@ -500,12 +517,14 @@ def _load_state(app_home: Path) -> dict[str, Any] | None:
         _validate_record_shape(record, f"frontend state retired[{index}]")
         for index, record in enumerate(retired_value)
     ]
-    return {
+    state = {
         "version": STATE_VERSION,
         "current": current,
         "previous": previous,
         "retired": retired,
     }
+    _validate_state_record_disjointness(state)
+    return state
 
 
 def _load_pending(app_home: Path) -> dict[str, Any]:
@@ -516,9 +535,13 @@ def _load_pending(app_home: Path) -> dict[str, Any]:
     if not isinstance(value, dict) or value.get("version") != STATE_VERSION:
         raise _error(f"frontend pending marker version must be 1: {path}")
     candidate = _validate_record_shape(value.get("candidate"), "pending candidate")
+    if candidate["legacy"]:
+        raise _error("pending candidate cannot be a legacy record")
     previous = value.get("previous")
     if previous is not None:
         previous = _validate_record_shape(previous, "pending previous")
+        if previous["legacy"]:
+            raise _error("pending previous cannot be a legacy record")
     legacy = value.get("legacy_previous_web")
     if legacy is not None:
         legacy = _safe_relative(legacy, "pending legacy_previous_web")
@@ -530,6 +553,77 @@ def _load_pending(app_home: Path) -> dict[str, Any]:
     }
 
 
+def _validate_owned_path(
+    path: Path, label: str, *, allow_missing: bool = False
+) -> None:
+    if not (path.exists() or path.is_symlink()):
+        if allow_missing:
+            return
+        raise _error(f"{label} is missing: {path}")
+    stat = _lstat(path, label)
+    if stat_module.S_ISLNK(stat.st_mode):
+        raise _error(f"{label} must not be a symlink: {path}")
+    if stat_module.S_ISDIR(stat.st_mode):
+        _validate_tree(path, label)
+    elif stat_module.S_ISREG(stat.st_mode):
+        return
+    else:
+        raise _error(f"{label} is not an owned directory or regular file: {path}")
+
+
+def _validate_record_paths(
+    app_home: Path,
+    record: dict[str, Any],
+    label: str,
+    *,
+    allow_missing: bool,
+) -> None:
+    _directory(app_home, "APP_HOME")
+    web = app_home / record["web"]
+    _assert_no_symlink_parents(web, app_home, f"{label}.web")
+    _validate_owned_path(web, f"{label} web", allow_missing=allow_missing)
+    inventory = record["inventory"]
+    if inventory is not None:
+        inventory_path = app_home / inventory
+        _assert_no_symlink_parents(inventory_path, app_home, f"{label}.inventory")
+        _validate_owned_path(
+            inventory_path, f"{label} inventory", allow_missing=allow_missing
+        )
+
+
+def _paths_overlap(left: str, right: str) -> bool:
+    left_path = Path(left)
+    right_path = Path(right)
+    return (
+        left_path == right_path
+        or left_path in right_path.parents
+        or right_path in left_path.parents
+    )
+
+
+def _validate_state_record_disjointness(state: dict[str, Any]) -> None:
+    paths: list[tuple[str, str]] = []
+    for label in ("current", "previous"):
+        record = state.get(label)
+        if record is not None:
+            entries = [(f"{label}.web", record["web"])]
+            if record["inventory"] is not None:
+                entries.append((f"{label}.inventory", record["inventory"]))
+            paths.extend(entries)
+    for index, record in enumerate(state["retired"]):
+        entries = [(f"retired[{index}].web", record["web"])]
+        if record["inventory"] is not None:
+            entries.append((f"retired[{index}].inventory", record["inventory"]))
+        paths.extend(entries)
+    for index, (label, path) in enumerate(paths):
+        for other_label, other_path in paths[:index]:
+            if _paths_overlap(path, other_path):
+                raise _error(
+                    f"frontend state paths overlap: {label}={path} and "
+                    f"{other_label}={other_path}"
+                )
+
+
 def _validate_state_files(app_home: Path, state: dict[str, Any]) -> set[str]:
     keep: set[str] = set()
     asset_root = app_home / "frontend-assets"
@@ -537,8 +631,9 @@ def _validate_state_files(app_home: Path, state: dict[str, Any]) -> set[str]:
         record = state.get(label)
         if record is None:
             continue
-        web = app_home / record["web"]
-        _directory(web, f"retained {label} web")
+        _validate_record_paths(
+            app_home, record, f"retained {label}", allow_missing=False
+        )
         inventory = record["inventory"]
         if inventory is None:
             if not record["legacy"]:
@@ -552,6 +647,23 @@ def _validate_state_files(app_home: Path, state: dict[str, Any]) -> set[str]:
                 _safe_asset_path(asset_root, relative, "retained asset path"),
                 f"retained {label} asset",
             )
+    return keep
+
+
+def _preflight_prune(app_home: Path, state: dict[str, Any]) -> set[str]:
+    _validate_state_record_disjointness(state)
+    keep = _validate_state_files(app_home, state)
+    for index, record in enumerate(state["retired"]):
+        label = f"retired frontend {index}"
+        _validate_record_paths(app_home, record, label, allow_missing=True)
+        inventory = record["inventory"]
+        if inventory is not None:
+            inventory_path = app_home / inventory
+            if inventory_path.exists() or inventory_path.is_symlink():
+                _read_inventory(inventory_path, f"{label} inventory")
+    asset_root = app_home / "frontend-assets"
+    _directory(asset_root, "shared frontend asset directory")
+    _enumerate_files(asset_root)
     return keep
 
 
@@ -736,13 +848,19 @@ def commit(
                 raise _error(
                     f"preserved legacy frontend is missing: {app_home / legacy_path}"
                 )
-            previous = {
-                "id": "legacy",
-                "web": legacy_path,
-                "inventory": None,
-                "image": None,
-                "legacy": True,
-            }
+            previous = _validate_record_shape(
+                {
+                    "id": "legacy",
+                    "web": legacy_path,
+                    "inventory": None,
+                    "image": None,
+                    "legacy": True,
+                },
+                "preserved legacy frontend",
+            )
+            _validate_record_paths(
+                app_home, previous, "preserved legacy frontend", allow_missing=False
+            )
         else:
             previous = None
     next_state = {
@@ -757,7 +875,9 @@ def commit(
     return next_state
 
 
-def _remove_owned_path(path: Path, label: str) -> None:
+def _remove_owned_path(path: Path, label: str, root: Path | None = None) -> None:
+    if root is not None:
+        _assert_no_symlink_parents(path, root, label)
     if not (path.exists() or path.is_symlink()):
         return
     stat = path.lstat()
@@ -783,15 +903,17 @@ def prune(app_home: Path | None = None) -> dict[str, Any] | None:
     state = _load_state(app_home)
     if state is None:
         return None
-    keep = _validate_state_files(app_home, state)
+    keep = _preflight_prune(app_home, state)
     prune_assets(app_home / "frontend-assets", keep)
 
     remaining = list(state["retired"])
-    for index, record in enumerate(list(remaining)):
-        _remove_owned_path(app_home / record["web"], "retired frontend web")
+    for record in list(remaining):
+        _remove_owned_path(app_home / record["web"], "retired frontend web", app_home)
         if record["inventory"] is not None:
             _remove_owned_path(
-                app_home / record["inventory"], "retired frontend inventory"
+                app_home / record["inventory"],
+                "retired frontend inventory",
+                app_home,
             )
         remaining.remove(record)
         state["retired"] = remaining

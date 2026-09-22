@@ -92,14 +92,19 @@ check_page_assets() {
     local name="$1"
     local endpoint="$2"
     local expected_status="$3"
-    local body ref
+    local body ref ref_count=0
 
     test_endpoint "$name" "$endpoint" "$expected_status"
     body="$(request_body "$endpoint")"
     while IFS= read -r ref; do
         [[ -n "$ref" ]] || continue
+        ((++ref_count))
         test_endpoint "asset availability $ref" "$ref" 200
     done < <(printf '%s' "$body" | extract_asset_refs)
+    if ((ref_count == 0)); then
+        printf '%-48s %s\n' "Asset references $name" "FAIL (no extracted local asset references)"
+        ((++FAIL))
+    fi
 }
 
 discover_recipe_id() {

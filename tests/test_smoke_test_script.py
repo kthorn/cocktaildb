@@ -2,21 +2,29 @@ import os
 import subprocess
 
 
-def run_smoke_test(tmp_path, status, *, recipe_id="1", ingredient_id="2"):
+def run_smoke_test(
+    tmp_path, status, *, recipe_id="1", ingredient_id="2", asset_refs=True
+):
     curl = tmp_path / "curl"
+    page_body = (
+        '<html><link href="/assets/style-A.css"><script src="/assets/app-A.js"></script></html>'
+        if asset_refs
+        else "<html><body>no local assets</body></html>"
+    )
     curl.write_text(
         "#!/bin/bash\n"
         'printf \'%s\\n\' "$*" >> "$CURL_LOG"\n'
         'url="${@: -1}"\n'
-        'if [[ "$url" == *"/manifest.json" || "$url" == *"/asset-inventory.json" || "$url" == *"/frontend-state.json" || "$url" == *"/frontend-pending.json" || "$url" == *"/recipe/404" || "$url" == *"/ingredient/404" ]]; then\n'
+        'if [[ "$url" == *"/manifest.json" || "$url" == *"/asset-inventory.json" || "$url" == *"/frontend-state.json" || "$url" == *"/frontend-pending.json" ]]; then\n'
         "  printf '404'\n"
         'elif [[ " $* " == *" -w "* ]]; then\n'
-        f"  printf '{status}'\n"
+        '  if [[ "$url" == *"/recipe/404" || "$url" == *"/ingredient/404" ]]; then printf \'404\'; else '
+        f"printf '{status}'; fi\n"
         "else\n"
         '  case "$url" in\n'
-        '    */) printf \'<html><link href="/assets/style-A.css"><script src="/assets/app-A.js"></script></html>\' ;;\n'
+        f"    */) printf '{page_body}' ;;\n"
         "    */js/config.js) printf 'export default { apiUrl: \"https://api.example.test\" };' ;;\n"
-        '    */recipe/*|*/ingredient/*) printf \'<html><link href="/assets/style-A.css"><script src="/assets/app-A.js"></script></html>\' ;;\n'
+        f"    */recipe/*|*/ingredient/*) printf '{page_body}' ;;\n"
         '    */health) printf \'{"status":"healthy"}\' ;;\n'
         '    */recipes/search) [[ "${SMOKE_EMPTY_DB:-}" == true ]] && printf \'{"recipes":[]}\' || printf \'{"recipes":[{"id":1}]}\' ;;\n'
         '    */ingredients) [[ "${SMOKE_EMPTY_DB:-}" == true ]] && printf \'[]\' || printf \'[{"id":2,"name":"Whiskey"}]\' ;;\n'
@@ -97,6 +105,13 @@ def test_smoke_test_fails_when_selected_page_checks_fail(tmp_path):
     assert result.returncode == 1
     assert "SMOKE TEST FAILED" in result.stdout
     assert "Failed:" in result.stdout
+
+
+def test_smoke_test_fails_when_required_page_has_no_local_asset_refs(tmp_path):
+    result = run_smoke_test(tmp_path, "200", asset_refs=False)
+
+    assert result.returncode == 1
+    assert "no extracted local asset references" in result.stdout
 
 
 def test_empty_database_smoke_checks_not_found_pages_without_fake_ids(tmp_path):

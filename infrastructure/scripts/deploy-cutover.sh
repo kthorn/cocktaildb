@@ -250,6 +250,100 @@ op_commit() {
     "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" commit "$RELEASE_ROOT" "$NEW_IMAGE"
 }
 
+verify_api_image_identity() {
+    local expected_image="$1"
+    local context="$2"
+    local container_id running_image expected_image_id actual_image_id
+
+    container_id=$(compose_current ps -q api) || {
+        say "Unable to inspect the active API container for ${context} identity verification."
+        return 1
+    }
+    if [[ -z "$container_id" || "$container_id" == *$'\n'* ]]; then
+        say "No single active API container is available for ${context} identity verification."
+        return 1
+    fi
+    running_image=$("$DOCKER_BIN" inspect --format '{{.Config.Image}}' "$container_id") || return
+    expected_image_id=$("$DOCKER_BIN" image inspect --format '{{.Id}}' "$expected_image") || {
+        say "Expected API image is unavailable for ${context} identity verification: $expected_image"
+        return 1
+    }
+    actual_image_id=$("$DOCKER_BIN" inspect --format '{{.Image}}' "$container_id") || return
+    if [[ "$actual_image_id" != "$expected_image_id" ]]; then
+        say "${context} API image ID does not match expected image: active_id=$actual_image_id expected_id=$expected_image_id active_tag=$running_image expected_tag=$expected_image"
+        return 1
+    fi
+}
+
+verify_served_frontend_identity() {
+    local expected_root="$1"
+    local mismatch_message="$2"
+    local served_target expected_target
+
+    if [[ ! -L "$SERVED_WEB" ]]; then
+        say "${mismatch_message}: served path is not a symlink: $SERVED_WEB"
+        return 1
+    fi
+    served_target=$(readlink -f "$SERVED_WEB" 2>/dev/null) || {
+        say "${mismatch_message}: unable to resolve served path: $SERVED_WEB"
+        return 1
+    }
+    expected_target=$(readlink -f "$expected_root" 2>/dev/null) || {
+        say "${mismatch_message}: unable to resolve expected path: $expected_root"
+        return 1
+    }
+    if [[ "$served_target" != "$expected_target" ]]; then
+        say "${mismatch_message}: active=$served_target expected=$expected_target"
+        return 1
+    fi
+}
+
+op_verify_prune_identity() {
+    local state_path="$APP_HOME/frontend-state.json"
+    local current_image current_web
+
+    if [[ ! -f "$state_path" || -L "$state_path" ]]; then
+        say "Committed frontend state is missing or is a symlink: $state_path"
+        return 1
+    fi
+    current_image=$(
+        "$PYTHON_BIN" - "$state_path" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    state = json.load(stream)
+current = state.get("current")
+if not isinstance(current, dict) or not isinstance(current.get("image"), str):
+    raise SystemExit("committed frontend state has no current API image")
+print(current["image"])
+PY
+    ) || {
+        say "Unable to read committed frontend API image from $state_path"
+        return 1
+    }
+    current_web=$(
+        "$PYTHON_BIN" - "$state_path" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    state = json.load(stream)
+current = state.get("current")
+if not isinstance(current, dict) or not isinstance(current.get("web"), str):
+    raise SystemExit("committed frontend state has no current web path")
+print(current["web"])
+PY
+    ) || {
+        say "Unable to read committed frontend web path from $state_path"
+        return 1
+    }
+    verify_api_image_identity "$current_image" "Committed" || return
+    verify_served_frontend_identity \
+        "$APP_HOME/$current_web" \
+        "Served frontend does not match committed current" || return
+}
+
 op_prune() {
     "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" prune
 }
@@ -281,7 +375,7 @@ fail_cutover() {
     local failed_phase="$1"
     local status="$2"
 
-    if [[ "$failed_phase" == preflight && -e "$APP_HOME/frontend-pending.json" ]]; then
+    if [[ "$failed_phase" == preflight && (-e "$APP_HOME/frontend-pending.json" || -L "$APP_HOME/frontend-pending.json") ]]; then
         say "An unresolved frontend publication marker blocks deployment: $APP_HOME/frontend-pending.json"
         say "Verify the active API image and served frontend, then run recovery; do not delete the marker."
     fi
@@ -324,6 +418,15 @@ run_phase() {
 run_frontend_prune() {
     local status
 
+    say "CUTOVER phase=frontend-prune-identity"
+    if run_operation verify_prune_identity; then
+        :
+    else
+        status=$?
+        say "Release is deployed, but frontend retention cleanup identity verification failed; keep the healthy API running and do not prune."
+        exit "$status"
+    fi
+
     say "CUTOVER phase=frontend-prune"
     run_operation prune
     status=$?
@@ -337,43 +440,29 @@ run_frontend_prune() {
 recover_cutover() {
     local recovery_root="$1"
     local recovery_image="$2"
-    local container_id running_image expected_image_id actual_image_id served_target expected_target
 
     RELEASE_ROOT="$recovery_root"
     NEW_IMAGE="$recovery_image"
+    if [[ -L "$APP_HOME/frontend-pending.json" ]]; then
+        if [[ ! -e "$APP_HOME/frontend-pending.json" ]]; then
+            say "The frontend pending marker is a dangling symlink: $APP_HOME/frontend-pending.json"
+        else
+            say "The frontend pending marker must not be a symlink: $APP_HOME/frontend-pending.json"
+        fi
+        say "Inspect the marker and serving state, then perform manual recovery without deleting it."
+        return 1
+    fi
     if [[ ! -f "$APP_HOME/frontend-pending.json" ]]; then
         say "No frontend pending marker exists; nothing to recover."
         return 1
     fi
-    container_id=$(compose_current ps -q api) || {
-        say "Unable to inspect the active API container; recover manually without deleting the marker."
-        return 1
-    }
-    if [[ -z "$container_id" ]]; then
-        say "No active API container matches the pending frontend candidate; recover manually without restarting the old API."
+    if ! verify_api_image_identity "$recovery_image" "Active"; then
+        say "Inspect the running container and marker, then perform manual recovery; the old API will not be restarted automatically."
         return 1
     fi
-    running_image=$("$DOCKER_BIN" inspect --format '{{.Config.Image}}' "$container_id") || return
-    if [[ "$running_image" != "$recovery_image" ]]; then
-        expected_image_id=$("$DOCKER_BIN" image inspect --format '{{.Id}}' "$recovery_image") || {
-            say "Pending API image is unavailable: $recovery_image"
-            return 1
-        }
-        actual_image_id=$("$DOCKER_BIN" inspect --format '{{.Image}}' "$container_id") || return
-        if [[ "$actual_image_id" != "$expected_image_id" ]]; then
-            say "Active API image does not match pending candidate: active=$running_image pending=$recovery_image"
-            say "Inspect the running container and marker, then perform manual recovery; the old API will not be restarted automatically."
-            return 1
-        fi
-    fi
-
-    served_target=$(readlink -f "$SERVED_WEB" 2>/dev/null) || {
-        say "Unable to resolve served frontend link: $SERVED_WEB"
-        return 1
-    }
-    expected_target=$(readlink -f "$recovery_root/web" 2>/dev/null) || return
-    if [[ "$served_target" != "$expected_target" ]]; then
-        say "Served frontend does not match pending candidate: active=$served_target pending=$expected_target"
+    if ! verify_served_frontend_identity \
+        "$recovery_root/web" \
+        "Served frontend does not match pending candidate"; then
         say "Inspect the running frontend and marker, then perform manual recovery; the old API will not be restarted automatically."
         return 1
     fi
@@ -417,7 +506,7 @@ fi
 if [[ ! -d "$RELEASE_ROOT/web" || ! -f "$RELEASE_ROOT/web/js/config.js" ]]; then
     fail_cutover preflight 1
 fi
-if [[ -e "$APP_HOME/frontend-pending.json" ]]; then
+if [[ -e "$APP_HOME/frontend-pending.json" || -L "$APP_HOME/frontend-pending.json" ]]; then
     fail_cutover preflight 1
 fi
 
