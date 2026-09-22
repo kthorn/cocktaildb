@@ -1,4 +1,6 @@
 -- Repair the imported Perfect BQE recipe: its barspoon quantity is one.
+BEGIN;
+
 UPDATE recipe_ingredients AS ri
 SET amount = 1
 FROM units AS u
