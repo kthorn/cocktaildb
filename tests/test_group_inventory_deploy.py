@@ -1,5 +1,6 @@
 import fcntl
 import gzip
+import json
 import os
 import shutil
 import subprocess
@@ -20,6 +21,19 @@ MIGRATION_15 = "15_migration_add_user_groups.sql"
 def _write_executable(path: Path, content: str) -> None:
     path.write_text(content)
     path.chmod(0o755)
+
+
+def _write_frontend_artifact(path: Path) -> None:
+    assets = path / "web" / "assets"
+    assets.mkdir(parents=True)
+    (assets / "test-A.js").write_text("export default 1;\n")
+    (path / "web" / "index.html").write_text("<!doctype html>\n")
+    (path / "manifest.json").write_text(
+        json.dumps({"index.html": {"file": "assets/test-A.js"}})
+    )
+    (path / "asset-inventory.json").write_text(
+        json.dumps({"version": 1, "files": ["test-A.js"]})
+    )
 
 
 @pytest.fixture
@@ -623,10 +637,18 @@ def test_deploy_playbook_stages_frontend_and_has_no_restart_handlers():
     playbook = yaml.safe_load(playbook_path.read_text())
     tasks = playbook[0]["tasks"]
     handlers = playbook[0].get("handlers", [])
-    frozen_release = playbook[0]["pre_tasks"][0]["ansible.builtin.set_fact"]
+    frozen_release = next(
+        task["ansible.builtin.set_fact"]
+        for task in playbook[0]["pre_tasks"]
+        if "ansible.builtin.set_fact" in task
+    )
 
     assert "deployment_release_id" in frozen_release
-    lifecycle_lock = playbook[0]["pre_tasks"][1]
+    lifecycle_lock = next(
+        task
+        for task in playbook[0]["pre_tasks"]
+        if task["name"] == "Acquire deployment lifecycle lock"
+    )
     assert lifecycle_lock["name"] == "Acquire deployment lifecycle lock"
     assert lifecycle_lock["ansible.builtin.command"]["argv"] == [
         "mkdir",
@@ -647,12 +669,51 @@ def test_deploy_playbook_stages_frontend_and_has_no_restart_handlers():
     assert "Restart API" not in {handler["name"] for handler in handlers}
     assert all("Restart Caddy" not in task.get("notify", []) for task in tasks)
 
+    artifact_validation = next(
+        task
+        for task in playbook[0]["pre_tasks"]
+        if task["name"] == "Validate frontend artifact before deployment lock"
+    )
+    assert artifact_validation["ansible.builtin.command"]["argv"][-2:] == [
+        "validate",
+        "{{ frontend_artifact_dir }}",
+    ]
+    assert playbook[0]["pre_tasks"].index(artifact_validation) < playbook[0][
+        "pre_tasks"
+    ].index(lifecycle_lock)
+
     frontend_sync = next(
         task for task in tasks if task["name"] == "Stage frontend code"
     )
+    frontend_sync_args = frontend_sync["ansible.builtin.synchronize"]
     config = next(task for task in tasks if task["name"] == "Stage frontend config.js")
-    assert "release_web_root" in frontend_sync["ansible.builtin.synchronize"]["dest"]
+    js_directory = next(
+        task for task in tasks if task["name"] == "Create staged frontend js directory"
+    )
+    assert frontend_sync_args["src"] == "{{ frontend_artifact_dir }}/web/"
+    assert frontend_sync_args["delete"] is True
+    assert "release_web_root" in frontend_sync_args["dest"]
     assert "release_web_root" in config["ansible.builtin.template"]["dest"]
+    assert tasks.index(js_directory) < tasks.index(config)
+
+    api_sync = next(task for task in tasks if task["name"] == "Stage API code")
+    api_manifest = next(
+        task for task in tasks if task["name"] == "Stage API frontend manifest"
+    )
+    assert api_sync["ansible.builtin.synchronize"]["delete"] is True
+    assert (
+        api_manifest["ansible.builtin.copy"]["src"]
+        == "{{ frontend_artifact_dir }}/manifest.json"
+    )
+    assert (
+        api_manifest["ansible.builtin.copy"]["dest"]
+        == "{{ release_root }}/api/frontend-manifest.json"
+    )
+    assert tasks.index(api_sync) < tasks.index(api_manifest)
+
+    metadata = next(task for task in tasks if task["name"] == "Stage frontend metadata")
+    assert metadata["ansible.builtin.copy"]["dest"] == "{{ release_root }}/{{ item }}"
+    assert "release_web_root" not in metadata["ansible.builtin.copy"]["dest"]
     caddy_validation = next(
         task for task in tasks if task["name"] == "Validate staged Caddy configuration"
     )
@@ -677,13 +738,52 @@ def test_deploy_playbook_stages_frontend_and_has_no_restart_handlers():
     assert syntax.returncode == 0, syntax.stdout + syntax.stderr
 
 
-def test_deploy_wrapper_uses_normal_playbook(tmp_path):
+def test_deploy_wrapper_rejects_invalid_artifact_before_playbook(tmp_path):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     calls = tmp_path / "calls"
     _write_executable(
-        bin_dir / "ansible-galaxy",
-        '#!/bin/sh\nprintf \'galaxy %s\\n\' "$*" >> "$CALLS"\n',
+        bin_dir / "ansible-playbook",
+        '#!/bin/sh\nprintf \'playbook %s\\n\' "$*" >> "$CALLS"\n',
+    )
+    env = os.environ.copy()
+    env.update(
+        {
+            "PATH": f"{bin_dir}:{env['PATH']}",
+            "CALLS": str(calls),
+            "COCKTAILDB_DB_PASSWORD": "test-only",
+        }
+    )
+
+    result = subprocess.run(
+        [
+            "bash",
+            "scripts/deploy-ec2.sh",
+            "dev",
+            "--frontend-artifact",
+            str(tmp_path / "invalid-artifact"),
+        ],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "frontend artifact error" in result.stderr
+    assert not calls.exists()
+
+
+def test_deploy_wrapper_consumes_existing_artifact_without_npm_rebuild(tmp_path):
+    artifact = tmp_path / "artifact"
+    _write_frontend_artifact(artifact)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    calls = tmp_path / "calls"
+    _write_executable(
+        bin_dir / "npm",
+        '#!/bin/sh\nprintf \'npm %s\\n\' "$*" >> "$CALLS"\n',
     )
     _write_executable(
         bin_dir / "ansible-playbook",
@@ -699,7 +799,57 @@ def test_deploy_wrapper_uses_normal_playbook(tmp_path):
     )
 
     result = subprocess.run(
-        ["bash", "scripts/deploy-ec2.sh", "dev"],
+        [
+            "bash",
+            "scripts/deploy-ec2.sh",
+            "--frontend-artifact",
+            str(artifact),
+            "dev",
+        ],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    logged = calls.read_text().splitlines()
+    assert not any(line.startswith("npm ") for line in logged)
+    assert any(f"frontend_artifact_dir={artifact.resolve()}" in line for line in logged)
+
+
+def test_deploy_wrapper_uses_normal_playbook(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    calls = tmp_path / "calls"
+    _write_executable(
+        bin_dir / "ansible-galaxy",
+        '#!/bin/sh\nprintf \'galaxy %s\\n\' "$*" >> "$CALLS"\n',
+    )
+    _write_executable(
+        bin_dir / "ansible-playbook",
+        '#!/bin/sh\nprintf \'playbook %s\\n\' "$*" >> "$CALLS"\n',
+    )
+    artifact = tmp_path / "artifact"
+    _write_frontend_artifact(artifact)
+    env = os.environ.copy()
+    env.update(
+        {
+            "PATH": f"{bin_dir}:{env['PATH']}",
+            "CALLS": str(calls),
+            "COCKTAILDB_DB_PASSWORD": "test-only",
+        }
+    )
+
+    result = subprocess.run(
+        [
+            "bash",
+            "scripts/deploy-ec2.sh",
+            "dev",
+            "--frontend-artifact",
+            str(artifact),
+        ],
         cwd=ROOT,
         env=env,
         text=True,

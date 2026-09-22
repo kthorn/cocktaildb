@@ -23,6 +23,18 @@
         ansible.builtin.set_fact:
             deployment_release_id: "{{ deployment_release_id | default(lookup('pipe', 'date -u +%Y%m%dT%H%M%SZ'), true) }}"
 
+      - name: Validate frontend artifact before deployment lock
+        delegate_to: localhost
+        become: false
+        ansible.builtin.command:
+            argv:
+                - node
+                - '{{ playbook_dir }}/../../../scripts/frontend-artifact.mjs'
+                - validate
+                - '{{ frontend_artifact_dir }}'
+            chdir: '{{ playbook_dir }}/../../..'
+        changed_when: false
+
       # This atomic directory lock is acquired before the first remote mutation.
       # A failed play intentionally leaves it for operator inspection.
       - name: Acquire deployment lifecycle lock
@@ -106,13 +118,30 @@
                 - '--exclude=tests/'
                 - '--exclude=*.db'
 
+      - name: Stage API frontend manifest
+        ansible.builtin.copy:
+            src: '{{ frontend_artifact_dir }}/manifest.json'
+            dest: '{{ release_root }}/api/frontend-manifest.json'
+            owner: '{{ app_user }}'
+            group: '{{ app_group }}'
+            mode: '0644'
+
       - name: Stage frontend code
         ansible.builtin.synchronize:
-            src: '{{ playbook_dir }}/../../../src/web/'
+            src: '{{ frontend_artifact_dir }}/web/'
             dest: '{{ release_web_root }}/'
             delete: yes
-            rsync_opts:
-                - '--exclude=config.js'
+
+      - name: Stage frontend metadata
+        ansible.builtin.copy:
+            src: '{{ frontend_artifact_dir }}/{{ item }}'
+            dest: '{{ release_root }}/{{ item }}'
+            owner: '{{ app_user }}'
+            group: '{{ app_group }}'
+            mode: '0644'
+        loop:
+            - manifest.json
+            - asset-inventory.json
 
       - name: Stage barcart package
         ansible.builtin.synchronize:
@@ -124,6 +153,14 @@
                 - '--exclude=*.pyc'
                 - '--exclude=.pytest_cache'
                 - '--exclude=tests/'
+
+      - name: Create staged frontend js directory
+        ansible.builtin.file:
+            path: '{{ release_web_root }}/js'
+            state: directory
+            owner: '{{ app_user }}'
+            group: '{{ app_group }}'
+            mode: '0755'
 
       - name: Stage frontend config.js
         ansible.builtin.template:
@@ -259,6 +296,33 @@
             src: '{{ playbook_dir }}/../../../migrations/'
             dest: '{{ release_root }}/migrations/'
             delete: yes
+
+      - name: Inspect existing web root link
+        ansible.builtin.stat:
+            path: '{{ app_home }}/web'
+            follow: false
+        register: web_root_link
+
+      - name: Inspect existing web root target
+        ansible.builtin.stat:
+            path: '{{ app_home }}/web'
+            follow: true
+        register: web_root_target
+
+      - name: Fail when deployed web root is dangling
+        ansible.builtin.fail:
+            msg: 'The deployed web root is a dangling symlink: {{ app_home }}/web'
+        when:
+            - web_root_link.stat.islnk | default(false)
+            - not (web_root_target.stat.exists | default(false))
+
+      - name: Create shared frontend asset directory
+        ansible.builtin.file:
+            path: /opt/cocktaildb/frontend-assets
+            state: directory
+            owner: '{{ app_user }}'
+            group: '{{ app_group }}'
+            mode: '0755'
 
       - name: Set ownership of staged release
         ansible.builtin.file:
