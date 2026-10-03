@@ -16,7 +16,7 @@
 - `./scripts/local-config.sh` generates `src/web/js/config.js` for local dev.
 - `./scripts/serve.sh` runs Vite at strict `http://localhost:8000`.
 - Optional SSR development runs FastAPI on port 8001 with `FRONTEND_ASSET_MODE=development`; browse recipe/ingredient/sitemap routes through Vite on port 8000.
-- `npm run preview -- dist /path/to/config.js` previews a disposable config-injected copy without mutating `dist/`.
+- `npm run preview -- /path/to/config.js` previews a disposable config-injected copy without mutating `dist/`.
 - `/home/kurtt/miniforge3/envs/cocktaildb/bin/python -m pytest tests/ -v` runs API and integration tests.
 - `/home/kurtt/miniforge3/envs/cocktaildb/bin/python -m pytest packages/barcart/tests/` runs analytics package tests.
 

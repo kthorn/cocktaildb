@@ -33,8 +33,8 @@ A disposable preview copies an explicitly selected generated config into a
 temporary directory and never changes `dist/`:
 
 ```bash
-npm run preview -- dist /path/to/config.js
-# or set FRONTEND_PREVIEW_CONFIG=/path/to/config.js
+npm run preview -- /path/to/config.js
+# or set FRONTEND_PREVIEW_CONFIG=/path/to/config.js npm run preview
 ```
 
 ## Frontend-only local development

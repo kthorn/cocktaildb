@@ -24,7 +24,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Generate local config**: `./scripts/local-config.sh` points the frontend at the remote development API.
 - **Start Vite**: `./scripts/serve.sh` serves the frontend on strict `http://localhost:8000`.
 - **Optional SSR**: run FastAPI on port 8001 with `FRONTEND_ASSET_MODE=development`; Vite proxies recipe, ingredient, and sitemap routes. Browse through port 8000.
-- **Preview**: `npm run preview -- dist /path/to/config.js` uses a disposable copy and never mutates the artifact.
+- **Preview**: `npm run preview -- /path/to/config.js` uses a disposable copy and never mutates the artifact.
 - **Manual browser smoke**: check index/search/analytics, D3 loading, nested recipe/ingredient pages, and login/callback/logout configuration; browser automation is not installed.
 
 ### Testing

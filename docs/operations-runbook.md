@@ -89,7 +89,7 @@ selected config and does not modify `dist/`:
 ```bash
 npm ci
 npm run build
-npm run preview -- dist /path/to/config.js
+npm run preview -- /path/to/config.js
 ```
 
 No browser automation is installed. The Node gate checks source/config

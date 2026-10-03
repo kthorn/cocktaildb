@@ -39,8 +39,8 @@ artifact without rebuilding, or run a disposable preview with a selected config:
 
 ```bash
 node scripts/frontend-artifact.mjs validate dist
-npm run preview -- dist /path/to/config.js
-# FRONTEND_PREVIEW_CONFIG=/path/to/config.js npm run preview -- dist
+npm run preview -- /path/to/config.js
+# FRONTEND_PREVIEW_CONFIG=/path/to/config.js npm run preview
 ```
 
 ## Frontend-only local workflow
