@@ -467,6 +467,28 @@ def test_prepared_assets_are_idempotently_validated_and_unreadable_assets_fail(
         release_module.validate_release(release, require_assets=None, app_home=app_home)
 
 
+def test_begin_accepts_prepared_assets_after_staged_source_removal(
+    tmp_path, release_module
+):
+    app_home = tmp_path / "app"
+    app_home.mkdir()
+    (app_home / "web").mkdir()
+    release = _write_release(app_home, "A", {"one.js": "one"})
+    release_module.publish_assets(release, app_home)
+
+    marker = release_module.begin(
+        release,
+        "cocktaildb-api:release-A",
+        "sha256:candidate",
+        "sha256:prior",
+        app_home,
+    )
+
+    assert marker["phase"] == "prepublication"
+    assert not (release / "web" / "assets").exists()
+    assert (release / "frontend-assets.json").exists()
+
+
 def test_v1_pending_marker_is_rejected_without_phase_guessing(tmp_path, release_module):
     app_home = tmp_path / "app"
     app_home.mkdir()

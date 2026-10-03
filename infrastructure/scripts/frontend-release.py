@@ -899,7 +899,7 @@ def begin(
         )
     candidate_image_id = _immutable_image_id(candidate_image_id, "candidate image ID")
     prior_api_image_id = _immutable_image_id(prior_api_image_id, "prior API image ID")
-    validate_release(release, require_assets=True, app_home=app_home)
+    validate_release(release, require_assets=None, app_home=app_home)
     state = _load_state(app_home)
     if state is not None:
         _validate_state_files(app_home, state)
