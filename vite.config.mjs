@@ -27,8 +27,8 @@ const ssrProxyTarget = 'http://localhost:8001';
 export default defineConfig({
     server: {
         proxy: {
-            '/recipe': { target: ssrProxyTarget },
-            '/ingredient': { target: ssrProxyTarget },
+            '/recipe/': { target: ssrProxyTarget },
+            '/ingredient/': { target: ssrProxyTarget },
             '/sitemap.xml': { target: ssrProxyTarget },
         },
     },
