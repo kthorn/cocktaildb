@@ -1598,6 +1598,15 @@ def test_resume_stopped_continues_forward_only_with_fresh_backup(tmp_path):
     ]
     assert "old" in (app_home / "web" / "old.html").read_text()
     assert "restart" not in result.stdout.lower()
+    marker = json.loads((app_home / "frontend-pending.json").read_text())
+    prior = (app_home / "web").stat()
+    assert marker["phase"] == "cutover"
+    assert marker["prior_frontend"]["st_dev"] == prior.st_dev
+    assert marker["prior_frontend"]["st_ino"] == prior.st_ino
+    release = Path(env["RELEASE_ROOT"])
+    assert not (release / "web" / "assets").exists()
+    assert (release / "frontend-assets.json").exists()
+    assert (app_home / "frontend-assets" / "styles.css").read_text() == "styles\n"
 
 
 @pytest.mark.parametrize(
