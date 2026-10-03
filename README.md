@@ -99,21 +99,37 @@ previous successful frontend, and keeps the union of their asset inventories.
 Tabs older than that retained window may require a refresh after cleanup.
 
 An unresolved `frontend-pending.json` marker blocks another deployment and
-cleanup. Inspect the active API image and served symlink, then use the normal
-recovery command only after reconciling those identities:
+cleanup. Version 2 records the phase, immutable candidate/prior API image IDs,
+and exact prior frontend; version-1 markers are rejected for manual
+reconciliation and must not be guessed or cleared. Before writer shutdown, a
+verified prepublication abort clears only the marker:
 
 ```bash
 APP_HOME=/opt/cocktaildb \
-  /opt/cocktaildb/scripts/deploy-cutover.sh recover \
+  /opt/cocktaildb/scripts/deploy-cutover.sh abort-prepublication \
   /opt/cocktaildb/releases/<release-id> \
   cocktaildb-api:release-<release-id>
 ```
 
-Recovery reruns health and frontend smoke checks before committing the state.
-It never deletes a marker to bypass reconciliation and never automatically
-restarts an old API after possible writes. If publication succeeded but cleanup
-failed, the healthy release remains current; verify identities and retry the
-frontend cleanup rather than rolling back the API or database.
+If writers stopped before `cutover` became durable, abort is forbidden. The
+approved guarded forward-only recovery requires zero API writers, the exact
+candidate immutable image, unchanged prior frontend, valid staged/prepared
+assets, existing dry-run/parity safeguards, and a fresh verified backup while
+stopped:
+
+```bash
+APP_HOME=/opt/cocktaildb \
+  /opt/cocktaildb/scripts/deploy-cutover.sh resume-stopped \
+  /opt/cocktaildb/releases/<release-id> \
+  cocktaildb-api:release-<release-id>
+```
+
+It never restarts the old API. For a durable `cutover` marker or post-write
+state, use `recover` after reconciling identities. Recovery reruns health and
+frontend smoke checks before committing the state; any failure or abort is
+additive and does not prune. If publication succeeded but cleanup failed, the
+healthy release remains current; verify identities and retry frontend cleanup
+rather than rolling back the API or database.
 
 See [`scripts/README.md`](scripts/README.md) and
 [`docs/operations-runbook.md`](docs/operations-runbook.md) for release phases,

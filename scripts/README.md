@@ -80,9 +80,13 @@ Ansible lifecycle lock and its nested cutover lock. Its frontend phases are:
    preconditions before live mutations.
 2. Run the existing Docker cleanup, backup, image build, and migration safety
    checks.
-3. Write the pending publication marker, publish hashed assets into shared
-   storage, then stop writers and perform the guarded API/migration cutover.
-4. Start the matching API image and wait for health readiness.
+3. Write the version-2 `prepublication` marker (including immutable
+   candidate/prior API image IDs and the prior frontend identity), publish
+   hashed assets into shared storage, then stop writers and verify they are
+   stopped. Asset publication is retryable in either staged (`web/assets`)
+   or prepared (`frontend-assets.json` plus shared bytes) form.
+4. Durably mark the marker `cutover` before any migration, then start the
+   matching API image and wait for health readiness.
 5. Publish the release web/config symlink, run static and SSR smoke checks
    through Caddy, and commit the successful current/previous record.
 6. Verify the active API image and served symlink still match the committed
@@ -96,11 +100,46 @@ runs before successful publication and verification. The first conversion from
 a real `web` directory to a symlink is guarded and restorable, but is not
 atomic. Later releases use a temporary symlink followed by atomic replacement.
 
-## Recovery and cleanup retry
+## Recovery, abort, and cleanup retry
 
-An unresolved `frontend-pending.json` marker is a hard gate. Do not remove it by
-hand. Inspect the running API image, `web` symlink, candidate release, and
-health/smoke results, then run:
+An unresolved `frontend-pending.json` marker is a hard gate. Version 2 is
+independent of successful `frontend-state.json` version 1 and records
+`phase`, immutable `candidate_image_id`/`prior_api_image_id`, and the exact
+prior frontend. Version-1 pending markers are diagnosed and require manual
+identity/database reconciliation; never infer their phase or clear them.
+
+Before writers stop, a verified abort can clear only the marker. It requires
+the exact candidate tag/ID, the prior API image ID, unchanged successful state
+and served frontend (or the original first-rollout real-directory device/inode):
+
+```bash
+APP_HOME=/opt/cocktaildb \
+  /opt/cocktaildb/scripts/deploy-cutover.sh abort-prepublication \
+  /opt/cocktaildb/releases/<release-id> \
+  cocktaildb-api:release-<release-id>
+```
+
+Abort never deletes shared or staged/prepared assets and never prunes. If
+writers stopped before the durable phase transition, abort is forbidden. The
+approved guarded forward-only route is:
+
+```bash
+APP_HOME=/opt/cocktaildb \
+  /opt/cocktaildb/scripts/deploy-cutover.sh resume-stopped \
+  /opt/cocktaildb/releases/<release-id> \
+  cocktaildb-api:release-<release-id>
+```
+
+`resume-stopped` runs under the existing cutover lock and requires zero API
+writers, the exact immutable candidate image, unchanged prior frontend,
+valid staged/prepared assets, the existing migration dry-run/parity checks,
+and a fresh verified backup while stopped. It marks `cutover` durably before
+migration and proceeds through migration, start, health, publish, smoke,
+commit, and retention. It never restarts the old API. Ambiguous bookkeeping,
+identity, or parity leaves the marker intact for manual forward recovery.
+
+For a marker already in `cutover` (or after possible writes), use candidate
+recovery only after checking the exact candidate image and served pointer:
 
 ```bash
 APP_HOME=/opt/cocktaildb \
@@ -109,13 +148,14 @@ APP_HOME=/opt/cocktaildb \
   cocktaildb-api:release-<release-id>
 ```
 
-Recovery checks candidate identities, reruns health and smoke, reconciles and
-commits the state, and only then retries retention. It never blindly rolls back
-an API/database after possible writes. If the state record is committed but
-frontend cleanup fails, the release is already deployed; keep it serving,
-verify identity, and rerun the normal cleanup path. The cleanup preflight is
-fail-closed and preserves unrelated API, migration, backup, Docker, and
-migration-parity data.
+Recovery checks identities, reruns health and smoke, reconciles and commits the
+state, and only then retries retention. It never blindly rolls back an
+API/database after possible writes. Any failure or abort leaves assets and
+release data additive; no pruning occurs until successful commit. If the state
+record is committed but frontend cleanup fails, the release is already
+deployed; keep it serving, verify identity, and retry cleanup. The cleanup
+preflight is fail-closed and preserves unrelated API, migration, backup,
+Docker, and migration-parity data.
 
 The first hashed release keeps the old directory as an explicit `legacy`
 previous record with no asset inventory. Existing unversioned tabs can require

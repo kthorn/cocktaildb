@@ -38,14 +38,18 @@ gate before passing the resulting `dist/` directory to Ansible. Ansible
 validates the artifact and public config before remote mutation, stages the API
 manifest and frontend, and preserves the existing Caddy configuration.
 
-The cutover helper validates the staged release, writes the pending frontend
-publication marker, publishes immutable hashed assets before API start, runs the
-existing backup/build/migration checks, starts and health-checks the matching
-API image, publishes the release web/config symlink, and smoke-checks static and
-SSR pages through Caddy. Only after smoke succeeds does it commit the current /
-previous frontend record. It then verifies API and symlink identity before
-pruning retired frontend directories and assets outside the union of the two
-retained inventories. Docker image/builder cleanup remains a separate phase.
+The cutover helper validates the staged release, writes a version-2
+`prepublication` marker containing immutable candidate/prior API image IDs and
+the exact prior frontend identity, publishes immutable hashed assets before API
+start, runs the existing backup/build checks, stops and verifies writers, and
+durably marks `cutover` before any migration. Asset publication is retryable in
+staged (`web/assets`) or prepared (`frontend-assets.json` plus verified shared
+bytes) form. It starts and health-checks the matching API image, publishes the
+release web/config symlink, and smoke-checks static and SSR pages through Caddy.
+Only after smoke succeeds does it commit the current/previous frontend record.
+It then verifies API and symlink identity before pruning retired frontend
+directories and assets outside the union of the two retained inventories.
+Docker image/builder cleanup remains a separate phase.
 
 The first hashed deployment preserves the existing real web directory as an
 explicit legacy previous record while converting `/opt/cocktaildb/web` to a
@@ -95,13 +99,48 @@ D3, nested recipe/ingredient pages, and login/callback/logout while watching
 that hashed assets return 200 and runtime requests use the selected API/auth
 configuration.
 
-### Pending publication and cleanup recovery
+### Pending publication, abort, resume, and cleanup recovery
 
-`/opt/cocktaildb/frontend-pending.json` is a hard preflight gate. Never delete
-it to bypass reconciliation. First inspect the marker, active Compose API
-container image ID, `/opt/cocktaildb/web` symlink target, current/previous
-records, and Caddy health/smoke responses. Recover only with the matching
-candidate release and image:
+`/opt/cocktaildb/frontend-pending.json` is a hard preflight gate. Version 2 is
+independent of successful-state version 1 and records the candidate/prior
+immutable API image IDs, phase, and prior frontend identity. A version-1
+pending marker is rejected with a manual-reconciliation diagnostic; never
+infer its phase or clear it. Never delete a marker to bypass reconciliation.
+
+Before writer shutdown, verify the prior API/image and frontend identities, then
+abort only through the guarded command if the marker is still
+`prepublication`:
+
+```bash
+APP_HOME=/opt/cocktaildb \
+  /opt/cocktaildb/scripts/deploy-cutover.sh abort-prepublication \
+  /opt/cocktaildb/releases/<release-id> \
+  cocktaildb-api:release-<release-id>
+```
+
+Abort clears only the marker. It leaves staged/prepared assets, shared assets,
+release directories, serving pointer, and successful state untouched and never
+prunes. If writers stopped before `cutover` was durable, abort is forbidden.
+Use the approved guarded forward-only route instead:
+
+```bash
+APP_HOME=/opt/cocktaildb \
+  /opt/cocktaildb/scripts/deploy-cutover.sh resume-stopped \
+  /opt/cocktaildb/releases/<release-id> \
+  cocktaildb-api:release-<release-id>
+```
+
+`resume-stopped` runs under the existing lock and requires zero API writers, the
+exact candidate immutable image, unchanged prior frontend (including first
+rollout real-directory device/inode), valid staged/prepared assets, existing
+dry-run/parity safeguards, and a fresh verified backup while stopped. It marks
+`cutover` durably before migration, then proceeds through migration, API start,
+health, publish, smoke, commit, and retention. It never restarts the old API;
+ambiguous identity, bookkeeping, or parity leaves the marker intact for manual
+forward recovery.
+
+For a marker already in `cutover` (or after possible writes), inspect the active
+Compose image ID and served pointer, then use matching candidate recovery:
 
 ```bash
 APP_HOME=/opt/cocktaildb \
@@ -110,14 +149,14 @@ APP_HOME=/opt/cocktaildb \
   cocktaildb-api:release-<release-id>
 ```
 
-Recovery verifies the candidate API image and served symlink, reruns health and
-frontend smoke, reconciles identities, commits the successful state, and then
-retries frontend retention. It never automatically restarts an old API after
-possible writes. If publication and state commit succeeded but cleanup failed,
-the release remains healthy and current; verify identities and rerun the
-cleanup path. Cleanup retains current plus one previous successful generation
-and the union of both inventories, and never removes API, migration, backup,
-Docker, or migration-parity data.
+Recovery verifies the exact candidate image and served symlink, reruns health
+and frontend smoke, reconciles identities, commits the successful state, and
+then retries frontend retention. It never automatically restarts an old API.
+Any failure or abort is additive and does not prune. If publication and state
+commit succeeded but cleanup failed, the release remains healthy and current;
+verify identities and retry cleanup. Cleanup retains current plus one previous
+successful generation and the union of both inventories, and never removes API,
+migration, backup, Docker, or migration-parity data.
 
 ### Frontend release paths
 
