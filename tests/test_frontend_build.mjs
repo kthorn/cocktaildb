@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { execFile, spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { createServer } from 'node:http';
 import {
     access,
@@ -12,7 +14,6 @@ import {
     symlink,
     writeFile,
 } from 'node:fs/promises';
-import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -322,6 +323,249 @@ async function serveDirectory(directory) {
     };
 }
 
+async function reservePort() {
+    const server = createServer();
+    await new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', resolve);
+    });
+    const address = server.address();
+    assert(address && typeof address === 'object');
+    const port = address.port;
+    await new Promise((resolve) => server.close(resolve));
+    return port;
+}
+
+function captureProcess(child) {
+    let output = '';
+    for (const stream of [child.stdout, child.stderr]) {
+        stream?.setEncoding('utf8');
+        stream?.on('data', (chunk) => {
+            output += chunk;
+        });
+    }
+    child.once('error', () => {});
+    return () => output;
+}
+
+async function waitForExit(child, timeout = 10_000) {
+    if (child.exitCode !== null || child.signalCode !== null)
+        return { code: child.exitCode, signal: child.signalCode };
+    const exit = once(child, 'exit').then(([code, signal]) => ({ code, signal }));
+    const timer = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('child process did not exit in time')), timeout).unref();
+    });
+    return Promise.race([exit, timer]);
+}
+
+async function stopProcess(child) {
+    if (!child || child.exitCode !== null || child.signalCode !== null) return;
+    const signal = (name) => {
+        try {
+            if (child.processGroup) process.kill(-child.pid, name);
+            else child.kill(name);
+        } catch (error) {
+            if (error.code !== 'ESRCH') throw error;
+        }
+    };
+    signal('SIGTERM');
+    try {
+        await waitForExit(child, 5_000);
+    } catch {
+        signal('SIGKILL');
+        await waitForExit(child, 5_000);
+    }
+}
+
+async function waitForHttp(url, child, output, label) {
+    let lastError;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+        if (child.exitCode !== null || child.signalCode !== null) {
+            throw new Error(`${label} exited before serving ${url}\n${output()}`);
+        }
+        try {
+            return await fetch(url, { signal: AbortSignal.timeout(250) });
+        } catch (error) {
+            lastError = error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error(`${label} did not serve ${url}: ${lastError?.message}\n${output()}`);
+}
+
+async function assertViteProxyBoundaries() {
+    const fixture = await mkdtemp(path.join(tmpdir(), 'cocktaildb-vite-proxy-'));
+    const upstreamRequests = [];
+    const upstream = createServer((request, response) => {
+        const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
+        upstreamRequests.push(pathname);
+        response.writeHead(200, { 'content-type': 'text/plain' });
+        response.end(`stub:${pathname}`);
+    });
+    let vite;
+    try {
+        await cp(path.join(repository, 'src'), path.join(fixture, 'src'), {
+            recursive: true,
+            filter: (source) => !source.endsWith(path.join('js', 'config.js')),
+        });
+        await symlink(path.join(repository, 'node_modules'), path.join(fixture, 'node_modules'));
+        const upstreamPort = await new Promise((resolve, reject) => {
+            upstream.once('error', reject);
+            upstream.listen(0, '127.0.0.1', () => resolve(upstream.address().port));
+        });
+        const viteConfig = await readFile(path.join(repository, 'vite.config.mjs'), 'utf8');
+        assert(viteConfig.includes('http://localhost:8001'));
+        await writeFile(
+            path.join(fixture, 'vite.config.mjs'),
+            viteConfig.replace('http://localhost:8001', `http://127.0.0.1:${upstreamPort}`),
+        );
+        const port = await reservePort();
+        vite = spawn(
+            process.execPath,
+            [
+                path.join(fixture, 'node_modules', 'vite', 'bin', 'vite.js'),
+                '--host',
+                '127.0.0.1',
+                '--port',
+                String(port),
+                '--strictPort',
+            ],
+            { cwd: fixture, stdio: ['ignore', 'pipe', 'pipe'] },
+        );
+        const output = captureProcess(vite);
+        await waitForHttp(`http://127.0.0.1:${port}/recipes.html`, vite, output, 'Vite dev server');
+
+        const staticFiles = [
+            ['/recipes.html', 'recipes.html'],
+            ['/ingredients.html', 'ingredients.html'],
+            ['/recipe-card.css', 'recipe-card.css'],
+            ['/ingredient-chart.css', 'ingredient-chart.css'],
+            ['/ingredient-tree.css', 'ingredient-tree.css'],
+        ];
+        for (const [urlPath, sourceName] of staticFiles) {
+            const response = await fetch(`http://127.0.0.1:${port}${urlPath}`);
+            assert.equal(response.status, 200, urlPath);
+            const body = await response.text();
+            const source = await readFile(path.join(fixture, 'src', 'web', sourceName), 'utf8');
+            const marker = source.split(/\r?\n/).find((line) => line.trim())?.trim();
+            assert(marker && body.includes(marker), `${urlPath} was not served from source`);
+            assert(!body.includes('stub:'), `${urlPath} was forwarded to the SSR stub`);
+        }
+
+        const proxiedPaths = ['/recipe/test-slug', '/ingredient/test-slug'];
+        for (const urlPath of proxiedPaths) {
+            const response = await fetch(`http://127.0.0.1:${port}${urlPath}`);
+            assert.equal(response.status, 200, urlPath);
+            assert.equal(await response.text(), `stub:${urlPath}`);
+        }
+        assert.deepEqual(upstreamRequests.sort(), proxiedPaths.sort());
+    } finally {
+        await stopProcess(vite);
+        await new Promise((resolve) => upstream.close(resolve));
+        await rm(fixture, { recursive: true, force: true });
+    }
+}
+
+const previewFiles = ['normalize.css', 'styles.css', 'recipe-card.css', 'common.js', 'recipe.js'];
+
+async function createPreviewFixture(port) {
+    const fixture = await mkdtemp(path.join(tmpdir(), 'cocktaildb-preview-'));
+    const assets = path.join(fixture, 'dist', 'web', 'assets');
+    await mkdir(assets, { recursive: true });
+    await mkdir(path.join(fixture, 'scripts'), { recursive: true });
+    await cp(
+        path.join(repository, 'scripts', 'frontend-artifact.mjs'),
+        path.join(fixture, 'scripts', 'frontend-artifact.mjs'),
+    );
+    await symlink(path.join(repository, 'node_modules'), path.join(fixture, 'node_modules'));
+    await writeFile(
+        path.join(fixture, 'package.json'),
+        JSON.stringify({
+            private: true,
+            scripts: { preview: 'node scripts/frontend-artifact.mjs preview dist' },
+        }),
+    );
+    await writeFile(
+        path.join(fixture, 'vite.config.mjs'),
+        `export default { preview: { host: '127.0.0.1', port: ${port}, strictPort: true } };\n`,
+    );
+    await writeFile(path.join(fixture, 'dist', 'web', 'index.html'), '<!doctype html><h1>preview</h1>\n');
+    for (const file of previewFiles) await writeFile(path.join(assets, file), file);
+    await writeFile(
+        path.join(fixture, 'dist', 'asset-inventory.json'),
+        JSON.stringify({ version: 1, files: [...previewFiles].sort() }),
+    );
+    const manifest = Object.fromEntries(
+        [
+            ['normalize.css', 'normalize.css'],
+            ['styles.css', 'styles.css'],
+            ['recipe-card.css', 'recipe-card.css'],
+            ['js/common.js', 'common.js'],
+            ['js/recipe.js', 'recipe.js'],
+        ].map(([name, file]) => [name, { file: `assets/${file}` }]),
+    );
+    await writeFile(path.join(fixture, 'dist', 'manifest.json'), JSON.stringify(manifest));
+    await writeFile(
+        path.join(fixture, 'config.js'),
+        'export default { apiUrl: "https://positional.invalid" };\n',
+    );
+    await writeFile(
+        path.join(fixture, 'env-config.js'),
+        'export default { apiUrl: "https://environment.invalid" };\n',
+    );
+    return fixture;
+}
+
+function spawnPreview(fixture, args, extraEnv = {}) {
+    const npmArgs = ['run', 'preview'];
+    if (args.length > 0) npmArgs.push('--', ...args);
+    const child = spawn('npm', npmArgs, {
+        cwd: fixture,
+        env: { ...process.env, ...extraEnv },
+        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: true,
+    });
+    child.processGroup = true;
+    const output = captureProcess(child);
+    return { child, output };
+}
+
+async function assertPreviewConfigSelection(args, extraEnv, expectedText) {
+    const port = await reservePort();
+    const fixture = await createPreviewFixture(port);
+    let preview;
+    try {
+        preview = spawnPreview(fixture, args, extraEnv);
+        const response = await waitForHttp(
+            `http://127.0.0.1:${port}/js/config.js`,
+            preview.child,
+            preview.output,
+            'Vite preview',
+        );
+        assert.equal(response.status, 200);
+        assert.match(await response.text(), new RegExp(expectedText));
+    } finally {
+        if (preview) await stopProcess(preview.child);
+        await rm(fixture, { recursive: true, force: true });
+    }
+}
+
+async function assertPreviewArgumentContract() {
+    await assertPreviewConfigSelection(['config.js'], {}, 'positional\\.invalid');
+    await assertPreviewConfigSelection([], { FRONTEND_PREVIEW_CONFIG: 'env-config.js' }, 'environment\\.invalid');
+
+    const port = await reservePort();
+    const fixture = await createPreviewFixture(port);
+    try {
+        const preview = spawnPreview(fixture, ['dist']);
+        const result = await waitForExit(preview.child);
+        assert.notEqual(result.code, 0);
+        assert.match(preview.output(), /preview config must be a regular file/);
+    } finally {
+        await rm(fixture, { recursive: true, force: true });
+    }
+}
+
 async function assertNodeModuleModes() {
     const packageJson = JSON.parse(await readFile(path.join(repository, 'package.json'), 'utf8'));
     assert.equal(packageJson.type, undefined, 'root package must remain typeless');
@@ -481,6 +725,8 @@ async function main() {
     await assertRequiredManifestValidation();
     await assertManifestReferenceValidation();
     await assertNodeModuleModes();
+    await assertViteProxyBoundaries();
+    await assertPreviewArgumentContract();
     const fixture = await createFixture();
     try {
         const originalCss = await readFile(path.join(fixture, 'src', 'web', 'styles.css'));
