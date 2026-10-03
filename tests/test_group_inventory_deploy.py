@@ -416,6 +416,7 @@ def _run_default_operations(
     *,
     gate_image_id: str = "sha256:current",
     frontend_release_script: Path | None = None,
+    image_id_file: Path | None = None,
 ):
     app_home = tmp_path / "app"
     release_root = app_home / "releases" / "release"
@@ -477,7 +478,11 @@ if [[ "${{FRONTEND_GATE:-}}" == true && -e "$APP_HOME/web/js/config.js" ]]; then
     printf '%s\\n' "$FRONTEND_GATE_IMAGE_ID"
     exit 0
   elif [[ "$1" == image && "$2" == inspect ]]; then
-    printf 'sha256:current\\n'
+    if [[ -n "${{IMAGE_ID_FILE:-}}" && -f "$IMAGE_ID_FILE" ]]; then
+      cat "$IMAGE_ID_FILE"
+    else
+      printf 'sha256:current\\n'
+    fi
     exit 0
   fi
 fi
@@ -515,6 +520,7 @@ printf 'curl %s\n' "$*" >> "$DOCKER_CALLS"
         "SMOKE_TEST_BIN": "/bin/true",
         "FRONTEND_GATE": "true",
         "FRONTEND_GATE_IMAGE_ID": gate_image_id,
+        "IMAGE_ID_FILE": str(image_id_file) if image_id_file is not None else "",
     }
     result = subprocess.run(
         ["bash", str(CUTOVER)],
@@ -526,6 +532,45 @@ printf 'curl %s\n' "$*" >> "$DOCKER_CALLS"
     )
     calls = docker_calls.read_text().splitlines() if docker_calls.exists() else []
     return result, calls
+
+
+def test_forward_cutover_rechecks_mutable_candidate_tag_before_migration(tmp_path):
+    image_id_file = tmp_path / "candidate-image-id"
+    image_id_file.write_text("sha256:current\\n")
+    helper_log = tmp_path / "frontend-helper.log"
+    real_helper = ROOT / "infrastructure" / "scripts" / "frontend-release.py"
+    wrapper = tmp_path / "frontend-release-wrapper"
+    _write_executable(
+        wrapper,
+        f"""#!/usr/bin/env python3
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+result = subprocess.run([sys.executable, {str(real_helper)!r}, *sys.argv[1:]], check=False)
+if result.returncode:
+    raise SystemExit(result.returncode)
+with Path({str(helper_log)!r}).open("a", encoding="utf-8") as stream:
+    stream.write(sys.argv[1] + "\\n")
+if sys.argv[1] == "assets":
+    Path(os.environ["IMAGE_ID_FILE"]).write_text("sha256:retagged\\n")
+elif sys.argv[1] == "commit":
+    Path(os.environ["IMAGE_ID_FILE"]).write_text("sha256:current\\n")
+""",
+    )
+
+    result, calls = _run_default_operations(
+        tmp_path,
+        "exit 0",
+        frontend_release_script=wrapper,
+        image_id_file=image_id_file,
+    )
+
+    assert result.returncode != 0
+    assert "Candidate API image ID does not match pending marker" in result.stdout
+    assert not any(call.startswith("up ") for call in calls)
+    assert "mark-cutover" not in helper_log.read_text().splitlines()
 
 
 def test_docker_cleanup_is_conservative_and_surrounds_deployment(tmp_path):

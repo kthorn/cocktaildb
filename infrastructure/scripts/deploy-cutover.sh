@@ -140,6 +140,7 @@ op_verify_stopped() {
 }
 
 op_migrate() {
+    verify_candidate_image_identity "$NEW_IMAGE" || return
     (
         cd "$RELEASE_ROOT" || exit
         "$APP_HOME/scripts/run-migrations.sh" "$APP_ENV"
@@ -200,6 +201,7 @@ op_verify_parity() {
 }
 
 op_start() {
+    verify_candidate_image_identity "$NEW_IMAGE" || return
     "$DOCKER_BIN" image tag "$NEW_IMAGE" cocktaildb-api:latest || return
     compose_current up -d --no-build --no-deps --force-recreate api
 }
@@ -306,6 +308,7 @@ op_begin() {
 op_mark_cutover() {
     local candidate_image_id
 
+    verify_candidate_image_identity "$NEW_IMAGE" || return
     candidate_image_id=$(pending_field candidate_image_id) || return
     "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" mark-cutover \
         "$RELEASE_ROOT" "$NEW_IMAGE" "$candidate_image_id"
