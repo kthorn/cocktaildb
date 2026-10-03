@@ -23,6 +23,34 @@ VALID_CONFIG = {
 }
 
 
+def test_cloudformation_lookup_reports_missing_boto3_clearly():
+    script = """
+import sys
+
+class BlockBoto3:
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == 'boto3' or fullname.startswith('boto3.'):
+            raise ModuleNotFoundError('blocked boto3 for lookup isolation')
+        return None
+
+sys.meta_path.insert(0, BlockBoto3())
+from scripts.generate_config import get_cloudformation_output
+
+assert get_cloudformation_output('stack', 'OutputKey') is None
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "boto3" in result.stdout
+    assert "CloudFormation output OutputKey" in result.stdout
+
+
 def test_public_renderer_imports_without_boto3():
     script = """
 import sys

@@ -26,7 +26,14 @@ def get_cloudformation_output(stack_name, output_key, region="us-east-1"):
     try:
         import boto3
         from botocore.exceptions import BotoCoreError, ClientError
+    except ImportError as e:
+        print(
+            f"Error retrieving CloudFormation output {output_key}: "
+            f"boto3/botocore is required for AWS lookup: {e}"
+        )
+        return None
 
+    try:
         cf_client = boto3.client("cloudformation", region_name=region)
         response = cf_client.describe_stacks(StackName=stack_name)
 
