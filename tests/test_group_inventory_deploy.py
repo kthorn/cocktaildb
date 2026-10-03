@@ -1412,7 +1412,13 @@ fi
 
 
 def _resume_harness(
-    tmp_path: Path, *, running_writers=False, candidate_id="sha256:candidate"
+    tmp_path: Path,
+    *,
+    running_writers=False,
+    candidate_id="sha256:candidate",
+    missing_asset=False,
+    fail_backup=False,
+    phase="prepublication",
 ):
     app_home = tmp_path / "app"
     release_root = app_home / "releases" / "candidate"
@@ -1426,6 +1432,11 @@ def _resume_harness(
     (app_home / "web" / "old.html").write_text("old")
     (release_root / "web" / "js" / "config.js").write_text("new")
     (release_root / "migrations" / MIGRATION_15).write_text("migration")
+    _write_required_release_manifest(release_root, ["candidate.js"])
+    if missing_asset:
+        (release_root / "web" / "assets" / "styles.css").unlink()
+
+    prior_stat = (app_home / "web").stat()
     record = {
         "id": "candidate",
         "web": "releases/candidate/web",
@@ -1437,7 +1448,7 @@ def _resume_harness(
         json.dumps(
             {
                 "version": 2,
-                "phase": "prepublication",
+                "phase": phase,
                 "candidate": record,
                 "candidate_image_id": candidate_id,
                 "prior_api_image_id": "sha256:prior",
@@ -1445,13 +1456,17 @@ def _resume_harness(
                 "prior_frontend": {
                     "kind": "legacy-directory",
                     "path": "web",
-                    "st_dev": 1,
-                    "st_ino": 1,
+                    "st_dev": prior_stat.st_dev,
+                    "st_ino": prior_stat.st_ino,
                 },
                 "legacy_previous_web": None,
             }
         )
     )
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    image_id_file = tmp_path / "candidate-image-id"
+    image_id_file.write_text(f"{candidate_id}\n")
     dispatcher = ops / "operation"
     _write_executable(
         dispatcher,
@@ -1460,10 +1475,30 @@ set -euo pipefail
 operation=$(basename "$0")
 printf '%s\\n' "$operation" >> "$STATE_DIR/events"
 case "$operation" in
-  verify_stopped|assets|backup|mark_cutover|migrate|verify_recorded|verify_parity|start|health|publish|smoke|commit|verify_prune_identity|prune|cleanup)
+  verify_stopped)
+    [[ "${RUNNING_WRITERS:-false}" != true ]]
+    ;;
+  assets)
+    "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" assets "$RELEASE_ROOT"
     ;;
   pending)
+    test -f "$RELEASE_ROOT/migrations/15_migration_add_user_groups.sql"
     printf 'Would apply: 16_future.sql\\n'
+    ;;
+  backup)
+    if [[ "${FAIL_BACKUP:-false}" == true ]]; then
+      printf 'injected fresh-backup failure\\n' >&2
+      exit 42
+    fi
+    mkdir -p "$APP_HOME/backups"
+    printf 'fresh backup' | gzip > "$APP_HOME/backups/backup-resume.sql.gz"
+    gzip -t "$APP_HOME/backups/backup-resume.sql.gz"
+    ;;
+  mark_cutover)
+    "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" mark-cutover \\
+      "$RELEASE_ROOT" "$NEW_IMAGE" "$CANDIDATE_ID"
+    ;;
+  migrate|verify_recorded|verify_parity|start|health|publish|smoke|commit|verify_prune_identity|prune|cleanup)
     ;;
   *)
     printf 'unexpected operation: %s\\n' "$operation" >&2
@@ -1499,7 +1534,7 @@ set -euo pipefail
 if [[ "$*" == *"--status running"* ]]; then
   if [[ "${RUNNING_WRITERS:-false}" == true ]]; then printf 'writer-container\\n'; fi
 elif [[ "$1" == image && "$2" == inspect ]]; then
-  printf '%s\\n' "$CANDIDATE_ID"
+  cat "$IMAGE_ID_FILE"
 fi
 """,
     )
@@ -1512,13 +1547,17 @@ fi
         "DEPLOY_LOCK_FILE": str(tmp_path / "deploy.lock"),
         "DOCKER_BIN": str(docker),
         "PYTHON_BIN": sys.executable,
+        "FRONTEND_RELEASE_SCRIPT": str(
+            ROOT / "infrastructure" / "scripts" / "frontend-release.py"
+        ),
         "RELEASE_ID": "candidate",
         "NEW_IMAGE": "cocktaildb-api:release-candidate",
-        "STATE_DIR": str(tmp_path / "state"),
+        "STATE_DIR": str(state_dir),
+        "IMAGE_ID_FILE": str(image_id_file),
         "RUNNING_WRITERS": "true" if running_writers else "false",
+        "FAIL_BACKUP": "true" if fail_backup else "false",
         "CANDIDATE_ID": candidate_id,
     }
-    Path(env["STATE_DIR"]).mkdir()
     return env, app_home
 
 
@@ -1572,7 +1611,8 @@ def test_resume_stopped_rejects_writer_or_candidate_identity_drift(
     tmp_path, running_writers, candidate_id, message
 ):
     env, _ = _resume_harness(tmp_path, running_writers=running_writers)
-    env["CANDIDATE_ID"] = candidate_id
+    if not running_writers:
+        Path(env["IMAGE_ID_FILE"]).write_text(f"{candidate_id}\n")
     result = subprocess.run(
         [
             "bash",
@@ -1592,6 +1632,132 @@ def test_resume_stopped_rejects_writer_or_candidate_identity_drift(
     assert message in result.stdout
     assert not (Path(env["STATE_DIR"]) / "events").exists()
     assert (Path(env["APP_HOME"]) / "frontend-pending.json").exists()
+
+
+def test_resume_stopped_rejects_missing_staged_asset_before_backup(tmp_path):
+    env, _ = _resume_harness(tmp_path, missing_asset=True)
+    result = subprocess.run(
+        [
+            "bash",
+            str(CUTOVER),
+            "resume-stopped",
+            env["RELEASE_ROOT"],
+            "cocktaildb-api:release-candidate",
+        ],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "inventory" in (result.stdout + result.stderr)
+    assert (Path(env["STATE_DIR"]) / "events").read_text().splitlines() == [
+        "verify_stopped",
+        "assets",
+    ]
+    assert (
+        json.loads((Path(env["APP_HOME"]) / "frontend-pending.json").read_text())[
+            "phase"
+        ]
+        == "prepublication"
+    )
+    assert not (
+        Path(env["APP_HOME"]) / "releases/candidate/frontend-assets.json"
+    ).exists()
+
+
+def test_resume_stopped_rejects_backup_failure_before_phase_transition(tmp_path):
+    env, _ = _resume_harness(tmp_path, fail_backup=True)
+    result = subprocess.run(
+        [
+            "bash",
+            str(CUTOVER),
+            "resume-stopped",
+            env["RELEASE_ROOT"],
+            "cocktaildb-api:release-candidate",
+        ],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "Cutover failed during backup" in result.stdout
+    assert (Path(env["STATE_DIR"]) / "events").read_text().splitlines() == [
+        "verify_stopped",
+        "assets",
+        "pending",
+        "backup",
+    ]
+    assert (
+        json.loads((Path(env["APP_HOME"]) / "frontend-pending.json").read_text())[
+            "phase"
+        ]
+        == "prepublication"
+    )
+    assert (Path(env["APP_HOME"]) / "releases/candidate/frontend-assets.json").exists()
+
+
+def test_resume_stopped_rejects_changed_real_prior_frontend_identity(tmp_path):
+    env, app_home = _resume_harness(tmp_path)
+    served = app_home / "web"
+    served.rename(app_home / "web-replaced")
+    served.mkdir()
+    (served / "old.html").write_text("recreated")
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(CUTOVER),
+            "resume-stopped",
+            env["RELEASE_ROOT"],
+            "cocktaildb-api:release-candidate",
+        ],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "identity changed" in (result.stdout + result.stderr)
+    events = (Path(env["STATE_DIR"]) / "events").read_text().splitlines()
+    assert events[-1] == "mark_cutover"
+    assert "migrate" not in events
+    assert (
+        json.loads((app_home / "frontend-pending.json").read_text())["phase"]
+        == "prepublication"
+    )
+
+
+def test_resume_stopped_rejects_cutover_phase_without_mutation(tmp_path):
+    env, app_home = _resume_harness(tmp_path, phase="cutover")
+    result = subprocess.run(
+        [
+            "bash",
+            str(CUTOVER),
+            "resume-stopped",
+            env["RELEASE_ROOT"],
+            "cocktaildb-api:release-candidate",
+        ],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "prepublication marker" in result.stdout
+    assert not (Path(env["STATE_DIR"]) / "events").exists()
+    assert json.loads((app_home / "frontend-pending.json").read_text())["phase"] == (
+        "cutover"
+    )
 
 
 @pytest.mark.parametrize("actual_image_id", ["sha256:wrong"])
