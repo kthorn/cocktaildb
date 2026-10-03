@@ -175,6 +175,13 @@ RETURNS TRIGGER AS $$
 BEGIN
   -- Handle INSERT and UPDATE
   IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+    -- Serialize the recompute per recipe. The subqueries below are evaluated
+    -- before the UPDATE takes its row lock, so without this lock two concurrent
+    -- raters can both count the pre-race total and both write it.
+    -- FOR NO KEY UPDATE, not FOR UPDATE: the ratings foreign key check holds a
+    -- KEY SHARE lock on this same row, and FOR UPDATE conflicts with KEY SHARE,
+    -- which deadlocks concurrent raters.
+    PERFORM 1 FROM recipes WHERE id = NEW.recipe_id FOR NO KEY UPDATE;
     UPDATE recipes
     SET
       avg_rating = (SELECT AVG(rating) FROM ratings WHERE recipe_id = NEW.recipe_id),
@@ -183,6 +190,7 @@ BEGIN
     RETURN NEW;
   -- Handle DELETE
   ELSIF TG_OP = 'DELETE' THEN
+    PERFORM 1 FROM recipes WHERE id = OLD.recipe_id FOR NO KEY UPDATE;
     UPDATE recipes
     SET
       avg_rating = COALESCE((SELECT AVG(rating) FROM ratings WHERE recipe_id = OLD.recipe_id), 0),
