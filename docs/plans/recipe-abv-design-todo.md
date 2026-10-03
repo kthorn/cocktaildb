@@ -16,8 +16,16 @@
 
 Spec: `docs/superpowers/specs/2026-09-19-recipe-abv-design.md`.
 Dilution and structured preparation are deferred to GitHub issue #70.
+Remaining ingredient ABV values are tracked in #98.
 
-Pre-existing changes to `api/db/db_core.py`, `api/models/responses.py`,
-`api/routes/pages.py`, `tests/test_page_route_contracts.py`, and untracked
-`research/` are outside this design task and must remain untouched.
-Implementation must use a separate clean worktree rather than mix these changes.
+This checklist is complete. The session scope note below applied while it ran:
+
+> Pre-existing changes to `api/db/db_core.py`, `api/models/responses.py`,
+> `api/routes/pages.py`, `tests/test_page_route_contracts.py`, and untracked
+> `research/` are outside this design task and must remain untouched.
+> Implementation must use a separate clean worktree rather than mix these changes.
+
+Those pre-existing changes belonged to unrelated sessions and never became part of
+this work. The untracked `research/` directory now lives in the cocktail-research
+repo (commit `a1d7c0f`) at `research/ingredient-values/`, so no checkout of this
+repository carries it.
