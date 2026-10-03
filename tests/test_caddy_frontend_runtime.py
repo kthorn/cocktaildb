@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import shutil
 import socket
+import stat
 import subprocess
 import threading
 import time
@@ -19,6 +21,13 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 CADDYFILE = ROOT / "infrastructure" / "caddy" / "Caddyfile"
+FRONTEND_RELEASE_PATH = ROOT / "infrastructure" / "scripts" / "frontend-release.py"
+_RELEASE_SPEC = importlib.util.spec_from_file_location(
+    "frontend_release_for_caddy", FRONTEND_RELEASE_PATH
+)
+assert _RELEASE_SPEC and _RELEASE_SPEC.loader
+frontend_release = importlib.util.module_from_spec(_RELEASE_SPEC)
+_RELEASE_SPEC.loader.exec_module(frontend_release)
 CADDY_IMAGE = (
     "caddy:2.10.2-alpine@sha256:"
     "4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d"
@@ -26,7 +35,7 @@ CADDY_IMAGE = (
 
 
 class _SsrHandler(BaseHTTPRequestHandler):
-    def do_GET(self):  # noqa: N802 - stdlib handler API
+    def do_GET(self):
         if self.path.startswith(("/recipe/", "/ingredient/")):
             body = f"SSR upstream: {self.path}".encode()
             self.send_response(200)
@@ -83,12 +92,15 @@ def _caddy_runner(tmp_path: Path, domain_port: int, http_port: int, upstream_por
     if use_docker:
         _ensure_caddy_image(docker)
 
-    web = tmp_path / "web"
-    assets = tmp_path / "assets"
+    app_home = tmp_path / "app"
+    release = app_home / "releases" / "caddy"
+    web = release / "web"
+    assets = web / "assets"
     logs = tmp_path / "logs"
     (web / "js").mkdir(parents=True)
     assets.mkdir()
     logs.mkdir()
+    logs.chmod(0o777)
     (web / "index.html").write_text("<!doctype html>\n", encoding="utf-8")
     (web / "media.svg").write_text(
         '<svg xmlns="http://www.w3.org/2000/svg"/>\n', encoding="utf-8"
@@ -100,6 +112,52 @@ def _caddy_runner(tmp_path: Path, domain_port: int, http_port: int, upstream_por
     (assets / "icon-A.svg").write_text(
         '<svg xmlns="http://www.w3.org/2000/svg"/>\n', encoding="utf-8"
     )
+    for name in (
+        "normalize.css",
+        "styles.css",
+        "recipe-card.css",
+        "common.js",
+        "recipe.js",
+    ):
+        (assets / name).write_text(name, encoding="utf-8")
+    (release / "manifest.json").write_text(
+        '{"normalize.css":{"file":"assets/normalize.css"},"styles.css":{"file":"assets/styles.css"},"recipe-card.css":{"file":"assets/recipe-card.css"},"js/common.js":{"file":"assets/common.js"},"js/recipe.js":{"file":"assets/recipe.js"},"index.html":{"file":"assets/test-A.js","assets":["assets/icon-A.svg"]}}\n',
+        encoding="utf-8",
+    )
+    (release / "asset-inventory.json").write_text(
+        '{"version":1,"files":["common.js","icon-A.svg","normalize.css","recipe-card.css","recipe.js","styles.css","test-A.js"]}\n',
+        encoding="utf-8",
+    )
+    frontend_release.publish_assets(release, app_home)
+    published_assets = app_home / "frontend-assets"
+    (published_assets / "test-A.js").chmod(0o600)
+
+    reused_release = app_home / "releases" / "reused"
+    reused_web = reused_release / "web"
+    reused_assets = reused_web / "assets"
+    (reused_web / "js").mkdir(parents=True)
+    reused_assets.mkdir()
+    (reused_web / "js" / "config.js").write_text(
+        "export default { apiUrl: 'http://upstream.invalid' };\n", encoding="utf-8"
+    )
+    (reused_web / "index.html").write_text("<!doctype html>\n", encoding="utf-8")
+    (reused_web / "media.svg").write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg"/>\n', encoding="utf-8"
+    )
+    for source in published_assets.iterdir():
+        shutil.copy2(source, reused_assets / source.name)
+    (reused_release / "manifest.json").write_text(
+        '{"normalize.css":{"file":"assets/normalize.css"},"styles.css":{"file":"assets/styles.css"},"recipe-card.css":{"file":"assets/recipe-card.css"},"js/common.js":{"file":"assets/common.js"},"js/recipe.js":{"file":"assets/recipe.js"},"index.html":{"file":"assets/test-A.js","assets":["assets/icon-A.svg"]}}\n',
+        encoding="utf-8",
+    )
+    (reused_release / "asset-inventory.json").write_text(
+        '{"version":1,"files":["common.js","icon-A.svg","normalize.css","recipe-card.css","recipe.js","styles.css","test-A.js"]}\n',
+        encoding="utf-8",
+    )
+    frontend_release.publish_assets(reused_release, app_home)
+    assert stat.S_IMODE((published_assets / "test-A.js").stat().st_mode) == 0o644
+    web = reused_web
+    assets = published_assets
 
     network = None
     upstream_name = None
@@ -265,6 +323,10 @@ def _caddy_runner(tmp_path: Path, domain_port: int, http_port: int, upstream_por
                 "--rm",
                 "--name",
                 caddy_name,
+                # The pinned image runs as root by default and has no named
+                # service user; nobody exercises the same non-owner read gate.
+                "--user",
+                "65534:65534",
                 "--network",
                 network,
                 "-p",

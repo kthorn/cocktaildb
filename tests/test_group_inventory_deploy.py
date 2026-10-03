@@ -26,13 +26,74 @@ def _write_executable(path: Path, content: str) -> None:
 def _write_frontend_artifact(path: Path) -> None:
     assets = path / "web" / "assets"
     assets.mkdir(parents=True)
-    (assets / "test-A.js").write_text("export default 1;\n")
+    for name, content in {
+        "normalize.css": "normalize\n",
+        "styles.css": "styles\n",
+        "recipe-card.css": "recipe-card\n",
+        "common.js": "common\n",
+        "recipe.js": "recipe\n",
+        "test-A.js": "export default 1;\n",
+    }.items():
+        (assets / name).write_text(content)
     (path / "web" / "index.html").write_text("<!doctype html>\n")
     (path / "manifest.json").write_text(
-        json.dumps({"index.html": {"file": "assets/test-A.js"}})
+        json.dumps(
+            {
+                "normalize.css": {"file": "assets/normalize.css"},
+                "styles.css": {"file": "assets/styles.css"},
+                "recipe-card.css": {"file": "assets/recipe-card.css"},
+                "js/common.js": {"file": "assets/common.js"},
+                "js/recipe.js": {"file": "assets/recipe.js"},
+                "index.html": {"file": "assets/test-A.js"},
+            }
+        )
     )
     (path / "asset-inventory.json").write_text(
-        json.dumps({"version": 1, "files": ["test-A.js"]})
+        json.dumps(
+            {
+                "version": 1,
+                "files": [
+                    "common.js",
+                    "normalize.css",
+                    "recipe-card.css",
+                    "recipe.js",
+                    "styles.css",
+                    "test-A.js",
+                ],
+            }
+        )
+    )
+
+
+def _write_required_release_manifest(release_root: Path, extra_files=()):
+    assets = release_root / "web" / "assets"
+    assets.mkdir(parents=True, exist_ok=True)
+    contents = {
+        "normalize.css": "normalize\n",
+        "styles.css": "styles\n",
+        "recipe-card.css": "recipe-card\n",
+        "common.js": "common\n",
+        "recipe.js": "recipe\n",
+    }
+    for name in extra_files:
+        contents[name] = name
+    for name, content in contents.items():
+        (assets / name).write_text(content)
+    files = sorted(contents)
+    (release_root / "manifest.json").write_text(
+        json.dumps(
+            {
+                "normalize.css": {"file": "assets/normalize.css"},
+                "styles.css": {"file": "assets/styles.css"},
+                "recipe-card.css": {"file": "assets/recipe-card.css"},
+                "js/common.js": {"file": "assets/common.js"},
+                "js/recipe.js": {"file": "assets/recipe.js"},
+                "index.html": {"file": f"assets/{files[-1]}"},
+            }
+        )
+    )
+    (release_root / "asset-inventory.json").write_text(
+        json.dumps({"version": 1, "files": files})
     )
 
 
@@ -109,6 +170,10 @@ case "$operation" in
   verify_stopped)
     test ! -f "$STATE_DIR/old_api_running"
     ;;
+  mark_cutover)
+    test -f "$STATE_DIR/frontend_pending"
+    touch "$STATE_DIR/cutover_marked"
+    ;;
   migrate)
     test ! -f "$STATE_DIR/old_api_running"
     touch "$STATE_DIR/migrated" "$STATE_DIR/migration_recorded"
@@ -174,6 +239,7 @@ esac
         "assets",
         "stop",
         "verify_stopped",
+        "mark_cutover",
         "migrate",
         "verify_recorded",
         "verify_parity",
@@ -253,13 +319,7 @@ def test_failed_backup_command_cannot_fall_through_to_an_older_archive(tmp_path)
     (app_home / "backups").mkdir()
     (release_root / "migrations" / MIGRATION_15).write_text("-- migration\n")
     (release_root / "web" / "js" / "config.js").write_text("// config\n")
-    (release_root / "web" / "assets" / "test-A.js").write_text("export default 1;\n")
-    (release_root / "manifest.json").write_text(
-        json.dumps({"index.html": {"file": "assets/test-A.js"}})
-    )
-    (release_root / "asset-inventory.json").write_text(
-        json.dumps({"version": 1, "files": ["test-A.js"]})
-    )
+    _write_required_release_manifest(release_root, ["test-A.js"])
     (app_home / ".env").write_text(
         "DB_HOST=localhost\nDB_PORT=5432\nDB_USER=test\nDB_PASSWORD=test\nDB_NAME=test\n"
     )
@@ -311,13 +371,7 @@ def test_corrupt_new_backup_stops_before_build(tmp_path):
         directory.mkdir(parents=True, exist_ok=True)
     (release_root / "migrations" / MIGRATION_15).write_text("-- migration\n")
     (release_root / "web" / "js" / "config.js").write_text("// config\n")
-    (release_root / "web" / "assets" / "test-A.js").write_text("export default 1;\n")
-    (release_root / "manifest.json").write_text(
-        json.dumps({"index.html": {"file": "assets/test-A.js"}})
-    )
-    (release_root / "asset-inventory.json").write_text(
-        json.dumps({"version": 1, "files": ["test-A.js"]})
-    )
+    _write_required_release_manifest(release_root, ["test-A.js"])
     (app_home / ".env").write_text(
         "DB_HOST=localhost\nDB_PORT=5432\nDB_USER=test\nDB_PASSWORD=test\nDB_NAME=test\n"
     )
@@ -373,18 +427,14 @@ def _run_default_operations(
         release_root / "api",
         app_home / "scripts",
         app_home / "backups",
+        app_home / "web" / "js",
         bin_dir,
     ):
         directory.mkdir(parents=True, exist_ok=True)
     (release_root / "migrations" / MIGRATION_15).write_text("-- migration\n")
     (release_root / "web" / "js" / "config.js").write_text("// config\n")
-    (release_root / "web" / "assets" / "test-A.js").write_text("export default 1;\n")
-    (release_root / "manifest.json").write_text(
-        json.dumps({"index.html": {"file": "assets/test-A.js"}})
-    )
-    (release_root / "asset-inventory.json").write_text(
-        json.dumps({"version": 1, "files": ["test-A.js"]})
-    )
+    (app_home / "web" / "js" / "config.js").write_text("// old config\n")
+    _write_required_release_manifest(release_root, ["test-A.js"])
     (release_root / "api" / "Dockerfile.prod").write_text("FROM scratch\n")
     (app_home / ".env").write_text(
         "DB_HOST=localhost\nDB_PORT=5432\nDB_USER=test\nDB_PASSWORD=test\nDB_NAME=test\n"
@@ -412,7 +462,12 @@ printf 'new backup' | gzip > "$BACKUP_DIR/backup-new.sql.gz"
 set -euo pipefail
 printf '%s\n' "$*" >> "$DOCKER_CALLS"
 if [[ "${{FRONTEND_GATE:-}}" == true && -e "$APP_HOME/web/js/config.js" ]]; then
-  if [[ "$*" == *" ps -q api"* ]]; then
+  if [[ "$*" == *" stop --timeout "* ]]; then
+    touch "$APP_HOME/.old-api-stopped"
+  elif [[ "$*" == *" ps --status running -q api"* && ! -e "$APP_HOME/.old-api-stopped" ]]; then
+    printf 'api-container\\n'
+    exit 0
+  elif [[ "$*" == *" ps -q api"* ]]; then
     printf 'api-container\\n'
     exit 0
   elif [[ "$1" == inspect && "$3" == '{{{{.Config.Image}}}}' ]]; then
@@ -488,7 +543,9 @@ def test_docker_cleanup_is_conservative_and_surrounds_deployment(tmp_path):
 def test_docker_cleanup_failures_do_not_stop_a_healthy_release(
     tmp_path, command, after_publication
 ):
-    condition = '[[ -f "$APP_HOME/web/js/config.js" ]]' if after_publication else "true"
+    condition = (
+        '[[ -f "$APP_HOME/frontend-state.json" ]]' if after_publication else "true"
+    )
     result, calls = _run_default_operations(
         tmp_path,
         f'''if [[ "$1 $2" == "{command}" ]] && {condition}; then
@@ -652,6 +709,7 @@ def test_first_cutover_orders_writer_shutdown_migration_readiness_and_publicatio
         "assets",
         "stop",
         "verify_stopped",
+        "mark_cutover",
         "migrate",
         "verify_recorded",
         "verify_parity",
@@ -812,6 +870,7 @@ def test_host_lock_rejects_an_overlapping_cutover(cutover_harness):
         ("begin", "begin", True, False, False),
         ("assets", "assets", True, False, False),
         ("stop", "stop", True, False, False),
+        ("mark_cutover", "mark_cutover", False, False, False),
         ("migrate", "migrate", False, False, False),
         ("verify_recorded", "verify_recorded", False, False, False),
         ("verify_parity", "verify_parity", False, False, False),
@@ -850,6 +909,7 @@ def test_cutover_failure_states(
         "begin",
         "assets",
         "stop",
+        "mark_cutover",
         "migrate",
         "verify_recorded",
         "verify_parity",
@@ -965,6 +1025,58 @@ def test_deploy_playbook_stages_frontend_and_has_no_restart_handlers():
     assert syntax.returncode == 0, syntax.stdout + syntax.stderr
 
 
+@pytest.mark.parametrize("mutation", ["missing-entry", "missing-file", "missing-asset"])
+def test_invalid_ssr_manifest_fails_controller_and_host_before_cutover(
+    tmp_path, mutation
+):
+    artifact = tmp_path / "artifact"
+    _write_frontend_artifact(artifact)
+    manifest_path = artifact / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    if mutation == "missing-entry":
+        del manifest["js/recipe.js"]
+    elif mutation == "missing-file":
+        manifest["js/recipe.js"]["file"] = ""
+    else:
+        manifest["js/recipe.js"]["file"] = "assets/not-in-inventory.js"
+    manifest_path.write_text(json.dumps(manifest))
+
+    controller = subprocess.run(
+        ["node", "scripts/frontend-artifact.mjs", "validate", str(artifact)],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert controller.returncode != 0
+
+    app_home = tmp_path / "app"
+    (app_home / "web").mkdir(parents=True)
+    (app_home / "web" / "old.html").write_text("old")
+    release = app_home / "releases" / "candidate"
+    shutil.copytree(artifact / "web", release / "web")
+    shutil.copy2(artifact / "manifest.json", release / "manifest.json")
+    shutil.copy2(artifact / "asset-inventory.json", release / "asset-inventory.json")
+    (release / "web" / "js").mkdir(parents=True, exist_ok=True)
+    (release / "web" / "js" / "config.js").write_text("export default {};\n")
+    host = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "infrastructure/scripts/frontend-release.py"),
+            "validate",
+            str(release),
+        ],
+        cwd=ROOT,
+        env={**os.environ, "APP_HOME": str(app_home)},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert host.returncode != 0
+    assert not (app_home / "frontend-pending.json").exists()
+    assert (app_home / "web" / "old.html").exists()
+
+
 def test_deploy_wrapper_rejects_invalid_artifact_before_playbook(tmp_path):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -1058,9 +1170,11 @@ printf 'npm %s\\n' "$*" >> "$CALLS"
 if [ "$*" = "run build" ]; then
   rm -rf dist
   mkdir -p dist/web/assets
-  printf 'export default 1;\\n' > dist/web/assets/test-A.js
-  printf '{\"index.html\":{\"file\":\"assets/test-A.js\"}}\\n' > dist/manifest.json
-  printf '{\"version\":1,\"files\":[\"test-A.js\"]}\\n' > dist/asset-inventory.json
+  for name in normalize.css styles.css recipe-card.css common.js recipe.js test-A.js; do
+    printf '%s\\n' "$name" > "dist/web/assets/$name"
+  done
+  printf '{\"normalize.css\":{\"file\":\"assets/normalize.css\"},\"styles.css\":{\"file\":\"assets/styles.css\"},\"recipe-card.css\":{\"file\":\"assets/recipe-card.css\"},\"js/common.js\":{\"file\":\"assets/common.js\"},\"js/recipe.js\":{\"file\":\"assets/recipe.js\"},\"index.html\":{\"file\":\"assets/test-A.js\"}}\\n' > dist/manifest.json
+  printf '{\"version\":1,\"files\":[\"common.js\",\"normalize.css\",\"recipe-card.css\",\"recipe.js\",\"styles.css\",\"test-A.js\"]}\\n' > dist/asset-inventory.json
 fi
 """,
     )
@@ -1113,6 +1227,13 @@ def _recovery_harness(
     release_root = app_home / "releases" / "candidate"
     previous_root = app_home / "releases" / "previous"
     other_root = app_home / "releases" / "other"
+    required_files = {
+        "normalize.css": "normalize",
+        "styles.css": "styles",
+        "recipe-card.css": "recipe-card",
+        "common.js": "common",
+        "recipe.js": "recipe",
+    }
     for release_root_for_fixture, asset_name, page_name in (
         (release_root, "candidate.js", "candidate"),
         (previous_root, "previous.js", "previous"),
@@ -1122,15 +1243,25 @@ def _recovery_harness(
         (web / "js").mkdir(parents=True)
         (web / "index.html").write_text(f"{page_name} frontend")
         (web / "js" / "config.js").write_text("export default {};\n")
+        files = sorted([*required_files, asset_name])
         (release_root_for_fixture / "frontend-assets.json").write_text(
-            json.dumps({"version": 1, "files": [asset_name]})
+            json.dumps({"version": 1, "files": files})
         )
         (release_root_for_fixture / "manifest.json").write_text(
-            json.dumps({"index.html": {"file": f"assets/{asset_name}"}})
+            json.dumps(
+                {
+                    "normalize.css": {"file": "assets/normalize.css"},
+                    "styles.css": {"file": "assets/styles.css"},
+                    "recipe-card.css": {"file": "assets/recipe-card.css"},
+                    "js/common.js": {"file": "assets/common.js"},
+                    "js/recipe.js": {"file": "assets/recipe.js"},
+                    "index.html": {"file": f"assets/{asset_name}"},
+                }
+            )
         )
     asset_root = app_home / "frontend-assets"
     asset_root.mkdir(parents=True)
-    for asset_name in ("candidate.js", "previous.js", "obsolete.js"):
+    for asset_name in (*required_files, "candidate.js", "previous.js", "obsolete.js"):
         (asset_root / asset_name).write_text(asset_name)
 
     candidate = {
@@ -1160,9 +1291,13 @@ def _recovery_harness(
     (app_home / "frontend-pending.json").write_text(
         json.dumps(
             {
-                "version": 1,
+                "version": 2,
+                "phase": "cutover",
                 "candidate": candidate,
+                "candidate_image_id": "sha256:expected",
+                "prior_api_image_id": "sha256:prior",
                 "previous": previous,
+                "prior_frontend": {"kind": "hashed-release", "record": previous},
                 "legacy_previous_web": None,
             }
         )
@@ -1229,6 +1364,189 @@ fi
         "STATE_DIR": str(state_dir),
     }
     return env, app_home, release_root
+
+
+def _resume_harness(
+    tmp_path: Path, *, running_writers=False, candidate_id="sha256:candidate"
+):
+    app_home = tmp_path / "app"
+    release_root = app_home / "releases" / "candidate"
+    ops = tmp_path / "ops"
+    bin_dir = tmp_path / "bin"
+    (release_root / "web" / "js").mkdir(parents=True)
+    (release_root / "migrations").mkdir(parents=True)
+    (app_home / "web").mkdir(parents=True)
+    ops.mkdir()
+    bin_dir.mkdir()
+    (app_home / "web" / "old.html").write_text("old")
+    (release_root / "web" / "js" / "config.js").write_text("new")
+    (release_root / "migrations" / MIGRATION_15).write_text("migration")
+    record = {
+        "id": "candidate",
+        "web": "releases/candidate/web",
+        "inventory": "releases/candidate/frontend-assets.json",
+        "image": "cocktaildb-api:release-candidate",
+        "legacy": False,
+    }
+    (app_home / "frontend-pending.json").write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "phase": "prepublication",
+                "candidate": record,
+                "candidate_image_id": candidate_id,
+                "prior_api_image_id": "sha256:prior",
+                "previous": None,
+                "prior_frontend": {
+                    "kind": "legacy-directory",
+                    "path": "web",
+                    "st_dev": 1,
+                    "st_ino": 1,
+                },
+                "legacy_previous_web": None,
+            }
+        )
+    )
+    dispatcher = ops / "operation"
+    _write_executable(
+        dispatcher,
+        """#!/bin/bash
+set -euo pipefail
+operation=$(basename "$0")
+printf '%s\\n' "$operation" >> "$STATE_DIR/events"
+case "$operation" in
+  verify_stopped|assets|backup|mark_cutover|migrate|verify_recorded|verify_parity|start|health|publish|smoke|commit|verify_prune_identity|prune|cleanup)
+    ;;
+  pending)
+    printf 'Would apply: 16_future.sql\\n'
+    ;;
+  *)
+    printf 'unexpected operation: %s\\n' "$operation" >&2
+    exit 64
+    ;;
+esac
+""",
+    )
+    for operation in (
+        "verify_stopped",
+        "assets",
+        "pending",
+        "backup",
+        "mark_cutover",
+        "migrate",
+        "verify_recorded",
+        "verify_parity",
+        "start",
+        "health",
+        "publish",
+        "smoke",
+        "commit",
+        "verify_prune_identity",
+        "prune",
+        "cleanup",
+    ):
+        (ops / operation).symlink_to(dispatcher)
+    docker = bin_dir / "docker"
+    _write_executable(
+        docker,
+        """#!/bin/bash
+set -euo pipefail
+if [[ "$*" == *"--status running"* ]]; then
+  if [[ "${RUNNING_WRITERS:-false}" == true ]]; then printf 'writer-container\\n'; fi
+elif [[ "$1" == image && "$2" == inspect ]]; then
+  printf '%s\\n' "$CANDIDATE_ID"
+fi
+""",
+    )
+    env = {
+        **os.environ,
+        "APP_HOME": str(app_home),
+        "RELEASE_ROOT": str(release_root),
+        "SERVED_WEB": str(app_home / "web"),
+        "CUTOVER_OPS_DIR": str(ops),
+        "DEPLOY_LOCK_FILE": str(tmp_path / "deploy.lock"),
+        "DOCKER_BIN": str(docker),
+        "PYTHON_BIN": sys.executable,
+        "RELEASE_ID": "candidate",
+        "NEW_IMAGE": "cocktaildb-api:release-candidate",
+        "STATE_DIR": str(tmp_path / "state"),
+        "RUNNING_WRITERS": "true" if running_writers else "false",
+        "CANDIDATE_ID": candidate_id,
+    }
+    Path(env["STATE_DIR"]).mkdir()
+    return env, app_home
+
+
+def test_resume_stopped_continues_forward_only_with_fresh_backup(tmp_path):
+    env, app_home = _resume_harness(tmp_path)
+    result = subprocess.run(
+        [
+            "bash",
+            str(CUTOVER),
+            "resume-stopped",
+            env["RELEASE_ROOT"],
+            "cocktaildb-api:release-candidate",
+        ],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (Path(env["STATE_DIR"]) / "events").read_text().splitlines() == [
+        "verify_stopped",
+        "assets",
+        "pending",
+        "backup",
+        "mark_cutover",
+        "migrate",
+        "verify_recorded",
+        "start",
+        "health",
+        "publish",
+        "smoke",
+        "commit",
+        "verify_prune_identity",
+        "prune",
+        "cleanup",
+    ]
+    assert "old" in (app_home / "web" / "old.html").read_text()
+    assert "restart" not in result.stdout.lower()
+
+
+@pytest.mark.parametrize(
+    ("running_writers", "candidate_id", "message"),
+    [
+        (True, "sha256:candidate", "zero running API writer"),
+        (False, "sha256:wrong", "Candidate API image ID"),
+    ],
+)
+def test_resume_stopped_rejects_writer_or_candidate_identity_drift(
+    tmp_path, running_writers, candidate_id, message
+):
+    env, _ = _resume_harness(tmp_path, running_writers=running_writers)
+    env["CANDIDATE_ID"] = candidate_id
+    result = subprocess.run(
+        [
+            "bash",
+            str(CUTOVER),
+            "resume-stopped",
+            env["RELEASE_ROOT"],
+            "cocktaildb-api:release-candidate",
+        ],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert message in result.stdout
+    assert not (Path(env["STATE_DIR"]) / "events").exists()
+    assert (Path(env["APP_HOME"]) / "frontend-pending.json").exists()
 
 
 @pytest.mark.parametrize("actual_image_id", ["sha256:wrong"])
@@ -1308,7 +1626,12 @@ def test_recovery_reconciles_matching_api_and_frontend(tmp_path):
     assert not (app_home / "frontend-pending.json").exists()
     assert sorted(path.name for path in (app_home / "frontend-assets").iterdir()) == [
         "candidate.js",
+        "common.js",
+        "normalize.css",
         "previous.js",
+        "recipe-card.css",
+        "recipe.js",
+        "styles.css",
     ]
     assert (release_root / "web" / "index.html").exists()
     assert (app_home / state["previous"]["web"] / "index.html").exists()
@@ -1319,9 +1642,16 @@ def test_recovery_reconciles_matching_api_and_frontend(tmp_path):
         (app_home / "frontend-pending.json").write_text(
             json.dumps(
                 {
-                    "version": 1,
+                    "version": 2,
+                    "phase": "cutover",
                     "candidate": state["current"],
+                    "candidate_image_id": "sha256:expected",
+                    "prior_api_image_id": "sha256:prior",
                     "previous": state["previous"],
+                    "prior_frontend": {
+                        "kind": "hashed-release",
+                        "record": state["previous"],
+                    },
                     "legacy_previous_web": None,
                 }
             )
@@ -1332,7 +1662,15 @@ def test_recovery_reconciles_matching_api_and_frontend(tmp_path):
         assert json.loads(state_path.read_text()) == state
         assert sorted(
             path.name for path in (app_home / "frontend-assets").iterdir()
-        ) == ["candidate.js", "previous.js"]
+        ) == [
+            "candidate.js",
+            "common.js",
+            "normalize.css",
+            "previous.js",
+            "recipe-card.css",
+            "recipe.js",
+            "styles.css",
+        ]
 
 
 def test_recovery_diagnoses_dangling_pending_marker(tmp_path):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import shutil
+import stat
 from pathlib import Path
 
 import pytest
@@ -29,29 +30,35 @@ def _write_release(
 ) -> Path:
     release = app_home / "releases" / release_id
     assets = release / "web" / "assets"
+    required_files = {
+        "normalize.css": "normalize",
+        "styles.css": "styles",
+        "recipe-card.css": "recipe-card",
+        "common.js": "common",
+        "recipe.js": "recipe",
+    }
+    all_files = {**required_files, **files}
     (release / "web" / "js").mkdir(parents=True)
     (release / "web" / "js" / "config.js").write_text(
         "export default { apiUrl: 'https://api.example.test' };\n"
     )
     if include_assets:
         assets.mkdir()
-        for name, value in files.items():
+        for name, value in all_files.items():
             path = assets / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(value)
-    (release / "manifest.json").write_text(
-        json.dumps(
-            {
-                "index.html": {
-                    "file": f"assets/{next(iter(files))}"
-                    if files
-                    else "assets/empty.js"
-                }
-            }
-        )
-    )
+    manifest = {
+        "normalize.css": {"file": "assets/normalize.css"},
+        "styles.css": {"file": "assets/styles.css"},
+        "recipe-card.css": {"file": "assets/recipe-card.css"},
+        "js/common.js": {"file": "assets/common.js"},
+        "js/recipe.js": {"file": "assets/recipe.js"},
+        "index.html": {"file": f"assets/{next(iter(all_files))}"},
+    }
+    (release / "manifest.json").write_text(json.dumps(manifest))
     (release / "asset-inventory.json").write_text(
-        json.dumps({"version": 1, "files": sorted(files)})
+        json.dumps({"version": 1, "files": sorted(all_files)})
     )
     return release
 
@@ -73,6 +80,54 @@ def test_shared_asset_survives_two_generation_prune(tmp_path, release_module):
         (assets / name).write_text(name)
     release_module.prune_assets(assets, {"shared.js", "current.js"})
     assert sorted(p.name for p in assets.iterdir()) == ["current.js", "shared.js"]
+
+
+@pytest.mark.parametrize(
+    "manifest_update",
+    [
+        lambda manifest: manifest.pop("normalize.css"),
+        lambda manifest: manifest["styles.css"].update(file=""),
+        lambda manifest: manifest["styles.css"].update(
+            file="assets/not-in-inventory.css"
+        ),
+        lambda manifest: manifest["recipe-card.css"].update(file="assets/common.js"),
+    ],
+    ids=[
+        "missing-required-entry",
+        "missing-required-file",
+        "missing-required-asset",
+        "wrong-required-type",
+    ],
+)
+def test_host_validator_rejects_invalid_required_ssr_manifest(
+    tmp_path, release_module, manifest_update
+):
+    app_home = tmp_path / "app"
+    release = _write_release(
+        app_home,
+        "A",
+        {
+            "normalize.css": "normalize",
+            "styles.css": "styles",
+            "recipe-card.css": "recipe-card",
+            "common.js": "common",
+            "recipe.js": "recipe",
+        },
+    )
+    manifest = {
+        "normalize.css": {"file": "assets/normalize.css"},
+        "styles.css": {"file": "assets/styles.css"},
+        "recipe-card.css": {"file": "assets/recipe-card.css"},
+        "js/common.js": {"file": "assets/common.js"},
+        "js/recipe.js": {"file": "assets/recipe.js"},
+    }
+    manifest_update(manifest)
+    (release / "manifest.json").write_text(json.dumps(manifest))
+
+    with pytest.raises(
+        release_module.FrontendReleaseError, match="required|invalid|non-empty|absent"
+    ):
+        release_module.validate_release(release)
 
 
 def test_inventory_rejects_path_escape(tmp_path, release_module):
@@ -107,6 +162,30 @@ def test_conflicting_immutable_asset_fails_without_overwrite(tmp_path, release_m
     assert (release / "web" / "assets" / "same.js").exists()
 
 
+def test_new_published_assets_are_publicly_readable(tmp_path, release_module):
+    app_home = tmp_path / "app"
+    release = _write_release(app_home, "A", {"one.js": "one"})
+
+    release_module.publish_assets(release, app_home)
+
+    published = app_home / "frontend-assets" / "one.js"
+    assert stat.S_IMODE(published.stat().st_mode) == 0o644
+
+
+def test_reused0600_asset_is_repaired_to_public_mode(tmp_path, release_module):
+    app_home = tmp_path / "app"
+    first = _write_release(app_home, "A", {"one.js": "one"})
+    release_module.publish_assets(first, app_home)
+    published = app_home / "frontend-assets" / "one.js"
+    published.chmod(0o600)
+
+    second = _write_release(app_home, "B", {"one.js": "one"})
+    release_module.publish_assets(second, app_home)
+
+    assert published.read_text() == "one"
+    assert stat.S_IMODE(published.stat().st_mode) == 0o644
+
+
 def test_failed_copy_leaves_release_assets_intact(
     tmp_path, release_module, monkeypatch
 ):
@@ -121,6 +200,26 @@ def test_failed_copy_leaves_release_assets_intact(
         release_module.publish_assets(release, app_home)
     assert (release / "web" / "assets" / "one.js").exists()
     assert not (app_home / "frontend-assets" / "one.js").exists()
+
+
+def test_partial_asset_publication_is_retained_for_retry(tmp_path, release_module):
+    app_home = tmp_path / "app"
+    release = _write_release(app_home, "A", {"one.js": "one", "two.js": "two"})
+    original_copy = release_module.shutil.copyfileobj
+
+    def fail_on_two(source, destination, *args, **kwargs):
+        if Path(source.name).name == "two.js":
+            raise OSError("injected second asset failure")
+        return original_copy(source, destination, *args, **kwargs)
+
+    release_module.shutil.copyfileobj = fail_on_two
+    with pytest.raises(OSError, match="injected second asset failure"):
+        release_module.publish_assets(release, app_home)
+
+    assert (app_home / "frontend-assets" / "one.js").exists()
+    assert (release / "web" / "assets" / "one.js").exists()
+    assert (release / "web" / "assets" / "two.js").exists()
+    assert not (release / "frontend-assets.json").exists()
 
 
 def test_real_directory_conversion_restores_previous_web_on_replace_failure(
@@ -152,14 +251,232 @@ def test_real_directory_conversion_restores_previous_web_on_replace_failure(
     assert not (app_home / "releases" / "previous-web-A").exists()
 
 
+def _write_committed_frontend(app_home: Path, release_module, release_id="prior"):
+    release = _write_release(app_home, release_id, {"prior.js": "prior"})
+    image = f"cocktaildb-api:release-{release_id}"
+    release_module.publish_assets(release, app_home)
+    served = app_home / "web"
+    served.parent.mkdir(parents=True, exist_ok=True)
+    served.symlink_to(release / "web", target_is_directory=True)
+    record = release_module._record(release, app_home, image)
+    (app_home / "frontend-state.json").write_text(
+        json.dumps({"version": 1, "current": record, "previous": None, "retired": []})
+    )
+    return release, record, served
+
+
+def test_begin_records_v2_immutable_identities_and_prior_frontend(
+    tmp_path, release_module
+):
+    app_home = tmp_path / "app"
+    app_home.mkdir()
+    _previous, previous, served = _write_committed_frontend(app_home, release_module)
+    candidate = _write_release(app_home, "candidate", {"candidate.js": "candidate"})
+
+    marker = release_module.begin(
+        candidate,
+        "cocktaildb-api:release-candidate",
+        "sha256:candidate",
+        "sha256:prior",
+        app_home,
+    )
+
+    assert marker["version"] == 2
+    assert marker["phase"] == "prepublication"
+    assert marker["candidate_image_id"] == "sha256:candidate"
+    assert marker["prior_api_image_id"] == "sha256:prior"
+    assert marker["previous"] == previous
+    assert marker["prior_frontend"] == {
+        "kind": "hashed-release",
+        "record": previous,
+    }
+    assert served.is_symlink()
+    assert json.loads((app_home / "frontend-pending.json").read_text()) == marker
+
+
 def test_pending_marker_blocks_new_publication_and_prune(tmp_path, release_module):
     app_home = tmp_path / "app"
+    app_home.mkdir()
+    (app_home / "web").mkdir()
+    (app_home / "web" / "old.html").write_text("old")
     release = _write_release(app_home, "A", {"one.js": "one"})
-    release_module.begin(release, "cocktaildb-api:release-A", app_home)
+    release_module.begin(
+        release,
+        "cocktaildb-api:release-A",
+        "sha256:candidate",
+        "sha256:prior",
+        app_home,
+    )
     with pytest.raises(release_module.FrontendReleaseError, match="pending"):
-        release_module.begin(release, "cocktaildb-api:release-A", app_home)
+        release_module.begin(
+            release,
+            "cocktaildb-api:release-A",
+            "sha256:candidate",
+            "sha256:prior",
+            app_home,
+        )
     with pytest.raises(release_module.FrontendReleaseError, match="pending"):
         release_module.prune(app_home)
+
+
+def test_abort_prepublication_clears_only_marker_and_preserves_assets(
+    tmp_path, release_module
+):
+    app_home = tmp_path / "app"
+    app_home.mkdir()
+    previous, previous_record, served = _write_committed_frontend(
+        app_home, release_module
+    )
+    candidate = _write_release(app_home, "candidate", {"candidate.js": "candidate"})
+    release_module.begin(
+        candidate,
+        "cocktaildb-api:release-candidate",
+        "sha256:candidate",
+        "sha256:prior",
+        app_home,
+    )
+    partial = candidate / "web" / "assets" / "partial.js"
+    partial.write_text("partial")
+    shared = app_home / "frontend-assets" / "prior.js"
+    before_state = (app_home / "frontend-state.json").read_text()
+
+    release_module.abort_prepublication(
+        candidate,
+        "cocktaildb-api:release-candidate",
+        "sha256:candidate",
+        "sha256:prior",
+        app_home,
+    )
+
+    assert not (app_home / "frontend-pending.json").exists()
+    assert (candidate / "web" / "assets" / "partial.js").exists()
+    assert shared.read_text() == "prior"
+    assert (app_home / "frontend-state.json").read_text() == before_state
+    assert served.resolve() == previous.joinpath("web").resolve()
+    assert previous_record["id"] == "prior"
+
+
+def test_abort_prepublication_rejects_wrong_active_api_and_preserves_marker(
+    tmp_path, release_module
+):
+    app_home = tmp_path / "app"
+    app_home.mkdir()
+    _write_committed_frontend(app_home, release_module)
+    candidate = _write_release(app_home, "candidate", {"candidate.js": "candidate"})
+    release_module.begin(
+        candidate,
+        "cocktaildb-api:release-candidate",
+        "sha256:candidate",
+        "sha256:prior",
+        app_home,
+    )
+
+    with pytest.raises(release_module.FrontendReleaseError, match="active API"):
+        release_module.abort_prepublication(
+            candidate,
+            "cocktaildb-api:release-candidate",
+            "sha256:candidate",
+            "sha256:wrong",
+            app_home,
+        )
+    assert (app_home / "frontend-pending.json").exists()
+
+
+def test_mark_cutover_persists_phase_and_forbids_prepublication_abort(
+    tmp_path, release_module
+):
+    app_home = tmp_path / "app"
+    app_home.mkdir()
+    served = app_home / "web"
+    served.mkdir()
+    release = _write_release(app_home, "A", {"one.js": "one"})
+    release_module.begin(
+        release,
+        "cocktaildb-api:release-A",
+        "sha256:candidate",
+        "sha256:prior",
+        app_home,
+    )
+    release_module.publish_assets(release, app_home)
+
+    marker = release_module.mark_cutover(
+        release, "cocktaildb-api:release-A", "sha256:candidate", app_home
+    )
+
+    assert marker["phase"] == "cutover"
+    assert (
+        json.loads((app_home / "frontend-pending.json").read_text())["phase"]
+        == "cutover"
+    )
+    with pytest.raises(release_module.FrontendReleaseError, match="forbidden"):
+        release_module.abort_prepublication(
+            release,
+            "cocktaildb-api:release-A",
+            "sha256:candidate",
+            "sha256:prior",
+            app_home,
+        )
+    assert (app_home / "frontend-pending.json").exists()
+
+
+def test_first_rollout_abort_rejects_changed_legacy_directory_identity(
+    tmp_path, release_module
+):
+    app_home = tmp_path / "app"
+    app_home.mkdir()
+    served = app_home / "web"
+    served.mkdir()
+    (served / "old.html").write_text("old")
+    release = _write_release(app_home, "A", {"one.js": "one"})
+    release_module.begin(
+        release,
+        "cocktaildb-api:release-A",
+        "sha256:candidate",
+        "sha256:prior",
+        app_home,
+    )
+    served.rename(app_home / "web-recreated")
+    served.mkdir()
+    (served / "old.html").write_text("recreated")
+
+    with pytest.raises(release_module.FrontendReleaseError, match="identity"):
+        release_module.abort_prepublication(
+            release,
+            "cocktaildb-api:release-A",
+            "sha256:candidate",
+            "sha256:prior",
+            app_home,
+        )
+    assert (app_home / "frontend-pending.json").exists()
+
+
+def test_prepared_assets_are_idempotently_validated_and_unreadable_assets_fail(
+    tmp_path, release_module
+):
+    app_home = tmp_path / "app"
+    release = _write_release(app_home, "A", {"one.js": "one"})
+    release_module.publish_assets(release, app_home)
+    assert not (release / "web" / "assets").exists()
+    assert release_module.validate_release(
+        release, require_assets=None, app_home=app_home
+    )
+    release_module.publish_assets(release, app_home)
+    shared = app_home / "frontend-assets" / "one.js"
+    shared.chmod(0o600)
+    with pytest.raises(release_module.FrontendReleaseError, match="public"):
+        release_module.validate_release(release, require_assets=None, app_home=app_home)
+
+
+def test_v1_pending_marker_is_rejected_without_phase_guessing(tmp_path, release_module):
+    app_home = tmp_path / "app"
+    app_home.mkdir()
+    (app_home / "frontend-pending.json").write_text(
+        json.dumps({"version": 1, "candidate": {}, "previous": None})
+    )
+
+    with pytest.raises(release_module.FrontendReleaseError, match="version 1"):
+        release_module.prune(app_home)
+    assert (app_home / "frontend-pending.json").exists()
 
 
 def test_three_generation_prune_uses_current_previous_union(tmp_path, release_module):
@@ -250,8 +567,17 @@ def test_legacy_first_release_preserves_real_web_and_commits_record(
     served.mkdir(parents=True)
     (served / "old.html").write_text("old")
     release = _write_release(app_home, "A", {"one.js": "one"})
-    release_module.begin(release, "cocktaildb-api:release-A", app_home)
+    release_module.begin(
+        release,
+        "cocktaildb-api:release-A",
+        "sha256:candidate",
+        "sha256:prior",
+        app_home,
+    )
     release_module.publish_assets(release, app_home)
+    release_module.mark_cutover(
+        release, "cocktaildb-api:release-A", "sha256:candidate", app_home
+    )
     release_module.publish(release, served, app_home)
     release_module.commit(release, "cocktaildb-api:release-A", app_home)
     state = json.loads((app_home / "frontend-state.json").read_text())
@@ -533,9 +859,16 @@ def test_recover_clears_marker_when_state_already_committed(tmp_path, release_mo
     (app_home / "frontend-pending.json").write_text(
         json.dumps(
             {
-                "version": 1,
+                "version": 2,
+                "phase": "cutover",
                 "candidate": record,
-                "previous": None,
+                "candidate_image_id": "sha256:candidate",
+                "prior_api_image_id": "sha256:prior",
+                "previous": record,
+                "prior_frontend": {
+                    "kind": "hashed-release",
+                    "record": record,
+                },
                 "legacy_previous_web": None,
             }
         )

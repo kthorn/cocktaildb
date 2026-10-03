@@ -19,8 +19,17 @@ from pathlib import Path
 from typing import Any
 
 STATE_VERSION = 1
+PENDING_VERSION = 2
 ASSET_INVENTORY = "asset-inventory.json"
 FRONTEND_INVENTORY = "frontend-assets.json"
+PUBLIC_ASSET_MODE = 0o644
+REQUIRED_MANIFEST_ENTRIES = {
+    "normalize.css": "css",
+    "styles.css": "css",
+    "recipe-card.css": "css",
+    "js/common.js": "js",
+    "js/recipe.js": "js",
+}
 
 
 class FrontendReleaseError(RuntimeError):
@@ -181,9 +190,33 @@ def _manifest_asset(value: Any, label: str) -> str:
 def _validate_manifest(value: Any, inventory: set[str], label: str) -> None:
     if not isinstance(value, dict) or isinstance(value, list):
         raise _error(f"{label} must be an object")
+    for entry_name, expected_type in REQUIRED_MANIFEST_ENTRIES.items():
+        if entry_name not in value:
+            raise _error(f"{label} is missing required manifest entry: {entry_name}")
+        entry = value[entry_name]
+        if not isinstance(entry, dict) or isinstance(entry, list):
+            raise _error(f"{label} entry is invalid: {entry_name}")
+        file_name = entry.get("file")
+        if not isinstance(file_name, str) or not file_name:
+            raise _error(
+                f"{label} required file must be a non-empty string: {entry_name}"
+            )
+        relative = _manifest_asset(file_name, f"{label} {entry_name}.file")
+        if relative not in inventory:
+            raise _error(
+                f"{label} {entry_name}.file is absent from asset inventory: {file_name}"
+            )
+        if expected_type == "css" and not file_name.endswith(".css"):
+            raise _error(f"{label} required entry must reference CSS: {entry_name}")
+        if expected_type == "js" and not file_name.endswith(".js"):
+            raise _error(
+                f"{label} required entry must reference JavaScript: {entry_name}"
+            )
     for entry_name, entry in value.items():
         if not isinstance(entry, dict) or isinstance(entry, list):
             raise _error(f"{label} entry is invalid: {entry_name}")
+        if "file" not in entry:
+            raise _error(f"{label} file must be a non-empty string: {entry_name}")
         for field in ("file", "css", "assets"):
             if field not in entry:
                 continue
@@ -198,6 +231,10 @@ def _validate_manifest(value: Any, inventory: set[str], label: str) -> None:
                 if relative not in inventory:
                     raise _error(
                         f"{reference_label} is absent from asset inventory: {reference}"
+                    )
+                if field == "css" and not reference.endswith(".css"):
+                    raise _error(
+                        f"{label} {entry_name}.css must reference CSS: {reference}"
                     )
         for field in ("imports", "dynamicImports"):
             if field not in entry:
@@ -239,17 +276,48 @@ def _inventory_paths(release: Path, *, require_assets: bool) -> tuple[list[str],
     return files, retained
 
 
-def validate_release(release: Path, *, require_assets: bool = True) -> list[str]:
+def _public_asset_file(path: Path, label: str) -> None:
+    _regular_file(path, label)
+    mode = stat_module.S_IMODE(path.stat().st_mode)
+    if mode != PUBLIC_ASSET_MODE:
+        raise _error(f"{label} must be publicly readable with mode 0644: {path}")
+
+
+def _validate_prepared_assets(
+    release: Path, app_home: Path, files: list[str], retained: Path
+) -> None:
+    web_assets = release / "web" / "assets"
+    if web_assets.exists() or web_assets.is_symlink():
+        raise _error(f"prepared release must not contain web/assets: {release}")
+    _regular_file(retained, "prepared frontend inventory")
+    asset_root = app_home / "frontend-assets"
+    _directory(asset_root, "shared frontend asset directory")
+    for relative in files:
+        shared = _safe_asset_path(asset_root, relative, "prepared asset path")
+        _assert_no_symlink_parents(shared, asset_root, "prepared asset")
+        _public_asset_file(shared, "prepared shared asset")
+
+
+def validate_release(
+    release: Path,
+    *,
+    require_assets: bool | None = True,
+    app_home: Path | None = None,
+) -> list[str]:
     release = Path(release)
+    app_home = Path(app_home or os.environ.get("APP_HOME") or release.parent.parent)
     _directory(release, "release")
     web = release / "web"
     _validate_tree(web, "release web directory")
     _regular_file(web / "js" / "config.js", "generated frontend config")
-    files, _ = _inventory_paths(release, require_assets=require_assets)
+    web_assets = web / "assets"
+    if require_assets is None:
+        require_assets = web_assets.exists() or web_assets.is_symlink()
+    files, retained = _inventory_paths(release, require_assets=require_assets)
     manifest = _read_json(release / "manifest.json", "Vite manifest")
     _validate_manifest(manifest, set(files), "Vite manifest")
-    if not require_assets and (web / "assets").exists():
-        raise _error(f"served release must not contain web/assets: {release}")
+    if not require_assets:
+        _validate_prepared_assets(release, app_home, files, retained)
     return files
 
 
@@ -307,6 +375,8 @@ def _atomic_copy(source: Path, destination: Path) -> bool:
         _regular_file(destination, "existing shared asset")
         if not _same_bytes(source, destination):
             raise _error(f"immutable asset has different bytes: {destination}")
+        os.chmod(destination, PUBLIC_ASSET_MODE)
+        _fsync_directory(destination.parent)
         return False
     destination.parent.mkdir(parents=True, exist_ok=True)
     _assert_no_symlink_parents(destination, destination.parent, "shared asset")
@@ -315,6 +385,7 @@ def _atomic_copy(source: Path, destination: Path) -> bool:
     )
     temporary = Path(temporary_name)
     try:
+        os.fchmod(descriptor, PUBLIC_ASSET_MODE)
         with os.fdopen(descriptor, "wb") as output, source.open("rb") as input_file:
             shutil.copyfileobj(input_file, output)
             output.flush()
@@ -323,6 +394,8 @@ def _atomic_copy(source: Path, destination: Path) -> bool:
             _regular_file(destination, "existing shared asset")
             if not _same_bytes(source, destination):
                 raise _error(f"immutable asset has different bytes: {destination}")
+            os.chmod(destination, PUBLIC_ASSET_MODE)
+            _fsync_directory(destination.parent)
             temporary.unlink()
             return False
         os.replace(temporary, destination)
@@ -339,8 +412,11 @@ def _atomic_copy(source: Path, destination: Path) -> bool:
 def publish_assets(release: Path, app_home: Path) -> list[str]:
     release = Path(release)
     app_home = Path(app_home)
-    files = validate_release(release, require_assets=True)
     source_root = release / "web" / "assets"
+    if not (source_root.exists() or source_root.is_symlink()):
+        return validate_release(release, require_assets=False, app_home=app_home)
+
+    files = validate_release(release, require_assets=True, app_home=app_home)
     destination_root = app_home / "frontend-assets"
     _ensure_directory(destination_root, "shared frontend asset directory")
 
@@ -358,28 +434,24 @@ def publish_assets(release: Path, app_home: Path) -> list[str]:
                 raise _error(f"immutable asset has different bytes: {destination}")
         sources.append((relative, source, destination))
 
-    created: list[Path] = []
-    try:
-        for _, source, destination in sources:
-            if _atomic_copy(source, destination):
-                created.append(destination)
-        inventory = {"version": STATE_VERSION, "files": files}
-        retained = release / FRONTEND_INVENTORY
-        if retained.exists() or retained.is_symlink():
-            existing = _read_inventory(retained, "release frontend inventory")
-            if existing != files:
-                raise _error(f"release frontend inventory disagrees: {retained}")
-        else:
-            _atomic_json(retained, inventory)
-        shutil.rmtree(source_root)
-        _fsync_directory(source_root.parent)
-    except BaseException:
-        for destination in reversed(created):
-            try:
-                destination.unlink()
-            except FileNotFoundError:
-                pass
-        raise
+    for _, source, destination in sources:
+        _atomic_copy(source, destination)
+
+    for relative in files:
+        _public_asset_file(
+            _safe_asset_path(destination_root, relative, "published asset path"),
+            "published shared asset",
+        )
+    inventory = {"version": STATE_VERSION, "files": files}
+    retained = release / FRONTEND_INVENTORY
+    if retained.exists() or retained.is_symlink():
+        existing = _read_inventory(retained, "release frontend inventory")
+        if existing != files:
+            raise _error(f"release frontend inventory disagrees: {retained}")
+    else:
+        _atomic_json(retained, inventory)
+    shutil.rmtree(source_root)
+    _fsync_directory(source_root.parent)
     return files
 
 
@@ -527,13 +599,104 @@ def _load_state(app_home: Path) -> dict[str, Any] | None:
     return state
 
 
+def _immutable_image_id(value: Any, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not value.startswith("sha256:")
+        or len(value) <= len("sha256:")
+        or any(character.isspace() for character in value)
+    ):
+        raise _error(f"{label} must be an immutable image ID")
+    return value
+
+
+def _capture_prior_frontend(
+    app_home: Path, state: dict[str, Any] | None
+) -> dict[str, Any]:
+    served = _served_path_from_environment(app_home)
+    if state is not None:
+        current = state["current"]
+        expected = (app_home / current["web"]).resolve()
+        if not served.is_symlink():
+            raise _error(f"served frontend is not the committed symlink: {served}")
+        actual = (served.parent / os.readlink(served)).resolve()
+        if actual != expected:
+            raise _error(
+                f"served frontend does not match committed current: {actual} != {expected}"
+            )
+        return {"kind": "hashed-release", "record": current}
+
+    try:
+        stat = served.lstat()
+    except FileNotFoundError as exc:
+        raise _error(f"first-rollout legacy frontend is missing: {served}") from exc
+    if stat_module.S_ISLNK(stat.st_mode):
+        raise _error("first-rollout legacy frontend must be a real directory")
+    if not stat_module.S_ISDIR(stat.st_mode):
+        raise _error("first-rollout legacy frontend must be a directory")
+    return {
+        "kind": "legacy-directory",
+        "path": _relative_to_app(served, app_home),
+        "st_dev": stat.st_dev,
+        "st_ino": stat.st_ino,
+    }
+
+
+def _validate_prior_frontend(
+    app_home: Path, pending: dict[str, Any], state: dict[str, Any] | None
+) -> None:
+    prior = pending["prior_frontend"]
+    if prior["kind"] == "hashed-release":
+        expected_record = pending["previous"]
+        if expected_record is None or state is None:
+            raise _error("pending prior frontend requires a committed current release")
+        if not _same_record(state["current"], expected_record):
+            raise _error(
+                "committed frontend state no longer matches pending prior frontend"
+            )
+        _served_matches(app_home, expected_record)
+        return
+    if prior["kind"] == "legacy-directory":
+        if state is not None:
+            raise _error("first-rollout prior frontend now has committed state")
+        served = _served_path_from_environment(app_home)
+        try:
+            stat = served.lstat()
+        except FileNotFoundError as exc:
+            raise _error("first-rollout legacy frontend is missing") from exc
+        if stat_module.S_ISLNK(stat.st_mode) or not stat_module.S_ISDIR(stat.st_mode):
+            raise _error("first-rollout legacy frontend identity changed")
+        observed_path = _relative_to_app(served, app_home)
+        if (
+            observed_path != prior["path"]
+            or stat.st_dev != prior["st_dev"]
+            or stat.st_ino != prior["st_ino"]
+        ):
+            raise _error(
+                "first-rollout legacy frontend identity changed: "
+                f"path={observed_path} st_dev={stat.st_dev} st_ino={stat.st_ino}"
+            )
+        return
+    raise _error(f"unsupported pending prior frontend kind: {prior.get('kind')}")
+
+
 def _load_pending(app_home: Path) -> dict[str, Any]:
     path = _pending_path(app_home)
     if not path.exists() and not path.is_symlink():
         raise _error(f"frontend pending marker is missing: {path}")
     value = _read_json(path, "frontend pending marker")
-    if not isinstance(value, dict) or value.get("version") != STATE_VERSION:
-        raise _error(f"frontend pending marker version must be 1: {path}")
+    if not isinstance(value, dict):
+        raise _error(f"frontend pending marker must be an object: {path}")
+    version = value.get("version")
+    if version == STATE_VERSION:
+        raise _error(
+            f"frontend pending marker version 1 is unsupported; manual identity and database reconciliation is required: {path}"
+        )
+    if version != PENDING_VERSION:
+        raise _error(f"frontend pending marker version must be 2: {path}")
+    phase = value.get("phase")
+    if phase not in {"prepublication", "cutover"}:
+        raise _error(f"frontend pending marker phase is invalid: {path}")
     candidate = _validate_record_shape(value.get("candidate"), "pending candidate")
     if candidate["legacy"]:
         raise _error("pending candidate cannot be a legacy record")
@@ -542,13 +705,58 @@ def _load_pending(app_home: Path) -> dict[str, Any]:
         previous = _validate_record_shape(previous, "pending previous")
         if previous["legacy"]:
             raise _error("pending previous cannot be a legacy record")
+    candidate_image_id = _immutable_image_id(
+        value.get("candidate_image_id"), "pending candidate image ID"
+    )
+    prior_api_image_id = _immutable_image_id(
+        value.get("prior_api_image_id"), "pending prior API image ID"
+    )
+    prior_frontend = value.get("prior_frontend")
+    if not isinstance(prior_frontend, dict):
+        raise _error("pending prior frontend must be an object")
+    if prior_frontend.get("kind") == "hashed-release":
+        record = _validate_record_shape(
+            prior_frontend.get("record"), "pending prior frontend record"
+        )
+        if record["legacy"]:
+            raise _error("pending prior frontend record cannot be legacy")
+        if previous is None or not _same_record(record, previous):
+            raise _error("pending prior frontend record disagrees with previous")
+        prior_frontend = {"kind": "hashed-release", "record": record}
+    elif prior_frontend.get("kind") == "legacy-directory":
+        if previous is not None:
+            raise _error("legacy prior frontend cannot have previous state")
+        path_value = _safe_relative(
+            prior_frontend.get("path"), "pending prior frontend path"
+        )
+        st_dev = prior_frontend.get("st_dev")
+        st_ino = prior_frontend.get("st_ino")
+        if (
+            not isinstance(st_dev, int)
+            or st_dev < 0
+            or not isinstance(st_ino, int)
+            or st_ino < 0
+        ):
+            raise _error("pending legacy frontend identity is invalid")
+        prior_frontend = {
+            "kind": "legacy-directory",
+            "path": path_value,
+            "st_dev": st_dev,
+            "st_ino": st_ino,
+        }
+    else:
+        raise _error("pending prior frontend kind is invalid")
     legacy = value.get("legacy_previous_web")
     if legacy is not None:
         legacy = _safe_relative(legacy, "pending legacy_previous_web")
     return {
-        "version": STATE_VERSION,
+        "version": PENDING_VERSION,
+        "phase": phase,
         "candidate": candidate,
+        "candidate_image_id": candidate_image_id,
+        "prior_api_image_id": prior_api_image_id,
         "previous": previous,
+        "prior_frontend": prior_frontend,
         "legacy_previous_web": legacy,
     }
 
@@ -652,7 +860,7 @@ def _validate_state_files(app_home: Path, state: dict[str, Any]) -> set[str]:
         keep.update(files)
         _directory(asset_root, "shared frontend asset directory")
         for relative in files:
-            _regular_file(
+            _public_asset_file(
                 _safe_asset_path(asset_root, relative, "retained asset path"),
                 f"retained {label} asset",
             )
@@ -677,7 +885,11 @@ def _preflight_prune(app_home: Path, state: dict[str, Any]) -> set[str]:
 
 
 def begin(
-    release: Path, api_image: str, app_home: Path | None = None
+    release: Path,
+    api_image: str,
+    candidate_image_id: str,
+    prior_api_image_id: str,
+    app_home: Path | None = None,
 ) -> dict[str, Any]:
     release = Path(release)
     app_home = Path(app_home or os.environ.get("APP_HOME", "/opt/cocktaildb"))
@@ -685,18 +897,22 @@ def begin(
         raise _error(
             f"unresolved frontend pending marker blocks deployment: {_pending_path(app_home)}"
         )
-    if (release / "web" / "assets").exists():
-        validate_release(release, require_assets=True)
-    else:
-        validate_release(release, require_assets=False)
+    candidate_image_id = _immutable_image_id(candidate_image_id, "candidate image ID")
+    prior_api_image_id = _immutable_image_id(prior_api_image_id, "prior API image ID")
+    validate_release(release, require_assets=True, app_home=app_home)
     state = _load_state(app_home)
     if state is not None:
         _validate_state_files(app_home, state)
+    prior_frontend = _capture_prior_frontend(app_home, state)
     candidate = _record(release, app_home, api_image)
     pending = {
-        "version": STATE_VERSION,
+        "version": PENDING_VERSION,
+        "phase": "prepublication",
         "candidate": candidate,
+        "candidate_image_id": candidate_image_id,
+        "prior_api_image_id": prior_api_image_id,
         "previous": state["current"] if state else None,
+        "prior_frontend": prior_frontend,
         "legacy_previous_web": None,
     }
     _atomic_json(_pending_path(app_home), pending)
@@ -766,6 +982,83 @@ def publish_web(
         raise
 
 
+def _validate_pending_candidate(
+    pending: dict[str, Any],
+    release: Path,
+    api_image: str,
+    app_home: Path,
+    candidate_image_id: str | None = None,
+) -> None:
+    candidate = pending["candidate"]
+    expected = _record(release, app_home, api_image)
+    if not _same_record(candidate, expected):
+        raise _error("pending candidate identity does not match release or API image")
+    if candidate_image_id is not None:
+        candidate_image_id = _immutable_image_id(
+            candidate_image_id, "candidate image ID"
+        )
+        if pending["candidate_image_id"] != candidate_image_id:
+            raise _error(
+                "candidate immutable image ID does not match pending marker: "
+                f"observed={candidate_image_id} expected={pending['candidate_image_id']}"
+            )
+
+
+def _clear_pending(app_home: Path) -> None:
+    _pending_path(app_home).unlink()
+    _fsync_directory(app_home)
+
+
+def abort_prepublication(
+    release: Path,
+    api_image: str,
+    candidate_image_id: str,
+    active_api_image_id: str,
+    app_home: Path | None = None,
+) -> None:
+    release = Path(release)
+    app_home = Path(app_home or os.environ.get("APP_HOME", "/opt/cocktaildb"))
+    pending = _load_pending(app_home)
+    if pending["phase"] != "prepublication":
+        raise _error("prepublication abort is forbidden after cutover phase")
+    _validate_pending_candidate(
+        pending, release, api_image, app_home, candidate_image_id
+    )
+    active_api_image_id = _immutable_image_id(
+        active_api_image_id, "active API image ID"
+    )
+    if active_api_image_id != pending["prior_api_image_id"]:
+        raise _error(
+            "active API image ID does not match pending prior API: "
+            f"observed={active_api_image_id} expected={pending['prior_api_image_id']}"
+        )
+    state = _load_state(app_home)
+    _validate_prior_frontend(app_home, pending, state)
+    _clear_pending(app_home)
+
+
+def mark_cutover(
+    release: Path,
+    api_image: str,
+    candidate_image_id: str,
+    app_home: Path | None = None,
+) -> dict[str, Any]:
+    release = Path(release)
+    app_home = Path(app_home or os.environ.get("APP_HOME", "/opt/cocktaildb"))
+    pending = _load_pending(app_home)
+    if pending["phase"] != "prepublication":
+        raise _error("pending marker is not in prepublication phase")
+    _validate_pending_candidate(
+        pending, release, api_image, app_home, candidate_image_id
+    )
+    validate_release(release, require_assets=False, app_home=app_home)
+    state = _load_state(app_home)
+    _validate_prior_frontend(app_home, pending, state)
+    pending["phase"] = "cutover"
+    _atomic_json(_pending_path(app_home), pending)
+    return pending
+
+
 def publish(
     release: Path, served: Path | None = None, app_home: Path | None = None
 ) -> dict[str, Any]:
@@ -773,12 +1066,14 @@ def publish(
     app_home = Path(app_home or os.environ.get("APP_HOME", "/opt/cocktaildb"))
     served = Path(served or _served_path_from_environment())
     pending = _load_pending(app_home)
+    if pending["phase"] != "cutover":
+        raise _error("frontend publication requires durable cutover phase")
     candidate = pending["candidate"]
     if candidate["id"] != release.name or candidate["web"] != _relative_to_app(
         release / "web", app_home
     ):
         raise _error("release identity does not match the pending candidate")
-    validate_release(release, require_assets=False)
+    validate_release(release, require_assets=False, app_home=app_home)
     state = _load_state(app_home)
     legacy_backup = None
     if served.exists() and not served.is_symlink():
@@ -824,6 +1119,8 @@ def commit(
     release = Path(release)
     app_home = Path(app_home or os.environ.get("APP_HOME", "/opt/cocktaildb"))
     pending = _load_pending(app_home)
+    if pending["phase"] != "cutover":
+        raise _error("frontend commit requires durable cutover phase")
     candidate = pending["candidate"]
     if candidate["id"] != release.name or candidate["image"] != api_image:
         raise _error("commit identity does not match pending candidate")
@@ -838,7 +1135,7 @@ def commit(
         _fsync_directory(app_home)
         return state
 
-    validate_release(release, require_assets=False)
+    validate_release(release, require_assets=False, app_home=app_home)
     _served_matches(app_home, candidate)
     if state is not None:
         _validate_state_files(app_home, state)
@@ -906,6 +1203,7 @@ def _remove_owned_path(path: Path, label: str, root: Path | None = None) -> None
 def prune(app_home: Path | None = None) -> dict[str, Any] | None:
     app_home = Path(app_home or os.environ.get("APP_HOME", "/opt/cocktaildb"))
     if _pending_path(app_home).exists() or _pending_path(app_home).is_symlink():
+        _load_pending(app_home)
         raise _error(
             f"unresolved frontend pending marker blocks pruning: {_pending_path(app_home)}"
         )
@@ -936,24 +1234,26 @@ def recover(
     release = Path(release)
     app_home = Path(app_home or os.environ.get("APP_HOME", "/opt/cocktaildb"))
     pending = _load_pending(app_home)
+    if pending["phase"] != "cutover":
+        raise _error(
+            "candidate recovery requires cutover phase; use abort-prepublication "
+            "or resume-stopped for a prepublication marker"
+        )
+    _validate_pending_candidate(pending, release, api_image, app_home)
     candidate = pending["candidate"]
-    expected = _record(release, app_home, api_image)
-    if not _same_record(candidate, expected):
-        raise _error("recovery identity does not match pending candidate")
     state = _load_state(app_home)
     if state is not None and _same_record(state["current"], candidate):
         _validate_state_files(app_home, state)
         _served_matches(app_home, candidate)
-        _pending_path(app_home).unlink()
-        _fsync_directory(app_home)
+        _clear_pending(app_home)
         return state
     return commit(release, api_image, app_home)
 
 
 def _usage() -> str:
     return (
-        "usage: frontend-release.py <validate|assets|begin|publish|commit|prune|recover> "
-        "[RELEASE_ROOT] [API_IMAGE]"
+        "usage: frontend-release.py <validate|assets|begin|abort-prepublication|"
+        "mark-cutover|publish|commit|prune|recover> ..."
     )
 
 
@@ -967,11 +1267,27 @@ def main(argv: list[str] | None = None) -> int:
     served = Path(os.environ.get("SERVED_WEB", str(app_home / "web")))
     try:
         if command == "validate" and len(arguments) == 1:
-            validate_release(Path(arguments[0]))
+            validate_release(Path(arguments[0]), require_assets=None, app_home=app_home)
         elif command == "assets" and len(arguments) == 1:
             publish_assets(Path(arguments[0]), app_home)
-        elif command == "begin" and len(arguments) == 2:
-            begin(Path(arguments[0]), arguments[1], app_home)
+        elif command == "begin" and len(arguments) == 4:
+            begin(
+                Path(arguments[0]),
+                arguments[1],
+                arguments[2],
+                arguments[3],
+                app_home,
+            )
+        elif command == "abort-prepublication" and len(arguments) == 4:
+            abort_prepublication(
+                Path(arguments[0]),
+                arguments[1],
+                arguments[2],
+                arguments[3],
+                app_home,
+            )
+        elif command == "mark-cutover" and len(arguments) == 3:
+            mark_cutover(Path(arguments[0]), arguments[1], arguments[2], app_home)
         elif command == "publish" and len(arguments) == 1:
             publish(Path(arguments[0]), served, app_home)
         elif command == "commit" and len(arguments) == 2:
