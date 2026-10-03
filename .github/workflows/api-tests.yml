@@ -13,6 +13,29 @@ jobs:
     api-tests:
         runs-on: ubuntu-latest
         timeout-minutes: 20
+        # PostgreSQL as a service container: the suite needs a real database
+        # (plpgsql triggers, pg_trgm, advisory locks), and this way the tests do
+        # not pay for container startup or depend on the Docker socket.
+        services:
+            postgres:
+                image: postgres:15
+                env:
+                    POSTGRES_USER: test_user
+                    POSTGRES_PASSWORD: test_password
+                    POSTGRES_DB: cocktaildb_test
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd pg_isready
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+        env:
+            TEST_DB_HOST: localhost
+            TEST_DB_PORT: '5432'
+            TEST_DB_NAME: cocktaildb_test
+            TEST_DB_USER: test_user
+            TEST_DB_PASSWORD: test_password
         steps:
             - name: Check out repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -39,13 +62,5 @@ jobs:
             - name: Check Docker for PostgreSQL fixtures
               run: docker info
 
-            - name: Test pages, middleware, errors, downloads, and deployment
-              run: >-
-                  python -m pytest -q
-                  tests/test_page_route_contracts.py
-                  tests/test_pages.py
-                  tests/test_rate_limit.py
-                  tests/test_starlette_compatibility.py
-                  tests/test_analytics_em_distances_download.py
-                  tests/test_db_tag_associations_unit.py
-                  tests/test_group_inventory_deploy.py
+            - name: Run the test suite
+              run: python -m pytest -q

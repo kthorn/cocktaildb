@@ -96,11 +96,29 @@ def postgres_container():
 
 
 @pytest.fixture(scope="session")
-def postgres_connection_params(postgres_container):
-    """Get connection parameters for the test PostgreSQL container"""
-    return {
-        "host": postgres_container.get_container_host_ip(),
-        "port": postgres_container.get_exposed_port(5432),
+def postgres_connection_params(request):
+    """Connection params for the test database.
+
+    CI provides PostgreSQL through TEST_DB_HOST (a service container, so no
+    Docker socket is needed and startup is not part of the test run). Locally
+    there is no such variable, so we start a throwaway container instead; the
+    session-scoped request below keeps it alive for the whole run.
+    """
+    external_host = os.environ.get("TEST_DB_HOST")
+    if external_host:
+        yield {
+            "host": external_host,
+            "port": int(os.environ.get("TEST_DB_PORT", "5432")),
+            "dbname": os.environ.get("TEST_DB_NAME", TEST_DB_NAME),
+            "user": os.environ.get("TEST_DB_USER", TEST_DB_USER),
+            "password": os.environ.get("TEST_DB_PASSWORD", TEST_DB_PASSWORD),
+        }
+        return
+
+    container = request.getfixturevalue("postgres_container")
+    yield {
+        "host": container.get_container_host_ip(),
+        "port": container.get_exposed_port(5432),
         "dbname": TEST_DB_NAME,
         "user": TEST_DB_USER,
         "password": TEST_DB_PASSWORD,
@@ -119,7 +137,7 @@ def schema_sql():
 
 
 @pytest.fixture(scope="function")
-def pg_db_with_schema(postgres_container, postgres_connection_params, schema_sql):
+def pg_db_with_schema(postgres_connection_params, schema_sql):
     """PostgreSQL database with schema initialized - fresh for each test"""
     conn = psycopg2.connect(**postgres_connection_params)
     conn.autocommit = True
@@ -191,7 +209,7 @@ def pg_db_with_data(pg_db_with_schema):
 
 
 @pytest.fixture(scope="session")
-def pg_db_with_prod_data(postgres_container, postgres_connection_params):
+def pg_db_with_prod_data(postgres_connection_params):
     """PostgreSQL database loaded with production backup - session scoped for efficiency"""
     if PROD_BACKUP_PATH is None or not PROD_BACKUP_PATH.exists():
         pytest.skip("Production backup not found (set PROD_BACKUP_PATH env var)")
