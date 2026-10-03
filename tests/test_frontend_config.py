@@ -10,7 +10,6 @@ import yaml
 
 from scripts.generate_config import render_public_config
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -24,15 +23,49 @@ VALID_CONFIG = {
 }
 
 
-def test_public_config_escapes_javascript_values():
-    config = dict(
-        apiUrl="https://dev.example/api",
-        userPoolId="pool",
-        clientId="client",
-        cognitoDomain="https://auth.example",
-        appUrl="http://localhost:8000",
-        appName="Kurt's \\ bar\n",
+def test_public_renderer_imports_without_boto3():
+    script = """
+import sys
+
+class BlockBoto3:
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == 'boto3' or fullname.startswith('boto3.'):
+            raise ModuleNotFoundError('blocked boto3 for import isolation')
+        return None
+
+sys.meta_path.insert(0, BlockBoto3())
+from scripts.generate_config import render_public_config
+
+print(render_public_config({
+    'apiUrl': 'https://api.example',
+    'userPoolId': 'pool',
+    'clientId': 'client',
+    'cognitoDomain': 'https://auth.example',
+    'appUrl': 'http://localhost:8000',
+    'appName': 'Cocktail Database',
+}))
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
     )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.startswith("export default ")
+
+
+def test_public_config_escapes_javascript_values():
+    config = {
+        "apiUrl": "https://dev.example/api",
+        "userPoolId": "pool",
+        "clientId": "client",
+        "cognitoDomain": "https://auth.example",
+        "appUrl": "http://localhost:8000",
+        "appName": "Kurt's \\ bar\n",
+    }
 
     source = render_public_config(config)
 

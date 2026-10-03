@@ -10,9 +10,6 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
-import boto3
-
-
 PUBLIC_CONFIG_FIELDS = (
     "apiUrl",
     "userPoolId",
@@ -27,6 +24,9 @@ PUBLIC_URL_FIELDS = ("apiUrl", "cognitoDomain", "appUrl")
 def get_cloudformation_output(stack_name, output_key, region="us-east-1"):
     """Get a specific output value from a CloudFormation stack."""
     try:
+        import boto3
+        from botocore.exceptions import BotoCoreError, ClientError
+
         cf_client = boto3.client("cloudformation", region_name=region)
         response = cf_client.describe_stacks(StackName=stack_name)
 
@@ -42,7 +42,7 @@ def get_cloudformation_output(stack_name, output_key, region="us-east-1"):
         print(f"Warning: Output key '{output_key}' not found in stack {stack_name}")
         return None
 
-    except Exception as e:
+    except (BotoCoreError, ClientError, KeyError) as e:
         print(f"Error retrieving CloudFormation output {output_key}: {e}")
         return None
 
@@ -50,7 +50,7 @@ def get_cloudformation_output(stack_name, output_key, region="us-east-1"):
 def render_public_config(config: dict) -> str:
     """Validate and serialize the browser-visible runtime configuration."""
     if not isinstance(config, dict):
-        raise ValueError("public configuration must be a dictionary")
+        raise TypeError("public configuration must be a dictionary")
 
     missing = [field for field in PUBLIC_CONFIG_FIELDS if field not in config]
     if missing:
@@ -115,7 +115,7 @@ def generate_config_js(config_values, target_env, output_path):
         Path(output_path).write_text(config_content, encoding="utf-8")
         print(f"config.js updated successfully for {target_env}")
         return True
-    except Exception as e:
+    except (KeyError, OSError, TypeError, UnicodeError, ValueError) as e:
         print(f"Error writing config.js: {e}")
         return False
 

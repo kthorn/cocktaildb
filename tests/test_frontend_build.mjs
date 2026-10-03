@@ -54,16 +54,58 @@ async function copyIfPresent(source, destination, options = {}) {
     if (await exists(source)) await cp(source, destination, options);
 }
 
+async function assertRequiredManifestValidation() {
+    const artifact = await mkdtemp(path.join(tmpdir(), 'cocktaildb-required-manifest-'));
+    try {
+        const assets = path.join(artifact, 'web', 'assets');
+        await mkdir(assets, { recursive: true });
+        const files = ['normalize.css', 'styles.css', 'recipe-card.css', 'common.js', 'recipe.js'];
+        for (const file of files) await writeFile(path.join(assets, file), file);
+        await writeFile(
+            path.join(artifact, 'asset-inventory.json'),
+            JSON.stringify({ version: 1, files: [...files].sort() }),
+        );
+        const manifest = {
+            'normalize.css': { file: 'assets/normalize.css' },
+            'styles.css': { file: 'assets/styles.css' },
+            'recipe-card.css': { file: 'assets/recipe-card.css' },
+            'js/common.js': { file: 'assets/common.js' },
+            'js/recipe.js': { file: 'assets/recipe.js' },
+        };
+        for (const [label, mutate, message] of [
+            ['missing required entry', (value) => delete value['normalize.css'], /required manifest entry/],
+            ['missing required file', (value) => { value['styles.css'].file = ''; }, /must be a non-empty string/],
+            ['missing required asset', (value) => { value['styles.css'].file = 'assets/not-in-inventory.css'; }, /absent from asset inventory/],
+            ['wrong required type', (value) => { value['recipe-card.css'].file = 'assets/common.js'; }, /must reference CSS/],
+        ]) {
+            const candidate = structuredClone(manifest);
+            mutate(candidate);
+            await writeFile(path.join(artifact, 'manifest.json'), JSON.stringify(candidate));
+            await assert.rejects(() => validateArtifact(artifact), message, label);
+        }
+    } finally {
+        await rm(artifact, { recursive: true, force: true });
+    }
+}
+
 async function assertManifestReferenceValidation() {
     const artifact = await mkdtemp(path.join(tmpdir(), 'cocktaildb-artifact-'));
     try {
         const assets = path.join(artifact, 'web', 'assets');
         await mkdir(assets, { recursive: true });
-        await writeFile(path.join(assets, 'main.js'), '');
+        const requiredFiles = ['normalize.css', 'styles.css', 'recipe-card.css', 'common.js', 'recipe.js'];
+        for (const file of [...requiredFiles, 'main.js']) await writeFile(path.join(assets, file), '');
         await writeFile(
             path.join(artifact, 'asset-inventory.json'),
-            JSON.stringify({ version: 1, files: ['main.js'] }),
+            JSON.stringify({ version: 1, files: [...requiredFiles, 'main.js'].sort() }),
         );
+        const requiredManifest = {
+            'normalize.css': { file: 'assets/normalize.css' },
+            'styles.css': { file: 'assets/styles.css' },
+            'recipe-card.css': { file: 'assets/recipe-card.css' },
+            'js/common.js': { file: 'assets/common.js' },
+            'js/recipe.js': { file: 'assets/recipe.js' },
+        };
         const invalidEntries = [
             { field: 'imports', value: 'entry', message: /must be an array/ },
             { field: 'dynamicImports', value: 'entry', message: /must be an array/ },
@@ -83,7 +125,7 @@ async function assertManifestReferenceValidation() {
         for (const { field, value, message } of invalidEntries) {
             await writeFile(
                 path.join(artifact, 'manifest.json'),
-                JSON.stringify({ entry: { file: 'assets/main.js', [field]: value } }),
+                JSON.stringify({ ...requiredManifest, entry: { file: 'assets/main.js', [field]: value } }),
             );
             await assert.rejects(() => validateArtifact(artifact), message);
         }
@@ -436,6 +478,7 @@ async function buildTwiceAndCheck(fixture) {
 }
 
 async function main() {
+    await assertRequiredManifestValidation();
     await assertManifestReferenceValidation();
     await assertNodeModuleModes();
     const fixture = await createFixture();

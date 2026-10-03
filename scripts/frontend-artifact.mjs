@@ -16,6 +16,13 @@ import { fileURLToPath } from 'node:url';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const metadataNames = new Set(['manifest.json', 'asset-inventory.json']);
+const requiredManifestEntries = new Map([
+    ['normalize.css', 'css'],
+    ['styles.css', 'css'],
+    ['recipe-card.css', 'css'],
+    ['js/common.js', 'js'],
+    ['js/recipe.js', 'js'],
+]);
 
 function fail(message) {
     throw new Error(message);
@@ -46,7 +53,12 @@ async function requireRegularFile(file, label) {
 function validateRelativePath(value, label) {
     if (typeof value !== 'string' || value.length === 0)
         fail(`${label} must be a non-empty string`);
-    if (value.includes('\\') || value.startsWith('/') || path.posix.isAbsolute(value)) {
+    if (
+        value.includes('\\') ||
+        value.includes('\0') ||
+        value.startsWith('/') ||
+        path.posix.isAbsolute(value)
+    ) {
         fail(`${label} is not a safe relative path: ${value}`);
     }
     const parts = value.split('/');
@@ -140,19 +152,43 @@ async function validateManifest(file, inventoryFiles, assetsDirectory) {
     if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
         fail('Vite manifest must be an object');
     }
+    for (const [entryName, expectedType] of requiredManifestEntries) {
+        if (!Object.hasOwn(manifest, entryName)) {
+            fail(`Vite manifest is missing required manifest entry: ${entryName}`);
+        }
+        const entry = manifest[entryName];
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+            fail(`Vite manifest entry is invalid: ${entryName}`);
+        }
+        if (typeof entry.file !== 'string' || entry.file.length === 0) {
+            fail(`Vite manifest required file must be a non-empty string: ${entryName}`);
+        }
+        await assertManifestReference(
+            entry.file,
+            `Vite manifest ${entryName}.file`,
+            inventoryFiles,
+            assetsDirectory,
+        );
+        if (expectedType === 'css' && !entry.file.endsWith('.css')) {
+            fail(`Vite manifest required entry must reference CSS: ${entryName}`);
+        }
+        if (expectedType === 'js' && !entry.file.endsWith('.js')) {
+            fail(`Vite manifest required entry must reference JavaScript: ${entryName}`);
+        }
+    }
     for (const [entryName, entry] of Object.entries(manifest)) {
         if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
             fail(`Vite manifest entry is invalid: ${entryName}`);
         }
-        if ('file' in entry) {
-            if (typeof entry.file !== 'string') fail(`Vite manifest file is invalid: ${entryName}`);
-            await assertManifestReference(
-                entry.file,
-                `Vite manifest ${entryName}.file`,
-                inventoryFiles,
-                assetsDirectory,
-            );
+        if (typeof entry.file !== 'string' || entry.file.length === 0) {
+            fail(`Vite manifest file must be a non-empty string: ${entryName}`);
         }
+        await assertManifestReference(
+            entry.file,
+            `Vite manifest ${entryName}.file`,
+            inventoryFiles,
+            assetsDirectory,
+        );
         for (const field of ['css', 'assets']) {
             if (!(field in entry)) continue;
             if (!Array.isArray(entry[field]))
@@ -160,6 +196,11 @@ async function validateManifest(file, inventoryFiles, assetsDirectory) {
             for (const [index, reference] of entry[field].entries()) {
                 if (typeof reference !== 'string') {
                     fail(`Vite manifest ${entryName}.${field}[${index}] is invalid`);
+                }
+                if (field === 'css' && !reference.endsWith('.css')) {
+                    fail(
+                        `Vite manifest ${entryName}.css[${index}] must reference CSS: ${reference}`,
+                    );
                 }
                 await assertManifestReference(
                     reference,
