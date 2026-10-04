@@ -175,6 +175,13 @@ RETURNS TRIGGER AS $$
 BEGIN
   -- Handle INSERT and UPDATE
   IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+    -- Serialize the recompute per recipe. The subqueries below are evaluated
+    -- before the UPDATE takes its row lock, so without this lock two concurrent
+    -- raters can both count the pre-race total and both write it.
+    -- FOR NO KEY UPDATE, not FOR UPDATE: the ratings foreign key check holds a
+    -- KEY SHARE lock on this same row, and FOR UPDATE conflicts with KEY SHARE,
+    -- which deadlocks concurrent raters.
+    PERFORM 1 FROM recipes WHERE id = NEW.recipe_id FOR NO KEY UPDATE;
     UPDATE recipes
     SET
       avg_rating = (SELECT AVG(rating) FROM ratings WHERE recipe_id = NEW.recipe_id),
@@ -183,6 +190,7 @@ BEGIN
     RETURN NEW;
   -- Handle DELETE
   ELSIF TG_OP = 'DELETE' THEN
+    PERFORM 1 FROM recipes WHERE id = OLD.recipe_id FOR NO KEY UPDATE;
     UPDATE recipes
     SET
       avg_rating = COALESCE((SELECT AVG(rating) FROM ratings WHERE recipe_id = OLD.recipe_id), 0),
@@ -244,6 +252,50 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Aggregate valid recorded leaf ABVs for every ingredient and its ancestors.
+CREATE OR REPLACE VIEW ingredient_abv_ranges AS
+WITH RECURSIVE observations(leaf_id, ingredient_id, percent_abv) AS (
+  SELECT i.id, i.id, i.percent_abv
+  FROM ingredients i
+  WHERE i.percent_abv IS NOT NULL
+    AND i.percent_abv <> 'NaN'::numeric
+    AND i.percent_abv BETWEEN 0 AND 100
+    AND NOT EXISTS (
+      SELECT 1 FROM ingredients child WHERE child.parent_id = i.id
+    )
+  UNION
+  SELECT o.leaf_id, parent.id, o.percent_abv
+  FROM observations o
+  JOIN ingredients current ON current.id = o.ingredient_id
+  JOIN ingredients parent ON parent.id = current.parent_id
+)
+SELECT i.id AS ingredient_id,
+       MIN(o.percent_abv) AS min_percent_abv,
+       MAX(o.percent_abv) AS max_percent_abv,
+       COUNT(o.leaf_id) AS observation_count
+FROM ingredients i
+LEFT JOIN observations o ON o.ingredient_id = i.id
+GROUP BY i.id;
+
+-- Clear an old derived ABV when its last child is deleted or reparented.
+CREATE OR REPLACE FUNCTION clear_empty_ingredient_parent_abv()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    UPDATE ingredients p SET percent_abv = NULL
+    WHERE p.id = OLD.parent_id
+      AND p.percent_abv IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM ingredients c WHERE c.parent_id = p.id);
+  ELSIF OLD.parent_id IS DISTINCT FROM NEW.parent_id THEN
+    UPDATE ingredients p SET percent_abv = NULL
+    WHERE p.id = OLD.parent_id
+      AND p.percent_abv IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM ingredients c WHERE c.parent_id = p.id);
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Function to automatically update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -278,6 +330,11 @@ AFTER INSERT OR DELETE OR UPDATE OF parent_id, percent_abv, sugar_g_per_l,
   titratable_acidity_g_per_l ON ingredients
 FOR EACH STATEMENT
 EXECUTE FUNCTION roll_up_ingredient_values();
+
+CREATE TRIGGER clear_empty_ingredient_parent_abv_after_change
+AFTER DELETE OR UPDATE OF parent_id ON ingredients
+FOR EACH ROW
+EXECUTE FUNCTION clear_empty_ingredient_parent_abv();
 
 -- Analytics refresh triggers
 CREATE TRIGGER analytics_recipes_dirty

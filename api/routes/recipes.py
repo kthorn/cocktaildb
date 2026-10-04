@@ -1,31 +1,30 @@
 """Recipes endpoints for the CocktailDB API"""
 
 import logging
-from typing import Optional
-from fastapi import APIRouter, Depends, Query, Response, status
 
+from core.exceptions import DatabaseException, NotFoundException, ValidationException
+from db.database import get_database as get_db
+from db.db_core import Database
 from dependencies.auth import (
     UserInfo,
     get_current_user_optional,
     require_authentication,
     require_editor_access,
 )
-from db.database import get_database as get_db
-from db.db_core import Database
+from fastapi import APIRouter, Depends, Query, Response, status
 from models.requests import (
+    BulkRecipeUpload,
     RecipeCreate,
     RecipeUpdate,
-    BulkRecipeUpload,
 )
 from models.responses import (
-    RecipeResponse,
+    BulkUploadResponse,
+    BulkUploadValidationError,
     MessageResponse,
     PaginatedSearchResponse,
     PaginationMetadata,
-    BulkUploadResponse,
-    BulkUploadValidationError,
+    RecipeResponse,
 )
-from core.exceptions import NotFoundException, DatabaseException, ValidationException
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +60,7 @@ def check_duplicate_ingredients(ingredients: list) -> list[int]:
 
 @router.get("/search", response_model=PaginatedSearchResponse)
 async def search_recipes(
-    q: Optional[str] = Query(None, description="Search query"),
+    q: str | None = Query(None, description="Search query"),
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     limit: int = Query(20, ge=1, le=1000, description="Number of items per page"),
     sort_by: str = Query(
@@ -69,28 +68,28 @@ async def search_recipes(
         description="Sort field: name, created_at, avg_rating, rating_count, random",
     ),
     sort_order: str = Query("asc", description="Sort order: asc, desc"),
-    cursor: Optional[str] = Query(None, description="Cursor for pagination"),
-    min_rating: Optional[float] = Query(
+    cursor: str | None = Query(None, description="Cursor for pagination"),
+    min_rating: float | None = Query(
         None, description="Minimum rating (type depends on rating_type)", ge=0, le=5
     ),
-    max_rating: Optional[float] = Query(
+    max_rating: float | None = Query(
         None, description="Maximum rating (type depends on rating_type)", ge=0, le=5
     ),
     rating_type: str = Query(
         "average",
         description="Rating filter type: 'average' (avg_rating) or 'user' (user's personal rating)",
     ),
-    tags: Optional[str] = Query(None, description="Comma-separated list of tags"),
-    ingredients: Optional[str] = Query(
+    tags: str | None = Query(None, description="Comma-separated list of tags"),
+    ingredients: str | None = Query(
         None,
         description="Comma-separated ingredient names with optional operators (e.g., 'Vodka,Gin:MUST,Vermouth:MUST_NOT')",
     ),
-    inventory: Optional[bool] = Query(
+    inventory: bool | None = Query(
         None,
         description="Filter recipes that can be made with user's ingredient inventory",
     ),
     db: Database = Depends(get_db),
-    user: Optional[UserInfo] = Depends(get_current_user_optional),
+    user: UserInfo | None = Depends(get_current_user_optional),
 ):
     """Search recipes with pagination and filters"""
     try:
@@ -204,12 +203,12 @@ async def search_recipes(
         raise
     except Exception as e:
         logger.error(f"Error searching recipes: {str(e)}")
-        raise DatabaseException("Failed to search recipes", detail=str(e))
+        raise DatabaseException("Failed to search recipes", detail=str(e)) from e
 
 
 @router.get("/search/authenticated", response_model=PaginatedSearchResponse)
 async def search_recipes_authenticated(
-    q: Optional[str] = Query(None, description="Search query"),
+    q: str | None = Query(None, description="Search query"),
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     limit: int = Query(20, ge=1, le=1000, description="Number of items per page"),
     sort_by: str = Query(
@@ -217,23 +216,23 @@ async def search_recipes_authenticated(
         description="Sort field: name, created_at, avg_rating, rating_count, random",
     ),
     sort_order: str = Query("asc", description="Sort order: asc, desc"),
-    cursor: Optional[str] = Query(None, description="Cursor for pagination"),
-    min_rating: Optional[float] = Query(
+    cursor: str | None = Query(None, description="Cursor for pagination"),
+    min_rating: float | None = Query(
         None, description="Minimum rating (type depends on rating_type)", ge=0, le=5
     ),
-    max_rating: Optional[float] = Query(
+    max_rating: float | None = Query(
         None, description="Maximum rating (type depends on rating_type)", ge=0, le=5
     ),
     rating_type: str = Query(
         "average",
         description="Rating filter type: 'average' (avg_rating) or 'user' (user's personal rating)",
     ),
-    tags: Optional[str] = Query(None, description="Comma-separated list of tags"),
-    ingredients: Optional[str] = Query(
+    tags: str | None = Query(None, description="Comma-separated list of tags"),
+    ingredients: str | None = Query(
         None,
         description="Comma-separated ingredient names with optional operators (e.g., 'Vodka,Gin:MUST,Vermouth:MUST_NOT')",
     ),
-    inventory: Optional[bool] = Query(
+    inventory: bool | None = Query(
         False,
         description="Filter recipes that can be made with user's ingredient inventory",
     ),
@@ -301,7 +300,7 @@ async def create_recipe(
         raise  # Re-raise ValidationException without wrapping
     except Exception as e:
         logger.error(f"Error creating recipe: {str(e)}")
-        raise DatabaseException("Failed to create recipe", detail=str(e))
+        raise DatabaseException("Failed to create recipe", detail=str(e)) from e
 
 
 @router.get("/{recipe_id}", response_model=RecipeResponse)
@@ -309,7 +308,7 @@ async def get_recipe(
     recipe_id: int,
     response: Response,
     db: Database = Depends(get_db),
-    user: Optional[UserInfo] = Depends(get_current_user_optional),
+    user: UserInfo | None = Depends(get_current_user_optional),
 ):
     """Get a specific recipe by ID
 
@@ -334,7 +333,7 @@ async def get_recipe(
         raise
     except Exception as e:
         logger.error(f"Error getting recipe {recipe_id}: {str(e)}", exc_info=True)
-        raise DatabaseException("Failed to retrieve recipe", detail=str(e))
+        raise DatabaseException("Failed to retrieve recipe", detail=str(e)) from e
 
 
 @router.put("/{recipe_id}", response_model=RecipeResponse)
@@ -368,7 +367,7 @@ async def update_recipe(
         raise
     except Exception as e:
         logger.error(f"Error updating recipe {recipe_id}: {str(e)}")
-        raise DatabaseException("Failed to update recipe", detail=str(e))
+        raise DatabaseException("Failed to update recipe", detail=str(e)) from e
 
 
 @router.delete("/{recipe_id}", response_model=MessageResponse)
@@ -394,7 +393,7 @@ async def delete_recipe(
         raise
     except Exception as e:
         logger.error(f"Error deleting recipe {recipe_id}: {str(e)}")
-        raise DatabaseException("Failed to delete recipe", detail=str(e))
+        raise DatabaseException("Failed to delete recipe", detail=str(e)) from e
 
 
 @router.post(
@@ -434,19 +433,19 @@ async def bulk_upload_recipes(
             name for name, count in recipe_name_counts.items() if count > 1
         }
         all_ingredient_names = list(
-            set(
+            {
                 ingredient.ingredient_name
                 for recipe in bulk_data.recipes
                 for ingredient in recipe.ingredients
-            )
+            }
         )
         all_unit_names = list(
-            set(
+            {
                 ingredient.unit_name
                 for recipe in bulk_data.recipes
                 for ingredient in recipe.ingredients
                 if ingredient.unit_name is not None
-            )
+            }
         )
         all_unit_ids = sorted(
             {
@@ -547,7 +546,7 @@ async def bulk_upload_recipes(
                     continue
 
                 # Check if all ingredients exist by name (using batch results)
-                for ingredient_idx, ingredient in enumerate(recipe_data.ingredients):
+                for _ingredient_idx, ingredient in enumerate(recipe_data.ingredients):
                     if ingredient.ingredient_name not in valid_ingredients:
                         validation_errors.append(
                             BulkUploadValidationError(
@@ -756,4 +755,4 @@ async def bulk_upload_recipes(
     except Exception as e:
         total_duration = time.time() - start_time
         logger.error(f"Error in bulk upload after {total_duration:.3f}s: {str(e)}")
-        raise DatabaseException("Failed to bulk upload recipes", detail=str(e))
+        raise DatabaseException("Failed to bulk upload recipes", detail=str(e)) from e

@@ -5,7 +5,6 @@ Tests individual endpoint functionality with mocked dependencies
 
 import pytest
 from fastapi import status
-from unittest.mock import Mock, patch
 
 pytestmark = pytest.mark.asyncio
 

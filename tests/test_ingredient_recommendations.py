@@ -241,7 +241,7 @@ class TestIngredientRecommendations:
         )
 
         # Should recommend the specific brand since user only has generic
-        specific_brand = next((r for r in recommendations if r["id"] == 200), None)
+        next((r for r in recommendations if r["id"] == 200), None)
         # This recipe requires exact match, so generic rum shouldn't satisfy it
         # (depending on implementation details, this might show up in recommendations)
 
@@ -284,7 +284,7 @@ class TestIngredientRecommendations:
         # 2. Recipe needs Rye (allow_substitution=True)
         # 3. Both are siblings under same parent
         # 4. This tests the bd-65 fix for sibling matching
-        rye_rec = next((r for r in recommendations if r["id"] == 303), None)
+        next((r for r in recommendations if r["id"] == 303), None)
         # Note: This may or may not show up depending on substitution logic
         # The test documents expected behavior for bd-65 fix
 
@@ -329,7 +329,7 @@ class TestIngredientRecommendations:
         # 2. Recipe needs Bourbon (allow_substitution=True)
         # 3. Both share common ancestor (Spirits) with allow_substitution=True
         # 4. This tests the bd-65 fix for recursive ancestor matching
-        bourbon_rec = next((r for r in recommendations if r["id"] == 402), None)
+        next((r for r in recommendations if r["id"] == 402), None)
         # Note: This may or may not show up depending on substitution logic
         # The test documents expected behavior for bd-65 fix
 

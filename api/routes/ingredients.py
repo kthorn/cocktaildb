@@ -2,8 +2,6 @@
 
 import logging
 
-from fastapi import APIRouter, Body, Depends, status
-
 from bulk_ingredient_values import BULK_VALUE_LIMITS, parse_bulk_ingredient_values
 from core.exceptions import (
     ConflictException,
@@ -19,6 +17,7 @@ from dependencies.auth import (
     get_current_user_optional,
     require_editor_access,
 )
+from fastapi import APIRouter, Body, Depends, status
 from models.requests import BulkIngredientUpload, IngredientCreate, IngredientUpdate
 from models.responses import (
     BulkIngredientUploadResponse,

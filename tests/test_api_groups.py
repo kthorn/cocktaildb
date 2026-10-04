@@ -2,8 +2,8 @@ import pytest
 import pytest_asyncio
 from dependencies.auth import (
     UserInfo,
-    require_authentication,
     get_current_user_optional,
+    require_authentication,
 )
 
 

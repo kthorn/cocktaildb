@@ -5,9 +5,6 @@ These tests verify that search_recipes_paginated() returns ingredients with
 both 'full_name' and 'hierarchy' fields, which are essential for frontend tooltips.
 """
 
-import pytest
-from api.db.db_core import Database
-
 
 class TestSearchIngredientHierarchy:
     """Test that search results include ingredient hierarchy data"""

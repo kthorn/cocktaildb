@@ -6,10 +6,11 @@ Deployed on EC2 with Caddy reverse proxy.
 """
 
 import logging
-import sys
 import os
+import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -19,27 +20,27 @@ from starlette.middleware.base import BaseHTTPMiddleware
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.config import settings
-from core.exceptions import CocktailDBException
 from core.exception_handlers import (
     cocktail_db_exception_handler,
+    general_exception_handler,
     starlette_http_exception_handler,
     validation_exception_handler,
-    general_exception_handler,
 )
+from core.exceptions import CocktailDBException
 from middleware.rate_limit import RateLimitMiddleware
 from routes import (
-    ingredients,
-    recipes,
-    ratings,
-    units,
-    tags,
-    auth,
     admin,
-    user_ingredients,
-    groups,
-    stats,
     analytics,
+    auth,
+    groups,
+    ingredients,
     pages,
+    ratings,
+    recipes,
+    stats,
+    tags,
+    units,
+    user_ingredients,
 )
 from routes.tags import recipe_tags_router
 

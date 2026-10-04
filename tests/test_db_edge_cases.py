@@ -4,14 +4,10 @@ Comprehensive tests for error scenarios, edge cases, data validation,
 and recovery mechanisms in the database layer
 """
 
-import pytest
-import psycopg2
-import os
-import tempfile
-import shutil
-from typing import Dict, Any, List
-from unittest.mock import patch, MagicMock
 import time
+
+import psycopg2
+import pytest
 
 from api.db.db_core import Database
 
@@ -40,13 +36,13 @@ class TestDataValidationErrors:
         db = db_instance
 
         # Test with non-string name
-        with pytest.raises(Exception):
+        with pytest.raises(TypeError):
             db.create_ingredient(
                 {"name": 123, "description": "Test", "parent_id": None}
             )
 
         # Test with invalid parent_id type
-        with pytest.raises(Exception):
+        with pytest.raises(TypeError):
             db.create_ingredient(
                 {"name": "Test", "description": "Test", "parent_id": "invalid"}
             )
@@ -56,7 +52,7 @@ class TestDataValidationErrors:
         db = db_instance
 
         # Test with missing ingredient_id
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             db.create_recipe(
                 {
                     "name": "Test Recipe",
@@ -65,7 +61,7 @@ class TestDataValidationErrors:
                 }
             )
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             db.create_recipe(
                 {
                     "name": "Test Recipe",
@@ -122,7 +118,6 @@ class TestConcurrencyAndLockingErrors:
         recipe = db.create_recipe({"name": "Test Recipe", "instructions": "Test"})
 
         import threading
-        import time
 
         errors = []
         success_count = [0]
@@ -229,7 +224,7 @@ class TestQueryErrorHandling:
         db = db_instance
 
         # Test mismatched parameter count
-        with pytest.raises(Exception):
+        with pytest.raises(IndexError):
             db.execute_query(
                 "INSERT INTO ingredients (name, description) VALUES (%s, %s, %s)",
                 ("Name", "Description"),  # Missing third parameter

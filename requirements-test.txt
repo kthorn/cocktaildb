@@ -12,6 +12,11 @@ pytest-mock>=3.14.1
 pytest-cov>=4.1.0
 httpx>=0.24.0
 
+# Lint. Pinned to the same version as the ruff-check pre-commit hook and as
+# required-version in ruff.toml, so a CI step installing from this file cannot
+# run a different, wider rule set.
+ruff==0.16.5
+
 # Focused database typing regression check
 pyright==1.1.408
 

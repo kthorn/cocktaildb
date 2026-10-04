@@ -4,9 +4,6 @@ Tests for unit-related database operations including get_unit_by_name,
 get_unit_by_abbreviation, and get_unit_by_name_or_abbreviation
 """
 
-import pytest
-from api.db.db_core import Database
-
 
 class TestUnitDatabaseOperations:
     """Test unit-related database operations"""

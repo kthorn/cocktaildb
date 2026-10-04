@@ -27,7 +27,7 @@ from barcart.distance import (
 from barcart.em_learner import em_fit
 from barcart.registry import Registry
 from barcart.reporting import report_neighbors
-from barcart.rollup import create_rollup_mapping, apply_rollup_to_recipes
+from barcart.rollup import apply_rollup_to_recipes, create_rollup_mapping
 
 __all__ = [
     # Core types

@@ -4,11 +4,8 @@ Comprehensive tests for recipe CRUD operations, ingredient relationships,
 and complex query scenarios
 """
 
+import psycopg2
 import pytest
-import psycopg2.errors
-from typing import Dict, Any, List
-
-from api.db.db_core import Database
 from core.exceptions import ConflictException
 
 
@@ -67,6 +64,51 @@ class TestRecipeCRUD:
 
         with pytest.raises(ValueError, match="Invalid ingredient ID"):
             db.create_recipe(recipe_data)
+
+    def test_create_recipe_rejects_null_amount_for_convertible_unit(self, db_instance):
+        """A unit with an mL conversion requires an amount."""
+        db = db_instance
+        gin = db.create_ingredient({"name": "Measured Gin"})
+        db.execute_query(
+            "INSERT INTO units (name, abbreviation, conversion_to_ml) VALUES (%s, %s, %s)",
+            ("Barspoon", "bsp", 2.46446),
+        )
+        unit_id = db.execute_query(
+            "SELECT id FROM units WHERE name = %s", ("Barspoon",)
+        )[0]["id"]
+
+        with pytest.raises(ValueError, match="amount is required"):
+            db.create_recipe(
+                {
+                    "name": "Missing Barspoon Amount",
+                    "ingredients": [
+                        {"ingredient_id": gin["id"], "unit_id": unit_id, "amount": None}
+                    ],
+                }
+            )
+
+    def test_update_recipe_rejects_null_amount_for_convertible_unit(self, db_instance):
+        """Updating a recipe cannot introduce a missing convertible amount."""
+        db = db_instance
+        gin = db.create_ingredient({"name": "Update Gin"})
+        recipe = db.create_recipe({"name": "Update Amount Recipe"})
+        db.execute_query(
+            "INSERT INTO units (name, abbreviation, conversion_to_ml) VALUES (%s, %s, %s)",
+            ("Barspoon", "bsp", 2.46446),
+        )
+        unit_id = db.execute_query(
+            "SELECT id FROM units WHERE name = %s", ("Barspoon",)
+        )[0]["id"]
+
+        with pytest.raises(ValueError, match="amount is required"):
+            db.update_recipe(
+                recipe["id"],
+                {
+                    "ingredients": [
+                        {"ingredient_id": gin["id"], "unit_id": unit_id, "amount": None}
+                    ]
+                },
+            )
 
     def test_get_recipe_by_id(self, db_instance):
         """Test retrieving recipe by ID"""
@@ -541,14 +583,14 @@ class TestRecipeEdgeCases:
         """Test creating recipe with empty name"""
         db = db_instance
 
-        with pytest.raises(Exception):
+        with pytest.raises(psycopg2.errors.NotNullViolation):
             db.create_recipe({"name": "", "instructions": "Test"})
 
     def test_recipe_none_name(self, db_instance):
         """Test creating recipe with None name"""
         db = db_instance
 
-        with pytest.raises(Exception):
+        with pytest.raises(psycopg2.errors.NotNullViolation):
             db.create_recipe({"name": None, "instructions": "Test"})
 
     def test_recipe_very_long_name(self, db_instance):

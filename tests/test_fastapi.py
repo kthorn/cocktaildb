@@ -45,7 +45,7 @@ class TestModelsAndValidation:
     def test_recipe_create_model(self):
         """Test recipe creation model validation"""
         try:
-            from api.models.requests import RecipeCreate, RecipeIngredient
+            from api.models.requests import RecipeCreate
 
             # Valid recipe data
             recipe_data = {

@@ -1,4 +1,16 @@
 /* Styles for recipe-card.js elements extracted from inline declarations. */
+.recipe-abv {
+    margin-bottom: 1em;
+}
+
+.recipe-abv details {
+    font-size: 0.9em;
+}
+
+.recipe-abv summary {
+    cursor: pointer;
+}
+
 .modal.is-hidden {
     display: none;
 }

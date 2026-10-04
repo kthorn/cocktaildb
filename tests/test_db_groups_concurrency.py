@@ -3,6 +3,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Event
 from unittest.mock import patch
+
 import pytest
 from core.exceptions import CocktailDBException
 

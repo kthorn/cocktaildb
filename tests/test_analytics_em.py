@@ -7,8 +7,9 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "api"))
 
-from api.db.db_analytics import AnalyticsQueries
 import barcart
+
+from api.db.db_analytics import AnalyticsQueries
 
 
 def test_compute_cocktail_space_umap_em_handles_sparse_volume(

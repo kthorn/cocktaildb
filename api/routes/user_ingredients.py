@@ -1,25 +1,25 @@
 """User ingredient endpoints for the CocktailDB API"""
 
 import logging
-from fastapi import APIRouter, Depends, status, HTTPException
 
-from dependencies.auth import UserInfo, require_authentication
+from core.exceptions import DatabaseException, NotFoundException
 from db.database import get_database as get_db
 from db.db_core import Database
+from dependencies.auth import UserInfo, require_authentication
+from fastapi import APIRouter, Depends, HTTPException, status
 from models.requests import (
     UserIngredientAdd,
     UserIngredientBulkAdd,
     UserIngredientBulkRemove,
 )
 from models.responses import (
-    UserIngredientResponse,
-    UserIngredientListResponse,
-    UserIngredientBulkResponse,
-    MessageResponse,
-    IngredientRecommendationResponse,
     IngredientRecommendationListResponse,
+    IngredientRecommendationResponse,
+    MessageResponse,
+    UserIngredientBulkResponse,
+    UserIngredientListResponse,
+    UserIngredientResponse,
 )
-from core.exceptions import NotFoundException, DatabaseException
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +53,13 @@ async def add_user_ingredient(
 
     except ValueError as e:
         if "does not exist" in str(e):
-            raise NotFoundException(str(e))
-        raise HTTPException(status_code=400, detail=str(e))
+            raise NotFoundException(str(e)) from e
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Error adding ingredient to user inventory: {str(e)}")
-        raise DatabaseException("Failed to add ingredient to inventory", detail=str(e))
+        raise DatabaseException(
+            "Failed to add ingredient to inventory", detail=str(e)
+        ) from e
 
 
 @router.delete("/bulk", response_model=UserIngredientBulkResponse)
@@ -84,12 +86,12 @@ async def remove_user_ingredients_bulk(
         logger.warning(
             f"Validation error during bulk remove for user {user.user_id}: {str(e)}"
         )
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Error bulk removing ingredients from user inventory: {str(e)}")
         raise DatabaseException(
             "Failed to bulk remove ingredients from inventory", detail=str(e)
-        )
+        ) from e
 
 
 @router.delete("/{ingredient_id}", response_model=MessageResponse)
@@ -119,7 +121,7 @@ async def remove_user_ingredient(
         logger.error(f"Error removing ingredient from user inventory: {str(e)}")
         raise DatabaseException(
             "Failed to remove ingredient from inventory", detail=str(e)
-        )
+        ) from e
 
 
 @router.get("", response_model=UserIngredientListResponse)
@@ -152,7 +154,9 @@ async def get_user_ingredients(
 
     except Exception as e:
         logger.error(f"Error getting user ingredients: {str(e)}")
-        raise DatabaseException("Failed to retrieve user ingredients", detail=str(e))
+        raise DatabaseException(
+            "Failed to retrieve user ingredients", detail=str(e)
+        ) from e
 
 
 @router.post(
@@ -184,7 +188,7 @@ async def add_user_ingredients_bulk(
         logger.error(f"Error bulk adding ingredients to user inventory: {str(e)}")
         raise DatabaseException(
             "Failed to bulk add ingredients to inventory", detail=str(e)
-        )
+        ) from e
 
 
 @router.get("/recommendations", response_model=IngredientRecommendationListResponse)
@@ -225,4 +229,4 @@ async def get_ingredient_recommendations(
         logger.error(f"Error getting ingredient recommendations: {str(e)}")
         raise DatabaseException(
             "Failed to retrieve ingredient recommendations", detail=str(e)
-        )
+        ) from e

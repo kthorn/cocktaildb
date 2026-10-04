@@ -1,5 +1,16 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { NAV_CONFIG, getCurrentPageId, isNavItemActive } from '../src/web/js/navigation.js';
+
+const recipeCardSource = readFileSync(
+    new URL('../src/web/js/recipeCard.js', import.meta.url),
+    'utf8',
+);
+assert.match(
+    recipeCardSource,
+    /window\.location\.href = `\/recipes\.html\?edit=\$\{recipe\.id\}`;/,
+    'recipe edit navigation must target the root recipes page',
+);
 
 const items = [...NAV_CONFIG.primary, ...NAV_CONFIG.secondary, ...NAV_CONFIG.admin];
 assert.equal(NAV_CONFIG.primary.filter((item) => item.mobileBottom).length, 5);

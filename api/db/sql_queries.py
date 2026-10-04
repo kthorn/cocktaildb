@@ -1,5 +1,3 @@
-from typing import List
-
 from .db_utils import build_recipe_sort_spec
 
 # Shared SQL fragments for ingredient queries
@@ -7,6 +5,77 @@ INGREDIENT_SELECT_FIELDS = """
     ri.id as recipe_ingredient_id, ri.amount, ri.ingredient_id, i.name as ingredient_name,
     ri.unit_id, u.name as unit_name, u.abbreviation as unit_abbreviation,
     i.path as ingredient_path, u.conversion_to_ml
+"""
+
+RESOLVE_INGREDIENT_ABV_SQL = """
+WITH RECURSIVE requested AS (
+    SELECT DISTINCT ingredient_id
+    FROM unnest(%(ingredient_ids)s::integer[]) AS requested_ids(ingredient_id)
+),
+walk(requested_id, candidate_id, depth, visited) AS (
+    SELECT i.id, i.id, 0, ARRAY[i.id]::integer[]
+    FROM requested r
+    JOIN ingredients i ON i.id = r.ingredient_id
+
+    UNION ALL
+
+    SELECT w.requested_id, parent.id, w.depth + 1, w.visited || parent.id
+    FROM walk w
+    JOIN ingredients current ON current.id = w.candidate_id
+    JOIN ingredients parent ON parent.id = current.parent_id
+    WHERE NOT parent.id = ANY(w.visited)
+),
+populated_candidates AS (
+    SELECT
+        w.requested_id,
+        w.candidate_id,
+        w.depth,
+        ranges.min_percent_abv,
+        ranges.max_percent_abv,
+        ranges.observation_count,
+        candidate.name::text AS family_name
+    FROM walk w
+    JOIN ingredient_abv_ranges ranges ON ranges.ingredient_id = w.candidate_id
+    JOIN ingredients candidate ON candidate.id = w.candidate_id
+    WHERE ranges.observation_count > 0
+),
+selected AS (
+    SELECT DISTINCT ON (requested_id)
+        requested_id,
+        candidate_id,
+        depth,
+        min_percent_abv,
+        max_percent_abv,
+        observation_count,
+        family_name
+    FROM populated_candidates
+    ORDER BY requested_id, depth, candidate_id
+)
+SELECT
+    requested.ingredient_id,
+    COALESCE(selected.min_percent_abv, 0::numeric) AS min_percent_abv,
+    COALESCE(selected.max_percent_abv, 100::numeric) AS max_percent_abv,
+    COALESCE(selected.observation_count, 0::bigint) AS observation_count,
+    selected.candidate_id AS family_id,
+    selected.family_name,
+    CASE
+        WHEN selected.requested_id IS NULL THEN 'unknown'
+        WHEN selected.depth = 0
+             AND ingredient.percent_abv IS NOT NULL
+             AND ingredient.percent_abv <> 'NaN'::numeric
+             AND ingredient.percent_abv BETWEEN 0 AND 100
+             AND NOT EXISTS (
+                 SELECT 1
+                 FROM ingredients child
+                 WHERE child.parent_id = ingredient.id
+             )
+            THEN 'recorded'
+        ELSE 'family'
+    END AS source
+FROM requested
+JOIN ingredients ingredient ON ingredient.id = requested.ingredient_id
+LEFT JOIN selected ON selected.requested_id = requested.ingredient_id
+ORDER BY requested.ingredient_id;
 """
 
 # Shared substitution matching logic
@@ -96,9 +165,9 @@ get_ingredients_count_sql = """
 
 
 def build_search_recipes_paginated_sql(
-    must_conditions: List[str],
-    must_not_conditions: List[str],
-    tag_conditions: List[str] = None,
+    must_conditions: list[str],
+    must_not_conditions: list[str],
+    tag_conditions: list[str] = None,
     sort_by: str = "name",
     sort_order: str = "asc",
     inventory_filter: bool = False,
@@ -245,9 +314,9 @@ def build_search_recipes_paginated_sql(
 
 
 def build_search_recipes_keyset_sql(
-    must_conditions: List[str],
-    must_not_conditions: List[str],
-    tag_conditions: List[str] = None,
+    must_conditions: list[str],
+    must_not_conditions: list[str],
+    tag_conditions: list[str] = None,
     sort_by: str = "name",
     sort_order: str = "asc",
     inventory_filter: bool = False,

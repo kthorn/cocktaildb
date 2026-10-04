@@ -6,10 +6,9 @@ import logging
 import os
 import resource
 import sys
-from typing import Dict, Any
+from typing import Any
 
 import pandas as pd
-
 from db.database import get_database
 from db.db_analytics import AnalyticsQueries
 from utils.analytics_cache import AnalyticsStorage
@@ -29,9 +28,9 @@ def log_memory(stage: str) -> None:
 
 
 def enrich_tree_with_recipe_counts(
-    tree_node: Dict[str, Any],
-    recipe_counts: Dict[str, Dict[str, int]],
-) -> Dict[str, Any]:
+    tree_node: dict[str, Any],
+    recipe_counts: dict[str, dict[str, int]],
+) -> dict[str, Any]:
     """Recursively enrich tree nodes with recipe count data."""
     node_id = str(tree_node["id"])
 
@@ -54,7 +53,7 @@ def enrich_tree_with_recipe_counts(
     return tree_node
 
 
-def regenerate_analytics() -> Dict[str, Any]:
+def regenerate_analytics() -> dict[str, Any]:
     """
     Core analytics regeneration logic.
 
@@ -129,12 +128,12 @@ def regenerate_analytics() -> Dict[str, Any]:
     # Compute candidate_k based on recipe count: k = 0.15 * n_recipes
     # This is the benchmarked runtime/fidelity balance for the current dataset.
     n_recipes = len(
-        set(
+        {
             r["recipe_id"]
             for r in analytics_queries.db.execute_query(
                 "SELECT DISTINCT recipe_id FROM recipe_ingredients"
             )
-        )
+        }
     )
     candidate_k = max(
         10, int(EM_CANDIDATE_K_FRACTION * n_recipes)

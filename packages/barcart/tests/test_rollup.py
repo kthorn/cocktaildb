@@ -1,8 +1,8 @@
 """Tests for ingredient rollup functionality."""
 
 import pandas as pd
-import pytest
-from barcart.rollup import create_rollup_mapping, apply_rollup_to_recipes
+
+from barcart.rollup import apply_rollup_to_recipes, create_rollup_mapping
 
 
 class TestCreateRollupMapping:

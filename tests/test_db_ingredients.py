@@ -152,10 +152,10 @@ class TestIngredientHierarchy:
         gin = db.create_ingredient(
             {"name": "Test1", "description": "Gin", "parent_id": spirits["id"]}
         )
-        vodka = db.create_ingredient(
+        db.create_ingredient(
             {"name": "Test2", "description": "Vodka", "parent_id": spirits["id"]}
         )
-        london_gin = db.create_ingredient(
+        db.create_ingredient(
             {
                 "name": "London Dry Gin1",
                 "description": "London Gin",
@@ -497,7 +497,7 @@ class TestIngredientEdgeCases:
         """Test creating ingredient with None name"""
         db = db_instance
 
-        with pytest.raises(Exception):  # Should fail due to NOT NULL constraint
+        with pytest.raises(TypeError):  # name must be a str, not None
             db.create_ingredient(
                 {"name": None, "description": "Test", "parent_id": None}
             )

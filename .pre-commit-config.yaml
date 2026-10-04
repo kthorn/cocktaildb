@@ -10,6 +10,22 @@ repos:
             types:
                 - python
 
+          # Lint, not format. ruff format normalizes layout but never reports a
+          # lint finding, so without this hook the rule set declared in ruff.toml
+          # would be unenforced. --fix applies the safe fixes; --force-exclude
+          # makes ruff honour ruff.toml's exclude list for the explicit filenames
+          # pre-commit passes on the command line. The version here is pinned to
+          # the one in ruff.toml and requirements-test.txt; a mismatch fails
+          # loudly rather than linting with a different rule set.
+          - id: ruff-check
+            name: ruff check
+            entry: ruff check --fix --force-exclude
+            language: python
+            additional_dependencies:
+                - ruff==0.16.5
+            types:
+                - python
+
           # One formatter for the frontend code and every YAML file the repository
           # owns: Ansible, Compose, CloudFormation and CI. Style comes from
           # .prettierrc, not from this hook. api/templates/*.html stays out because
