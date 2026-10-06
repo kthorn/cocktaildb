@@ -7,8 +7,9 @@ from unittest.mock import Mock
 import httpx
 import pytest
 from fastapi import FastAPI
-from api.core.frontend_assets import FrontendAssets
 from routes import pages
+
+from api.core.frontend_assets import FrontendAssets
 
 # Reject the legacy call order on older Starlette too; 1.x no longer accepts it.
 pytestmark = pytest.mark.filterwarnings(

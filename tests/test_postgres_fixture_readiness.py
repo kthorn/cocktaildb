@@ -1,6 +1,5 @@
-from testcontainers.core.wait_strategies import PortWaitStrategy
-
 import conftest
+from testcontainers.core.wait_strategies import PortWaitStrategy
 
 
 def test_postgres_fixture_waits_for_mapped_host_port_before_yield(monkeypatch):

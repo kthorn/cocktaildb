@@ -1,9 +1,9 @@
 """Tests for server-rendered HTML pages (recipe, ingredient, sitemap)"""
 
 import pytest
+from routes import pages
 
 from api.core.frontend_assets import FrontendAssets
-from routes import pages
 
 pytestmark = pytest.mark.asyncio
 

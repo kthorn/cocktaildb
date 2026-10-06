@@ -74,10 +74,32 @@ async function assertRequiredManifestValidation() {
             'js/recipe.js': { file: 'assets/recipe.js' },
         };
         for (const [label, mutate, message] of [
-            ['missing required entry', (value) => delete value['normalize.css'], /required manifest entry/],
-            ['missing required file', (value) => { value['styles.css'].file = ''; }, /must be a non-empty string/],
-            ['missing required asset', (value) => { value['styles.css'].file = 'assets/not-in-inventory.css'; }, /absent from asset inventory/],
-            ['wrong required type', (value) => { value['recipe-card.css'].file = 'assets/common.js'; }, /must reference CSS/],
+            [
+                'missing required entry',
+                (value) => delete value['normalize.css'],
+                /required manifest entry/,
+            ],
+            [
+                'missing required file',
+                (value) => {
+                    value['styles.css'].file = '';
+                },
+                /must be a non-empty string/,
+            ],
+            [
+                'missing required asset',
+                (value) => {
+                    value['styles.css'].file = 'assets/not-in-inventory.css';
+                },
+                /absent from asset inventory/,
+            ],
+            [
+                'wrong required type',
+                (value) => {
+                    value['recipe-card.css'].file = 'assets/common.js';
+                },
+                /must reference CSS/,
+            ],
         ]) {
             const candidate = structuredClone(manifest);
             mutate(candidate);
@@ -94,8 +116,15 @@ async function assertManifestReferenceValidation() {
     try {
         const assets = path.join(artifact, 'web', 'assets');
         await mkdir(assets, { recursive: true });
-        const requiredFiles = ['normalize.css', 'styles.css', 'recipe-card.css', 'common.js', 'recipe.js'];
-        for (const file of [...requiredFiles, 'main.js']) await writeFile(path.join(assets, file), '');
+        const requiredFiles = [
+            'normalize.css',
+            'styles.css',
+            'recipe-card.css',
+            'common.js',
+            'recipe.js',
+        ];
+        for (const file of [...requiredFiles, 'main.js'])
+            await writeFile(path.join(assets, file), '');
         await writeFile(
             path.join(artifact, 'asset-inventory.json'),
             JSON.stringify({ version: 1, files: [...requiredFiles, 'main.js'].sort() }),
@@ -126,7 +155,10 @@ async function assertManifestReferenceValidation() {
         for (const { field, value, message } of invalidEntries) {
             await writeFile(
                 path.join(artifact, 'manifest.json'),
-                JSON.stringify({ ...requiredManifest, entry: { file: 'assets/main.js', [field]: value } }),
+                JSON.stringify({
+                    ...requiredManifest,
+                    entry: { file: 'assets/main.js', [field]: value },
+                }),
             );
             await assert.rejects(() => validateArtifact(artifact), message);
         }
@@ -447,7 +479,10 @@ async function assertViteProxyBoundaries() {
             assert.equal(response.status, 200, urlPath);
             const body = await response.text();
             const source = await readFile(path.join(fixture, 'src', 'web', sourceName), 'utf8');
-            const marker = source.split(/\r?\n/).find((line) => line.trim())?.trim();
+            const marker = source
+                .split(/\r?\n/)
+                .find((line) => line.trim())
+                ?.trim();
             assert(marker && body.includes(marker), `${urlPath} was not served from source`);
             assert(!body.includes('stub:'), `${urlPath} was forwarded to the SSR stub`);
         }
@@ -489,7 +524,10 @@ async function createPreviewFixture(port) {
         path.join(fixture, 'vite.config.mjs'),
         `export default { preview: { host: '127.0.0.1', port: ${port}, strictPort: true } };\n`,
     );
-    await writeFile(path.join(fixture, 'dist', 'web', 'index.html'), '<!doctype html><h1>preview</h1>\n');
+    await writeFile(
+        path.join(fixture, 'dist', 'web', 'index.html'),
+        '<!doctype html><h1>preview</h1>\n',
+    );
     for (const file of previewFiles) await writeFile(path.join(assets, file), file);
     await writeFile(
         path.join(fixture, 'dist', 'asset-inventory.json'),
@@ -552,7 +590,11 @@ async function assertPreviewConfigSelection(args, extraEnv, expectedText) {
 
 async function assertPreviewArgumentContract() {
     await assertPreviewConfigSelection(['config.js'], {}, 'positional\\.invalid');
-    await assertPreviewConfigSelection([], { FRONTEND_PREVIEW_CONFIG: 'env-config.js' }, 'environment\\.invalid');
+    await assertPreviewConfigSelection(
+        [],
+        { FRONTEND_PREVIEW_CONFIG: 'env-config.js' },
+        'environment\\.invalid',
+    );
 
     const port = await reservePort();
     const fixture = await createPreviewFixture(port);
