@@ -98,4 +98,4 @@ Replace source-directory deployment and obsolete static-server guidance. Update 
 
 ## Remaining gate
 
-The user approved proceeding to implementation planning on 2026-09-20 after the automated-review blocker was disclosed. The implementation plan is `docs/superpowers/plans/2026-09-20-vite-hashed-assets.md`; plan review and execution-method confirmation remain before implementation. Independent implementation reviews require repairing reviewer tool loading. TypeScript remains a separate future decision.
+The user approved proceeding to implementation planning on 2026-09-20 after the automated-review blocker was disclosed. A companion implementation plan was produced for the implementation process and removed from the repository after implementation concluded — this spec is the lasting design record, and the process/audit history lives in the working logs for that migration. TypeScript remains a separate future decision.
