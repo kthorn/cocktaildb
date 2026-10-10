@@ -36,7 +36,7 @@ repos:
             language: node
             additional_dependencies:
                 - prettier@3.9.6
-            files: ^((src/web|tests)/.*\.(js|mjs|html)|.*\.(yml|yaml))$
+            files: ^((src/web|tests)/.*\.(js|mjs|html)|package\.json|vite\.config\.mjs|scripts/frontend-artifact\.mjs|.*\.(yml|yaml))$
 
     # Shell style comes from this hook's args, not from .prettierrc: -i 4 matches
     # its tabWidth, and -ci indents case bodies. The python language vendors a

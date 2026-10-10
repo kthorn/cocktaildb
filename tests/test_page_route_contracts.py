@@ -1,11 +1,15 @@
 """Page route contracts that do not require a running database."""
 
+import json
+from pathlib import Path
 from unittest.mock import Mock
 
 import httpx
 import pytest
 from fastapi import FastAPI
 from routes import pages
+
+from api.core.frontend_assets import FrontendAssets
 
 # Reject the legacy call order on older Starlette too; 1.x no longer accepts it.
 pytestmark = pytest.mark.filterwarnings(
@@ -14,7 +18,10 @@ pytestmark = pytest.mark.filterwarnings(
 
 
 @pytest.fixture
-def page_app():
+def page_app(monkeypatch):
+    assets = FrontendAssets("development")
+    monkeypatch.setattr(pages, "frontend_assets", assets)
+    monkeypatch.setitem(pages.templates.env.globals, "frontend_assets", assets)
     db = Mock()
     app = FastAPI()
     app.include_router(pages.router)
@@ -132,6 +139,7 @@ async def test_missing_pages_render_from_any_working_directory(
     assert response.status_code == 404
     assert "text/html" in response.headers["content-type"]
     assert "not found" in response.text.lower()
+    assert 'type="module"' not in response.text
 
 
 @pytest.mark.asyncio
@@ -160,3 +168,47 @@ async def test_existing_pages_render_outside_repository(
     assert 'href="/img/favicon.svg"' in response.text
     if url.startswith("/recipe/"):
         assert 'href="/recipe-card.css"' in response.text
+    else:
+        assert 'type="module"' not in response.text
+
+
+@pytest.mark.asyncio
+async def test_built_assets_render_from_manifest_outside_repository(
+    page_app, monkeypatch, tmp_path
+):
+    app, db = page_app
+    manifest_path = Path(__file__).parents[1] / "dist" / "manifest.json"
+    assert manifest_path.is_file()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assets = FrontendAssets("built", manifest_path)
+    monkeypatch.setattr(pages, "frontend_assets", assets)
+    monkeypatch.setitem(pages.templates.env.globals, "frontend_assets", assets)
+    db.get_recipe.return_value = {"id": 42, "name": "Example recipe"}
+    db.get_recipe_similarity.return_value = None
+    monkeypatch.chdir(tmp_path)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/recipe/42")
+
+    assert response.status_code == 200
+    assert 'href="/assets/' in response.text
+    assert 'src="/assets/' in response.text
+    assert 'href="/normalize.css"' not in response.text
+    assert 'src="/js/' not in response.text
+    assert 'href="assets/' not in response.text
+    assert 'src="assets/' not in response.text
+    assert assets.validate() is None
+    assert 'href="/' + manifest["normalize.css"]["file"] + '"' in response.text
+    assert 'src="/' + manifest["js/common.js"]["file"] + '"' in response.text
+    assert 'src="/' + manifest["js/recipe.js"]["file"] + '"' in response.text
+    assert response.text.index(manifest["normalize.css"]["file"]) < response.text.index(
+        manifest["styles.css"]["file"]
+    )
+    assert response.text.index(manifest["styles.css"]["file"]) < response.text.index(
+        manifest["recipe-card.css"]["file"]
+    )
+    assert response.text.index(manifest["js/common.js"]["file"]) < response.text.index(
+        manifest["js/recipe.js"]["file"]
+    )

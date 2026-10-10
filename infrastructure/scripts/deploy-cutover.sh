@@ -15,6 +15,10 @@ MIGRATION_15="15_migration_add_user_groups.sql"
 DOCKER_BIN="${DOCKER_BIN:-docker}"
 CURL_BIN="${CURL_BIN:-curl}"
 PSQL_BIN="${PSQL_BIN:-psql}"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+FRONTEND_RELEASE_SCRIPT="${FRONTEND_RELEASE_SCRIPT:-${APP_HOME}/scripts/frontend-release.py}"
+SMOKE_TEST_BIN="${SMOKE_TEST_BIN:-${APP_HOME}/scripts/smoke-test.sh}"
+SMOKE_BASE_URL="${SMOKE_BASE_URL:-http://127.0.0.1:80}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8000/health}"
 HEALTH_ATTEMPTS="${HEALTH_ATTEMPTS:-15}"
 HEALTH_DELAY_SECONDS="${HEALTH_DELAY_SECONDS:-2}"
@@ -27,6 +31,8 @@ PARITY_MARKER="${PARITY_MARKER:-${APP_HOME}/releases/.migration15-parity-require
 NEW_API_STARTED=false
 NEW_API_MAY_HAVE_WRITTEN=false
 WRITERS_STOPPED=false
+CANDIDATE_IMAGE_ID=""
+PRIOR_API_IMAGE_ID=""
 
 say() {
     printf '%s\n' "$*"
@@ -134,6 +140,7 @@ op_verify_stopped() {
 }
 
 op_migrate() {
+    verify_candidate_image_identity "$NEW_IMAGE" || return
     (
         cd "$RELEASE_ROOT" || exit
         "$APP_HOME/scripts/run-migrations.sh" "$APP_ENV"
@@ -194,6 +201,7 @@ op_verify_parity() {
 }
 
 op_start() {
+    verify_candidate_image_identity "$NEW_IMAGE" || return
     "$DOCKER_BIN" image tag "$NEW_IMAGE" cocktaildb-api:latest || return
     compose_current up -d --no-build --no-deps --force-recreate api
 }
@@ -222,40 +230,245 @@ op_stop_new() {
     compose_current stop --timeout "$STOP_TIMEOUT_SECONDS" api
 }
 
+op_validate_frontend() {
+    "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" validate "$RELEASE_ROOT"
+}
+
+image_id_for_tag() {
+    local image_tag="$1"
+
+    "$DOCKER_BIN" image inspect --format '{{.Id}}' "$image_tag"
+}
+
+active_api_image_id() {
+    local container_id
+
+    container_id=$(compose_current ps --status running -q api) || return
+    if [[ -z "$container_id" || "$container_id" == *$'\n'* ]]; then
+        say "No single active API container is available for immutable image verification."
+        return 1
+    fi
+    "$DOCKER_BIN" inspect --format '{{.Image}}' "$container_id"
+}
+
+pending_field() {
+    local field="$1"
+
+    "$PYTHON_BIN" - "$APP_HOME/frontend-pending.json" "$field" <<'PY'
+import json
+import sys
+
+path, field = sys.argv[1:]
+with open(path, encoding="utf-8") as stream:
+    value = json.load(stream)
+for component in field.split("."):
+    if not isinstance(value, dict) or component not in value:
+        raise SystemExit(f"pending marker is missing field: {field}")
+    value = value[component]
+if not isinstance(value, (str, int)):
+    raise SystemExit(f"pending marker field is not scalar: {field}")
+print(value)
+PY
+}
+
+verify_pending_version() {
+    local version
+
+    version=$(pending_field version) || return
+    if [[ "$version" == 1 ]]; then
+        say "Pending marker version 1 is unsupported; do not infer phase or clear it. Manual identity and database reconciliation is required."
+        return 1
+    fi
+    if [[ "$version" != 2 ]]; then
+        say "Unsupported pending marker version: $version"
+        return 1
+    fi
+}
+
+verify_candidate_image_identity() {
+    local image_tag="$1"
+    local expected_id actual_id
+
+    verify_pending_version || return
+    expected_id=$(pending_field candidate_image_id) || return
+    actual_id=$(image_id_for_tag "$image_tag") || return
+    if [[ "$actual_id" != "$expected_id" ]]; then
+        say "Candidate API image ID does not match pending marker: tag=$image_tag actual=$actual_id expected=$expected_id"
+        return 1
+    fi
+}
+
+op_begin() {
+    CANDIDATE_IMAGE_ID=$(image_id_for_tag "$NEW_IMAGE") || return
+    PRIOR_API_IMAGE_ID=$(active_api_image_id) || return
+    "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" begin \
+        "$RELEASE_ROOT" "$NEW_IMAGE" "$CANDIDATE_IMAGE_ID" "$PRIOR_API_IMAGE_ID"
+}
+
+op_mark_cutover() {
+    local candidate_image_id
+
+    verify_candidate_image_identity "$NEW_IMAGE" || return
+    candidate_image_id=$(pending_field candidate_image_id) || return
+    "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" mark-cutover \
+        "$RELEASE_ROOT" "$NEW_IMAGE" "$candidate_image_id"
+}
+
+op_abort_prepublication() {
+    local candidate_image_id active_api_id
+
+    verify_pending_version || return
+    candidate_image_id=$(pending_field candidate_image_id) || return
+    active_api_id=$(active_api_image_id) || return
+    "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" abort-prepublication \
+        "$RELEASE_ROOT" "$NEW_IMAGE" "$candidate_image_id" "$active_api_id"
+}
+
+op_assets() {
+    "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" assets "$RELEASE_ROOT"
+}
+
 op_publish() {
-    local previous_web
+    "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" publish "$RELEASE_ROOT"
+}
 
-    previous_web="$APP_HOME/releases/previous-web-${RELEASE_ID}"
-    if [[ -e "$previous_web" ]]; then
-        say "Refusing to overwrite preserved frontend: $previous_web"
+op_smoke() {
+    "$SMOKE_TEST_BIN" "$SMOKE_BASE_URL"
+}
+
+op_commit() {
+    "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" commit "$RELEASE_ROOT" "$NEW_IMAGE"
+}
+
+verify_api_image_identity() {
+    local expected_image="$1"
+    local context="$2"
+    local container_id running_image expected_image_id actual_image_id
+
+    container_id=$(compose_current ps -q api) || {
+        say "Unable to inspect the active API container for ${context} identity verification."
+        return 1
+    }
+    if [[ -z "$container_id" || "$container_id" == *$'\n'* ]]; then
+        say "No single active API container is available for ${context} identity verification."
         return 1
     fi
-
-    if [[ -e "$SERVED_WEB" || -L "$SERVED_WEB" ]]; then
-        mv "$SERVED_WEB" "$previous_web" || return
-    fi
-    if ! mv "$RELEASE_ROOT/web" "$SERVED_WEB"; then
-        if [[ -e "$previous_web" || -L "$previous_web" ]]; then
-            mv "$previous_web" "$SERVED_WEB"
-        fi
+    running_image=$("$DOCKER_BIN" inspect --format '{{.Config.Image}}' "$container_id") || return
+    expected_image_id=$("$DOCKER_BIN" image inspect --format '{{.Id}}' "$expected_image") || {
+        say "Expected API image is unavailable for ${context} identity verification: $expected_image"
+        return 1
+    }
+    actual_image_id=$("$DOCKER_BIN" inspect --format '{{.Image}}' "$container_id") || return
+    if [[ "$actual_image_id" != "$expected_image_id" ]]; then
+        say "${context} API image ID does not match expected image: active_id=$actual_image_id expected_id=$expected_image_id active_tag=$running_image expected_tag=$expected_image"
         return 1
     fi
-    say "Previous frontend preserved at $previous_web"
+}
+
+verify_served_frontend_identity() {
+    local expected_root="$1"
+    local mismatch_message="$2"
+    local served_target expected_target
+
+    if [[ ! -L "$SERVED_WEB" ]]; then
+        say "${mismatch_message}: served path is not a symlink: $SERVED_WEB"
+        return 1
+    fi
+    served_target=$(readlink -f "$SERVED_WEB" 2>/dev/null) || {
+        say "${mismatch_message}: unable to resolve served path: $SERVED_WEB"
+        return 1
+    }
+    expected_target=$(readlink -f "$expected_root" 2>/dev/null) || {
+        say "${mismatch_message}: unable to resolve expected path: $expected_root"
+        return 1
+    }
+    if [[ "$served_target" != "$expected_target" ]]; then
+        say "${mismatch_message}: active=$served_target expected=$expected_target"
+        return 1
+    fi
+}
+
+op_verify_prune_identity() {
+    local state_path="$APP_HOME/frontend-state.json"
+    local current_image current_web
+
+    if [[ ! -f "$state_path" || -L "$state_path" ]]; then
+        say "Committed frontend state is missing or is a symlink: $state_path"
+        return 1
+    fi
+    current_image=$(
+        "$PYTHON_BIN" - "$state_path" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    state = json.load(stream)
+current = state.get("current")
+if not isinstance(current, dict) or not isinstance(current.get("image"), str):
+    raise SystemExit("committed frontend state has no current API image")
+print(current["image"])
+PY
+    ) || {
+        say "Unable to read committed frontend API image from $state_path"
+        return 1
+    }
+    current_web=$(
+        "$PYTHON_BIN" - "$state_path" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    state = json.load(stream)
+current = state.get("current")
+if not isinstance(current, dict) or not isinstance(current.get("web"), str):
+    raise SystemExit("committed frontend state has no current web path")
+print(current["web"])
+PY
+    ) || {
+        say "Unable to read committed frontend web path from $state_path"
+        return 1
+    }
+    verify_api_image_identity "$current_image" "Committed" || return
+    verify_served_frontend_identity \
+        "$APP_HOME/$current_web" \
+        "Served frontend does not match committed current" || return
+}
+
+op_prune() {
+    "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" prune
+}
+
+op_recover() {
+    "$PYTHON_BIN" "$FRONTEND_RELEASE_SCRIPT" recover "$RELEASE_ROOT" "$NEW_IMAGE"
 }
 
 run_operation() {
     local operation="$1"
+    shift || true
 
     if [[ -n "$CUTOVER_OPS_DIR" ]]; then
-        "$CUTOVER_OPS_DIR/$operation"
+        "$CUTOVER_OPS_DIR/$operation" "$@"
     else
-        "op_$operation"
+        "op_$operation" "$@"
     fi
+}
+
+report_serving_state() {
+    local serving_target
+
+    serving_target=$(readlink -f "$SERVED_WEB" 2>/dev/null || printf '%s' '<unresolved>')
+    say "Serving frontend: $serving_target"
+    say "Pending API image: $NEW_IMAGE"
 }
 
 fail_cutover() {
     local failed_phase="$1"
     local status="$2"
+
+    if [[ "$failed_phase" == preflight && (-e "$APP_HOME/frontend-pending.json" || -L "$APP_HOME/frontend-pending.json") ]]; then
+        say "An unresolved frontend publication marker blocks deployment: $APP_HOME/frontend-pending.json"
+        say "Verify the active API image and served frontend, then run recovery; do not delete the marker."
+    fi
 
     if [[ ("$failed_phase" == start || "$failed_phase" == health) && "$NEW_API_STARTED" == true ]]; then
         if run_operation stop_new; then
@@ -266,6 +479,9 @@ fail_cutover() {
     fi
 
     say "Cutover failed during ${failed_phase}."
+    if [[ "$failed_phase" == publish || "$failed_phase" == smoke || "$failed_phase" == commit ]]; then
+        report_serving_state
+    fi
     if [[ "$WRITERS_STOPPED" == false ]]; then
         say "The old API and served frontend were left in place. Fix the failure and rerun the normal deploy."
     elif [[ "$NEW_API_MAY_HAVE_WRITTEN" == true ]]; then
@@ -289,11 +505,230 @@ run_phase() {
     fi
 }
 
+run_frontend_prune() {
+    local status
+
+    say "CUTOVER phase=frontend-prune-identity"
+    if run_operation verify_prune_identity; then
+        :
+    else
+        status=$?
+        say "Release is deployed, but frontend retention cleanup identity verification failed; keep the healthy API running and do not prune."
+        exit "$status"
+    fi
+
+    say "CUTOVER phase=frontend-prune"
+    run_operation prune
+    status=$?
+    if [[ "$status" == 0 ]]; then
+        return 0
+    fi
+    say "Release is deployed, but frontend retention cleanup failed; keep the healthy API running and retry cleanup after verifying identities."
+    exit "$status"
+}
+
+prepare_parity_marker() {
+    if [[ "$migration_15_was_pending" == true ]]; then
+        if ! printf '%s\n' "$RELEASE_ID" >"$PARITY_MARKER"; then
+            fail_cutover recovery_marker 1
+        fi
+    fi
+}
+
+run_forward_cutover() {
+    prepare_parity_marker
+    run_phase mark_cutover
+    run_phase migrate
+    run_phase verify_recorded
+    if [[ "$initial_parity_required" == true ]]; then
+        run_phase verify_parity
+        if ! rm -f "$PARITY_MARKER"; then
+            fail_cutover recovery_marker 1
+        fi
+    fi
+    NEW_API_STARTED=true
+    NEW_API_MAY_HAVE_WRITTEN=true
+    run_phase start
+    run_phase health
+    run_phase publish
+    run_phase smoke
+    run_phase commit
+    run_frontend_prune
+}
+
+abort_prepublication_cutover() {
+    local recovery_root="$1"
+    local recovery_image="$2"
+    local phase
+
+    RELEASE_ROOT="$recovery_root"
+    NEW_IMAGE="$recovery_image"
+    if [[ -L "$APP_HOME/frontend-pending.json" ]]; then
+        say "The frontend pending marker must not be a symlink: $APP_HOME/frontend-pending.json"
+        return 1
+    fi
+    if [[ ! -f "$APP_HOME/frontend-pending.json" ]]; then
+        say "No frontend pending marker exists; nothing to abort."
+        return 1
+    fi
+    verify_pending_version || return
+    phase=$(pending_field phase) || return
+    if [[ "$phase" != prepublication ]]; then
+        say "Prepublication abort is forbidden after durable cutover; use forward recovery instead."
+        return 1
+    fi
+    verify_candidate_image_identity "$recovery_image" || return
+    say "CUTOVER phase=abort-prepublication"
+    run_operation abort_prepublication || return
+    say "Prepublication marker cleared after verified prior identity; shared assets and release data were retained. Rerun the normal deployment."
+}
+
+resume_cutover() {
+    local recovery_root="$1"
+    local recovery_image="$2"
+    local phase running pending_output
+
+    RELEASE_ROOT="$recovery_root"
+    NEW_IMAGE="$recovery_image"
+    if [[ -L "$APP_HOME/frontend-pending.json" ]]; then
+        say "The frontend pending marker must not be a symlink: $APP_HOME/frontend-pending.json"
+        return 1
+    fi
+    if [[ ! -f "$APP_HOME/frontend-pending.json" ]]; then
+        say "No frontend pending marker exists; nothing to resume."
+        return 1
+    fi
+    verify_pending_version || return
+    phase=$(pending_field phase) || return
+    if [[ "$phase" != prepublication ]]; then
+        say "resume-stopped requires a prepublication marker; use recover for cutover phase."
+        return 1
+    fi
+    verify_candidate_image_identity "$recovery_image" || return
+    running=$(compose_current ps --status running -q api) || return
+    if [[ -n "$running" ]]; then
+        say "resume-stopped requires zero running API writer containers: $running"
+        return 1
+    fi
+    WRITERS_STOPPED=true
+    run_phase verify_stopped
+    run_phase assets
+    if [[ -f "$PARITY_MARKER" ]]; then
+        parity_recovery_at_start=true
+    else
+        parity_recovery_at_start=false
+    fi
+
+    say "CUTOVER phase=resume-pending"
+    if pending_output=$(run_operation pending); then
+        say "$pending_output"
+    else
+        fail_cutover resume-pending $?
+    fi
+    if grep -Fqx "Would apply: $MIGRATION_15" <<<"$pending_output"; then
+        migration_15_was_pending=true
+    else
+        migration_15_was_pending=false
+    fi
+    if [[ "$parity_recovery_at_start" == true && "$migration_15_was_pending" == true ]]; then
+        say "A prior migration 15 attempt has uncertain SQL/bookkeeping state and must not be replayed."
+        say "Inspect the schema and exact legacy/group parity, then perform manual forward recovery."
+        fail_cutover recovery 1
+    fi
+    if [[ "$migration_15_was_pending" == true || "$parity_recovery_at_start" == true ]]; then
+        initial_parity_required=true
+    else
+        initial_parity_required=false
+    fi
+
+    say "CUTOVER phase=resume-backup"
+    run_phase backup
+    run_forward_cutover
+    say "CUTOVER phase=cleanup"
+    if run_operation cleanup; then
+        say "Stopped API recovery completed forward-only: candidate API and frontend are published."
+    else
+        local status=$?
+        say "Release is healthy and reconciled, but Docker artifact cleanup failed; leave the healthy API running and investigate."
+        return "$status"
+    fi
+}
+
+recover_cutover() {
+    local recovery_root="$1"
+    local recovery_image="$2"
+
+    RELEASE_ROOT="$recovery_root"
+    NEW_IMAGE="$recovery_image"
+    if [[ -L "$APP_HOME/frontend-pending.json" ]]; then
+        if [[ ! -e "$APP_HOME/frontend-pending.json" ]]; then
+            say "The frontend pending marker is a dangling symlink: $APP_HOME/frontend-pending.json"
+        else
+            say "The frontend pending marker must not be a symlink: $APP_HOME/frontend-pending.json"
+        fi
+        say "Inspect the marker and serving state, then perform manual recovery without deleting it."
+        return 1
+    fi
+    if [[ ! -f "$APP_HOME/frontend-pending.json" ]]; then
+        say "No frontend pending marker exists; nothing to recover."
+        return 1
+    fi
+    verify_pending_version || return
+    local pending_phase
+    pending_phase=$(pending_field phase) || return
+    if [[ "$pending_phase" == prepublication ]]; then
+        say "The marker is prepublication; use abort-prepublication while the prior API/frontend identities remain active or approved resume-stopped after writers stop."
+        return 1
+    fi
+    verify_candidate_image_identity "$recovery_image" || return
+    if ! verify_api_image_identity "$recovery_image" "Active"; then
+        say "Inspect the running container and marker, then perform manual recovery; the old API will not be restarted automatically."
+        return 1
+    fi
+    if ! verify_served_frontend_identity \
+        "$recovery_root/web" \
+        "Served frontend does not match pending candidate"; then
+        say "Inspect the running frontend and marker, then perform manual recovery; the old API will not be restarted automatically."
+        return 1
+    fi
+
+    say "CUTOVER phase=recovery-health"
+    run_operation health || return
+    say "CUTOVER phase=recovery-smoke"
+    run_operation smoke || return
+    say "CUTOVER phase=recovery-commit"
+    run_operation recover || return
+    run_frontend_prune
+    say "CUTOVER phase=cleanup"
+    if run_operation cleanup; then
+        say "Frontend recovery reconciled the published release and cleanup completed."
+    else
+        local status=$?
+        say "Release is healthy and reconciled, but Docker artifact cleanup failed; leave the healthy API running and investigate."
+        return "$status"
+    fi
+}
+
 mkdir -p "$(dirname "$DEPLOY_LOCK_FILE")"
 exec 9>"$DEPLOY_LOCK_FILE"
 if ! flock -n 9; then
     fail_cutover lock 73
 fi
+
+case "${1:-}" in
+    abort-prepublication)
+        abort_prepublication_cutover "${2:-$RELEASE_ROOT}" "${3:-$NEW_IMAGE}"
+        exit $?
+        ;;
+    resume-stopped)
+        resume_cutover "${2:-$RELEASE_ROOT}" "${3:-$NEW_IMAGE}"
+        exit $?
+        ;;
+    recover)
+        recover_cutover "${2:-$RELEASE_ROOT}" "${3:-$NEW_IMAGE}"
+        exit $?
+        ;;
+esac
 
 parity_recovery_at_start=false
 if [[ -f "$PARITY_MARKER" ]]; then
@@ -304,6 +739,9 @@ if [[ ! -f "$RELEASE_ROOT/migrations/$MIGRATION_15" ]]; then
     fail_cutover preflight 1
 fi
 if [[ ! -d "$RELEASE_ROOT/web" || ! -f "$RELEASE_ROOT/web/js/config.js" ]]; then
+    fail_cutover preflight 1
+fi
+if [[ -e "$APP_HOME/frontend-pending.json" || -L "$APP_HOME/frontend-pending.json" ]]; then
     fail_cutover preflight 1
 fi
 
@@ -329,30 +767,16 @@ else
     initial_parity_required=false
 fi
 
+run_phase validate_frontend
 run_phase cleanup
 run_phase backup
 run_phase build
+run_phase begin
+run_phase assets
 run_phase stop
 WRITERS_STOPPED=true
 run_phase verify_stopped
-if [[ "$migration_15_was_pending" == true ]]; then
-    if ! printf '%s\n' "$RELEASE_ID" >"$PARITY_MARKER"; then
-        fail_cutover recovery_marker 1
-    fi
-fi
-run_phase migrate
-run_phase verify_recorded
-if [[ "$initial_parity_required" == true ]]; then
-    run_phase verify_parity
-    if ! rm -f "$PARITY_MARKER"; then
-        fail_cutover recovery_marker 1
-    fi
-fi
-NEW_API_STARTED=true
-NEW_API_MAY_HAVE_WRITTEN=true
-run_phase start
-run_phase health
-run_phase publish
+run_forward_cutover
 
 say "CUTOVER phase=cleanup"
 if run_operation cleanup; then

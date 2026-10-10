@@ -14,6 +14,7 @@ import psycopg2
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport
+from testcontainers.core.wait_strategies import PortWaitStrategy
 from testcontainers.postgres import PostgresContainer
 
 # Add project root and api directory to Python path for imports
@@ -79,7 +80,7 @@ def postgres_container():
             username=TEST_DB_USER,
             password=TEST_DB_PASSWORD,
             dbname=TEST_DB_NAME,
-        ) as container:
+        ).waiting_for(PortWaitStrategy(5432)) as container:
             # Wait for container to be ready
             container.get_connection_url()
             ready = True

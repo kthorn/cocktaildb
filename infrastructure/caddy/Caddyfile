@@ -10,11 +10,27 @@
 
 # Unversioned frontend files must revalidate after every deployment.
 (frontend_cache) {
-    @mutable path / *.html *.js *.css /recipe/* /ingredient/*
+    @mutable {
+        path / *.html *.js *.css /recipe/* /ingredient/*
+        not path /assets/*
+    }
     header @mutable Cache-Control "no-cache"
 
-    @immutable_media path *.png *.jpg *.jpeg *.gif *.svg *.woff *.woff2
+    @immutable_media {
+        path *.png *.jpg *.jpeg *.gif *.svg *.woff *.woff2
+        not path /assets/*
+    }
     header @immutable_media Cache-Control "public, max-age=3600"
+
+    handle_path /assets/* {
+        root * /opt/cocktaildb/frontend-assets
+        header {
+            match status 2xx
+            Cache-Control "public, max-age=31536000, immutable"
+            defer
+        }
+        file_server
+    }
 }
 
 # Production: Domain-based routing with automatic HTTPS

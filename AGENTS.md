@@ -2,24 +2,27 @@
 
 ## Project Structure & Module Organization
 - `api/` holds the FastAPI backend, including routes, models, and database layer (`api/db/`).
-- `src/web/` contains the static frontend (HTML/CSS/JS) served via Caddy on EC2.
+- `src/web/` contains the vanilla multi-page frontend source; Vite builds it into ignored `dist/web/` for Caddy.
 - `tests/` includes pytest suites plus fixtures.
 - `packages/barcart/` is a standalone analytics package with its own tests and tooling.
 - `infrastructure/` contains Ansible playbooks, Caddy config, PostgreSQL schema, and systemd services.
-- `scripts/` provides deployment, config generation, and test DB helpers.
+- `scripts/` provides artifact build/preview, deployment, config generation, and test DB helpers.
 - `template.yaml` is a CloudFormation template for shared AWS resources (Cognito, S3, IAM).
 
 ## Build, Test, and Development Commands
 - `aws cloudformation deploy --template-file template.yaml --stack-name cocktaildb-dev --capabilities CAPABILITY_NAMED_IAM` deploys AWS resources.
+- Node 22.22.2 is the tested frontend runtime. The root package is intentionally typeless: existing CommonJS `.js` scripts remain executable while Node syntax detection handles frontend ESM.
+- `npm ci && npm run build && npm run test:build` builds and checks the configuration-free artifact with the committed lockfile.
 - `./scripts/local-config.sh` generates `src/web/js/config.js` for local dev.
-- `./scripts/serve.sh` serves the frontend at `http://localhost:8000`.
-- `npx live-server src/web --port=8000` runs live-reload for UI changes.
-- `python -m pytest tests/ -v` runs API and integration tests.
-- `pytest packages/barcart/tests/` runs analytics package tests.
+- `./scripts/serve.sh` runs Vite at strict `http://localhost:8000`.
+- Optional SSR development runs FastAPI on port 8001 with `FRONTEND_ASSET_MODE=development`; browse recipe/ingredient/sitemap routes through Vite on port 8000.
+- `npm run preview -- /path/to/config.js` previews a disposable config-injected copy without mutating `dist/`.
+- `/home/kurtt/miniforge3/envs/cocktaildb/bin/python -m pytest tests/ -v` runs API and integration tests.
+- `/home/kurtt/miniforge3/envs/cocktaildb/bin/python -m pytest packages/barcart/tests/` runs analytics package tests.
 
 ## Formatting
 
-- Requires Node 22.7 or newer; Node 22.22.2 is the tested version. The floor is required so `node --check` detects ESM syntax without a root `package.json`.
+- Frontend builds require Node 22.12.0 or newer because the pinned Vite 8.3.0 declares that floor; Node 22.22.2 is the tested version. The root package remains typeless so existing CommonJS scripts and Node's formatter-era 22.7+ syntax detection for frontend ESM continue to execute; the build/artifact test asserts both modes.
 - Install hooks with `~/miniforge3/envs/cocktaildb/bin/python -m pip install pre-commit==4.6.2 && ~/miniforge3/envs/cocktaildb/bin/python -m pre_commit install`.
 - Run every formatter check with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run --all-files`.
 - Format/check Python only with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run ruff-format --all-files`.

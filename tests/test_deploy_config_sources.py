@@ -162,6 +162,40 @@ def test_deploy_entry_point_installs_no_ansible_collections():
     )
 
 
+def test_both_deployment_paths_prepare_shared_assets_and_guard_web_root():
+    for playbook_name in ("deploy.yml", "deploy-caddy.yml"):
+        playbook = _play(playbook_name)
+        tasks = _tasks(playbook)
+        shared_assets = [
+            task
+            for task in tasks
+            if task.get("ansible.builtin.file", task.get("file", {})).get("path")
+            == "/opt/cocktaildb/frontend-assets"
+        ]
+        assert len(shared_assets) == 1, (
+            f"{playbook_name} must create shared frontend assets before Caddy starts"
+        )
+        assert (
+            shared_assets[0].get(
+                "ansible.builtin.file", shared_assets[0].get("file", {})
+            )["state"]
+            == "directory"
+        )
+
+        task_names = [task["name"] for task in tasks]
+        assert "Fail when deployed web root is dangling" in task_names
+        guard_index = task_names.index("Fail when deployed web root is dangling")
+        caddy_start = [
+            index
+            for index, task in enumerate(tasks)
+            if task["name"] in {"Restart Caddy", "Ensure Caddy is running"}
+        ]
+        assert caddy_start
+        shared_assets_index = task_names.index(shared_assets[0]["name"])
+        assert shared_assets_index < min(caddy_start)
+        assert guard_index < min(caddy_start)
+
+
 def test_each_environment_has_one_explicit_inventory():
     assert sorted(p.name for p in (ANSIBLE / "inventory").glob("*.yml")) == [
         "dev.yml",

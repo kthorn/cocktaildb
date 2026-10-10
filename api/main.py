@@ -75,6 +75,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting CocktailDB API")
     logger.info(f"Environment: {settings.environment}")
     logger.info(f"Database: {settings.db_host}:{settings.db_port}/{settings.db_name}")
+    pages.frontend_assets.validate()
 
     yield
 

@@ -17,9 +17,37 @@
             group: caddy
             mode: '0755'
 
-      - name: Create web root directory
-        file:
+      - name: Inspect existing web root link
+        ansible.builtin.stat:
             path: '{{ web_root }}'
+            follow: false
+        register: web_root_link
+
+      - name: Inspect existing web root target
+        ansible.builtin.stat:
+            path: '{{ web_root }}'
+            follow: true
+        register: web_root_target
+
+      - name: Fail when deployed web root is dangling
+        ansible.builtin.fail:
+            msg: 'The deployed web root is a dangling symlink: {{ web_root }}'
+        when:
+            - web_root_link.stat.islnk | default(false)
+            - not (web_root_target.stat.exists | default(false))
+
+      - name: Create web root directory
+        ansible.builtin.file:
+            path: '{{ web_root }}'
+            state: directory
+            owner: cocktaildb
+            group: cocktaildb
+            mode: '0755'
+        when: not (web_root_link.stat.islnk | default(false))
+
+      - name: Create shared frontend asset directory
+        ansible.builtin.file:
+            path: /opt/cocktaildb/frontend-assets
             state: directory
             owner: cocktaildb
             group: cocktaildb
