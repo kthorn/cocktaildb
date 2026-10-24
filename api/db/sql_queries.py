@@ -1,3 +1,5 @@
+from recipe_abv import RINSE_VOLUME_ML, TOP_UP_VOLUME_ML
+
 from .db_utils import build_recipe_sort_spec
 
 # Shared SQL fragments for ingredient queries
@@ -128,6 +130,68 @@ INGREDIENT_SUBSTITUTION_MATCH = """
     ))
 """
 
+# With ignore_minor, inventory search skips ingredients at or below this
+# fraction of the recipe's measurable volume (e.g. a few dashes of bitters).
+MINOR_INGREDIENT_MAX_FRACTION = 0.02
+
+
+def _recipe_ingredient_volume_ml(ri: str, u: str) -> str:
+    """SQL volume in mL for one recipe_ingredients row, NULL when unmeasurable.
+
+    Mirrors the volume rules in recipe_abv._volume_for_ingredient.
+    """
+    unit = f"LOWER(TRIM({u}.name))"
+    return f"""(CASE
+        WHEN {ri}.amount = 0 THEN 0
+        WHEN {ri}.amount < 0 THEN NULL
+        WHEN {unit} = 'to top' THEN {TOP_UP_VOLUME_ML}
+        WHEN {unit} = 'to rinse' THEN {RINSE_VOLUME_ML}
+        WHEN {u}.conversion_to_ml > 0 THEN {ri}.amount * {u}.conversion_to_ml
+    END)"""
+
+
+def build_inventory_filter_sql(ignore_minor: bool = False) -> str:
+    """Clause keeping recipes whose ingredients the user's group can cover.
+
+    Leaves the {substitution_match} placeholder for the caller's format().
+    """
+    minor_skip = ""
+    if ignore_minor:
+        minor_skip = f"""
+                AND NOT COALESCE(
+                    {_recipe_ingredient_volume_ml("ri_missing", "u_missing")}
+                    <= {MINOR_INGREDIENT_MAX_FRACTION} * (
+                        SELECT SUM({_recipe_ingredient_volume_ml("ri_total", "u_total")})
+                        FROM recipe_ingredients ri_total
+                        LEFT JOIN units u_total ON ri_total.unit_id = u_total.id
+                        WHERE ri_total.recipe_id = r_inv.id
+                    ),
+                    FALSE
+                )"""
+    return (
+        """ AND r.id IN (
+            SELECT r_inv.id
+            FROM recipes r_inv
+            WHERE r_inv.id = r.id
+            AND NOT EXISTS (
+                SELECT 1 FROM recipe_ingredients ri_missing
+                LEFT JOIN ingredients i_recipe ON ri_missing.ingredient_id = i_recipe.id
+                LEFT JOIN units u_missing ON ri_missing.unit_id = u_missing.id
+                WHERE ri_missing.recipe_id = r_inv.id"""
+        + minor_skip
+        + """
+                AND NOT EXISTS (
+                    SELECT 1 FROM group_ingredients ui_check
+                    LEFT JOIN ingredients i_user ON ui_check.ingredient_id = i_user.id
+                    WHERE ui_check.group_id = %(group_id)s
+                    AND (
+                        {substitution_match}
+                    )
+                )
+            )
+        )"""
+    )
+
 
 get_recipe_by_id_sql = """
     SELECT
@@ -172,6 +236,7 @@ def build_search_recipes_paginated_sql(
     sort_order: str = "asc",
     inventory_filter: bool = False,
     rating_type: str = "average",
+    ignore_minor: bool = False,
 ) -> str:
     """Build the paginated search SQL with optional ingredient filtering"""
     # Determine which rating field to use for filtering
@@ -226,24 +291,7 @@ def build_search_recipes_paginated_sql(
 
     # Add inventory filtering - recipe can be made with user's inventory (substitution-aware)
     if inventory_filter:
-        base_sql += """ AND r.id IN (
-            SELECT r_inv.id
-            FROM recipes r_inv
-            WHERE r_inv.id = r.id
-            AND NOT EXISTS (
-                SELECT 1 FROM recipe_ingredients ri_missing
-                LEFT JOIN ingredients i_recipe ON ri_missing.ingredient_id = i_recipe.id
-                WHERE ri_missing.recipe_id = r_inv.id
-                AND NOT EXISTS (
-                    SELECT 1 FROM group_ingredients ui_check
-                    LEFT JOIN ingredients i_user ON ui_check.ingredient_id = i_user.id
-                    WHERE ui_check.group_id = %(group_id)s
-                    AND (
-                        {substitution_match}
-                    )
-                )
-            )
-        )"""
+        base_sql += build_inventory_filter_sql(ignore_minor)
 
     base_sql += """
         GROUP BY
@@ -321,6 +369,7 @@ def build_search_recipes_keyset_sql(
     sort_order: str = "asc",
     inventory_filter: bool = False,
     rating_type: str = "average",
+    ignore_minor: bool = False,
 ) -> str:
     """Build the paginated search SQL using keyset (cursor) pagination."""
     rating_field = "r.avg_rating" if rating_type == "average" else "ur.rating"
@@ -377,24 +426,7 @@ def build_search_recipes_keyset_sql(
         base_sql += f" AND r.id IN (SELECT DISTINCT rt3.recipe_id FROM recipe_tags rt3 JOIN tags t3 ON rt3.tag_id = t3.id WHERE {condition})"
 
     if inventory_filter:
-        base_sql += """ AND r.id IN (
-            SELECT r_inv.id
-            FROM recipes r_inv
-            WHERE r_inv.id = r.id
-            AND NOT EXISTS (
-                SELECT 1 FROM recipe_ingredients ri_missing
-                LEFT JOIN ingredients i_recipe ON ri_missing.ingredient_id = i_recipe.id
-                WHERE ri_missing.recipe_id = r_inv.id
-                AND NOT EXISTS (
-                    SELECT 1 FROM group_ingredients ui_check
-                    LEFT JOIN ingredients i_user ON ui_check.ingredient_id = i_user.id
-                    WHERE ui_check.group_id = %(group_id)s
-                    AND (
-                        {substitution_match}
-                    )
-                )
-            )
-        )"""
+        base_sql += build_inventory_filter_sql(ignore_minor)
 
     base_sql += f"""
         GROUP BY
