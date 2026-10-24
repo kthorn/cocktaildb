@@ -190,6 +190,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // Reset ABV bounds
+        ['min-abv-search', 'max-abv-search'].forEach((id) => {
+            const input = document.getElementById(id);
+            if (input) input.value = '';
+        });
+
         // Reset selected tags
         selectedTags = [];
         renderTagChips();
@@ -433,6 +439,16 @@ document.addEventListener('DOMContentLoaded', () => {
             query.rating_type = 'user';
         } else {
             query.rating_type = 'average';
+        }
+
+        // Add ABV bounds; an entered 0 still counts and hides unknown-ABV recipes
+        const minAbvInput = document.getElementById('min-abv-search');
+        if (minAbvInput && minAbvInput.value !== '') {
+            query.min_abv = Number(minAbvInput.value);
+        }
+        const maxAbvInput = document.getElementById('max-abv-search');
+        if (maxAbvInput && maxAbvInput.value !== '') {
+            query.max_abv = Number(maxAbvInput.value);
         }
 
         // Add selected tags
