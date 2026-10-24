@@ -166,6 +166,19 @@ get_ingredients_count_sql = """
 # Dynamic SQL generation function for ingredient filtering
 
 
+# The ABV filter matches the whole percentages recipes display (recipe_abv's
+# display_low/display_high), so search returns what users see. Emitted only when
+# a bound is given; recipes whose ABV displays as Unknown never match.
+ABV_FILTER_JOIN = """
+        LEFT JOIN
+            recipe_abv rab ON rab.recipe_id = r.id"""
+
+ABV_FILTER_CONDITIONS = """
+        AND rab.status <> 'unknown'
+        AND (%(min_abv)s IS NULL OR rab.display_high >= %(min_abv)s)
+        AND (%(max_abv)s IS NULL OR rab.display_low <= %(max_abv)s)"""
+
+
 def build_search_recipes_paginated_sql(
     must_conditions: list[str],
     must_not_conditions: list[str],
@@ -175,6 +188,7 @@ def build_search_recipes_paginated_sql(
     inventory_filter: bool = False,
     rating_type: str = "average",
     ignore_minor: bool = False,
+    abv_filter: bool = False,
 ) -> str:
     """Build the paginated search SQL with optional ingredient filtering"""
     # Determine which rating field to use for filtering
@@ -184,7 +198,7 @@ def build_search_recipes_paginated_sql(
     sort_direction = sort_spec.direction
     sort_expr_sr = sort_expr.replace("r.", "sr.")
 
-    base_sql = f"""
+    base_sql = """
     WITH search_results AS (
         SELECT
             r.id, r.name, r.instructions, r.description, r.image_url,
@@ -204,7 +218,10 @@ def build_search_recipes_paginated_sql(
         LEFT JOIN
             recipe_ingredients ri ON r.id = ri.recipe_id
         LEFT JOIN
-            ingredients i ON ri.ingredient_id = i.id
+            ingredients i ON ri.ingredient_id = i.id"""
+    if abv_filter:
+        base_sql += ABV_FILTER_JOIN
+    base_sql += f"""
         WHERE
             (%(search_query)s IS NULL OR
              unaccent(r.name) ILIKE unaccent(%(search_query_with_wildcards)s))
@@ -212,6 +229,8 @@ def build_search_recipes_paginated_sql(
             (%(min_rating)s IS NULL OR COALESCE({rating_field}, 0) >= %(min_rating)s)
         AND
             (%(max_rating)s IS NULL OR COALESCE({rating_field}, 0) <= %(max_rating)s)"""
+    if abv_filter:
+        base_sql += ABV_FILTER_CONDITIONS
 
     # Add MUST ingredient filtering - recipe must contain ALL of the specified ingredients
     for condition in must_conditions:
@@ -308,6 +327,7 @@ def build_search_recipes_keyset_sql(
     inventory_filter: bool = False,
     rating_type: str = "average",
     ignore_minor: bool = False,
+    abv_filter: bool = False,
 ) -> str:
     """Build the paginated search SQL using keyset (cursor) pagination."""
     rating_field = "r.avg_rating" if rating_type == "average" else "ur.rating"
@@ -337,7 +357,10 @@ def build_search_recipes_keyset_sql(
         LEFT JOIN
             recipe_ingredients ri ON r.id = ri.recipe_id
         LEFT JOIN
-            ingredients i ON ri.ingredient_id = i.id
+            ingredients i ON ri.ingredient_id = i.id"""
+    if abv_filter:
+        base_sql += ABV_FILTER_JOIN
+    base_sql += f"""
         WHERE
             (%(search_query)s IS NULL OR
              unaccent(r.name) ILIKE unaccent(%(search_query_with_wildcards)s))
@@ -351,6 +374,8 @@ def build_search_recipes_keyset_sql(
                 OR ({sort_expr} {cursor_operator} %(cursor_sort)s)
                 OR ({sort_expr} = %(cursor_sort)s AND r.id {cursor_operator} %(cursor_id)s)
             )"""
+    if abv_filter:
+        base_sql += ABV_FILTER_CONDITIONS
 
     for condition in must_conditions:
         base_sql += f" AND r.id IN (SELECT DISTINCT ri2.recipe_id FROM recipe_ingredients ri2 JOIN ingredients i2 ON ri2.ingredient_id = i2.id WHERE {condition})"

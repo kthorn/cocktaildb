@@ -1,7 +1,7 @@
 # ruff: noqa: FURB157
 
-from decimal import Decimal
 import logging
+from decimal import Decimal
 from unittest.mock import Mock, call
 
 import pytest

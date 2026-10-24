@@ -374,7 +374,9 @@ def test_all_excluded_recipe_is_no_volume(db_instance, kind):
 def test_invalid_row_nulls_bounds(db_instance):
     db = db_instance
     ml = _ml(db)
-    recipe = _recipe(db, [(_ingredient(db, 40), ml, 10), (_ingredient(db, 0), ml, "NaN")])
+    recipe = _recipe(
+        db, [(_ingredient(db, 40), ml, 10), (_ingredient(db, 0), ml, "NaN")]
+    )
     row = _abv(db, recipe)
     assert row["status"] == "unknown"
     assert row["unknown_reason"] == "invalid_row"
@@ -489,8 +491,12 @@ def test_rollback_then_migration_round_trips(db_instance):
         "('ingredient_abv_resolution', 'recipe_ingredient_volumes', "
         "'recipe_abv_ingredient_rows', 'recipe_abv')"
     )
-    db.execute_query((root / "migrations/rollbacks/19_rollback_recipe_abv_views.sql").read_text())
+    db.execute_query(
+        (root / "migrations/rollbacks/19_rollback_recipe_abv_views.sql").read_text()
+    )
     assert db.execute_query(views)[0]["n"] == 0
     assert db.execute_query("SELECT count(*) AS n FROM ingredient_abv_ranges")
-    db.execute_query((root / "migrations/19_migration_add_recipe_abv_views.sql").read_text())
+    db.execute_query(
+        (root / "migrations/19_migration_add_recipe_abv_views.sql").read_text()
+    )
     assert db.execute_query(views)[0]["n"] == 4

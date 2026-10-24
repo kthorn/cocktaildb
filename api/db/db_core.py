@@ -926,7 +926,10 @@ class Database(GroupInventoryMixin):
         if not recipe_ids:
             return
         params = {"recipe_ids": recipe_ids}
-        bounds = {row["recipe_id"]: row for row in execute_query(RECIPE_ABV_BOUNDS_SQL, params)}
+        bounds = {
+            row["recipe_id"]: row
+            for row in execute_query(RECIPE_ABV_BOUNDS_SQL, params)
+        }
         rows_by_recipe: dict[int, list[dict]] = {}
         for row in execute_query(RECIPE_ABV_ROWS_SQL, params):
             rows_by_recipe.setdefault(row["recipe_id"], []).append(row)
@@ -935,7 +938,9 @@ class Database(GroupInventoryMixin):
             recipe_bounds = bounds.get(recipe["id"])
             if recipe_bounds is None:
                 # Every recipe has a recipe_abv row, so it was deleted mid-request.
-                logger.warning(f"Recipe {recipe['id']} has no ABV row; leaving abv empty")
+                logger.warning(
+                    f"Recipe {recipe['id']} has no ABV row; leaving abv empty"
+                )
                 recipe["abv"] = None
                 continue
             recipe["abv"] = format_recipe_abv(
@@ -1946,6 +1951,8 @@ class Database(GroupInventoryMixin):
                 else None,
                 "min_rating": search_params.get("min_rating"),
                 "max_rating": search_params.get("max_rating"),
+                "min_abv": search_params.get("min_abv"),
+                "max_abv": search_params.get("max_abv"),
                 "limit": limit,
                 "offset": offset,
                 "sort_by": sort_by,
@@ -2083,6 +2090,10 @@ class Database(GroupInventoryMixin):
 
             # Check if inventory filtering is requested
             inventory_filter = search_params.get("inventory", False)
+            abv_filter = (
+                query_params["min_abv"] is not None
+                or query_params["max_abv"] is not None
+            )
 
             # Build dynamic SQL query
             if use_keyset:
@@ -2095,6 +2106,7 @@ class Database(GroupInventoryMixin):
                     inventory_filter,
                     rating_type,
                     ignore_minor=bool(search_params.get("ignore_minor")),
+                    abv_filter=abv_filter,
                 )
             else:
                 paginated_sql = build_search_recipes_paginated_sql(
@@ -2106,6 +2118,7 @@ class Database(GroupInventoryMixin):
                     inventory_filter,
                     rating_type,
                     ignore_minor=bool(search_params.get("ignore_minor")),
+                    abv_filter=abv_filter,
                 )
             # Get paginated results
             rows = cast(

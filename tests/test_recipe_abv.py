@@ -203,7 +203,9 @@ def test_duplicate_notes_appear_once():
 
 
 def test_missing_name_falls_back_to_ingredient_id():
-    result = format_recipe_abv(wide(), [row(name=None, ingredient_id=42, source="unknown")])
+    result = format_recipe_abv(
+        wide(), [row(name=None, ingredient_id=42, source="unknown")]
+    )
     assert result["notes"] == ["Unknown strength for Ingredient 42; assuming 0–100%."]
 
 
