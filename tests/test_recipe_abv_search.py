@@ -210,3 +210,22 @@ async def test_authenticated_search_forwards_abv_bounds(abv_db, editor_client):
     )
     assert response.status_code == 200
     assert {r["name"] for r in response.json()["recipes"]} == {"Range", "Point"}
+
+
+@pytest.mark.parametrize(
+    ("params", "matches"),
+    [
+        ({"min_abv": 2}, True),
+        ({"min_abv": 3}, False),
+        ({"max_abv": 0}, True),
+    ],
+)
+def test_low_wide_interval_is_filtered_by_its_displayed_range(
+    db_instance, params, matches
+):
+    db = db_instance
+    _recipe(db, "Mocktail", [(_family_member(db, "Bitters", "0", "1.5"), 10)])
+    (listed,) = _search(db, {})
+    assert listed["abv"]["display"] == "0–2%"
+    names = {r["name"] for r in _search(db, params)}
+    assert ("Mocktail" in names) is matches

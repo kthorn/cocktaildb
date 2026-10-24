@@ -410,6 +410,8 @@ def test_point_display_rounds_half_up(db_instance, percent, display, status):
         ("30", "31", (31, 31, False), True),
         ("30", "31.0001", (30, 32, False), False),
         ("15", "17", (15, 17, False), False),
+        ("0", "1.5", (0, 2, False), False),
+        ("0.2", "1.3", (0, 2, False), False),
     ],
 )
 def test_family_interval_display(db_instance, lo, hi, display, narrow):
@@ -500,3 +502,30 @@ def test_rollback_then_migration_round_trips(db_instance):
         (root / "migrations/19_migration_add_recipe_abv_views.sql").read_text()
     )
     assert db.execute_query(views)[0]["n"] == 4
+
+
+def test_bounds_query_reads_only_the_requested_recipes_rows(db_instance):
+    db = db_instance
+    ml = _ml(db)
+    spirit = _ingredient(db, 40)
+    recipe_ids = [_recipe(db, [(spirit, ml, 10), (spirit, ml, 20)]) for _ in range(30)]
+    conn = db._get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "EXPLAIN (ANALYZE, FORMAT JSON) "
+                "SELECT * FROM recipe_abv WHERE recipe_id = ANY(%(recipe_ids)s)",
+                {"recipe_ids": recipe_ids[:1]},
+            )
+            query_plan = cursor.fetchone()[0]
+    finally:
+        db._return_connection(conn)
+
+    def rows_read(node):
+        own = 0
+        if node.get("Relation Name") == "recipe_ingredients":
+            own = node["Actual Rows"] * node.get("Actual Loops", 1)
+        return own + sum(rows_read(child) for child in node.get("Plans", []))
+
+    # Its own 2 rows plus an existence probe; reading every recipe would be 60.
+    assert rows_read(query_plan[0]["Plan"]) < 10

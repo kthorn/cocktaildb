@@ -93,7 +93,7 @@ No strings are composed here beyond the fixed codes; no aggregation.
 
 ### Layer 3 — SQL view `recipe_abv` (per-recipe interval; the math)
 
-Built from `recipes LEFT JOIN recipe_abv_ingredient_rows`, grouped by recipe id, so **every recipe has exactly one row**, including recipes with no ingredients. That removes any Python special case and makes the search filter's treatment of ingredientless recipes explicit.
+Built by grouping `recipe_abv_ingredient_rows` by recipe id, `UNION ALL` a `no_volume` row for each recipe without ingredients, so **every recipe has exactly one row**. Grouping the rows directly, rather than joining from `recipes`, is what lets a `recipe_id` filter reach `recipe_ingredients`' index; a `LEFT JOIN` from `recipes` aggregates every recipe, and a `LATERAL` per-recipe aggregate recomputes Layer 1's walk for each recipe (measured at 0.7–2.3 s on production data). That removes any Python special case and makes the search filter's treatment of ingredientless recipes explicit.
 
 - `recipe_id`
 - `unknown_reason text` — `'invalid_row'` (any `volume_rule = 'invalid'`), else `'no_volume'` (no contributing row, including no rows at all), else `'too_wide'` (division-free width > 20), else null. Python chooses the aggregate disclosure from this, not by inferring from null bounds.
@@ -278,7 +278,8 @@ Deployment ordering: apply the migration before deploying the API version that u
 
 - Views are plain (non-materialized) and computed per request. The planner limits how much of that work can be narrowed:
   - Layer 1's recursive CTE is always materialized, so it is computed over **all** ingredients whenever Layer 2b or 3 is read. The refactored `RESOLVE_INGREDIENT_ABV_SQL` likewise walks all ingredients instead of only the requested ids.
-  - Enrichment's `recipe_id = ANY(...)` filters on a grouping column, so it narrows Layers 2a/2b/3 to the page's recipes; only Layer 1 is still computed in full.
+  - Enrichment's `recipe_id = ANY(...)` filters on a grouping column, so it narrows Layers 2a/2b/3 to the page's recipes; only Layer 1 is still computed in full. A test (`test_bounds_query_reads_only_the_requested_recipes_rows`) pins this.
+  - Measured on the December 2025 production backup (1,550 recipes, 608 ingredients, 6,902 recipe rows): filtered search about 44 ms, unfiltered search about 8 ms, enrichment about 5 ms + 4 ms per page.
   - With an ABV filter active, the search join cannot push `r.id` into the aggregate view, so `recipe_abv` is computed for every recipe on each filtered search.
   - Without an ABV filter, the join is not emitted at all. (Relying on the planner's join removal would not work: `recipe_abv` stacks CTEs over its `GROUP BY`, which hides the uniqueness the planner needs.)
   - Ignore-minor reads only Layer 2a and never touches the recursive walk.

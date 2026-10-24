@@ -158,19 +158,25 @@ JOIN ingredient_abv_resolution s ON s.ingredient_id = v.ingredient_id;
 -- H = sum(v * high), and V = sum(v) across contributing rows.
 CREATE OR REPLACE VIEW recipe_abv AS
 WITH sums AS (
+    -- Grouping the rows directly (rather than joining from recipes) lets a
+    -- recipe_id filter on this view reach recipe_ingredients' index.
     SELECT
-        r.id AS recipe_id,
-        COALESCE(bool_or(rows.volume_rule = 'invalid'), FALSE) AS has_invalid,
-        COALESCE(bool_or(rows.is_estimated), FALSE) AS any_estimated,
-        COALESCE(
-            bool_or(rows.contributes AND rows.strength_source <> 'recorded'), FALSE
-        ) AS any_inferred,
+        rows.recipe_id,
+        bool_or(rows.volume_rule = 'invalid') AS has_invalid,
+        bool_or(rows.is_estimated) AS any_estimated,
+        bool_or(rows.contributes AND rows.strength_source <> 'recorded') AS any_inferred,
         SUM(rows.volume_ml) FILTER (WHERE rows.contributes) AS v,
         SUM(rows.volume_ml * rows.min_percent_abv) FILTER (WHERE rows.contributes) AS l,
         SUM(rows.volume_ml * rows.max_percent_abv) FILTER (WHERE rows.contributes) AS h
+    FROM recipe_abv_ingredient_rows rows
+    GROUP BY rows.recipe_id
+
+    UNION ALL
+
+    -- Recipes without ingredients still get a row (no_volume).
+    SELECT r.id, FALSE, FALSE, FALSE, NULL::numeric, NULL::numeric, NULL::numeric
     FROM recipes r
-    LEFT JOIN recipe_abv_ingredient_rows rows ON rows.recipe_id = r.id
-    GROUP BY r.id
+    WHERE NOT EXISTS (SELECT 1 FROM recipe_ingredients ri WHERE ri.recipe_id = r.id)
 ),
 classified AS (
     SELECT
@@ -186,7 +192,7 @@ shaped AS (
     SELECT
         classified.*,
         CASE WHEN unknown_reason IS NULL THEN h - l <= v END AS narrow,
-        CASE WHEN unknown_reason IS NULL THEN 0 < l + h AND l + h < 2 * v END
+        CASE WHEN unknown_reason IS NULL AND h - l <= v THEN 0 < l + h AND l + h < 2 * v END
             AS below_one
     FROM classified
 )
