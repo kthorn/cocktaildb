@@ -50,6 +50,7 @@ Extracts the nearest-populated-family recursive walk from `RESOLVE_INGREDIENT_AB
 - Columns: `ingredient_id`, `min_percent_abv`, `max_percent_abv`, `observation_count`, `family_id`, `family_name`, `source` (`recorded`/`family`/`unknown`), and `has_observations` (`observation_count > 0`).
 - `source` preserves the resolver's full `CASE` verbatim, not just the family walk: `recorded` requires depth 0 **and** a valid non-`NaN` `percent_abv` between 0 and 100 **and** no children; every other observed resolution is `family`.
 - Same walk logic, ordering, and tie-breaking as the current `RESOLVE_INGREDIENT_ABV_SQL` (`DISTINCT ON` by requested id, smallest depth, then candidate id), but parameter-free.
+- Unknown rows already carry `min_percent_abv = 0`, `max_percent_abv = 100`, and `observation_count = 0`; the `COALESCE`s live in this view.
 - `RESOLVE_INGREDIENT_ABV_SQL` is refactored to a thin parameterized select from this view, so its consumers (bulk ABV values page, existing tests) keep their behavior and contract: same columns, same `0–100` unknown bounds via `COALESCE`.
 
 ### Layer 2a — SQL view `recipe_ingredient_volumes` (volume rules; the only encoding)
@@ -83,10 +84,10 @@ Trimming: Python uses `str.strip()`, so trim the whitespace characters unit name
 Layer 2a joined to Layer 1 on `ingredient_id`, plus `ingredients.name`:
 
 - every Layer 2a column, plus `ingredient_name`
-- `min_percent_abv`, `max_percent_abv` — from `ingredient_abv_resolution`, `COALESCE(…, 0)` / `COALESCE(…, 100)` (unknown rows carry 0–100)
+- `min_percent_abv`, `max_percent_abv` — from `ingredient_abv_resolution` (unknown rows carry 0–100)
 - `strength_source` — `recorded`/`family`/`unknown`
 - `contributes boolean` — `volume_ml > 0`, i.e. `volume_rule IN ('top', 'rinse', 'measured')`. Only contributing rows enter the interval, the strength-source part of the status decision, and strength notes.
-- `strength_display_low`, `strength_display_high integer`, `strength_display_below_one boolean` — the whole-percent display of the ingredient's own strength interval, used by family notes. When `min_percent_abv = max_percent_abv` it is a point: both columns are `round(min_percent_abv)` (half up; values are never negative) and `strength_display_below_one` is `0 < min_percent_abv < 1`. Otherwise `floor(min_percent_abv)` / `ceil(max_percent_abv)`. No division is involved, because ingredient bounds are stored values.
+- `strength_display_low`, `strength_display_high integer`, `strength_display_below_one boolean` — the whole-percent display of the ingredient's own strength interval, used by family notes. When `min_percent_abv = max_percent_abv` it is a point: both columns are `round(min_percent_abv)` (half up; values are never negative), except that a point with `0 < min_percent_abv < 1` sets `strength_display_below_one` and both columns to `0`, as in Layer 3. Otherwise `floor(min_percent_abv)` / `ceil(max_percent_abv)`. No division is involved, because ingredient bounds are stored values.
 
 No strings are composed here beyond the fixed codes; no aggregation.
 
@@ -158,11 +159,11 @@ Behavior compared with the current helper is unchanged except at the edges where
 
 `tests/test_inventory_ignore_minor.py` must pass unchanged.
 
-**Sequencing:** the ignore-minor work is uncommitted on `feat/ignore-minor-ingredients`, the same branch this spec was drafted on. Land ignore-minor first on its own. Then implement this spec on a fresh branch from `main`; that branch performs the fold above.
+**Sequencing:** ignore-minor is PR #116 (`feat/ignore-minor-ingredients`). This spec is implemented on `feat/sql-recipe-abv`, stacked on that branch, and performs the fold above; merge #116 first.
 
 ### Search filtering — `api/db/sql_queries.py`
 
-Both `build_search_recipes_paginated_sql` and `build_search_recipes_keyset_sql` add inside the `search_results` CTE:
+Both `build_search_recipes_paginated_sql` and `build_search_recipes_keyset_sql` take `abv_filter: bool = False`, following the existing `inventory_filter` pattern. Only when it is true (either bound given) do they add inside the `search_results` CTE:
 
 ```sql
 LEFT JOIN recipe_abv rab ON rab.recipe_id = r.id
@@ -171,11 +172,9 @@ LEFT JOIN recipe_abv rab ON rab.recipe_id = r.id
 and the filter condition:
 
 ```sql
-((%(min_abv)s IS NULL AND %(max_abv)s IS NULL) OR rab.status <> 'unknown')
-AND
-(%(min_abv)s IS NULL OR (rab.display_high >= %(min_abv)s))
-AND
-(%(max_abv)s IS NULL OR (rab.display_low <= %(max_abv)s))
+rab.status <> 'unknown'
+AND (%(min_abv)s IS NULL OR rab.display_high >= %(min_abv)s)
+AND (%(max_abv)s IS NULL OR rab.display_low <= %(max_abv)s)
 ```
 
 - **The filter matches what the user sees.** A recipe matches when its displayed whole-percent range `[display_low, display_high]` intersects `[min_abv, max_abv]`:
@@ -194,13 +193,13 @@ AND
 - `min_abv: int | None = Query(None, ge=0, le=100, description="Minimum displayed ABV percent")`
 - `max_abv: int | None = Query(None, ge=0, le=100, description="Maximum displayed ABV percent")`
 
-They are integers because every displayed ABV is a whole percentage; a fractional bound would invite questions about where `14.5` falls against a displayed `15%`. FastAPI rejects a non-integer value with 422. Validation: when both are provided, `min_abv ≤ max_abv` (422 otherwise). Plumbed into `search_params` as `min_abv`/`max_abv` and forwarded to the db layer as query parameters on both SQL builders.
+They are integers because every displayed ABV is a whole percentage; a fractional bound would invite questions about where `14.5` falls against a displayed `15%`. FastAPI rejects a non-integer or out-of-range value with 422. When both are provided and `min_abv > max_abv`, the route raises `ValidationException` (400), like its other cross-field checks (`sort_by`, `rating_type`). Plumbed into `search_params` as `min_abv`/`max_abv` and forwarded to the db layer as query parameters on both SQL builders.
 
 `GET /api/recipes/search/authenticated` **must** declare and forward the same two parameters. Logged-in users always call this endpoint (`CocktailAPI.searchRecipes` in `api.js`), so dropping them there would silently disable the filter for every signed-in user. It calls `search_recipes` with explicit keyword arguments, so pass the values explicitly; the `Query(...)` defaults must not leak into the db call.
 
 ### Frontend — `src/web/search.html`, `src/web/js/search.js`, `src/web/js/api.js`
 
-- `search.html`: two numeric inputs (Min ABV / Max ABV, 0–100, step 1) in the existing filter panel beside the rating filter, with short help text saying they match the ABV shown on each recipe and hide recipes whose ABV is unknown.
+- `search.html`: two numeric inputs (Min ABV / Max ABV, 0–100, step 1) in their own group of the filter panel, after the inventory checkboxes, with short help text saying they match the ABV shown on each recipe and hide recipes whose ABV is unknown.
 - `search.js`: the query builder sets `query.min_abv` / `query.max_abv` when the input's value is non-empty (`input.value !== ''`), so an entered `0` is kept. The existing reset handler clears both inputs.
 - `api.js`: `searchRecipes` appends `min_abv` / `max_abv` when they are not `null`/`undefined`. Use an explicit null check, not the truthiness pattern used for `rating`, which would drop `0`. The anonymous-user branch already forwards every parameter except `inventory`/`ignore_minor`, so both endpoints receive the filter.
 - No changes to `recipeCard.js`, `recipe.html`, or any ABV display code: the contract is identical.
@@ -242,8 +241,8 @@ Deployment ordering: apply the migration before deploying the API version that u
 ## Error handling
 
 - Recipes with invalid rows or no modeled volume: `status = unknown`, null bounds, display `Unknown`, notes disclose the reason (Python renders prose from the codes).
-- ABV filter with no parameters: behavior identical to today. psycopg2 interpolates parameters client-side, so `NULL IS NULL` folds to true, the filter disappears, and the unreferenced LEFT JOIN to a view grouped by recipe id is eligible for join removal.
-- Malformed `min_abv > max_abv`: 422 at the API boundary.
+- ABV filter with no parameters: the SQL is exactly today's; the join is not emitted.
+- Malformed `min_abv > max_abv`: 400 at the API boundary; non-integer or out-of-range bounds: 422.
 - View absent (unmigrated DB): search, enrichment, and ignore-minor raise — fails loudly rather than silently returning wrong data, consistent with the repository's no-silent-fallback rule.
 
 ## Testing
@@ -281,7 +280,7 @@ Deployment ordering: apply the migration before deploying the API version that u
   - Layer 1's recursive CTE is always materialized, so it is computed over **all** ingredients whenever Layer 2b or 3 is read. The refactored `RESOLVE_INGREDIENT_ABV_SQL` likewise walks all ingredients instead of only the requested ids.
   - Enrichment's `recipe_id = ANY(...)` filters on a grouping column, so it narrows Layers 2a/2b/3 to the page's recipes; only Layer 1 is still computed in full.
   - With an ABV filter active, the search join cannot push `r.id` into the aggregate view, so `recipe_abv` is computed for every recipe on each filtered search.
-  - Without an ABV filter, the join can be removed entirely (see Error handling).
+  - Without an ABV filter, the join is not emitted at all. (Relying on the planner's join removal would not work: `recipe_abv` stacks CTEs over its `GROUP BY`, which hides the uniqueness the planner needs.)
   - Ignore-minor reads only Layer 2a and never touches the recursive walk.
 - Scale is hundreds of recipes and shallow hierarchies, so these full computations are cheap; no index changes anticipated. The implementation plan includes one `EXPLAIN ANALYZE` of a filtered search and an enrichment batch against the `pg_db_with_prod_data` fixture as a sanity check, not a gate. If profiling ever disagrees, the upgrade path is materializing `recipe_abv` with a refresh hook — deliberately out of scope.
 
