@@ -1,5 +1,3 @@
-from recipe_abv import RINSE_VOLUME_ML, TOP_UP_VOLUME_ML
-
 from .db_utils import build_recipe_sort_spec
 
 # Shared SQL fragments for ingredient queries
@@ -89,21 +87,6 @@ INGREDIENT_SUBSTITUTION_MATCH = """
 MINOR_INGREDIENT_MAX_FRACTION = 0.02
 
 
-def _recipe_ingredient_volume_ml(ri: str, u: str) -> str:
-    """SQL volume in mL for one recipe_ingredients row, NULL when unmeasurable.
-
-    Mirrors the volume rules in recipe_abv._volume_for_ingredient.
-    """
-    unit = f"LOWER(TRIM({u}.name))"
-    return f"""(CASE
-        WHEN {ri}.amount = 0 THEN 0
-        WHEN {ri}.amount < 0 THEN NULL
-        WHEN {unit} = 'to top' THEN {TOP_UP_VOLUME_ML}
-        WHEN {unit} = 'to rinse' THEN {RINSE_VOLUME_ML}
-        WHEN {u}.conversion_to_ml > 0 THEN {ri}.amount * {u}.conversion_to_ml
-    END)"""
-
-
 def build_inventory_filter_sql(ignore_minor: bool = False) -> str:
     """Clause keeping recipes whose ingredients the user's group can cover.
 
@@ -113,12 +96,14 @@ def build_inventory_filter_sql(ignore_minor: bool = False) -> str:
     if ignore_minor:
         minor_skip = f"""
                 AND NOT COALESCE(
-                    {_recipe_ingredient_volume_ml("ri_missing", "u_missing")}
-                    <= {MINOR_INGREDIENT_MAX_FRACTION} * (
-                        SELECT SUM({_recipe_ingredient_volume_ml("ri_total", "u_total")})
-                        FROM recipe_ingredients ri_total
-                        LEFT JOIN units u_total ON ri_total.unit_id = u_total.id
-                        WHERE ri_total.recipe_id = r_inv.id
+                    (
+                        SELECT v_missing.volume_ml
+                        FROM recipe_ingredient_volumes v_missing
+                        WHERE v_missing.recipe_ingredient_id = ri_missing.id
+                    ) <= {MINOR_INGREDIENT_MAX_FRACTION} * (
+                        SELECT SUM(v_total.volume_ml)
+                        FROM recipe_ingredient_volumes v_total
+                        WHERE v_total.recipe_id = r_inv.id
                     ),
                     FALSE
                 )"""
@@ -130,7 +115,6 @@ def build_inventory_filter_sql(ignore_minor: bool = False) -> str:
             AND NOT EXISTS (
                 SELECT 1 FROM recipe_ingredients ri_missing
                 LEFT JOIN ingredients i_recipe ON ri_missing.ingredient_id = i_recipe.id
-                LEFT JOIN units u_missing ON ri_missing.unit_id = u_missing.id
                 WHERE ri_missing.recipe_id = r_inv.id"""
         + minor_skip
         + """

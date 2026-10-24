@@ -8,11 +8,6 @@ from decimal import Decimal
 from math import isfinite
 from typing import Any
 
-# Still read by the ignore-minor volume helper in sql_queries until it moves to
-# the recipe_ingredient_volumes view.
-TOP_UP_VOLUME_ML = Decimal("88.7205")
-RINSE_VOLUME_ML = Decimal("1")
-
 _INVALID_NOTES = {
     "non_finite_amount": "Invalid quantity for {label}; ABV cannot be calculated.",
     "negative_amount": "Invalid quantity for {label}; ABV cannot be calculated.",
