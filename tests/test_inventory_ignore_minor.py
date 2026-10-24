@@ -109,3 +109,16 @@ async def test_authenticated_search_accepts_ignore_minor(
 
     assert "Mole Daiquiri" not in await names("inventory=true")
     assert "Mole Daiquiri" in await names("inventory=true&ignore_minor=true")
+
+
+@pytest.mark.parametrize("paginate", [False, True])
+def test_non_finite_amount_is_never_minor(minor_db, paginate):
+    _add_recipe(
+        minor_db,
+        "Mystery Rum",
+        [("Rum", "ounce", 2), ("Mystery Syrup", "ounce", "NaN")],
+    )
+
+    relaxed = _names(minor_db, {"inventory": True, "ignore_minor": True}, paginate)
+
+    assert "Mystery Rum" not in relaxed

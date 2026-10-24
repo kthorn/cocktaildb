@@ -1,63 +1,64 @@
 # ruff: noqa: FURB157
 
+import logging
 from decimal import Decimal
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import pytest
 
 from api.db.db_core import Database
-from api.db.sql_queries import RESOLVE_INGREDIENT_ABV_SQL
+from api.db.sql_queries import RECIPE_ABV_BOUNDS_SQL, RECIPE_ABV_ROWS_SQL
 from api.models.responses import RecipeABVResponse, RecipeResponse
 
 
-def ingredient(ingredient_id, amount=10, name=None):
+def bounds_row(recipe_id, percent="40"):
     return {
-        "ingredient_id": ingredient_id,
-        "ingredient_name": name or f"Ingredient {ingredient_id}",
-        "amount": amount,
-        "unit_name": "ml",
-        "conversion_to_ml": Decimal("1"),
+        "recipe_id": recipe_id,
+        "status": "calculated",
+        "unknown_reason": None,
+        "min_percent": Decimal(percent),
+        "max_percent": Decimal(percent),
+        "narrow": True,
+        "display_low": int(percent),
+        "display_high": int(percent),
+        "display_below_one": False,
     }
 
 
-def resolved(ingredient_id, lo=40, hi=40, source="recorded"):
+def contribution_row(recipe_id):
     return {
-        "ingredient_id": ingredient_id,
-        "min_percent_abv": Decimal(str(lo)),
-        "max_percent_abv": Decimal(str(hi)),
-        "observation_count": 1,
-        "family_id": ingredient_id,
-        "family_name": f"Family {ingredient_id}",
-        "source": source,
+        "recipe_id": recipe_id,
+        "ingredient_id": 1,
+        "ingredient_name": "Spirit",
+        "volume_rule": "measured",
+        "invalid_reason": None,
+        "volume_ml": Decimal("10"),
+        "strength_source": "recorded",
+        "contributes": True,
+        "strength_display_low": 40,
+        "strength_display_high": 40,
+        "strength_display_below_one": False,
     }
 
 
-def test_enrichment_uses_one_bulk_lookup_and_indexes_all_recipes():
-    recipes = [
-        {"id": 1, "ingredients": [ingredient(2), ingredient(1)]},
-        {"id": 2, "ingredients": [ingredient(2)]},
-    ]
-    execute = Mock(return_value=[resolved(1), resolved(2, 0, 0)])
+def test_enrichment_uses_two_bulk_queries_for_all_recipes():
+    recipes = [{"id": 1, "ingredients": []}, {"id": 2, "ingredients": []}]
+    execute = Mock(
+        side_effect=[
+            [bounds_row(2, "0"), bounds_row(1)],
+            [contribution_row(1), contribution_row(2)],
+        ]
+    )
     db = Database.__new__(Database)
 
     db._add_recipe_abv(recipes, execute)
 
-    execute.assert_called_once_with(
-        RESOLVE_INGREDIENT_ABV_SQL, {"ingredient_ids": [1, 2]}
-    )
-    assert recipes[0]["abv"]["display"] == "20%"
+    assert execute.call_args_list == [
+        call(RECIPE_ABV_BOUNDS_SQL, {"recipe_ids": [1, 2]}),
+        call(RECIPE_ABV_ROWS_SQL, {"recipe_ids": [1, 2]}),
+    ]
+    assert recipes[0]["abv"]["display"] == "40%"
     assert recipes[1]["abv"]["display"] == "0%"
-
-
-def test_enrichment_uses_the_passed_cursor_executor_without_opening_a_connection():
-    recipes = [{"id": 1, "ingredients": [ingredient(1)]}]
-    cursor_execute = Mock(return_value=[resolved(1)])
-    db = Database.__new__(Database)
-
-    db._add_recipe_abv(recipes, cursor_execute)
-
-    cursor_execute.assert_called_once()
-    assert recipes[0]["abv"]["status"] == "calculated"
 
 
 def test_enrichment_propagates_sql_failures():
@@ -66,32 +67,31 @@ def test_enrichment_propagates_sql_failures():
     db = Database.__new__(Database)
 
     with pytest.raises(RuntimeError) as raised:
-        db._add_recipe_abv([{"id": 1, "ingredients": [ingredient(1)]}], execute)
+        db._add_recipe_abv([{"id": 1, "ingredients": []}], execute)
 
     assert raised.value is error
 
 
-def test_missing_returned_ingredient_id_becomes_explicit_unknown():
-    recipes = [{"id": 1, "ingredients": [ingredient(1), ingredient(2)]}]
-    execute = Mock(return_value=[resolved(1)])
+def test_recipe_missing_from_view_gets_null_abv_and_warning(caplog):
+    recipes = [{"id": 1, "ingredients": []}, {"id": 2, "ingredients": []}]
+    execute = Mock(side_effect=[[bounds_row(1)], [contribution_row(1)]])
     db = Database.__new__(Database)
 
-    db._add_recipe_abv(recipes, execute)
+    with caplog.at_level(logging.WARNING):
+        db._add_recipe_abv(recipes, execute)
 
-    assert recipes[0]["abv"]["status"] == "unknown"
-    assert recipes[0]["abv"]["min_percent"] is None
-    assert any("Ingredient 2" in note for note in recipes[0]["abv"]["notes"])
+    assert recipes[0]["abv"]["display"] == "40%"
+    assert recipes[1]["abv"] is None
+    assert any("2" in record.getMessage() for record in caplog.records)
 
 
-def test_empty_recipe_collection_and_empty_ingredients_skip_lookup():
+def test_empty_recipe_collection_skips_lookup():
     execute = Mock(side_effect=AssertionError("lookup should not run"))
     db = Database.__new__(Database)
-    recipes = [{"id": 1, "ingredients": []}]
 
-    db._add_recipe_abv(recipes, execute)
+    db._add_recipe_abv([], execute)
 
     execute.assert_not_called()
-    assert recipes[0]["abv"]["status"] == "unknown"
 
 
 def test_recipe_abv_response_serializes_additive_contract():
@@ -257,3 +257,40 @@ def test_bulk_create_stays_minimal_then_normal_get_enriches(db_instance):
 
     assert RecipeResponse(**created[0]).abv is None
     assert db.get_recipe(created[0]["id"])["abv"]["display"] == "40%"
+
+
+def test_note_order_matches_ingredient_query(db_instance):
+    db = db_instance
+    db.execute_query(
+        """
+        INSERT INTO ingredients (id, name, parent_id, percent_abv) VALUES
+        (101, 'Family A', NULL, NULL), (102, 'A low', 101, 10),
+        (103, 'A high', 101, 20), (104, 'A', 101, NULL),
+        (111, 'Family B', NULL, NULL), (112, 'B low', 111, 12),
+        (113, 'B high', 111, 18), (114, 'B', 111, NULL),
+        (121, 'Family C', NULL, NULL), (122, 'C low', 121, 11),
+        (123, 'C high', 121, 19), (124, 'C', 121, NULL)
+        """
+    )
+    db.execute_query(
+        "INSERT INTO recipes (id, name, instructions) VALUES (1, 'Ordered', 'Mix')"
+    )
+    db.execute_query(
+        """
+        INSERT INTO recipe_ingredients (recipe_id, ingredient_id, unit_id, amount)
+        SELECT 1, v.ingredient_id, u.id, v.amount
+        FROM (VALUES (1, 104, 'to top', NULL::real), (2, 114, 'milliliter', 10),
+                     (3, 124, 'milliliter', 30)) AS v(position, ingredient_id, unit, amount)
+        JOIN units u ON u.name = v.unit
+        ORDER BY v.position
+        """
+    )
+
+    notes = db.get_recipe(1)["abv"]["notes"]
+
+    assert notes == [
+        "C: 11–19%",
+        "B: 12–18%",
+        "Assumed 88.7205 mL for to top ingredient A.",
+        "A: 10–20%",
+    ]

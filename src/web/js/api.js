@@ -220,6 +220,14 @@ export class CocktailAPI {
             queryParams.append('min_rating', searchQuery.rating);
         }
 
+        // ABV bounds are sent even when 0, which still hides unknown-ABV recipes
+        if (searchQuery.min_abv != null) {
+            queryParams.append('min_abv', searchQuery.min_abv);
+        }
+        if (searchQuery.max_abv != null) {
+            queryParams.append('max_abv', searchQuery.max_abv);
+        }
+
         // Add rating type filter (average vs user)
         if (searchQuery.rating_type) {
             queryParams.append('rating_type', searchQuery.rating_type);
