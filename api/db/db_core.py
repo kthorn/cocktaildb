@@ -2096,6 +2096,7 @@ class Database(GroupInventoryMixin):
                     sort_order,
                     inventory_filter,
                     rating_type,
+                    ignore_minor=bool(search_params.get("ignore_minor")),
                 )
             else:
                 paginated_sql = build_search_recipes_paginated_sql(
@@ -2106,6 +2107,7 @@ class Database(GroupInventoryMixin):
                     sort_order,
                     inventory_filter,
                     rating_type,
+                    ignore_minor=bool(search_params.get("ignore_minor")),
                 )
             # Get paginated results
             rows = cast(

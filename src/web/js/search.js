@@ -65,6 +65,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Setup auth-dependent UI elements
     updateAuthDependentUI();
+    document
+        .getElementById('inventory-search')
+        ?.addEventListener('change', updateIgnoreMinorCheckbox);
 
     // Setup add/remove ingredient rows
     addIngredientRowBtn.addEventListener('click', addIngredientRow);
@@ -441,6 +444,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const inventoryCheckbox = document.getElementById('inventory-search');
         if (inventoryCheckbox && inventoryCheckbox.checked) {
             query.inventory = true;
+            const ignoreMinorCheckbox = document.getElementById('ignore-minor-search');
+            if (ignoreMinorCheckbox && ignoreMinorCheckbox.checked) {
+                query.ignore_minor = true;
+            }
         }
 
         // Add ingredient conditions
@@ -1226,5 +1233,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 inventoryCheckbox.title = 'Show only recipes you can make with your inventory';
             }
         }
+        updateIgnoreMinorCheckbox();
+    }
+
+    // Small-amount skipping only applies to inventory search
+    function updateIgnoreMinorCheckbox() {
+        const inventoryCheckbox = document.getElementById('inventory-search');
+        const ignoreMinorCheckbox = document.getElementById('ignore-minor-search');
+        if (!ignoreMinorCheckbox) return;
+        const enabled = Boolean(
+            inventoryCheckbox && !inventoryCheckbox.disabled && inventoryCheckbox.checked,
+        );
+        ignoreMinorCheckbox.disabled = !enabled;
+        if (!enabled) {
+            ignoreMinorCheckbox.checked = false;
+        }
+        ignoreMinorCheckbox.title =
+            'Count a recipe as makeable when you only lack tiny amounts, like dashes of bitters';
     }
 });

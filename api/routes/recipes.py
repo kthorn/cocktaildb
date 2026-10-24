@@ -88,6 +88,10 @@ async def search_recipes(
         None,
         description="Filter recipes that can be made with user's ingredient inventory",
     ),
+    ignore_minor: bool = Query(
+        False,
+        description="With inventory, skip ingredients that are a small share of the drink's volume",
+    ),
     db: Database = Depends(get_db),
     user: UserInfo | None = Depends(get_current_user_optional),
 ):
@@ -156,6 +160,7 @@ async def search_recipes(
                     "Inventory filtering requires authentication. Please log in to use this feature."
                 )
             search_params["inventory"] = True
+            search_params["ignore_minor"] = ignore_minor
 
         logger.info(f"Search params: {search_params}")
         logger.info(
@@ -236,6 +241,10 @@ async def search_recipes_authenticated(
         False,
         description="Filter recipes that can be made with user's ingredient inventory",
     ),
+    ignore_minor: bool = Query(
+        False,
+        description="With inventory, skip ingredients that are a small share of the drink's volume",
+    ),
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_authentication),
 ):
@@ -254,6 +263,7 @@ async def search_recipes_authenticated(
         tags=tags,
         ingredients=ingredients,
         inventory=inventory,
+        ignore_minor=ignore_minor,
         db=db,
         user=user,
     )

@@ -241,6 +241,9 @@ export class CocktailAPI {
         // Add inventory filter if requested
         if (searchQuery.inventory) {
             queryParams.append('inventory', 'true');
+            if (searchQuery.ignore_minor) {
+                queryParams.append('ignore_minor', 'true');
+            }
         }
 
         // Build the URL with query string
@@ -260,7 +263,7 @@ export class CocktailAPI {
             // Anonymous users use regular search (remove inventory parameter if present)
             const anonymousParams = new URLSearchParams();
             queryParams.forEach((value, key) => {
-                if (key !== 'inventory') {
+                if (key !== 'inventory' && key !== 'ignore_minor') {
                     anonymousParams.append(key, value);
                 }
             });
