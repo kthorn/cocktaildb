@@ -23,6 +23,17 @@ WHERE ingredient_id = ANY(%(ingredient_ids)s::integer[])
 ORDER BY ingredient_id;
 """
 
+RECIPE_ABV_BOUNDS_SQL = """
+SELECT * FROM recipe_abv WHERE recipe_id = ANY(%(recipe_ids)s)
+"""
+
+# Rows come back in ingredient display order so notes dedupe on first use.
+RECIPE_ABV_ROWS_SQL = """
+SELECT * FROM recipe_abv_ingredient_rows
+WHERE recipe_id = ANY(%(recipe_ids)s)
+ORDER BY recipe_id, sort_volume DESC, recipe_ingredient_id
+"""
+
 # Shared substitution matching logic
 # This SQL fragment checks if a user's ingredient can satisfy a recipe's ingredient requirement
 # Variables that must be available in context:

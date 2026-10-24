@@ -9,13 +9,14 @@ import psycopg2
 from core.exceptions import ConflictException, ValidationException
 from psycopg2 import pool
 from psycopg2.extras import RealDictCursor
-from recipe_abv import calculate_recipe_abv
+from recipe_abv import format_recipe_abv
 
 from .db_utils import assemble_ingredient_full_names, extract_all_ingredient_ids
 from .group_inventory import GroupInventoryMixin
 from .sql_queries import (
     INGREDIENT_SELECT_FIELDS,
-    RESOLVE_INGREDIENT_ABV_SQL,
+    RECIPE_ABV_BOUNDS_SQL,
+    RECIPE_ABV_ROWS_SQL,
     get_ingredients_count_sql,
     get_recipe_by_id_sql,
     get_recipes_count_sql,
@@ -921,28 +922,25 @@ class Database(GroupInventoryMixin):
 
     def _add_recipe_abv(self, recipes: list[dict], execute_query) -> None:
         """Add one bulk-resolved ABV result to each recipe in a collection."""
-        ingredient_ids = sorted(
-            {
-                ingredient.get("ingredient_id")
-                for recipe in recipes
-                for ingredient in recipe.get("ingredients", [])
-                if ingredient.get("ingredient_id") is not None
-            }
-        )
-        ranges: dict[int, dict] = {}
-        if ingredient_ids:
-            rows = execute_query(
-                RESOLVE_INGREDIENT_ABV_SQL,
-                {"ingredient_ids": ingredient_ids},
-            )
-            ranges = {
-                row["ingredient_id"]: row
-                for row in rows
-                if row.get("ingredient_id") is not None
-            }
+        recipe_ids = [recipe["id"] for recipe in recipes]
+        if not recipe_ids:
+            return
+        params = {"recipe_ids": recipe_ids}
+        bounds = {row["recipe_id"]: row for row in execute_query(RECIPE_ABV_BOUNDS_SQL, params)}
+        rows_by_recipe: dict[int, list[dict]] = {}
+        for row in execute_query(RECIPE_ABV_ROWS_SQL, params):
+            rows_by_recipe.setdefault(row["recipe_id"], []).append(row)
 
         for recipe in recipes:
-            recipe["abv"] = calculate_recipe_abv(recipe.get("ingredients", []), ranges)
+            recipe_bounds = bounds.get(recipe["id"])
+            if recipe_bounds is None:
+                # Every recipe has a recipe_abv row, so it was deleted mid-request.
+                logger.warning(f"Recipe {recipe['id']} has no ABV row; leaving abv empty")
+                recipe["abv"] = None
+                continue
+            recipe["abv"] = format_recipe_abv(
+                recipe_bounds, rows_by_recipe.get(recipe["id"], [])
+            )
 
     def get_recipe(
         self, recipe_id: int, cognito_user_id: str | None = None

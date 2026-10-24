@@ -1,302 +1,274 @@
 # ruff: noqa: FURB157
+"""Recipe ABV text formatting from the SQL view columns."""
 
 from decimal import Decimal
 
 import pytest
 
-from api.recipe_abv import calculate_recipe_abv
+from api.recipe_abv import display_text, format_recipe_abv
 
 
-def row(i, amount, unit="ml", factor=1, name=None):
+def bounds(
+    status="calculated",
+    lo="40",
+    hi="40",
+    display=(40, 40, False),
+    narrow=True,
+    unknown_reason=None,
+):
+    low, high, below_one = display
     return {
-        "ingredient_id": i,
-        "ingredient_name": name or f"Ingredient {i}",
-        "amount": amount,
-        "unit_name": unit,
-        "conversion_to_ml": factor,
+        "recipe_id": 1,
+        "status": status,
+        "unknown_reason": unknown_reason,
+        "min_percent": None if lo is None else Decimal(lo),
+        "max_percent": None if hi is None else Decimal(hi),
+        "narrow": narrow,
+        "display_low": low,
+        "display_high": high,
+        "display_below_one": below_one,
     }
 
 
-def strength(lo, hi, source="recorded", family_id=1, family_name="Family"):
+def row(
+    name="Gin",
+    rule="measured",
+    reason=None,
+    volume="10",
+    source="recorded",
+    strength=(40, 40, False),
+    ingredient_id=1,
+):
+    low, high, below_one = strength
     return {
-        "min_percent_abv": lo,
-        "max_percent_abv": hi,
-        "observation_count": 1 if source != "unknown" else 0,
-        "family_id": family_id if source != "unknown" else None,
-        "family_name": family_name if source != "unknown" else None,
-        "source": source,
+        "recipe_id": 1,
+        "ingredient_id": ingredient_id,
+        "ingredient_name": name,
+        "volume_rule": rule,
+        "invalid_reason": reason,
+        "volume_ml": None if volume is None else Decimal(volume),
+        "strength_source": source,
+        "contributes": rule in ("top", "rinse", "measured"),
+        "strength_display_low": low,
+        "strength_display_high": high,
+        "strength_display_below_one": below_one,
     }
 
 
-def test_small_unknown_has_useful_integer_range():
-    result = calculate_recipe_abv(
-        [row(1, 60), row(2, 5)],
-        {1: strength(40, 40), 2: strength(0, 100, "unknown")},
-    )
-    assert result["status"] == "estimated"
-    assert result["display"] == "36–45%"
-    assert result["min_percent"] > 36
+WIDE = {"narrow": False, "status": "estimated", "lo": "10", "hi": "20"}
 
 
-def test_exactly_twenty_points_is_displayable():
-    result = calculate_recipe_abv(
-        [row(1, 80), row(2, 20)],
-        {1: strength(0, 0), 2: strength(0, 100, "unknown")},
-    )
-    assert result["display"] == "0–20%"
-    assert result["status"] == "estimated"
+def wide(**overrides):
+    return bounds(**{**WIDE, "display": (10, 20, False), **overrides})
 
 
 @pytest.mark.parametrize(
-    ("value", "display"),
-    [(Decimal("26.5"), "27%"), (0, "0%"), (0.4, "<1%")],
-)
-def test_point_display_rounds_half_up_and_protects_small_positive(value, display):
-    result = calculate_recipe_abv([row(1, 10)], {1: strength(value, value)})
-    assert result["display"] == display
-
-
-@pytest.mark.parametrize(
-    ("lo", "hi", "display"),
-    [(Decimal("10.1"), Decimal("20.1"), "10–21%"), (0, 0, "0%")],
-)
-def test_interval_display_rounds_outward(lo, hi, display):
-    result = calculate_recipe_abv([row(1, 10)], {1: strength(lo, hi, "family")})
-    assert result["display"] == display
-
-
-def test_decimal_float_and_int_inputs_are_combined_without_binary_drift():
-    result = calculate_recipe_abv(
-        [row(1, Decimal("10")), row(2, 10.0), row(3, 10)],
-        {
-            1: strength(10, 10),
-            2: strength(20, 20),
-            3: strength(30, 30),
-        },
-    )
-    assert result["min_percent"] == pytest.approx(20)
-    assert result["max_percent"] == pytest.approx(20)
-    assert result["display"] == "20%"
-
-
-@pytest.mark.parametrize(
-    ("width", "status"),
-    [(Decimal("19.9999"), "estimated"), (Decimal("20.0001"), "unknown")],
-)
-def test_width_cutoff_is_checked_before_display_rounding(width, status):
-    result = calculate_recipe_abv([row(1, 100)], {1: strength(0, width, "unknown")})
-    assert result["status"] == status
-
-
-def test_inferred_point_is_estimated_even_when_endpoints_match_recorded_point():
-    recorded = calculate_recipe_abv([row(1, 10)], {1: strength(40, 40)})
-    inferred = calculate_recipe_abv([row(1, 10)], {1: strength(40, 40, "family")})
-    assert recorded["status"] == "calculated"
-    assert inferred["status"] == "estimated"
-    assert recorded["display"] == "40%"
-    assert inferred["display"] == "40%"
-    assert inferred["notes"] == []
-
-
-@pytest.mark.parametrize("amount", [float("nan"), float("inf"), -1, Decimal("-0.1")])
-def test_invalid_amount_returns_unknown_with_no_bounds(amount):
-    result = calculate_recipe_abv([row(1, amount)], {1: strength(40, 40)})
-    assert result["status"] == "unknown"
-    assert result["min_percent"] is None
-    assert result["max_percent"] is None
-    assert any("quantity" in note.lower() for note in result["notes"])
-
-
-@pytest.mark.parametrize("factor", [None, 0, -1, float("nan"), float("inf")])
-def test_invalid_conversion_returns_unknown(factor):
-    result = calculate_recipe_abv([row(1, 10, factor=factor)], {1: strength(40, 40)})
-    assert result["status"] == "unknown"
-    assert result["min_percent"] is None
-    assert result["max_percent"] is None
-    assert any("volume" in note.lower() for note in result["notes"])
-
-
-@pytest.mark.parametrize(
-    "ingredient",
-    [row(1, 10, unit=None), row(1, None), row(1, 10, unit="pinch", factor=None)],
-)
-def test_missing_or_non_volume_rows_are_unknown(ingredient):
-    result = calculate_recipe_abv([ingredient], {1: strength(40, 40)})
-    assert result["status"] == "unknown"
-    assert result["min_percent"] is None
-    assert result["max_percent"] is None
-
-
-def test_unknown_strength_mapping_is_not_silently_turned_into_zero_to_hundred():
-    result = calculate_recipe_abv([row(42, 10)], {})
-    assert result["status"] == "unknown"
-    assert result["min_percent"] is None
-    assert result["max_percent"] is None
-    assert any(
-        "Ingredient 42" in note and "strength" in note for note in result["notes"]
-    )
-
-
-@pytest.mark.parametrize("unit", [" TO TOP ", "To Top"])
-def test_top_uses_the_approved_per_row_volume(unit):
-    result = calculate_recipe_abv(
-        [row(1, 99, unit=unit), row(2, 10)],
-        {1: strength(40, 40), 2: strength(0, 0)},
-    )
-    expected = Decimal("88.7205") * Decimal("40") / (Decimal("88.7205") + Decimal("10"))
-    assert result["min_percent"] == pytest.approx(float(expected))
-    assert result["max_percent"] == pytest.approx(float(expected))
-    assert result["notes"] == []
-
-
-def test_rinse_uses_one_ml_per_row_without_multiplying_positive_amount():
-    result = calculate_recipe_abv(
-        [row(1, 99, unit=" tO rInSe "), row(2, 10)],
-        {1: strength(40, 40), 2: strength(0, 0)},
-    )
-    expected = Decimal("40") / Decimal("11")
-    assert result["min_percent"] == pytest.approx(float(expected))
-    assert result["max_percent"] == pytest.approx(float(expected))
-    assert result["notes"] == []
-
-
-@pytest.mark.parametrize("amount", [None, 0, 1])
-def test_each_is_excluded_for_missing_zero_or_positive_amount(amount):
-    result = calculate_recipe_abv(
-        [row(1, amount, unit=" EACH "), row(2, 10)],
-        {2: strength(40, 40)},
-    )
-    expected_status = "estimated" if amount in (None, 1) else "calculated"
-    assert result["status"] == expected_status
-    assert result["display"] == "40%"
-    assert result["notes"] == []
-
-
-@pytest.mark.parametrize("unit", ["each", "to top", "to rinse"])
-def test_negative_special_unit_quantity_invalidates_recipe(unit):
-    result = calculate_recipe_abv(
-        [row(1, -1, unit=unit), row(2, 10)],
-        {1: strength(0, 0), 2: strength(40, 40)},
-    )
-    assert result["status"] == "unknown"
-    assert result["min_percent"] is None
-    assert result["max_percent"] is None
-    assert any("Ingredient 1" in note for note in result["notes"])
-
-
-@pytest.mark.parametrize("unit", ["each", "to top", "to rinse"])
-def test_special_units_with_explicit_zero_contribute_nothing(unit):
-    result = calculate_recipe_abv(
-        [row(1, 0, unit=unit), row(2, 10)],
-        {2: strength(40, 40)},
-    )
-    assert result["status"] == "calculated"
-    assert result["display"] == "40%"
-
-
-def test_top_missing_amount_is_permitted_but_regular_missing_amount_is_not():
-    top = calculate_recipe_abv([row(1, None, unit="to top")], {1: strength(40, 40)})
-    regular = calculate_recipe_abv([row(1, None)], {1: strength(40, 40)})
-    assert top["status"] == "estimated"
-    assert regular["status"] == "unknown"
-
-
-@pytest.mark.parametrize(
-    "ingredients",
-    [[], [row(1, 0)], [row(1, 1, unit="each")]],
-)
-def test_empty_zero_and_all_excluded_recipes_have_no_denominator(ingredients):
-    result = calculate_recipe_abv(ingredients, {1: strength(40, 40)})
-    assert result["status"] == "unknown"
-    assert result["min_percent"] is None
-    assert result["max_percent"] is None
-    assert result["display"] == "Unknown"
-
-
-def test_names_are_preserved_as_text_and_duplicate_notes_are_deduplicated():
-    name = "<Gin & Tonic>"
-    result = calculate_recipe_abv(
-        [row(1, None, unit="to top", name=name), row(1, 2, unit="to top", name=name)],
-        {1: strength(39, 41, "family")},
-    )
-    assert any(name in note for note in result["notes"])
-    assert len(result["notes"]) == len(set(result["notes"]))
-
-
-def test_wide_interval_preserves_raw_bounds_and_reports_unknown():
-    result = calculate_recipe_abv(
-        [row(1, 30), row(2, 30)],
-        {1: strength(0, 100, "unknown"), 2: strength(0, 0)},
-    )
-    assert result["status"] == "unknown"
-    assert result["min_percent"] == 0
-    assert result["max_percent"] == pytest.approx(50)
-    assert result["display"] == "Unknown"
-
-
-@pytest.mark.parametrize(
-    ("lo", "hi", "display", "has_notes"),
+    ("args", "text"),
     [
-        ("30", "30.9999", "30%", False),
-        ("30", "31", "31%", False),
-        ("30", "31.0001", "30–32%", True),
-        ("0", "1", "<1%", False),
-        ("0", "0", "0%", False),
+        ((None, None, None), "Unknown"),
+        ((0, 0, True), "<1%"),
+        ((0, 0, False), "0%"),
+        ((27, 27, False), "27%"),
+        ((36, 45, False), "36–45%"),
     ],
 )
-def test_narrow_ranges_collapse_using_raw_width(lo, hi, display, has_notes):
-    result = calculate_recipe_abv(
-        [row(1, 10)], {1: strength(Decimal(lo), Decimal(hi), "family")}
-    )
-    assert result["display"] == display
-    assert bool(result["notes"]) is has_notes
-    assert result["status"] == "estimated"
-    assert result["min_percent"] == float(lo)
-    assert result["max_percent"] == float(hi)
+def test_display_text_formats_sql_display_values(args, text):
+    assert display_text(*args) == text
 
 
-def test_narrow_cutoff_uses_volume_weighted_recipe_range():
-    result = calculate_recipe_abv(
-        [row(1, 99), row(2, 1)],
-        {1: strength(30, 30), 2: strength(0, 100, "unknown")},
-    )
+def test_calculated_point_result_converts_numbers_to_floats():
+    result = format_recipe_abv(bounds(), [row()])
     assert result == {
-        "status": "estimated",
-        "min_percent": pytest.approx(29.7),
-        "max_percent": pytest.approx(30.7),
-        "display": "30%",
+        "status": "calculated",
+        "min_percent": 40.0,
+        "max_percent": 40.0,
+        "display": "40%",
         "notes": [],
     }
+    assert isinstance(result["min_percent"], float)
 
 
-def test_notes_list_estimated_ingredients_and_their_ranges_not_family_names():
-    result = calculate_recipe_abv(
-        [row(1, 10, name="Blanc Vermouth"), row(2, 10, name="Gin")],
-        {
-            1: strength(15, 16, "family", family_name="Blanc Vermouth"),
-            2: strength(40, 44, "family", family_name="Gin"),
-        },
+def test_zero_bound_is_json_zero():
+    result = format_recipe_abv(bounds(lo="0", hi="0", display=(0, 0, False)), [row()])
+    assert result["min_percent"] == 0.0
+    assert result["display"] == "0%"
+
+
+def test_below_one_point_displays_less_than_one():
+    result = format_recipe_abv(
+        bounds(lo="0.4", hi="0.4", display=(0, 0, True)), [row()]
     )
-    assert result["display"] == "27–30%"
-    assert result["notes"] == ["Blanc Vermouth: 15–16%", "Gin: 40–44%"]
+    assert result["display"] == "<1%"
 
 
 @pytest.mark.parametrize(
-    ("unit", "note"),
-    [("to top", "88.7205 mL"), ("to rinse", "1 mL"), ("each", "counted ingredient")],
+    ("reason", "note"),
+    [
+        ("non_finite_amount", "Invalid quantity for Gin; ABV cannot be calculated."),
+        ("negative_amount", "Invalid quantity for Gin; ABV cannot be calculated."),
+        ("missing_unit", "Unknown volume for Gin; a volume unit is required."),
+        ("missing_amount", "Unknown volume for Gin; an amount is required."),
+        (
+            "invalid_conversion",
+            "Unknown volume for Gin; its conversion to mL is invalid.",
+        ),
+    ],
 )
-def test_volume_notes_remain_for_wider_cocktail_ranges(unit, note):
-    result = calculate_recipe_abv(
-        [row(1, None, unit=unit), row(2, 10)],
-        {1: strength(10, 20, "family"), 2: strength(10, 20, "family")},
+def test_invalid_rows_explain_their_reason(reason, note):
+    result = format_recipe_abv(
+        bounds(
+            status="unknown",
+            lo=None,
+            hi=None,
+            display=(None, None, None),
+            narrow=None,
+            unknown_reason="invalid_row",
+        ),
+        [row(rule="invalid", reason=reason, volume=None)],
+    )
+    assert result == {
+        "status": "unknown",
+        "min_percent": None,
+        "max_percent": None,
+        "display": "Unknown",
+        "notes": [note],
+    }
+
+
+@pytest.mark.parametrize(
+    ("rule", "volume", "note"),
+    [
+        ("top", "88.7205", "Assumed 88.7205 mL for to top ingredient Soda."),
+        ("rinse", "1", "Assumed 1 mL for to rinse ingredient Soda."),
+        (
+            "counted",
+            None,
+            "Excluded counted ingredient Soda; no liquid volume was modeled.",
+        ),
+    ],
+)
+def test_volume_assumptions_are_disclosed_on_wider_ranges(rule, volume, note):
+    result = format_recipe_abv(
+        wide(), [row(name="Soda", rule=rule, volume=volume), row()]
     )
     assert result["display"] == "10–20%"
-    assert any(note in text for text in result["notes"])
+    assert result["notes"] == [note]
 
 
-def test_invalid_strength_is_unknown_without_invented_bounds():
-    result = calculate_recipe_abv([row(1, 10)], {1: strength(float("nan"), 40)})
-    assert result["status"] == "unknown"
-    assert result["min_percent"] is None
-    assert result["max_percent"] is None
-    assert any("strength" in note.lower() for note in result["notes"])
+def test_unknown_and_family_strengths_are_disclosed_in_row_order():
+    result = format_recipe_abv(
+        wide(),
+        [
+            row(name="Blanc Vermouth", source="family", strength=(15, 16, False)),
+            row(name="Vodka", source="family", strength=(40, 40, False)),
+            row(name="Mystery", source="unknown", strength=(0, 100, False)),
+            row(name="Tiny", source="family", strength=(0, 0, True)),
+        ],
+    )
+    assert result["notes"] == [
+        "Blanc Vermouth: 15–16%",
+        "Vodka: 40%",
+        "Unknown strength for Mystery; assuming 0–100%.",
+        "Tiny: <1%",
+    ]
+
+
+def test_non_contributing_rows_have_no_strength_notes():
+    result = format_recipe_abv(
+        wide(),
+        [
+            row(name="Zero", rule="zero", volume="0", source="unknown"),
+            row(name="Bad", rule="invalid", reason="missing_amount", source="family"),
+            row(name="Garnish", rule="counted", volume=None, source="unknown"),
+        ],
+    )
+    assert result["notes"] == [
+        "Unknown volume for Bad; an amount is required.",
+        "Excluded counted ingredient Garnish; no liquid volume was modeled.",
+    ]
+
+
+def test_duplicate_notes_appear_once():
+    result = format_recipe_abv(
+        wide(),
+        [
+            row(name="<Gin & Tonic>", rule="top", volume="88.7205", source="family"),
+            row(name="<Gin & Tonic>", rule="top", volume="88.7205", source="family"),
+        ],
+    )
+    assert result["notes"] == [
+        "Assumed 88.7205 mL for to top ingredient <Gin & Tonic>.",
+        "<Gin & Tonic>: 40%",
+    ]
+
+
+def test_missing_name_falls_back_to_ingredient_id():
+    result = format_recipe_abv(wide(), [row(name=None, ingredient_id=42, source="unknown")])
+    assert result["notes"] == ["Unknown strength for Ingredient 42; assuming 0–100%."]
+
+
+def test_narrow_results_clear_notes():
+    result = format_recipe_abv(
+        bounds(status="estimated"),
+        [row(source="family"), row(name="Lime", rule="counted", volume=None)],
+    )
+    assert result["display"] == "40%"
+    assert result["notes"] == []
+
+
+def test_no_volume_is_disclosed():
+    result = format_recipe_abv(
+        bounds(
+            status="unknown",
+            lo=None,
+            hi=None,
+            display=(None, None, None),
+            narrow=None,
+            unknown_reason="no_volume",
+        ),
+        [row(name="Lime", rule="counted", volume=None)],
+    )
+    assert result["display"] == "Unknown"
+    assert result["notes"] == [
+        "Excluded counted ingredient Lime; no liquid volume was modeled.",
+        "No positive modeled liquid volume was available.",
+    ]
+
+
+def test_ingredientless_recipe_is_no_volume():
+    result = format_recipe_abv(
+        bounds(
+            status="unknown",
+            lo=None,
+            hi=None,
+            display=(None, None, None),
+            narrow=None,
+            unknown_reason="no_volume",
+        ),
+        [],
+    )
+    assert result["notes"] == ["No positive modeled liquid volume was available."]
+
+
+def test_too_wide_keeps_raw_bounds_and_explains():
+    result = format_recipe_abv(
+        bounds(
+            status="unknown",
+            lo="0",
+            hi="50",
+            display=(None, None, None),
+            narrow=None,
+            unknown_reason="too_wide",
+        ),
+        [row(name="Mystery", source="unknown", strength=(0, 100, False))],
+    )
+    assert result == {
+        "status": "unknown",
+        "min_percent": 0.0,
+        "max_percent": 50.0,
+        "display": "Unknown",
+        "notes": [
+            "Unknown strength for Mystery; assuming 0–100%.",
+            "The ABV interval is wider than 20 percentage points.",
+        ],
+    }
