@@ -118,4 +118,102 @@ SELECT
     sort_volume
 FROM ruled;
 
+-- Per-row strength and display data for every recipe ingredient.
+CREATE OR REPLACE VIEW recipe_abv_ingredient_rows AS
+SELECT
+    v.recipe_ingredient_id,
+    v.recipe_id,
+    v.ingredient_id,
+    i.name::text AS ingredient_name,
+    v.unit_name,
+    v.volume_rule,
+    v.invalid_reason,
+    v.volume_ml,
+    v.is_estimated,
+    v.sort_volume,
+    s.min_percent_abv,
+    s.max_percent_abv,
+    s.source AS strength_source,
+    v.volume_rule IN ('top', 'rinse', 'measured') AS contributes,
+    CASE
+        WHEN s.min_percent_abv = s.max_percent_abv AND s.min_percent_abv > 0
+             AND s.min_percent_abv < 1 THEN 0
+        WHEN s.min_percent_abv = s.max_percent_abv THEN round(s.min_percent_abv)::integer
+        ELSE floor(s.min_percent_abv)::integer
+    END AS strength_display_low,
+    CASE
+        WHEN s.min_percent_abv = s.max_percent_abv AND s.min_percent_abv > 0
+             AND s.min_percent_abv < 1 THEN 0
+        WHEN s.min_percent_abv = s.max_percent_abv THEN round(s.min_percent_abv)::integer
+        ELSE ceil(s.max_percent_abv)::integer
+    END AS strength_display_high,
+    s.min_percent_abv = s.max_percent_abv AND s.min_percent_abv > 0
+        AND s.min_percent_abv < 1 AS strength_display_below_one
+FROM recipe_ingredient_volumes v
+JOIN ingredients i ON i.id = v.ingredient_id
+JOIN ingredient_abv_resolution s ON s.ingredient_id = v.ingredient_id;
+
+-- One row per recipe: volume-weighted ABV interval, status, and the displayed
+-- whole percentages. Every decision is division-free over L = sum(v * low),
+-- H = sum(v * high), and V = sum(v) across contributing rows.
+CREATE OR REPLACE VIEW recipe_abv AS
+WITH sums AS (
+    SELECT
+        r.id AS recipe_id,
+        COALESCE(bool_or(rows.volume_rule = 'invalid'), FALSE) AS has_invalid,
+        COALESCE(bool_or(rows.is_estimated), FALSE) AS any_estimated,
+        COALESCE(
+            bool_or(rows.contributes AND rows.strength_source <> 'recorded'), FALSE
+        ) AS any_inferred,
+        SUM(rows.volume_ml) FILTER (WHERE rows.contributes) AS v,
+        SUM(rows.volume_ml * rows.min_percent_abv) FILTER (WHERE rows.contributes) AS l,
+        SUM(rows.volume_ml * rows.max_percent_abv) FILTER (WHERE rows.contributes) AS h
+    FROM recipes r
+    LEFT JOIN recipe_abv_ingredient_rows rows ON rows.recipe_id = r.id
+    GROUP BY r.id
+),
+classified AS (
+    SELECT
+        sums.*,
+        CASE
+            WHEN has_invalid THEN 'invalid_row'
+            WHEN v IS NULL THEN 'no_volume'
+            WHEN h - l > 20 * v THEN 'too_wide'
+        END AS unknown_reason
+    FROM sums
+),
+shaped AS (
+    SELECT
+        classified.*,
+        CASE WHEN unknown_reason IS NULL THEN h - l <= v END AS narrow,
+        CASE WHEN unknown_reason IS NULL THEN 0 < l + h AND l + h < 2 * v END
+            AS below_one
+    FROM classified
+)
+SELECT
+    recipe_id,
+    unknown_reason,
+    CASE
+        WHEN unknown_reason IS NOT NULL THEN 'unknown'
+        WHEN any_estimated OR any_inferred THEN 'estimated'
+        ELSE 'calculated'
+    END AS status,
+    CASE WHEN unknown_reason IS NULL OR unknown_reason = 'too_wide' THEN l / v END
+        AS min_percent,
+    CASE WHEN unknown_reason IS NULL OR unknown_reason = 'too_wide' THEN h / v END
+        AS max_percent,
+    narrow,
+    CASE
+        WHEN below_one THEN 0
+        WHEN narrow THEN div(l + h + v, 2 * v)::integer
+        WHEN NOT narrow THEN div(l, v)::integer
+    END AS display_low,
+    CASE
+        WHEN below_one THEN 0
+        WHEN narrow THEN div(l + h + v, 2 * v)::integer
+        WHEN NOT narrow THEN (div(h, v) + (mod(h, v) > 0)::integer)::integer
+    END AS display_high,
+    narrow AND below_one AS display_below_one
+FROM shaped;
+
 COMMIT;
