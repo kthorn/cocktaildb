@@ -1,0 +1,63 @@
+name: API image
+
+on:
+    pull_request:
+    push:
+        branches:
+            - main
+
+permissions:
+    contents: read
+
+jobs:
+    api-image:
+        # Native ARM64, matching the EC2 hosts, so the production image is built
+        # from the same aarch64 wheels it uses in production.
+        runs-on: ubuntu-24.04-arm
+        timeout-minutes: 20
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Set up Node
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+              with:
+                  node-version: 22.22.2
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            # The API validates the Vite manifest at startup; deploy.yml stages it
+            # into the build context the same way.
+            - name: Build the frontend manifest
+              run: |
+                  npm ci
+                  npm run build
+                  cp dist/manifest.json api/frontend-manifest.json
+
+            - name: Build the production image
+              run: docker build --file api/Dockerfile.prod --tag cocktaildb-api:ci .
+
+            # /health needs no database, so the container starts without one. The
+            # image's own HEALTHCHECK decides the outcome, as it does in production.
+            - name: Start the image and wait for its health check
+              run: |
+                  docker run --detach --name api \
+                      --env DB_PASSWORD=unused --env ENVIRONMENT=ci \
+                      --health-interval 2s --health-start-period 5s \
+                      cocktaildb-api:ci
+                  for _ in $(seq 1 45); do
+                      status=$(docker inspect --format '{{.State.Health.Status}}' api)
+                      echo "health: $status"
+                      if [ "$status" = healthy ]; then
+                          docker exec api python --version
+                          exit 0
+                      fi
+                      if [ "$status" = unhealthy ] || [ "$(docker inspect --format '{{.State.Running}}' api)" != true ]; then
+                          break
+                      fi
+                      sleep 2
+                  done
+                  docker logs api
+                  exit 1

@@ -14,6 +14,12 @@ updates:
           interval: weekly
       cooldown:
           default-days: 4
+      # ruff is pinned once, to required-version in ruff.toml, and the pre-commit
+      # hook, requirements-test.txt and barcart's dev extra must all match it.
+      # Bumping barcart's copy alone only makes it disagree, so ruff upgrades
+      # are done by hand across all four.
+      ignore:
+          - dependency-name: ruff
 
     - package-ecosystem: github-actions
       directory: /
