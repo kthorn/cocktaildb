@@ -11,7 +11,7 @@ permissions:
 
 jobs:
     api-tests:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         timeout-minutes: 20
         # PostgreSQL as a service container: the suite needs a real database
         # (plpgsql triggers, pg_trgm, advisory locks), and this way the tests do
