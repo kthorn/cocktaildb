@@ -1,13 +1,5 @@
 // Desktop Navigation Component
-import {
-    NAV_CONFIG,
-    NAV_MODES,
-    NAV_CLASSES,
-    getCurrentPageId,
-    isNavItemActive,
-    dispatchNavEvent,
-    NAV_EVENTS,
-} from './navigation.js';
+import { NAV_CONFIG, NAV_CLASSES, getCurrentPageId, isNavItemActive } from './navigation.js';
 
 /**
  * Renders and manages the desktop horizontal navigation
@@ -158,11 +150,6 @@ export class DesktopNav {
         link.appendChild(icon);
         link.appendChild(label);
 
-        // Add click handler
-        link.addEventListener('click', (e) => {
-            this.handleNavItemClick(e, item);
-        });
-
         li.appendChild(link);
         return li;
     }
@@ -287,11 +274,6 @@ export class DesktopNav {
         link.appendChild(icon);
         link.appendChild(label);
 
-        // Add click handler
-        link.addEventListener('click', (e) => {
-            this.handleNavItemClick(e, item);
-        });
-
         li.appendChild(link);
         return li;
     }
@@ -343,21 +325,6 @@ export class DesktopNav {
                 }
             }, 0);
         });
-    }
-
-    /**
-     * Handle navigation item click
-     * @param {Event} e - Click event
-     * @param {Object} item - Navigation item
-     */
-    handleNavItemClick(e, item) {
-        // Dispatch custom event
-        dispatchNavEvent(NAV_EVENTS.ITEM_CLICKED, {
-            item,
-            mode: NAV_MODES.DESKTOP,
-        });
-
-        // Allow default navigation to proceed
     }
 }
 

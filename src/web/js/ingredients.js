@@ -33,9 +33,6 @@ function showNotification(message, type = 'info') {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Authentication is now initialized in common.js
-    // initAuth(); // Remove this line
-
     // Update page title and form visibility based on authentication
     updatePageBasedOnAuth();
 

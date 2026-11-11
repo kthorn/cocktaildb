@@ -27,7 +27,6 @@ let currentSearchQuery = null;
 let currentSearchSortBy = 'name';
 let currentSearchSortOrder = 'asc';
 let currentSearchPage = 1;
-let totalSearchPages = 1;
 let searchResultsPerPage = 10;
 let isSearching = false;
 let allSearchResults = [];
@@ -153,7 +152,6 @@ document.addEventListener('DOMContentLoaded', () => {
         currentSearchSortBy = 'name';
         currentSearchSortOrder = 'asc';
         currentSearchPage = 1;
-        totalSearchPages = 1;
         allSearchResults = [];
         currentSearchCursor = null;
         nextSearchCursor = null;
@@ -265,9 +263,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // Update pagination state
-                totalSearchPages = result.pagination.has_next
-                    ? currentSearchPage + 1
-                    : currentSearchPage;
                 nextSearchCursor = result.pagination.next_cursor || null;
                 useCursorPagination = nextSearchCursor !== null;
 

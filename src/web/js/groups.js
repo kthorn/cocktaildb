@@ -418,9 +418,6 @@ export function initGroupsPage(options = {}) {
     return page;
 }
 
-// Keep a descriptive compatibility name for pages that instantiate managers directly.
-export const GroupsManager = GroupPage;
-
 if (typeof document !== 'undefined') {
     document.addEventListener('DOMContentLoaded', () => {
         initGroupsPage();

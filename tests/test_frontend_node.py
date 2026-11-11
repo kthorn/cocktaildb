@@ -20,6 +20,8 @@ import pytest
         "tests/test_recipe_card_modules.mjs",
         "tests/test_recipe_abv_display.mjs",
         "tests/test_search_abv_params.mjs",
+        "tests/test_admin_ingredient_value_errors.js",
+        "tests/test_bulk_ingredient_value_api.mjs",
     ],
 )
 def test_frontend_contract(script):
