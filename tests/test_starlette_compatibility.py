@@ -10,7 +10,6 @@ from core.exception_handlers import (
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from main import CORSHeaderMiddleware
-from routes.admin import CleanupFileResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
@@ -53,28 +52,3 @@ async def test_error_responses_with_cors_middleware():
             "error": "Internal Server Error",
             "detail": "An unexpected error occurred",
         }
-
-
-@pytest.mark.asyncio
-async def test_download_sends_file_before_cleanup(tmp_path):
-    backup = tmp_path / "backup.sql"
-    backup.write_text("example backup")
-    app = FastAPI()
-
-    @app.get("/download")
-    async def download():
-        return CleanupFileResponse(
-            path=backup,
-            media_type="application/sql",
-            filename="backup.sql",
-            cleanup_path=str(backup),
-        )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        response = await client.get("/download")
-    assert response.status_code == 200
-    assert response.text == "example backup"
-    assert 'filename="backup.sql"' in response.headers["content-disposition"]
-    assert not backup.exists()

@@ -27,17 +27,7 @@ pip install -r requirements.txt
 
 ### 2. Database Setup for Testing
 
-For integration tests that require production data, you need to set up a test database:
-
-```bash
-# Easy option: Use the helper script to download latest backup
-./scripts/download-test-db.sh
-
-# Manual option: Download specific backup
-./scripts/restore-backup.sh --list  # View available backups
-# Then download specific file:
-# aws s3 cp s3://backup-bucket/backup-YYYY-MM-DD_HH-MM-SS.db tests/fixtures/test_cocktaildb.db
-```
+Database-backed tests start a disposable PostgreSQL container through testcontainers (see `tests/conftest.py`), loading `infrastructure/postgres/schema.sql` and seed data. Docker must be running (`docker info`); no database download is needed.
 
 ### 3. Run Basic Tests
 
@@ -63,9 +53,7 @@ tests/
 ├── test_api_unit.py           # Unit tests for individual endpoints
 ├── test_api_integration.py    # Integration tests with production data
 ├── test_crud_operations.py    # Full CRUD workflow tests
-├── fixtures/                  # Test data and database files
-│   └── test_cocktaildb.db    # Production data copy for testing
-└── temp_dbs/                  # Temporary databases for isolated tests
+└── fixtures/                  # Schema snapshots used by migration tests
 ```
 
 ### Key Test Files
@@ -82,7 +70,7 @@ tests/
 
 1. **Python Environment**: CocktailDB conda/mamba environment activated
 2. **Dependencies**: All packages from `requirements.txt` installed
-3. **AWS Access**: For downloading production database (integration tests only)
+3. **Docker**: Required for PostgreSQL-backed tests (testcontainers)
 
 ### Required Packages
 
@@ -97,35 +85,9 @@ httpx==0.25.0              # HTTP client for FastAPI testing
 
 ## Database Setup for Testing
 
-### Option 1: Production Data (Recommended for Integration Tests)
+Database-backed tests start a disposable PostgreSQL container through testcontainers (see `tests/conftest.py`), loading `infrastructure/postgres/schema.sql` and seed data. Docker must be running (`docker info`); no database download is needed.
 
-```bash
-# Easiest: Use the helper script
-./scripts/download-test-db.sh
-
-# Manual method if you need a specific backup:
-./scripts/restore-backup.sh --list  # View available backups
-
-# Download specific backup from S3
-BACKUP_BUCKET=$(aws cloudformation describe-stacks \
-  --stack-name cocktail-db-prod \
-  --query "Stacks[0].Outputs[?OutputKey=='BackupBucketName'].OutputValue" \
-  --output text)
-
-aws s3 cp s3://$BACKUP_BUCKET/backup-YYYY-MM-DD_HH-MM-SS.db tests/fixtures/test_cocktaildb.db
-```
-
-### Option 2: Schema-Only Database
-
-```bash
-# Apply schema to create empty test database
-./infrastructure/scripts/run-migrations.sh -f infrastructure/postgres/schema.sql -e test --force-init
-
-# Copy schema-only database to fixtures
-cp /path/to/test/cocktaildb.db tests/fixtures/test_cocktaildb.db
-```
-
-### Option 3: Mocked Database Testing (Unit Tests)
+### Mocked Database Testing (Unit Tests)
 
 Many tests use mocked database dependencies and don't require external data setup.
 
@@ -271,9 +233,8 @@ psycopg2.OperationalError: could not connect to server
 **Solution**: Ensure test database is accessible or use mocked database fixtures
 
 ```bash
-# For integration tests, ensure dev PostgreSQL is accessible
-# or download a test database snapshot
-./scripts/download-test-db.sh
+# Database tests use a testcontainers PostgreSQL instance; check Docker
+docker info
 ```
 
 #### 2. Import Errors
@@ -360,9 +321,6 @@ For CI/CD pipelines, consider:
 ## 📋 Quick Reference Commands
 
 ```bash
-# Setup test database with production data (downloads locally)
-./scripts/download-test-db.sh
-
 # Run all tests
 python -m pytest tests/ -v
 
