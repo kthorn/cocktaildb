@@ -3,7 +3,6 @@ PyTest configuration and shared fixtures for CocktailDB API tests
 Uses PostgreSQL via testcontainers for realistic database testing
 """
 
-import gzip
 import os
 import sys
 from pathlib import Path
@@ -27,10 +26,6 @@ POSTGRES_IMAGE = "postgres:15"
 TEST_DB_NAME = "cocktaildb_test"
 TEST_DB_USER = "test_user"
 TEST_DB_PASSWORD = "test_password"
-
-# Path to production backup for integration tests
-_backup_env = os.environ.get("PROD_BACKUP_PATH")
-PROD_BACKUP_PATH = Path(_backup_env) if _backup_env else None
 
 
 def _reset_database_singleton():
@@ -209,50 +204,6 @@ def pg_db_with_data(pg_db_with_schema):
     yield pg_db_with_schema
 
 
-@pytest.fixture(scope="session")
-def pg_db_with_prod_data(postgres_connection_params):
-    """PostgreSQL database loaded with production backup - session scoped for efficiency"""
-    if PROD_BACKUP_PATH is None or not PROD_BACKUP_PATH.exists():
-        pytest.skip("Production backup not found (set PROD_BACKUP_PATH env var)")
-
-    conn = psycopg2.connect(**postgres_connection_params)
-    conn.autocommit = True
-    cursor = conn.cursor()
-
-    # Drop and recreate database for clean state
-    cursor.execute("""
-        DO $$ DECLARE
-            r RECORD;
-        BEGIN
-            FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
-                EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
-            END LOOP;
-        END $$;
-    """)
-    cursor.close()
-    conn.close()
-
-    # Decompress the production backup and replay it into the test database
-    with gzip.open(PROD_BACKUP_PATH, "rt") as f:
-        sql_content = f.read()
-
-    conn = psycopg2.connect(**postgres_connection_params)
-    conn.autocommit = True
-    cursor = conn.cursor()
-
-    # Execute the SQL (may need to split on certain commands)
-    try:
-        cursor.execute(sql_content)
-    except Exception as e:
-        # Some statements may fail, log and continue
-        print(f"Warning loading backup: {e}")
-
-    cursor.close()
-    conn.close()
-
-    yield postgres_connection_params
-
-
 @pytest.fixture(scope="function")
 def set_pg_env(pg_db_with_schema, monkeypatch):
     """Set environment variables for PostgreSQL connection"""
@@ -264,19 +215,6 @@ def set_pg_env(pg_db_with_schema, monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "test")
 
     yield pg_db_with_schema
-
-
-@pytest.fixture(scope="function")
-def set_pg_env_with_data(pg_db_with_data, monkeypatch):
-    """Set environment variables for PostgreSQL with test data"""
-    monkeypatch.setenv("DB_HOST", pg_db_with_data["host"])
-    monkeypatch.setenv("DB_PORT", str(pg_db_with_data["port"]))
-    monkeypatch.setenv("DB_NAME", pg_db_with_data["dbname"])
-    monkeypatch.setenv("DB_USER", pg_db_with_data["user"])
-    monkeypatch.setenv("DB_PASSWORD", pg_db_with_data["password"])
-    monkeypatch.setenv("ENVIRONMENT", "test")
-
-    yield pg_db_with_data
 
 
 # ============================================================================
@@ -575,14 +513,6 @@ async def admin_client(test_client_memory_with_app, mock_admin_user):
         del app.dependency_overrides[require_editor_access]
 
 
-@pytest.fixture(scope="session", autouse=True)
-def setup_test_environment():
-    """Setup test environment (runs once per session)"""
-    # Create directories
-    Path("tests/fixtures").mkdir(parents=True, exist_ok=True)
-    yield
-
-
 @pytest.fixture(scope="function")
 def sample_ingredient_data():
     """Sample ingredient data for testing"""
@@ -648,140 +578,6 @@ def assert_unit_structure(unit: dict[str, Any]):
     """Assert that unit has expected structure"""
     expected_keys = ["id", "name", "abbreviation", "conversion_to_ml"]
     assert_valid_response_structure(unit, expected_keys)
-
-
-def assert_complete_recipe_structure(
-    recipe: dict[str, Any], include_user_fields: bool = False
-):
-    """Assert that recipe has complete structure required for infinite scroll (no N+1 queries)"""
-    # Core recipe fields
-    core_fields = [
-        "id",
-        "name",
-        "instructions",
-        "created_by",
-        "avg_rating",
-        "rating_count",
-        "created_at",
-    ]
-    assert_valid_response_structure(recipe, core_fields)
-
-    # Extended fields for complete data
-    extended_fields = ["image_url", "source", "source_url"]
-    for field in extended_fields:
-        assert field in recipe, (
-            f"Recipe must include '{field}' field for infinite scroll"
-        )
-
-    # Tag structure validation
-    assert "public_tags" in recipe, "Recipe must include 'public_tags' array"
-    assert "private_tags" in recipe, "Recipe must include 'private_tags' array"
-    assert isinstance(recipe["public_tags"], list), "public_tags must be a list"
-    assert isinstance(recipe["private_tags"], list), "private_tags must be a list"
-
-    # Ingredient data completeness
-    if "ingredients" in recipe and recipe["ingredients"]:
-        for ingredient in recipe["ingredients"]:
-            ingredient_fields = ["id", "name", "amount", "unit"]
-            for field in ingredient_fields:
-                assert field in ingredient, f"Ingredient must include '{field}' field"
-
-    # User-specific fields (when authenticated)
-    if include_user_fields:
-        if "user_rating" in recipe:
-            user_rating = recipe["user_rating"]
-            assert user_rating is None or isinstance(user_rating, (int, float)), (
-                "user_rating must be null or numeric"
-            )
-            if user_rating is not None:
-                assert 1 <= user_rating <= 5, "user_rating must be between 1 and 5"
-
-
-def assert_search_response_structure(
-    response_data: dict[str, Any], include_user_fields: bool = False
-):
-    """Assert that search response has complete structure required by API_SPEC.md"""
-    # Top-level response structure
-    top_level_fields = ["recipes", "pagination", "query"]
-    assert_valid_response_structure(response_data, top_level_fields)
-
-    # Pagination structure
-    pagination_fields = [
-        "page",
-        "limit",
-        "total_count",
-        "has_next",
-        "has_previous",
-    ]
-    assert_valid_response_structure(response_data["pagination"], pagination_fields)
-
-    # Recipe array
-    assert isinstance(response_data["recipes"], list), "recipes must be a list"
-
-    # Each recipe should have complete structure
-    for recipe in response_data["recipes"]:
-        assert_complete_recipe_structure(recipe, include_user_fields)
-
-    # Query field validation
-    query = response_data["query"]
-    assert query is None or isinstance(query, str), "query field must be null or string"
-
-
-def assert_pagination_mathematical_consistency(pagination: dict[str, Any]):
-    """Assert that pagination metadata is mathematically consistent"""
-    page = pagination["page"]
-    limit = pagination["limit"]
-    total_count = pagination["total_count"]
-    has_next = pagination["has_next"]
-    has_previous = pagination["has_previous"]
-
-    # Basic type validation
-    assert isinstance(page, int) and page >= 1, "page must be positive integer"
-    assert isinstance(limit, int) and limit >= 1, "limit must be positive integer"
-    assert isinstance(total_count, int) and total_count >= 0, (
-        "total_count must be non-negative integer"
-    )
-    assert isinstance(has_next, bool), "has_next must be boolean"
-    assert isinstance(has_previous, bool), "has_previous must be boolean"
-
-    # has_next/has_previous logic
-    assert has_previous == (page > 1), "has_previous logic incorrect"
-
-
-def assert_sort_order_correctness(recipes: list, sort_by: str, sort_order: str = "asc"):
-    """Assert that recipes are correctly sorted according to parameters"""
-    if len(recipes) <= 1:
-        return  # Nothing to sort
-
-    values = []
-    for recipe in recipes:
-        if sort_by == "name":
-            values.append(recipe["name"].lower())
-        elif sort_by == "created_at":
-            values.append(recipe["created_at"])
-        elif sort_by == "avg_rating":
-            values.append(recipe["avg_rating"] or 0)  # Handle null ratings
-        else:
-            raise ValueError(f"Unknown sort_by parameter: {sort_by}")
-
-    if sort_order == "asc":
-        sorted_values = sorted(values)
-    elif sort_order == "desc":
-        sorted_values = sorted(values, reverse=True)
-    else:
-        raise ValueError(f"Unknown sort_order parameter: {sort_order}")
-
-    assert values == sorted_values, (
-        f"Recipes not properly sorted by {sort_by} {sort_order}"
-    )
-
-
-def assert_tag_structure(tag: dict[str, Any]):
-    """Assert that tag object has expected structure"""
-    if isinstance(tag, dict):
-        required_fields = ["id", "name"]
-        for field in required_fields:
-            assert field in tag, f"Tag must include '{field}' field"
 
 
 def _populate_test_data_pg(cursor):

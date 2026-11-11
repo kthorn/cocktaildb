@@ -1105,19 +1105,6 @@ class Database(GroupInventoryMixin):
             logger.error(f"Error getting units: {str(e)}")
             raise
 
-    def get_units_by_type(self, unit_type: str) -> list[dict[str, Any]]:
-        """Get units filtered by type (this implementation returns all units since there's no type column)"""
-        try:
-            # Since the units table doesn't have a type column, we'll return all units
-            # This could be enhanced later by adding a type column or filtering by name patterns
-            logger.warning(
-                f"get_units_by_type called with type '{unit_type}' but units table has no type column, returning all units"
-            )
-            return self.get_units()
-        except Exception as e:
-            logger.error(f"Error getting units by type {unit_type}: {str(e)}")
-            raise
-
     def get_unit_by_name(self, unit_name: str) -> dict[str, Any] | None:
         """Get a unit by exact name match (case-insensitive)"""
         try:
