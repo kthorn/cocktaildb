@@ -6,8 +6,6 @@ import {
     getCurrentPageId,
     isNavItemActive,
     getNavLabel,
-    dispatchNavEvent,
-    NAV_EVENTS,
 } from './navigation.js';
 
 /**
@@ -144,12 +142,8 @@ export class MobileBottomNav {
         link.appendChild(icon);
         link.appendChild(label);
 
-        // Add click handler
-        if (!shouldDisable) {
-            link.addEventListener('click', (e) => {
-                this.handleNavItemClick(e, item);
-            });
-        } else {
+        // Prevent navigation from disabled items
+        if (shouldDisable) {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
             });
@@ -157,21 +151,6 @@ export class MobileBottomNav {
 
         li.appendChild(link);
         return li;
-    }
-
-    /**
-     * Handle navigation item click
-     * @param {Event} e - Click event
-     * @param {Object} item - Navigation item
-     */
-    handleNavItemClick(e, item) {
-        // Dispatch custom event
-        dispatchNavEvent(NAV_EVENTS.ITEM_CLICKED, {
-            item,
-            mode: NAV_MODES.MOBILE_BOTTOM,
-        });
-
-        // Allow default navigation to proceed
     }
 }
 

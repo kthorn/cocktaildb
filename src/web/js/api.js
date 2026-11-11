@@ -297,11 +297,6 @@ export class CocktailAPI {
                 },
             };
         }
-        // Fallback for direct array response (legacy format)
-        return {
-            recipes: data || [],
-            pagination: { page: 1, limit: limit, total: (data || []).length, totalPages: 1 },
-        };
     }
 
     // Units API
@@ -313,10 +308,7 @@ export class CocktailAPI {
 
     async setRating(recipeId, ratingData) {
         try {
-            // Use POST for new ratings, PUT for updating existing ones
-            // The backend will handle both the same way
-            const method = ratingData.isUpdate ? 'PUT' : 'POST';
-            return this._request(`/ratings/${recipeId}`, method, ratingData);
+            return this._request(`/ratings/${recipeId}`, 'POST', ratingData);
         } catch (error) {
             console.error(`Error setting rating for recipe ${recipeId}:`, error);
             throw error;
@@ -348,30 +340,6 @@ export class CocktailAPI {
             return groups.includes('editor') || groups.includes('admin');
         } catch (error) {
             console.error('Error checking editor status:', error);
-            return false;
-        }
-    }
-
-    // Helper to check if user is an admin
-    isAdmin() {
-        if (!this.isAuthenticated()) {
-            return false;
-        }
-
-        try {
-            const idToken = localStorage.getItem('id_token');
-            if (!idToken) {
-                return false;
-            }
-
-            // Decode JWT token to get groups
-            const tokenPayload = JSON.parse(atob(idToken.split('.')[1]));
-            const groups = tokenPayload['cognito:groups'] || [];
-
-            // Check if user is in admin group
-            return groups.includes('admin');
-        } catch (error) {
-            console.error('Error checking admin status:', error);
             return false;
         }
     }
@@ -543,14 +511,6 @@ export class CocktailAPI {
 
     async getGroupRecommendations(groupId, limit = 20) {
         return this.getGroupIngredientRecommendations(groupId, limit);
-    }
-
-    async addUserIngredient(ingredientId) {
-        return this._request('/user-ingredients', 'POST', { ingredient_id: ingredientId });
-    }
-
-    async removeUserIngredient(ingredientId) {
-        return this._request(`/user-ingredients/${ingredientId}`, 'DELETE');
     }
 
     async bulkAddUserIngredients(ingredientIds) {

@@ -220,29 +220,6 @@ export function getNavLabel(item, useShortLabel = false) {
 }
 
 /**
- * Navigation event types for custom events
- */
-export const NAV_EVENTS = {
-    ITEM_CLICKED: 'nav-item-clicked',
-    MODE_CHANGED: 'nav-mode-changed',
-    MENU_TOGGLED: 'nav-menu-toggled',
-};
-
-/**
- * Dispatch a navigation event
- * @param {string} eventType - One of NAV_EVENTS
- * @param {Object} detail - Event detail data
- */
-export function dispatchNavEvent(eventType, detail = {}) {
-    const event = new CustomEvent(eventType, {
-        detail,
-        bubbles: true,
-        cancelable: true,
-    });
-    document.dispatchEvent(event);
-}
-
-/**
  * CSS class names used by navigation components
  */
 export const NAV_CLASSES = {

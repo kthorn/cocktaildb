@@ -1,13 +1,10 @@
 // Mobile Hamburger Menu Component
 import {
     NAV_CONFIG,
-    NAV_MODES,
     NAV_CLASSES,
     NAV_ANIMATIONS,
     getCurrentPageId,
     isNavItemActive,
-    dispatchNavEvent,
-    NAV_EVENTS,
 } from './navigation.js';
 
 /**
@@ -296,12 +293,6 @@ export class MobileHamburgerMenu {
         // Close menu
         this.close();
 
-        // Dispatch custom event
-        dispatchNavEvent(NAV_EVENTS.ITEM_CLICKED, {
-            item,
-            mode: NAV_MODES.MOBILE_MENU,
-        });
-
         // Allow default navigation to proceed
     }
 
@@ -325,12 +316,6 @@ export class MobileHamburgerMenu {
 
         // Prevent body scroll
         document.body.style.overflow = 'hidden';
-
-        // Dispatch event
-        dispatchNavEvent(NAV_EVENTS.MENU_TOGGLED, {
-            isOpen: true,
-            mode: NAV_MODES.MOBILE_MENU,
-        });
 
         // Focus the close button for accessibility
         setTimeout(() => {
@@ -361,12 +346,6 @@ export class MobileHamburgerMenu {
 
         // Restore body scroll
         document.body.style.overflow = '';
-
-        // Dispatch event
-        dispatchNavEvent(NAV_EVENTS.MENU_TOGGLED, {
-            isOpen: false,
-            mode: NAV_MODES.MOBILE_MENU,
-        });
 
         // Return focus to hamburger button
         if (this.hamburgerButton) {

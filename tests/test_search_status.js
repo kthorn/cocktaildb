@@ -144,7 +144,6 @@ const context = {
     allSearchResults: [],
     currentSearchQuery: null,
     currentSearchPage: 1,
-    totalSearchPages: 1,
     searchResultsPerPage: 10,
     isSearching: false,
     currentSearchCursor: null,
