@@ -1,5 +1,5 @@
 fastapi==0.142.2
-starlette==1.8.0
+starlette==1.10.0
 pydantic==2.13.5
 pydantic-settings==2.16.0
 python-multipart==0.0.32
