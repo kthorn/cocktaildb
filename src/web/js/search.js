@@ -65,6 +65,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Setup auth-dependent UI elements
     updateAuthDependentUI();
+    document
+        .getElementById('inventory-search')
+        ?.addEventListener('change', updateIgnoreMinorCheckbox);
 
     // Setup add/remove ingredient rows
     addIngredientRowBtn.addEventListener('click', addIngredientRow);
@@ -186,6 +189,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 wrapper.classList.remove('has-selection');
             }
         }
+
+        // Reset ABV bounds
+        ['min-abv-search', 'max-abv-search'].forEach((id) => {
+            const input = document.getElementById(id);
+            if (input) input.value = '';
+        });
 
         // Reset selected tags
         selectedTags = [];
@@ -432,6 +441,16 @@ document.addEventListener('DOMContentLoaded', () => {
             query.rating_type = 'average';
         }
 
+        // Add ABV bounds; an entered 0 still counts and hides unknown-ABV recipes
+        const minAbvInput = document.getElementById('min-abv-search');
+        if (minAbvInput && minAbvInput.value !== '') {
+            query.min_abv = Number(minAbvInput.value);
+        }
+        const maxAbvInput = document.getElementById('max-abv-search');
+        if (maxAbvInput && maxAbvInput.value !== '') {
+            query.max_abv = Number(maxAbvInput.value);
+        }
+
         // Add selected tags
         if (selectedTags.length > 0) {
             query.tags = selectedTags.map((tag) => tag.name);
@@ -441,6 +460,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const inventoryCheckbox = document.getElementById('inventory-search');
         if (inventoryCheckbox && inventoryCheckbox.checked) {
             query.inventory = true;
+            const ignoreMinorCheckbox = document.getElementById('ignore-minor-search');
+            if (ignoreMinorCheckbox && ignoreMinorCheckbox.checked) {
+                query.ignore_minor = true;
+            }
         }
 
         // Add ingredient conditions
@@ -1226,5 +1249,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 inventoryCheckbox.title = 'Show only recipes you can make with your inventory';
             }
         }
+        updateIgnoreMinorCheckbox();
+    }
+
+    // Small-amount skipping only applies to inventory search
+    function updateIgnoreMinorCheckbox() {
+        const inventoryCheckbox = document.getElementById('inventory-search');
+        const ignoreMinorCheckbox = document.getElementById('ignore-minor-search');
+        if (!ignoreMinorCheckbox) return;
+        const enabled = Boolean(
+            inventoryCheckbox && !inventoryCheckbox.disabled && inventoryCheckbox.checked,
+        );
+        ignoreMinorCheckbox.disabled = !enabled;
+        if (!enabled) {
+            ignoreMinorCheckbox.checked = false;
+        }
+        ignoreMinorCheckbox.title =
+            'Count a recipe as makeable when you only lack tiny amounts, like dashes of bitters';
     }
 });

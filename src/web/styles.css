@@ -2199,6 +2199,23 @@ input[type="radio"]:focus {
     gap: var(--space-sm);
 }
 
+.abv-range-inputs {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.abv-range-inputs input {
+    width: 6rem;
+}
+
+.abv-filter-help {
+    display: block;
+    margin-top: var(--space-xs);
+    color: var(--text-medium);
+    font-size: var(--text-sm);
+}
+
 .star-rating-filter {
     display: flex;
     align-items: center;
