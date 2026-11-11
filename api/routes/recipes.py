@@ -92,6 +92,12 @@ async def search_recipes(
         False,
         description="With inventory, skip ingredients that are a small share of the drink's volume",
     ),
+    min_abv: int | None = Query(
+        None, ge=0, le=100, description="Minimum displayed ABV percent"
+    ),
+    max_abv: int | None = Query(
+        None, ge=0, le=100, description="Maximum displayed ABV percent"
+    ),
     db: Database = Depends(get_db),
     user: UserInfo | None = Depends(get_current_user_optional),
 ):
@@ -123,6 +129,9 @@ async def search_recipes(
                 f"Invalid sort_order. Must be one of: {valid_sort_orders}"
             )
 
+        if min_abv is not None and max_abv is not None and min_abv > max_abv:
+            raise ValidationException("min_abv must be less than or equal to max_abv")
+
         if rating_type not in valid_rating_types:
             raise ValidationException(
                 f"Invalid rating_type. Must be one of: {valid_rating_types}"
@@ -146,6 +155,10 @@ async def search_recipes(
             search_params["min_rating"] = min_rating
         if max_rating is not None:
             search_params["max_rating"] = max_rating
+        if min_abv is not None:
+            search_params["min_abv"] = min_abv
+        if max_abv is not None:
+            search_params["max_abv"] = max_abv
         if tags:
             search_params["tags"] = [
                 tag.strip() for tag in tags.split(",") if tag.strip()
@@ -245,6 +258,12 @@ async def search_recipes_authenticated(
         False,
         description="With inventory, skip ingredients that are a small share of the drink's volume",
     ),
+    min_abv: int | None = Query(
+        None, ge=0, le=100, description="Minimum displayed ABV percent"
+    ),
+    max_abv: int | None = Query(
+        None, ge=0, le=100, description="Maximum displayed ABV percent"
+    ),
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_authentication),
 ):
@@ -264,6 +283,8 @@ async def search_recipes_authenticated(
         ingredients=ingredients,
         inventory=inventory,
         ignore_minor=ignore_minor,
+        min_abv=min_abv,
+        max_abv=max_abv,
         db=db,
         user=user,
     )

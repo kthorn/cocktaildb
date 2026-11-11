@@ -110,6 +110,37 @@
                                 </label>
                             </div>
 
+                            <div class="form-group abv-filter">
+                                <label for="min-abv-search">ABV %</label>
+                                <div class="abv-range-inputs">
+                                    <input
+                                        type="number"
+                                        id="min-abv-search"
+                                        name="min-abv-search"
+                                        min="0"
+                                        max="100"
+                                        step="1"
+                                        placeholder="Min"
+                                        aria-label="Minimum ABV percent"
+                                    />
+                                    <span aria-hidden="true">–</span>
+                                    <input
+                                        type="number"
+                                        id="max-abv-search"
+                                        name="max-abv-search"
+                                        min="0"
+                                        max="100"
+                                        step="1"
+                                        placeholder="Max"
+                                        aria-label="Maximum ABV percent"
+                                    />
+                                </div>
+                                <small class="abv-filter-help">
+                                    Matches the ABV shown on each recipe; recipes with unknown ABV
+                                    are hidden.
+                                </small>
+                            </div>
+
                             <div class="form-group form-group-inline">
                                 <label for="sort-select">Sort by</label>
                                 <select id="sort-select" name="sort-select" class="form-select">

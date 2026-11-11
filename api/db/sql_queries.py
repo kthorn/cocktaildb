@@ -1,5 +1,3 @@
-from recipe_abv import RINSE_VOLUME_ML, TOP_UP_VOLUME_ML
-
 from .db_utils import build_recipe_sort_spec
 
 # Shared SQL fragments for ingredient queries
@@ -10,74 +8,28 @@ INGREDIENT_SELECT_FIELDS = """
 """
 
 RESOLVE_INGREDIENT_ABV_SQL = """
-WITH RECURSIVE requested AS (
-    SELECT DISTINCT ingredient_id
-    FROM unnest(%(ingredient_ids)s::integer[]) AS requested_ids(ingredient_id)
-),
-walk(requested_id, candidate_id, depth, visited) AS (
-    SELECT i.id, i.id, 0, ARRAY[i.id]::integer[]
-    FROM requested r
-    JOIN ingredients i ON i.id = r.ingredient_id
-
-    UNION ALL
-
-    SELECT w.requested_id, parent.id, w.depth + 1, w.visited || parent.id
-    FROM walk w
-    JOIN ingredients current ON current.id = w.candidate_id
-    JOIN ingredients parent ON parent.id = current.parent_id
-    WHERE NOT parent.id = ANY(w.visited)
-),
-populated_candidates AS (
-    SELECT
-        w.requested_id,
-        w.candidate_id,
-        w.depth,
-        ranges.min_percent_abv,
-        ranges.max_percent_abv,
-        ranges.observation_count,
-        candidate.name::text AS family_name
-    FROM walk w
-    JOIN ingredient_abv_ranges ranges ON ranges.ingredient_id = w.candidate_id
-    JOIN ingredients candidate ON candidate.id = w.candidate_id
-    WHERE ranges.observation_count > 0
-),
-selected AS (
-    SELECT DISTINCT ON (requested_id)
-        requested_id,
-        candidate_id,
-        depth,
-        min_percent_abv,
-        max_percent_abv,
-        observation_count,
-        family_name
-    FROM populated_candidates
-    ORDER BY requested_id, depth, candidate_id
-)
 SELECT
-    requested.ingredient_id,
-    COALESCE(selected.min_percent_abv, 0::numeric) AS min_percent_abv,
-    COALESCE(selected.max_percent_abv, 100::numeric) AS max_percent_abv,
-    COALESCE(selected.observation_count, 0::bigint) AS observation_count,
-    selected.candidate_id AS family_id,
-    selected.family_name,
-    CASE
-        WHEN selected.requested_id IS NULL THEN 'unknown'
-        WHEN selected.depth = 0
-             AND ingredient.percent_abv IS NOT NULL
-             AND ingredient.percent_abv <> 'NaN'::numeric
-             AND ingredient.percent_abv BETWEEN 0 AND 100
-             AND NOT EXISTS (
-                 SELECT 1
-                 FROM ingredients child
-                 WHERE child.parent_id = ingredient.id
-             )
-            THEN 'recorded'
-        ELSE 'family'
-    END AS source
-FROM requested
-JOIN ingredients ingredient ON ingredient.id = requested.ingredient_id
-LEFT JOIN selected ON selected.requested_id = requested.ingredient_id
-ORDER BY requested.ingredient_id;
+    ingredient_id,
+    min_percent_abv,
+    max_percent_abv,
+    observation_count,
+    family_id,
+    family_name,
+    source
+FROM ingredient_abv_resolution
+WHERE ingredient_id = ANY(%(ingredient_ids)s::integer[])
+ORDER BY ingredient_id;
+"""
+
+RECIPE_ABV_BOUNDS_SQL = """
+SELECT * FROM recipe_abv WHERE recipe_id = ANY(%(recipe_ids)s)
+"""
+
+# Rows come back in ingredient display order so notes dedupe on first use.
+RECIPE_ABV_ROWS_SQL = """
+SELECT * FROM recipe_abv_ingredient_rows
+WHERE recipe_id = ANY(%(recipe_ids)s)
+ORDER BY recipe_id, sort_volume DESC, recipe_ingredient_id
 """
 
 # Shared substitution matching logic
@@ -135,21 +87,6 @@ INGREDIENT_SUBSTITUTION_MATCH = """
 MINOR_INGREDIENT_MAX_FRACTION = 0.02
 
 
-def _recipe_ingredient_volume_ml(ri: str, u: str) -> str:
-    """SQL volume in mL for one recipe_ingredients row, NULL when unmeasurable.
-
-    Mirrors the volume rules in recipe_abv._volume_for_ingredient.
-    """
-    unit = f"LOWER(TRIM({u}.name))"
-    return f"""(CASE
-        WHEN {ri}.amount = 0 THEN 0
-        WHEN {ri}.amount < 0 THEN NULL
-        WHEN {unit} = 'to top' THEN {TOP_UP_VOLUME_ML}
-        WHEN {unit} = 'to rinse' THEN {RINSE_VOLUME_ML}
-        WHEN {u}.conversion_to_ml > 0 THEN {ri}.amount * {u}.conversion_to_ml
-    END)"""
-
-
 def build_inventory_filter_sql(ignore_minor: bool = False) -> str:
     """Clause keeping recipes whose ingredients the user's group can cover.
 
@@ -159,12 +96,14 @@ def build_inventory_filter_sql(ignore_minor: bool = False) -> str:
     if ignore_minor:
         minor_skip = f"""
                 AND NOT COALESCE(
-                    {_recipe_ingredient_volume_ml("ri_missing", "u_missing")}
-                    <= {MINOR_INGREDIENT_MAX_FRACTION} * (
-                        SELECT SUM({_recipe_ingredient_volume_ml("ri_total", "u_total")})
-                        FROM recipe_ingredients ri_total
-                        LEFT JOIN units u_total ON ri_total.unit_id = u_total.id
-                        WHERE ri_total.recipe_id = r_inv.id
+                    (
+                        SELECT v_missing.volume_ml
+                        FROM recipe_ingredient_volumes v_missing
+                        WHERE v_missing.recipe_ingredient_id = ri_missing.id
+                    ) <= {MINOR_INGREDIENT_MAX_FRACTION} * (
+                        SELECT SUM(v_total.volume_ml)
+                        FROM recipe_ingredient_volumes v_total
+                        WHERE v_total.recipe_id = r_inv.id
                     ),
                     FALSE
                 )"""
@@ -176,7 +115,6 @@ def build_inventory_filter_sql(ignore_minor: bool = False) -> str:
             AND NOT EXISTS (
                 SELECT 1 FROM recipe_ingredients ri_missing
                 LEFT JOIN ingredients i_recipe ON ri_missing.ingredient_id = i_recipe.id
-                LEFT JOIN units u_missing ON ri_missing.unit_id = u_missing.id
                 WHERE ri_missing.recipe_id = r_inv.id"""
         + minor_skip
         + """
@@ -228,6 +166,19 @@ get_ingredients_count_sql = """
 # Dynamic SQL generation function for ingredient filtering
 
 
+# The ABV filter matches the whole percentages recipes display (recipe_abv's
+# display_low/display_high), so search returns what users see. Emitted only when
+# a bound is given; recipes whose ABV displays as Unknown never match.
+ABV_FILTER_JOIN = """
+        LEFT JOIN
+            recipe_abv rab ON rab.recipe_id = r.id"""
+
+ABV_FILTER_CONDITIONS = """
+        AND rab.status <> 'unknown'
+        AND (%(min_abv)s IS NULL OR rab.display_high >= %(min_abv)s)
+        AND (%(max_abv)s IS NULL OR rab.display_low <= %(max_abv)s)"""
+
+
 def build_search_recipes_paginated_sql(
     must_conditions: list[str],
     must_not_conditions: list[str],
@@ -237,6 +188,7 @@ def build_search_recipes_paginated_sql(
     inventory_filter: bool = False,
     rating_type: str = "average",
     ignore_minor: bool = False,
+    abv_filter: bool = False,
 ) -> str:
     """Build the paginated search SQL with optional ingredient filtering"""
     # Determine which rating field to use for filtering
@@ -246,7 +198,7 @@ def build_search_recipes_paginated_sql(
     sort_direction = sort_spec.direction
     sort_expr_sr = sort_expr.replace("r.", "sr.")
 
-    base_sql = f"""
+    base_sql = """
     WITH search_results AS (
         SELECT
             r.id, r.name, r.instructions, r.description, r.image_url,
@@ -266,7 +218,10 @@ def build_search_recipes_paginated_sql(
         LEFT JOIN
             recipe_ingredients ri ON r.id = ri.recipe_id
         LEFT JOIN
-            ingredients i ON ri.ingredient_id = i.id
+            ingredients i ON ri.ingredient_id = i.id"""
+    if abv_filter:
+        base_sql += ABV_FILTER_JOIN
+    base_sql += f"""
         WHERE
             (%(search_query)s IS NULL OR
              unaccent(r.name) ILIKE unaccent(%(search_query_with_wildcards)s))
@@ -274,6 +229,8 @@ def build_search_recipes_paginated_sql(
             (%(min_rating)s IS NULL OR COALESCE({rating_field}, 0) >= %(min_rating)s)
         AND
             (%(max_rating)s IS NULL OR COALESCE({rating_field}, 0) <= %(max_rating)s)"""
+    if abv_filter:
+        base_sql += ABV_FILTER_CONDITIONS
 
     # Add MUST ingredient filtering - recipe must contain ALL of the specified ingredients
     for condition in must_conditions:
@@ -370,6 +327,7 @@ def build_search_recipes_keyset_sql(
     inventory_filter: bool = False,
     rating_type: str = "average",
     ignore_minor: bool = False,
+    abv_filter: bool = False,
 ) -> str:
     """Build the paginated search SQL using keyset (cursor) pagination."""
     rating_field = "r.avg_rating" if rating_type == "average" else "ur.rating"
@@ -399,7 +357,10 @@ def build_search_recipes_keyset_sql(
         LEFT JOIN
             recipe_ingredients ri ON r.id = ri.recipe_id
         LEFT JOIN
-            ingredients i ON ri.ingredient_id = i.id
+            ingredients i ON ri.ingredient_id = i.id"""
+    if abv_filter:
+        base_sql += ABV_FILTER_JOIN
+    base_sql += f"""
         WHERE
             (%(search_query)s IS NULL OR
              unaccent(r.name) ILIKE unaccent(%(search_query_with_wildcards)s))
@@ -413,6 +374,8 @@ def build_search_recipes_keyset_sql(
                 OR ({sort_expr} {cursor_operator} %(cursor_sort)s)
                 OR ({sort_expr} = %(cursor_sort)s AND r.id {cursor_operator} %(cursor_id)s)
             )"""
+    if abv_filter:
+        base_sql += ABV_FILTER_CONDITIONS
 
     for condition in must_conditions:
         base_sql += f" AND r.id IN (SELECT DISTINCT ri2.recipe_id FROM recipe_ingredients ri2 JOIN ingredients i2 ON ri2.ingredient_id = i2.id WHERE {condition})"
