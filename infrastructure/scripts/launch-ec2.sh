@@ -25,7 +25,7 @@ echo "Instance type: $INSTANCE_TYPE"
 verify_instance_profile() {
     if ! aws iam get-instance-profile --instance-profile-name "$INSTANCE_PROFILE" &>/dev/null; then
         echo "ERROR: Instance profile '$INSTANCE_PROFILE' not found." >&2
-        echo "Deploy CloudFormation stack first: sam deploy --parameter-overrides Environment=$ENVIRONMENT" >&2
+        echo "Deploy CloudFormation stack first: aws cloudformation deploy --template-file template.yaml --parameter-overrides Environment=$ENVIRONMENT" >&2
         exit 1
     fi
     echo "Using instance profile: $INSTANCE_PROFILE"

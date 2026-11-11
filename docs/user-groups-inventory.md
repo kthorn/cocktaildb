@@ -49,7 +49,7 @@ Search retains the authenticated user ID for personal ratings and tags and resol
 
 Migration `15_migration_add_user_groups.sql` creates the new schema and backfills one group for each distinct legacy inventory user inside one transaction. It preserves ingredient IDs, timestamps, and the original user as `added_by`. Null legacy timestamps abort the migration before DDL so historical data is not fabricated. Fresh installs use matching DDL in `infrastructure/postgres/schema.sql`.
 
-Use the normal `scripts/deploy-ec2.sh dev|prod` path documented in [scripts/README.md](../scripts/README.md). The deployment playbook must stage the new assets and use the tested cutover helper. **Do not deploy this feature using the old migrate-while-serving playbook.** Do not call `scripts/run-remote-migrations.sh` alone for the initial cutover: that helper does not stop writers.
+Use the normal `scripts/deploy-ec2.sh dev|prod` path documented in [scripts/README.md](../scripts/README.md). The deployment playbook must stage the new assets and use the tested cutover helper. **Do not deploy this feature using the old migrate-while-serving playbook.** Do not run `run-migrations.sh` by hand for the initial cutover: it does not stop writers.
 
 The enforced order is:
 
@@ -73,6 +73,6 @@ After the new API starts, assume it may have accepted writes even if a later hea
 
 ## Verification
 
-Install `requirements-test.txt` with Python 3.12 or newer; it includes Ansible and YAML support for the local deployment harness. The implementation includes PostgreSQL migration/parity, membership/inventory/concurrency, HTTP authorization, search/privacy, and deployment-order/failure tests, plus Node UI behavior tests. Run the commands in the [implementation plan](plans/2026-09-08-user-groups-inventory.md).
+Install `requirements-test.txt` with Python 3.12 or newer; it includes Ansible and YAML support for the local deployment harness. The implementation includes PostgreSQL migration/parity, membership/inventory/concurrency, HTTP authorization, search/privacy, and deployment-order/failure tests, plus Node UI behavior tests. Run the commands in the [implementation plan](plans/completed/2026-09-08-user-groups-inventory.md).
 
 Browser acceptance can use two isolated mock-auth sessions against a disposable local API/database to exercise the complete UI-to-database path. Production Cognito authentication and an actual EC2 cutover still need their normal environment smoke checks during an authorized release; no live deployment is part of this PR.

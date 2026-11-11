@@ -26,9 +26,10 @@ htmlcov/
 # Git
 .git/
 .gitignore
+.worktrees/
 
-# AWS SAM
-.aws-sam/
+# Node (frontend is built separately)
+node_modules/
 
 # Environment
 .env
@@ -43,7 +44,6 @@ LICENSE
 
 # Scripts not needed in container
 scripts/
-schema-deploy/
 
 # Web frontend
 src/
@@ -52,9 +52,6 @@ src/
 tests/
 *_test.py
 test_*.py
-
-# Backup lambda (not needed for analytics)
-backup-lambda/
 
 # Other build artifacts
 *.egg

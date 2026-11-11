@@ -7,7 +7,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 CONFIG_PATH="$PROJECT_ROOT/src/web/js/config.js"
-STACK_NAME="${1:-cocktail-db-dev}"
+STACK_NAME="${1:-cocktaildb-dev}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 
 # Get dev API endpoint from CloudFormation

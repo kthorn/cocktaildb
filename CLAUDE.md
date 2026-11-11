@@ -9,14 +9,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Scripts
 
-- **Unix migration script**: `./infrastructure/scripts/run-migrations.sh -f path/to/migration.sql -e dev`
-- **Unix force reinit**: `./infrastructure/scripts/run-migrations.sh -f schema.sql -e dev --force-init`
-  ⚠️ **Warning:** This operation will delete and recreate the existing database. All current data will be lost!
+- **Migrations**: `infrastructure/scripts/run-migrations.sh [dev|prod] [--dry-run]` runs on the EC2 host (installed as `/opt/cocktaildb/scripts/run-migrations.sh`), reads DB settings from `/opt/cocktaildb/.env`, and applies every `migrations/*.sql` file not yet recorded in `schema_migrations`. Normal deployments call it from `deploy-cutover.sh` after stopping the API; do not run it by hand while the API is serving.
 
 ### Analytics Operations
-- **Trigger analytics refresh**: `./infrastructure/scripts/trigger-analytics.sh [dev|prod]`
+- **Trigger analytics refresh**: from a workstation, `./infrastructure/scripts/trigger-analytics-remote.sh [host] [--bg|--status|--progress]` (host defaults to `mixology.tools`); on the EC2 host, `/opt/cocktaildb/scripts/trigger-analytics.sh [--bg|--status|--progress]`
 - **View analytics**: GET `/api/v1/analytics/ingredient-usage` and `/api/v1/analytics/recipe-complexity`
-- Analytics automatically refresh after recipe/ingredient mutations
+- Analytics automatically refresh after recipe/ingredient mutations via the debounced `cocktaildb-analytics-debounce` systemd timer
 
 ### Frontend and local development
 - **Node**: Node 22.22.2 is the tested version; the root `package.json` intentionally remains typeless so existing CommonJS scripts keep working.
@@ -30,21 +28,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Testing
 - **Focused release gate**: use the exact command in `README.md` with `--no-cov`.
 - **Formatting**: `/home/kurtt/miniforge3/envs/cocktaildb/bin/python -m pre_commit run --all-files`.
-- **Full API suite**: `/home/kurtt/miniforge3/envs/cocktaildb/bin/python -m pytest -q` with the documented database fixture and normal coverage.
-- **Test database**: `python tests/test_db.py`.
+- **Full API suite**: `/home/kurtt/miniforge3/envs/cocktaildb/bin/python -m pytest -q` with normal coverage. Database-backed tests start PostgreSQL via testcontainers (`tests/conftest.py`), so Docker must be running.
 - **FastAPI tests**: `pytest tests/test_fastapi.py`.
 
-### Issue Tracking (Beads)
-- **List ready work**: `bd ready` - Show issues with no blockers
-- **Create issue**: `bd create "title" --type TYPE --priority N` - Types: bug, feature, task, epic, chore
-- **List all issues**: `bd list`
-- **Show details**: `bd show ID`
-- **Update status**: `bd update ID --status STATUS` - Status: open, in_progress, blocked, closed
-- **Add dependency**: `bd dep add CHILD PARENT` - CHILD depends on PARENT (use underscores in status values)
-- **View dependency tree**: `bd dep tree ID`
-- **Find blocked work**: `bd blocked`
-- **View statistics**: `bd stats`
-- **Documentation**: See skills/tools/beads/SKILL.md for workflows and patterns
+### Issue Tracking
+- Issues are tracked in GitHub Issues: `gh issue list`, `gh issue view N`, `gh issue create`.
 
 ## Architecture Overview
 
@@ -76,7 +64,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Configuration**: `core/config.py` - application settings and environment configuration
 - **Request/Response Models**: `models/` directory with Pydantic models for API validation
 - **Database Integration**: Uses `db/database.py` dependency injection for database access
-- **Utility Functions**: `utils/analytics_cache.py` (S3 storage manager for analytics)
+- **Utility Functions**: `utils/analytics_cache.py` (local-file storage manager for pre-generated analytics)
 
 ### Frontend (`src/web/`)
 - **Source app**: Vanilla JavaScript and multi-page HTML built by Vite; source config remains a relative import for native Node checks.
@@ -91,16 +79,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Ansible playbooks**: `infrastructure/ansible/` - automated EC2 provisioning and deployment
 - **Caddy config**: `infrastructure/caddy/Caddyfile` - reverse proxy and static file serving
 - **PostgreSQL**: `infrastructure/postgres/` - database schema and configuration
-- **Systemd**: `infrastructure/systemd/` - service definitions for API
+- **Systemd**: `infrastructure/systemd/` - backup and analytics services/timers (the API runs in Docker Compose)
 - **Scripts**: `infrastructure/scripts/` - deployment and maintenance scripts
 
 #### AWS Resources (`template.yaml`)
 - **CloudFormation template**: Shared AWS resources (EC2 managed separately via Ansible)
 - **Cognito**: User pool, client, groups, OAuth providers for authentication
-- **S3 Buckets**: Analytics cache, backups (prod only)
-- **IAM**: EC2 role and instance profile for S3 access
+- **S3 Bucket**: Database backups (prod only)
+- **IAM**: EC2 role and instance profile for S3 access (dev only; prod uses a separate `cocktaildb-prod-ec2` stack)
 - **DNS**: Route 53 records for domain (prod only)
-- **Deploy**: `aws cloudformation deploy --template-file template.yaml --stack-name cocktaildb-dev --capabilities CAPABILITY_NAMED_IAM`
+- **Deploy**: `aws cloudformation deploy --template-file template.yaml --stack-name cocktaildb-dev --parameter-overrides Environment=dev --capabilities CAPABILITY_NAMED_IAM`
 
 ## Key Patterns
 
@@ -112,7 +100,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Database Access
 - Use FastAPI dependency `get_database()` from `db/database.py` for database injection
-- Database connection cached globally as `_DB_INSTANCE` with 5-minute cache duration (300 seconds)
+- `Database` instance cached as a process-wide singleton in `_DB_INSTANCE` (no expiry); connections come from the class-level pool
 - Core database operations in `Database` class from `db/db_core.py`
 - SQL queries stored as constants in `db/sql_queries.py`
 - **Dependency pattern**: `db: Database = Depends(get_database)` in route handlers
@@ -143,17 +131,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Sorting**: Configurable sort fields (`name`, `created_at`, `avg_rating`) and order (`asc`, `desc`)
 
 ### Analytics Backend
-- **Architecture**: Static pre-generated analytics stored in S3, served via API endpoints
-- **Storage**: JSON files in S3 (`AnalyticsBucket`) with versioned keys (`analytics/v1/{type}.json`)
+- **Architecture**: Static pre-generated analytics stored on local disk, served via API endpoints
+- **Storage**: JSON files under `ANALYTICS_PATH` with versioned paths (`v1/{type}.json`)
 - **Components**:
   - `db/db_analytics.py`: Database queries for ingredient usage and recipe complexity statistics
-  - `utils/analytics_cache.py`: S3 storage manager (`AnalyticsStorage` class)
-  - `routes/analytics.py`: API endpoints with S3-first fallback to on-the-fly computation
+  - `utils/analytics_cache.py`: local-file storage manager (`AnalyticsStorage` class)
+  - `routes/analytics.py`: API endpoints serving stored files; ingredient-usage drill-down (`level`/`parent_id`) is computed on the fly
 - **Endpoints**:
   - GET `/api/v1/analytics/ingredient-usage?level={N}&parent_id={id}` - hierarchical ingredient usage stats
   - GET `/api/v1/analytics/recipe-complexity` - recipe complexity distribution
-- **Manual Refresh**: `./infrastructure/scripts/trigger-analytics.sh [dev|prod]`
-- **Caching Strategy**: S3-first retrieval with graceful fallback to on-the-fly computation
+- **Manual Refresh**: `./infrastructure/scripts/trigger-analytics-remote.sh [host] [--bg|--status|--progress]`
+- **Missing data**: If a stored file is absent, the endpoint returns an error asking for an analytics refresh (no on-the-fly fallback)
 
 ## Database Schema Patterns
 
@@ -204,7 +192,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 5. See `scripts/README.md` and `docs/operations-runbook.md` for first-release conversion, two-generation retention, cleanup retry, and recovery.
 
 ### Debugging
-- **Check API logs**: `sudo journalctl -u cocktaildb -f`
+- **Check API logs**: `sudo docker logs -f cocktaildb-api-1`
 - **Check Caddy logs**: `sudo journalctl -u caddy -f`
 - **PostgreSQL logs**: `sudo journalctl -u postgresql -f`
 - **CloudWatch Logs (prod)**: Caddy access logs in `/cocktaildb/prod/caddy-access` — query via `aws logs filter-log-events --log-group-name /cocktaildb/prod/caddy-access --limit 10` or use Logs Insights in the Console. See `docs/operations-runbook.md` for sample queries.
