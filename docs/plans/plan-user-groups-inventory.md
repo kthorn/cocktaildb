@@ -2,7 +2,7 @@
 
 **Status:** Ready to implement; reviewed 2026-09-08.
 
-The [authoritative implementation plan](2026-09-08-user-groups-inventory.md) replaces the earlier design and April implementation draft. Follow that document for exact API behavior, migration SQL, implementation tasks, and verification.
+The [authoritative implementation plan](completed/2026-09-08-user-groups-inventory.md) replaces the earlier design and April implementation draft. Follow that document for exact API behavior, migration SQL, implementation tasks, and verification.
 
 Users share a home bar with family/housemates. Each user has one group after first group/inventory access; inventory belongs to that group. Existing users with inventory receive personal groups during migration. Existing `/user-ingredients` API and Python DB methods remain compatible wrappers.
 

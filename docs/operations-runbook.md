@@ -364,15 +364,7 @@ For a non-migration failure, fix the reported problem and rerun the routine depl
 
 ## 7. DNS Management
 
-### Update DNS to Point to EC2
-
-```bash
-export HOSTED_ZONE_ID=<your-zone-id>
-export DOMAIN_NAME=mixology.tools
-export EC2_PUBLIC_IP=$COCKTAILDB_HOST
-
-./infrastructure/scripts/update-dns.sh
-```
+The apex A record (`DomainRecordSet`, pointing at `EC2ElasticIP`) and the auth subdomain record are managed by `template.yaml`; change them through a CloudFormation stack update rather than editing Route 53 directly.
 
 ### Check DNS Propagation
 

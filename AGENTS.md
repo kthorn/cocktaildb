@@ -5,12 +5,12 @@
 - `src/web/` contains the vanilla multi-page frontend source; Vite builds it into ignored `dist/web/` for Caddy.
 - `tests/` includes pytest suites plus fixtures.
 - `packages/barcart/` is a standalone analytics package with its own tests and tooling.
-- `infrastructure/` contains Ansible playbooks, Caddy config, PostgreSQL schema, and systemd services.
-- `scripts/` provides artifact build/preview, deployment, config generation, and test DB helpers.
+- `infrastructure/` contains Ansible playbooks, Caddy config, PostgreSQL schema, and systemd backup/analytics timers.
+- `scripts/` provides artifact build/preview, deployment, restore, and config generation helpers.
 - `template.yaml` is a CloudFormation template for shared AWS resources (Cognito, S3, IAM).
 
 ## Build, Test, and Development Commands
-- `aws cloudformation deploy --template-file template.yaml --stack-name cocktaildb-dev --capabilities CAPABILITY_NAMED_IAM` deploys AWS resources.
+- `aws cloudformation deploy --template-file template.yaml --stack-name cocktail-db-dev --parameter-overrides Environment=dev --capabilities CAPABILITY_NAMED_IAM` deploys AWS resources.
 - Node 22.22.2 is the tested frontend runtime. The root package is intentionally typeless: existing CommonJS `.js` scripts remain executable while Node syntax detection handles frontend ESM.
 - `npm ci && npm run build && npm run test:build` builds and checks the configuration-free artifact with the committed lockfile.
 - `./scripts/local-config.sh` generates `src/web/js/config.js` for local dev.
@@ -43,10 +43,10 @@
 
 ## Commit & Pull Request Guidelines
 - Commit messages follow a conventional style like `feat: ...`, `refactor: ...`, `docs: ...`.
-- Use `PR_DESCRIPTION.md` as the PR template; include a brief summary and test plan.
+- PR descriptions include a brief summary and test plan.
 - If you run `./scripts/local-config.sh`, revert `src/web/js/config.js` before committing.
 
 ## Security & Configuration Tips
 - AWS credentials must remain local; do not commit secrets or `.env` files.
-- Migrations that reinitialize the DB (e.g., `--force-init`) are destructive; confirm intent.
+- `infrastructure/scripts/run-migrations.sh` applies every pending `migrations/*.sql` file; run it only through the deployment cutover (`scripts/deploy-ec2.sh`), which stops the API first.
 - EC2 SSH keys should be stored securely in `~/.ssh/` with 600 permissions.

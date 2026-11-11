@@ -18,4 +18,3 @@ tqdm>=4.70.1
 joblib>=1.6.0
 psycopg2-binary==2.9.13
 uvicorn[standard]==0.54.0
-gunicorn==26.2.0
