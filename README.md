@@ -6,7 +6,7 @@ PostgreSQL, Caddy, and a vanilla JavaScript frontend.
 ## Prerequisites
 
 - AWS CLI and deployment credentials for infrastructure work
-- Python 3.12.10 for the documented test environment
+- Python 3.14.10 for the documented test environment
 - Node 22.22.2 and npm
 - Docker for the API and real-Caddy release gates
 
