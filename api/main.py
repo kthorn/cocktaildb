@@ -29,7 +29,6 @@ from core.exception_handlers import (
 from core.exceptions import CocktailDBException
 from middleware.rate_limit import RateLimitMiddleware
 from routes import (
-    admin,
     analytics,
     auth,
     groups,
@@ -113,7 +112,6 @@ app.include_router(units.router)
 app.include_router(tags.router)
 app.include_router(recipe_tags_router)
 app.include_router(auth.router)
-app.include_router(admin.router)
 app.include_router(user_ingredients.router)
 app.include_router(groups.router)
 app.include_router(stats.router)

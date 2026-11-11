@@ -38,7 +38,7 @@
 
 ## Testing Guidelines
 - Framework: `pytest` with unit, integration, and CRUD suites in `tests/`.
-- Integration/CRUD tests expect a fixture DB at `tests/fixtures/test_cocktaildb.db`.
+- Database-backed tests start PostgreSQL via testcontainers (`tests/conftest.py`); Docker must be running.
 - Name new tests as `test_*.py` and keep fixtures in `tests/conftest.py`.
 
 ## Commit & Pull Request Guidelines
