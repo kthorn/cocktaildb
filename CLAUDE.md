@@ -88,7 +88,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **S3 Bucket**: Database backups (prod only)
 - **IAM**: EC2 role and instance profile for S3 access (dev only; prod uses a separate `cocktaildb-prod-ec2` stack)
 - **DNS**: Route 53 records for domain (prod only)
-- **Deploy**: `aws cloudformation deploy --template-file template.yaml --stack-name cocktail-db-dev --parameter-overrides Environment=dev --capabilities CAPABILITY_NAMED_IAM`
+- **Deploy**: `aws cloudformation deploy --template-file template.yaml --stack-name cocktaildb-dev --parameter-overrides Environment=dev --capabilities CAPABILITY_NAMED_IAM`
 
 ## Key Patterns
 

@@ -399,7 +399,7 @@ Stopped instances only pay for EBS storage (~$3/month).
 ### CloudFormation Outputs
 
 ```bash
-aws cloudformation describe-stacks --stack-name cocktail-db-dev \
+aws cloudformation describe-stacks --stack-name cocktaildb-dev \
   --query 'Stacks[0].Outputs' --output table
 ```
 

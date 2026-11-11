@@ -169,9 +169,9 @@ The generator accepts CloudFormation outputs, validates the six public fields,
 and serializes JSON safely:
 
 ```bash
-python scripts/generate_config.py cocktail-db-dev dev
-python scripts/generate_config.py cocktail-db-prod prod --region us-west-2
-python scripts/generate_config.py cocktail-db-dev dev --output custom/path/config.js
+python scripts/generate_config.py cocktaildb-dev dev
+python scripts/generate_config.py cocktaildb-prod prod --region us-west-2
+python scripts/generate_config.py cocktaildb-dev dev --output custom/path/config.js
 ```
 
 Only public API and Cognito values are emitted. Database credentials, client

@@ -10,7 +10,7 @@
 - `template.yaml` is a CloudFormation template for shared AWS resources (Cognito, S3, IAM).
 
 ## Build, Test, and Development Commands
-- `aws cloudformation deploy --template-file template.yaml --stack-name cocktail-db-dev --parameter-overrides Environment=dev --capabilities CAPABILITY_NAMED_IAM` deploys AWS resources.
+- `aws cloudformation deploy --template-file template.yaml --stack-name cocktaildb-dev --parameter-overrides Environment=dev --capabilities CAPABILITY_NAMED_IAM` deploys AWS resources.
 - Node 22.22.2 is the tested frontend runtime. The root package is intentionally typeless: existing CommonJS `.js` scripts remain executable while Node syntax detection handles frontend ESM.
 - `npm ci && npm run build && npm run test:build` builds and checks the configuration-free artifact with the committed lockfile.
 - `./scripts/local-config.sh` generates `src/web/js/config.js` for local dev.
