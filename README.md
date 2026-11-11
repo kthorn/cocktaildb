@@ -6,9 +6,37 @@ PostgreSQL, Caddy, and a vanilla JavaScript frontend.
 ## Prerequisites
 
 - AWS CLI and deployment credentials for infrastructure work
-- Python 3.14.10 for the documented test environment
+- Python 3.14.10 for the documented test environment (see [Python support](#python-support))
 - Node 22.22.2 and npm
 - Docker for the API and real-Caddy release gates
+
+## Python support
+
+This section is the authoritative Python version policy. Keep every location
+listed below in step when either version changes.
+
+| | Version | Set in |
+| --- | --- | --- |
+| Preferred runtime (development, CI, production) | 3.14 (CI and the documented environment pin 3.14.10) | `.github/workflows/*.yml` `python-version`; `api/Dockerfile.prod` base image and `site-packages` path |
+| Minimum supported syntax | 3.12 | `ruff.toml` and barcart `[tool.ruff]` `target-version`; barcart `requires-python` and `[tool.mypy] python_version`; the CI `pyright --pythonversion` flag |
+
+The minimum is 3.12 because the pinned API dependencies require it (NumPy 2.5
+and Ansible 13 both need Python 3.12 or newer). Only the preferred runtime is
+tested in CI. The `api-image` workflow builds `api/Dockerfile.prod` on native
+ARM64, matching the EC2 hosts, and waits for its health check.
+
+Before moving the runtime to a newer Python, confirm that every pinned
+dependency publishes wheels for it on both x86_64 and aarch64. NumPy, pandas,
+scikit-learn, POT, psycopg2-binary, pydantic-core and Numba (via UMAP) are the
+ones most likely to lag a new Python release.
+
+**Rollback to 3.12.** If a production dependency proves incompatible with the
+runtime, set `api/Dockerfile.prod` back to `python:3.12-slim-bookworm` (both
+stages and the `python3.12/site-packages` copy path) and the workflows'
+`python-version` back to `3.12.10`, then redeploy. The 3.12 minimum means no
+code or lint configuration has to change. GitHub's `ubuntu-latest` (26.04)
+image has no 3.12.10 build, so a 3.12 rollback must also pin the workflows to
+`runs-on: ubuntu-24.04`, or use 3.12.13 or later.
 
 ## Frontend build and artifact gate
 

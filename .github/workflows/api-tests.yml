@@ -70,7 +70,7 @@ jobs:
                   python -m pip check
 
             - name: Check database result types
-              run: python -m pyright --pythonpath "$(command -v python)" api/db/db_core.py
+              run: python -m pyright --pythonversion 3.12 --pythonpath "$(command -v python)" api/db/db_core.py
 
             - name: Check Docker for PostgreSQL fixtures
               run: docker info
