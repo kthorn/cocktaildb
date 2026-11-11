@@ -1,52 +1,66 @@
-# Repository Guidelines
+# CocktailDB agent guide
 
-## Project Structure & Module Organization
-- `api/` holds the FastAPI backend, including routes, models, and database layer (`api/db/`).
-- `src/web/` contains the vanilla multi-page frontend source; Vite builds it into ignored `dist/web/` for Caddy.
-- `tests/` includes pytest suites plus fixtures.
-- `packages/barcart/` is a standalone analytics package with its own tests and tooling.
-- `infrastructure/` contains Ansible playbooks, Caddy config, PostgreSQL schema, and systemd backup/analytics timers.
-- `scripts/` provides artifact build/preview, deployment, restore, and config generation helpers.
-- `template.yaml` is a CloudFormation template for shared AWS resources (Cognito, S3, IAM).
+CocktailDB (mixology.tools) is a cocktail recipe app: a FastAPI + PostgreSQL API and a vanilla-JS multi-page frontend built by Vite, served by Caddy on a single EC2 host per environment (dev, prod). `CLAUDE.md` is a symlink to this file; edit `AGENTS.md`.
 
-## Build, Test, and Development Commands
-- `aws cloudformation deploy --template-file template.yaml --stack-name cocktaildb-dev --parameter-overrides Environment=dev --capabilities CAPABILITY_NAMED_IAM` deploys AWS resources.
-- Node 22.22.2 is the tested frontend runtime. The root package is intentionally typeless: existing CommonJS `.js` scripts remain executable while Node syntax detection handles frontend ESM.
-- `npm ci && npm run build && npm run test:build` builds and checks the configuration-free artifact with the committed lockfile.
-- `./scripts/local-config.sh` generates `src/web/js/config.js` for local dev.
-- `./scripts/serve.sh` runs Vite at strict `http://localhost:8000`.
-- Optional SSR development runs FastAPI on port 8001 with `FRONTEND_ASSET_MODE=development`; browse recipe/ingredient/sitemap routes through Vite on port 8000.
-- `npm run preview -- /path/to/config.js` previews a disposable config-injected copy without mutating `dist/`.
-- `/home/kurtt/miniforge3/envs/cocktaildb/bin/python -m pytest tests/ -v` runs API and integration tests.
-- `/home/kurtt/miniforge3/envs/cocktaildb/bin/python -m pytest packages/barcart/tests/` runs analytics package tests.
+## Repository map
 
-## Formatting
+- `api/`: FastAPI app (`main.py`), `routes/`, Pydantic `models/`, `dependencies/auth.py` (Cognito JWT), `core/` (settings, exceptions, global handlers), `db/` (`db_core.py` `Database` class, SQL constants in `sql_queries.py`, `db_analytics.py`), `templates/` (Jinja2 server-rendered recipe/ingredient pages).
+- `src/web/`: frontend source. All backend calls go through `CocktailAPI` in `js/api.js`; auth is in `js/auth.js`.
+- `packages/barcart/`: standalone similarity/analytics package (EMD, optimal transport) with its own tests; data-agnostic, takes DataFrames.
+- `infrastructure/`: Ansible playbooks, Caddyfile, `postgres/schema.sql`, systemd backup/analytics timers, host-side scripts.
+- `migrations/`: numbered SQL migrations (`NN_migration_*.sql`, rollbacks in `migrations/rollbacks/`). Files `01`–`08` predate PostgreSQL and use SQLite syntax.
+- `scripts/`: deploy wrapper, frontend artifact, restore, and config generation.
+- `template.yaml`: CloudFormation for shared AWS resources (Cognito, backup S3, IAM, DNS). Stacks are `cocktaildb-dev` and `cocktaildb-prod`.
+- `tests/`: pytest suites plus Node tests (`test_*.js`, `test_*.mjs`).
 
-- Frontend builds require Node 22.12.0 or newer because the pinned Vite 8.3.0 declares that floor; Node 22.22.2 is the tested version. The root package remains typeless so existing CommonJS scripts and Node's formatter-era 22.7+ syntax detection for frontend ESM continue to execute; the build/artifact test asserts both modes.
-- Install hooks with `~/miniforge3/envs/cocktaildb/bin/python -m pip install pre-commit==4.6.2 && ~/miniforge3/envs/cocktaildb/bin/python -m pre_commit install`.
-- Run every formatter check with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run --all-files`.
-- Format/check Python only with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run ruff-format --all-files`.
-- Format/check static frontend JS/MJS/HTML and all YAML (Ansible, Compose, CloudFormation, CI) with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run prettier --all-files`. `api/templates/*.html` is excluded because those are Jinja2 templates.
-- Format/check shell with `~/miniforge3/envs/cocktaildb/bin/python -m pre_commit run shfmt --all-files`. Its style comes from the hook's own args, not `.prettierrc`: `-i 4 -ci` matches `tabWidth: 4` and indents `case` bodies. Do not add `*.md` to the prettier hook yet — the specs under `docs/superpowers/` are under active edit and a repo-wide markdown reformat would conflict with every open workstream.
-- Ruff and Prettier editor extensions use `ruff.toml` and `.prettierrc`; CI is authoritative. `.prettierrc` governs every format Prettier touches, including YAML: 4-space indent, single quotes, 100-column print width.
+## Environment
 
-## Coding Style & Naming Conventions
-- Python: Ruff formats code with 4-space indentation; use `snake_case` for functions/variables and `PascalCase` for classes.
-- JavaScript: Prettier formats static frontend code; follow existing vanilla JS style and naming in `src/web/js/`.
-- Barcart uses `ruff` for lint/format (`packages/barcart/pyproject.toml`).
-- Prefer small, focused modules and keep API responses in `api/models/`.
+- Python: `/home/kurtt/miniforge3/envs/cocktaildb/bin/python` (conda env `cocktaildb`). Runtime is 3.14; minimum supported syntax is 3.12. README "Python support" is the authoritative version policy.
+- Node 22.22.2 (Vite needs ≥22.12). The root `package.json` is intentionally typeless so existing CommonJS scripts keep working; don't add `"type": "module"`.
+- Database-backed tests start PostgreSQL through testcontainers, so Docker must be running. Without Docker, those tests error at fixture setup; say so rather than treating them as passed.
 
-## Testing Guidelines
-- Framework: `pytest` with unit, integration, and CRUD suites in `tests/`.
-- Database-backed tests start PostgreSQL via testcontainers (`tests/conftest.py`); Docker must be running.
-- Name new tests as `test_*.py` and keep fixtures in `tests/conftest.py`.
+## Commands
 
-## Commit & Pull Request Guidelines
-- Commit messages follow a conventional style like `feat: ...`, `refactor: ...`, `docs: ...`.
-- PR descriptions include a brief summary and test plan.
-- If you run `./scripts/local-config.sh`, revert `src/web/js/config.js` before committing.
+`PY=/home/kurtt/miniforge3/envs/cocktaildb/bin/python`
 
-## Security & Configuration Tips
-- AWS credentials must remain local; do not commit secrets or `.env` files.
-- `infrastructure/scripts/run-migrations.sh` applies every pending `migrations/*.sql` file; run it only through the deployment cutover (`scripts/deploy-ec2.sh`), which stops the API first.
-- EC2 SSH keys should be stored securely in `~/.ssh/` with 600 permissions.
+- Full API suite (what CI runs): `$PY -m pytest -q`
+- Focused frontend/deploy release gate: the exact command under "Tests and formatting" in `README.md`
+- Barcart: `$PY -m pytest packages/barcart/tests`
+- Node tests: `node --test tests/test_*.js tests/test_*.mjs`
+- Frontend artifact: `npm ci && npm run build && npm run test:build`
+- All formatters and linters: `$PY -m pre_commit run --all-files` (ruff, prettier, shfmt; CI is authoritative)
+- Local frontend: `./scripts/local-config.sh` writes the gitignored `src/web/js/config.js`, then `./scripts/serve.sh` serves Vite on `http://localhost:8000`. For server-rendered pages, also run FastAPI on port 8001 with `FRONTEND_ASSET_MODE=development`, and browse through port 8000.
+- Preview a built artifact: `npm run preview -- /path/to/config.js` (uses a disposable copy).
+
+There is no browser automation. For UI changes, list the manual checks needed: index/search/analytics, nested recipe and ingredient pages, and login/callback/logout.
+
+## Conventions
+
+- Commits are conventional (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`). PRs include a short summary and a test plan.
+- Python: Ruff, `snake_case`/`PascalCase`. JS/HTML/YAML: Prettier per `.prettierrc` (4 spaces, single quotes, 100 columns). Shell: shfmt `-i 4 -ci`. `api/templates/*.html` are Jinja2 and excluded from Prettier. Markdown is not auto-formatted.
+- API routes: inject `db: Database = Depends(get_db)` (`db.database.get_database`, imported as `get_db`) and use auth dependencies from `dependencies/auth.py` (`get_current_user_optional`, `require_authentication`, `require_editor_access`). Raise `core/exceptions.py` types (`NotFoundException`, `ValidationException`, `ConflictException`, …) and let the global handlers format responses. Don't add catch-all `except Exception` blocks that re-wrap errors as `DatabaseException`; that turns client errors into 500s.
+- Schema changes need both a new numbered migration and an update to `infrastructure/postgres/schema.sql`.
+- Ingredients are hierarchical with materialized paths (`/1/23/45/`); searching by a parent includes descendants. Recipe `avg_rating`/`rating_count` are maintained by database triggers.
+- Analytics are pre-generated JSON files under `ANALYTICS_PATH` (`v1/{type}.json`), not S3. A debounced systemd timer refreshes them after mutations.
+- Frontend runtime config (`web/js/config.js`) comes from deployment or local setup and is never bundled into `dist/`.
+- Caddy routes `/api/v1/*` (current) and `/api/*` (legacy) to the same FastAPI app with the prefix stripped, so routes are declared without `/api`.
+
+## Deployment and operations
+
+Deploying and running migrations against dev or prod are human actions. Don't do either unless explicitly asked.
+
+- Deploy: `./scripts/deploy-ec2.sh <dev|prod> --frontend-artifact dist`. The wrapper stages config, publishes assets, stops the API, runs migrations, cuts over, and smoke-checks through Caddy. See `scripts/README.md` and `docs/operations-runbook.md`.
+- Keep the deploy pending marker. Never delete it to bypass reconciliation, and never automatically restart an old API after possible writes.
+- `infrastructure/scripts/run-migrations.sh [dev|prod] [--dry-run]` applies every unrecorded `migrations/*.sql`. Run it only through the deploy cutover, never by hand while the API is serving.
+- On the hosts, the API runs in Docker Compose under `/opt/cocktaildb` (`sudo docker logs cocktaildb-api-1`). Caddy and PostgreSQL are host services (`journalctl -u caddy`, `-u postgresql`).
+- SSH is via EC2 Instance Connect as `ec2-user` (Amazon Linux 2023, ARM64). Look up the instance with `aws ec2 describe-instances --filters "Name=tag:Name,Values=cocktaildb-dev" --query 'Reservations[0].Instances[0].InstanceId' --output text`. The runbook has the full procedure.
+- Analytics refresh: `./infrastructure/scripts/trigger-analytics-remote.sh [host] [--bg|--status|--progress]`.
+- Never commit secrets, `.env` files, or `src/web/js/config.js`.
+
+## Where to look
+
+- Issues: GitHub (`gh issue list`).
+- `README.md`: Python policy, release gate, deployment overview.
+- `TESTING.md`: test suite layout.
+- `docs/operations-runbook.md`: operations, recovery, CloudWatch log queries.
+- `docs/plans/`: active plans. Finished plans move to `docs/plans/completed/`.

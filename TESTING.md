@@ -374,5 +374,5 @@ automation is not installed in this repository.
 - [pytest Documentation](https://docs.pytest.org/)
 - [FastAPI Testing Guide](https://fastapi.tiangolo.com/tutorial/testing/)
 - [pytest-mock Documentation](https://pytest-mock.readthedocs.io/)
-- [Project CLAUDE.md](./CLAUDE.md) - Development commands and architecture
+- [AGENTS.md](./AGENTS.md) - Agent guide: commands, conventions, and operations (CLAUDE.md links here)
 - [Frontend scripts](./scripts/README.md) - Artifact, preview, config, and local workflow
