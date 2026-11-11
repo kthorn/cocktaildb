@@ -6,7 +6,7 @@ from core.exceptions import DatabaseException, NotFoundException
 from db.db_core import Database
 from dependencies.auth import UserInfo
 from models.requests import RatingCreate
-from models.responses import MessageResponse, RatingResponse, RatingSummaryResponse
+from models.responses import RatingResponse, RatingSummaryResponse
 
 logger = logging.getLogger(__name__)
 
@@ -77,32 +77,3 @@ async def create_or_update_rating_handler(
     except Exception as e:
         logger.error(f"Error setting rating for recipe {recipe_id}: {str(e)}")
         raise DatabaseException("Failed to set rating", detail=str(e)) from e
-
-
-async def delete_rating_handler(
-    recipe_id: int, db: Database, user: UserInfo
-) -> MessageResponse:
-    """Delete a user's rating for a recipe (requires authentication)"""
-    try:
-        logger.info(f"Deleting rating for recipe {recipe_id} by user {user.user_id}")
-
-        # Check if recipe exists
-        recipe = db.get_recipe(recipe_id)
-        if not recipe:
-            raise NotFoundException(f"Recipe with ID {recipe_id} not found")
-
-        # Check if user has a rating for this recipe
-        existing_rating = db.get_user_rating(recipe_id, user.user_id)
-        if not existing_rating:
-            raise NotFoundException(
-                "No rating found for this recipe by the current user"
-            )
-
-        db.delete_rating(recipe_id, user.user_id)
-        return MessageResponse(message="Rating deleted successfully")
-
-    except NotFoundException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting rating for recipe {recipe_id}: {str(e)}")
-        raise DatabaseException("Failed to delete rating", detail=str(e)) from e

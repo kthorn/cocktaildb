@@ -718,20 +718,6 @@ class TestSubstitutionAPI:
             "Recipe should NOT match when blocking parent exists in substitution path"
         )
 
-    def test_ingredient_create_with_substitution_level(self):
-        """Test creating ingredient via API with substitution_level"""
-        # This would test the FastAPI endpoints
-        # Implementation depends on test client setup
-        pass
-
-    def test_ingredient_update_substitution_level(self):
-        """Test updating substitution_level via API"""
-        pass
-
-    def test_bulk_ingredient_upload_with_substitution(self):
-        """Test bulk upload with substitution levels"""
-        pass
-
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

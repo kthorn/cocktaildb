@@ -70,14 +70,10 @@ nn_idx, nn_dist = knn_matrix(recipe_distances, k=5)
 ### Neighborhood Analysis
 - `knn_matrix()` - Find k-nearest neighbors
 - `report_neighbors()` - Human-readable neighbor report for any entity type
-- `neighbor_weight_matrix()` - Weighted neighbor matrix
 
 ### Advanced Analytics
 - `expected_ingredient_match_matrix()` - Expected matches from recipe pairs
 - `m_step_blosum()` - BLOSUM-like cost matrix update
-
-### Utilities
-- `build_index_to_id()` - Reverse mapping from indices to IDs
 
 ## Development
 
