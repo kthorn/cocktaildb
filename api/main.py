@@ -151,9 +151,8 @@ app.include_router(analytics.router)
 app.include_router(pages.router)
 
 # Public read-only MCP endpoint (Caddy strips /api/v1, so this is /api/v1/mcp)
-app.add_route(
-    "/mcp", mcp_endpoint, methods=["GET", "POST", "DELETE"], include_in_schema=False
-)
+# POST only: stateless mode has no server-initiated stream, so GET/DELETE get a 405
+app.add_route("/mcp", mcp_endpoint, methods=["POST"], include_in_schema=False)
 
 
 # Root endpoint

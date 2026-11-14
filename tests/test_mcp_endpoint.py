@@ -3,6 +3,7 @@
 import asyncio
 import json
 
+import anyio
 import pytest
 import pytest_asyncio
 
@@ -72,6 +73,8 @@ async def test_tools_list_over_http(mcp_client):
     assert resp.status_code == 200
     names = {t["name"] for t in resp.json()["result"]["tools"]}
     assert names == EXPECTED_TOOLS
+    for tool in resp.json()["result"]["tools"]:
+        assert tool["annotations"]["readOnlyHint"] is True
 
 
 @pytest.mark.asyncio
@@ -155,3 +158,16 @@ async def test_root_advertises_mcp(test_client_with_data):
     client, _app = test_client_with_data
     resp = await client.get("/")
     assert resp.json()["mcp"] == "/api/v1/mcp"
+
+
+@pytest.mark.asyncio
+async def test_get_mcp_returns_405_without_opening_stream(mcp_client):
+    with anyio.fail_after(2):
+        resp = await mcp_client.get("/mcp", headers={"Accept": "text/event-stream"})
+    assert resp.status_code == 405
+
+
+@pytest.mark.asyncio
+async def test_delete_mcp_returns_405(mcp_client):
+    resp = await mcp_client.delete("/mcp")
+    assert resp.status_code == 405
