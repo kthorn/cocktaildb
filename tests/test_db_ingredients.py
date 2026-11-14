@@ -531,6 +531,48 @@ class TestIngredientEdgeCases:
         assert result["name"] == special_name
 
 
+class TestIngredientNamesAndColonSpecs:
+    """Tests for get_ingredient_names and colons inside ingredient names"""
+
+    def test_get_ingredient_names_returns_mapping(self, db_instance_with_data):
+        db = db_instance_with_data
+        whiskey = db.create_ingredient({"name": "Whiskey Test", "parent_id": None})
+        bourbon = db.create_ingredient(
+            {"name": "Bourbon Test", "parent_id": whiskey["id"]}
+        )
+
+        names = db.get_ingredient_names([whiskey["id"], bourbon["id"]])
+
+        assert names == {whiskey["id"]: "Whiskey Test", bourbon["id"]: "Bourbon Test"}
+        assert db.get_ingredient_names([]) == {}
+
+    def test_search_ingredient_filter_handles_colon_in_name(
+        self, db_instance_with_data
+    ):
+        db = db_instance_with_data
+        amaro = db.create_ingredient({"name": "Amaro: Nonino", "parent_id": None})
+        recipe = db.create_recipe(
+            {
+                "name": "Colon Spritz",
+                "instructions": "Stir",
+                "ingredients": [{"ingredient_id": amaro["id"], "amount": 1.0}],
+            }
+        )
+
+        for spec in ("Amaro: Nonino:MUST", "Amaro: Nonino"):
+            result = db.search_recipes_paginated(
+                {"ingredients": [spec]}, limit=10, return_pagination=True
+            )
+            assert [r["id"] for r in result["recipes"]] == [recipe["id"]], spec
+
+        excluded = db.search_recipes_paginated(
+            {"ingredients": ["Amaro: Nonino:MUST_NOT"]},
+            limit=10,
+            return_pagination=True,
+        )
+        assert recipe["id"] not in [r["id"] for r in excluded["recipes"]]
+
+
 class TestIngredientDepthLimit:
     """The hierarchy may not exceed MAX_INGREDIENT_DEPTH levels"""
 
