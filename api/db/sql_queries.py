@@ -221,11 +221,7 @@ def build_search_recipes_paginated_sql(
         LEFT JOIN
             tags t ON rt.tag_id = t.id
         LEFT JOIN
-            ratings ur ON r.id = ur.recipe_id AND ur.cognito_user_id = %(cognito_user_id)s
-        LEFT JOIN
-            recipe_ingredients ri ON r.id = ri.recipe_id
-        LEFT JOIN
-            ingredients i ON ri.ingredient_id = i.id"""
+            ratings ur ON r.id = ur.recipe_id AND ur.cognito_user_id = %(cognito_user_id)s"""
     if abv_filter:
         base_sql += ABV_FILTER_JOIN
     base_sql += f"""
@@ -360,11 +356,7 @@ def build_search_recipes_keyset_sql(
         LEFT JOIN
             tags t ON rt.tag_id = t.id
         LEFT JOIN
-            ratings ur ON r.id = ur.recipe_id AND ur.cognito_user_id = %(cognito_user_id)s
-        LEFT JOIN
-            recipe_ingredients ri ON r.id = ri.recipe_id
-        LEFT JOIN
-            ingredients i ON ri.ingredient_id = i.id"""
+            ratings ur ON r.id = ur.recipe_id AND ur.cognito_user_id = %(cognito_user_id)s"""
     if abv_filter:
         base_sql += ABV_FILTER_JOIN
     base_sql += f"""
