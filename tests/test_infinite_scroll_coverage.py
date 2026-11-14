@@ -260,34 +260,22 @@ class TestSearchParameterHandling:
         """Verify parameter validation error messages match API specification"""
         # Invalid page (negative)
         response = await client.get("/recipes/search?page=-1")
-        assert response.status_code in [
-            status.HTTP_400_BAD_REQUEST,
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-        ]
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
         # Invalid limit (too large or negative)
         response = await client.get("/recipes/search?limit=-1")
-        assert response.status_code in [
-            status.HTTP_400_BAD_REQUEST,
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-        ]
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
     async def test_invalid_parameter_combinations(self, test_client_with_data):
         client, app = test_client_with_data
         """Test parameter combinations that should be invalid"""
         # Page 0
         response = await client.get("/recipes/search?page=0")
-        assert response.status_code in [
-            status.HTTP_400_BAD_REQUEST,
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-        ]
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
         # Limit 0
         response = await client.get("/recipes/search?limit=0")
-        assert response.status_code in [
-            status.HTTP_400_BAD_REQUEST,
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-        ]
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
     async def test_url_encoding_decoding_search_parameters(self, test_client_with_data):
         """Validate URL encoding/decoding of search parameters"""
@@ -335,8 +323,8 @@ class TestEdgeCasesAndBoundaryConditions:
         """Validate handling of very large page numbers"""
         response = await client.get("/recipes/search?page=999999&limit=10")
 
-        # Should handle gracefully - either return empty results or error
-        assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
+        assert response.status_code == status.HTTP_200_OK, response.text
+        assert response.json()["recipes"] == []
 
 
 class TestSpecialCharacterHandling:
@@ -359,8 +347,10 @@ class TestSpecialCharacterHandling:
         injection_query = "'; DROP TABLE recipes; --"
         response = await client.get(f"/recipes/search?q={injection_query}")
 
-        # Should either work safely or return an error, but not crash
-        assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
+        # The query is parameterized: it searches for the literal text.
+        assert response.status_code == status.HTTP_200_OK, response.text
+        assert response.json()["recipes"] == []
+        assert (await client.get("/recipes/search")).json()["recipes"]
 
     async def test_extremely_long_search_parameters(self, test_client_with_data):
         client, app = test_client_with_data
@@ -368,8 +358,7 @@ class TestSpecialCharacterHandling:
         long_query = "a" * 1000  # 1000 character query
         response = await client.get(f"/recipes/search?q={long_query}")
 
-        # Should handle gracefully
-        assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
+        assert response.status_code == status.HTTP_200_OK, response.text
 
 
 class TestErrorResponseFormat:
@@ -381,11 +370,8 @@ class TestErrorResponseFormat:
         # Force an error with invalid parameters
         response = await client.get("/recipes/search?page=0")
 
-        if response.status_code != status.HTTP_200_OK:
-            data = response.json()
-            # Error responses should have a consistent structure
-            # This will depend on your API's error handling implementation
-            assert isinstance(data, dict), "Error response should be a dictionary"
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.json()["error"] == "Validation Error"
 
     async def test_error_messages_are_user_friendly(self, test_client_with_data):
         client, app = test_client_with_data
@@ -393,19 +379,12 @@ class TestErrorResponseFormat:
         # Invalid page parameter
         response = await client.get("/recipes/search?page=-1")
 
-        if response.status_code != status.HTTP_200_OK:
-            # The response should contain useful error information
-            # This test may need adjustment based on actual error response format
-            data = response.json()
-            assert isinstance(data, dict), "Error should provide structured information"
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert "page" in response.json()["detail"]
 
     async def test_http_status_codes_for_different_errors(self, test_client_with_data):
         """Validate HTTP status codes for different error types"""
         client, app = test_client_with_data
         # Parameter validation errors
         response = await client.get("/recipes/search?page=-1")
-        if response.status_code != status.HTTP_200_OK:
-            assert response.status_code in [
-                status.HTTP_400_BAD_REQUEST,
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
-            ]
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY

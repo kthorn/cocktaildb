@@ -1,248 +1,106 @@
-"""
-CRUD (Create, Read, Update, Delete) operation tests for CocktailDB API
-Tests complex CRUD workflows and transactional behavior with isolated database instances
-"""
+"""End-to-end CRUD workflows for ingredients and recipes through the API."""
 
 import pytest
 
 pytestmark = pytest.mark.asyncio
 
 
-class TestComplexIngredientCRUD:
-    """Test complex CRUD operations for ingredients"""
+async def _create_ingredient(client, name, parent_id=None):
+    response = await client.post(
+        "/ingredients", json={"name": name, "parent_id": parent_id}
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
 
-    async def test_ingredient_hierarchy_crud_workflow(
-        self, test_client_with_data, mock_user, mocker
-    ):
-        """Test complete CRUD workflow with ingredient hierarchy"""
-        # Mock authentication using pytest-mock
-        mock_auth = mocker.patch("api.dependencies.auth.get_user_from_jwt")
-        from api.dependencies.auth import UserInfo
 
-        client, app = test_client_with_data
-        mock_auth.return_value = UserInfo(
-            user_id=mock_user["user_id"],
-            username=mock_user.get("username"),
-            email=mock_user.get("email"),
-            groups=mock_user.get("cognito:groups", []),
-            claims=mock_user,
+async def _create_recipe(client, name, ingredient_ids):
+    response = await client.post(
+        "/recipes",
+        json={
+            "name": name,
+            "instructions": "Stir with ice and strain",
+            "ingredients": [
+                {"ingredient_id": ingredient_id, "amount": 1.5, "unit_id": 1}
+                for ingredient_id in ingredient_ids
+            ],
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+async def test_ingredient_hierarchy_crud_workflow(editor_client):
+    parent = await _create_ingredient(editor_client, "Test Spirits")
+    child = await _create_ingredient(editor_client, "Test Gin", parent_id=parent["id"])
+    assert child["parent_id"] == parent["id"]
+    assert child["path"] == f"/{parent['id']}/{child['id']}/"
+
+    update = await editor_client.put(
+        f"/ingredients/{child['id']}", json={"description": "Juniper-forward"}
+    )
+    assert update.status_code == 200, update.text
+    assert update.json()["description"] == "Juniper-forward"
+    assert update.json()["parent_id"] == parent["id"]
+
+    assert (
+        await editor_client.delete(f"/ingredients/{child['id']}")
+    ).status_code == 200
+    assert (
+        await editor_client.delete(f"/ingredients/{parent['id']}")
+    ).status_code == 200
+    assert (await editor_client.get(f"/ingredients/{parent['id']}")).status_code == 404
+
+
+async def test_recipe_with_ingredients_crud_workflow(editor_client):
+    gin = await _create_ingredient(editor_client, "Gin")
+    vermouth = await _create_ingredient(editor_client, "Dry Vermouth")
+    created = await _create_recipe(
+        editor_client, "Test Complex Martini", [gin["id"], vermouth["id"]]
+    )
+
+    read = await editor_client.get(f"/recipes/{created['id']}")
+    assert read.status_code == 200, read.text
+    assert {i["ingredient_id"] for i in read.json()["ingredients"]} == {
+        gin["id"],
+        vermouth["id"],
+    }
+
+    update = await editor_client.put(
+        f"/recipes/{created['id']}",
+        json={"instructions": "Stir gently, double strain, express lemon peel"},
+    )
+    assert update.status_code == 200, update.text
+    assert update.json()["instructions"] == (
+        "Stir gently, double strain, express lemon peel"
+    )
+    assert len(update.json()["ingredients"]) == 2
+
+    assert (await editor_client.delete(f"/recipes/{created['id']}")).status_code == 200
+    assert (await editor_client.get(f"/recipes/{created['id']}")).status_code == 404
+
+
+async def test_successive_recipe_updates_keep_the_last_write(editor_client):
+    gin = await _create_ingredient(editor_client, "Gin")
+    created = await _create_recipe(editor_client, "Update Order Recipe", [gin["id"]])
+
+    for instructions in ("First update", "Second update"):
+        response = await editor_client.put(
+            f"/recipes/{created['id']}", json={"instructions": instructions}
         )
+        assert response.status_code == 200, response.text
 
-        # Create parent ingredient
-        parent_data = {"name": "Test Spirits", "description": "Alcoholic spirits"}
-        parent_response = await client.post("/ingredients", json=parent_data)
-
-        if parent_response.status_code == 201:
-            parent_ingredient = parent_response.json()
-            parent_id = parent_ingredient["ingredient_id"]
-
-            # Create child ingredient with hierarchy
-            child_data = {
-                "name": "Test Gin",
-                "description": "Juniper-flavored spirit",
-                "parent_id": parent_id,
-            }
-            child_response = await client.post("/ingredients", json=child_data)
-
-            if child_response.status_code == 201:
-                child_ingredient = child_response.json()
-                child_id = child_ingredient["ingredient_id"]
-                assert child_ingredient["parent_id"] == parent_id
-
-                # Update child ingredient
-                update_data = {"description": "Updated gin description"}
-                update_response = await client.put(
-                    f"/ingredients/{child_id}", json=update_data
-                )
-
-                if update_response.status_code == 200:
-                    # Verify hierarchy is maintained
-                    updated_ingredient = update_response.json()
-                    assert updated_ingredient["parent_id"] == parent_id
-
-                # Delete child first (should succeed)
-                delete_child_response = await client.delete(f"/ingredients/{child_id}")
-                assert delete_child_response.status_code in [200, 204]
-
-                # Delete parent (should succeed now that child is gone)
-                delete_parent_response = await client.delete(
-                    f"/ingredients/{parent_id}"
-                )
-                assert delete_parent_response.status_code in [200, 204]
+    final = await editor_client.get(f"/recipes/{created['id']}")
+    assert final.json()["instructions"] == "Second update"
 
 
-class TestComplexRecipeCRUD:
-    """Test complex CRUD operations for recipes"""
+async def test_deep_ingredient_hierarchy_paths(editor_client):
+    spirit = await _create_ingredient(editor_client, "Spirit")
+    whiskey = await _create_ingredient(editor_client, "Whiskey", spirit["id"])
+    bourbon = await _create_ingredient(editor_client, "Bourbon", whiskey["id"])
 
-    async def test_recipe_with_ingredients_crud_workflow(
-        self, test_client_with_data, mock_user
-    ):
-        """Test complete CRUD workflow for recipes with ingredients"""
-        from api.dependencies.auth import UserInfo, require_authentication
+    response = await editor_client.get(f"/ingredients/{bourbon['id']}")
 
-        client, app = test_client_with_data
-
-        # Create authenticated client with dependency override
-        user_info = UserInfo(
-            user_id=mock_user["user_id"],
-            username=mock_user.get("username"),
-            email=mock_user.get("email"),
-            groups=mock_user.get("cognito:groups", []),
-            claims=mock_user,
-        )
-
-        # Override the authentication dependency
-        def override_require_authentication():
-            return user_info
-
-        app.dependency_overrides[require_authentication] = (
-            override_require_authentication
-        )
-
-        # Get existing ingredients and units for the recipe
-        ingredients_response = await client.get("/ingredients?limit=2")
-        units_response = await client.get("/units?limit=1")
-
-        if (
-            ingredients_response.status_code == 200
-            and units_response.status_code == 200
-            and len(ingredients_response.json()) >= 2
-            and len(units_response.json()) >= 1
-        ):
-            ingredients = ingredients_response.json()  # Direct list
-            units = units_response.json()  # Direct list
-
-            recipe_data = {
-                "name": "Test Complex Martini",
-                "instructions": "Stir with ice, strain, and garnish",
-                "ingredients": [
-                    {
-                        "ingredient_id": ingredients[0]["id"],
-                        "amount": 2.5,
-                        "unit_id": units[0]["id"],
-                    },
-                    {
-                        "ingredient_id": ingredients[1]["id"],
-                        "amount": 0.5,
-                        "unit_id": units[0]["id"],
-                    },
-                ],
-            }
-
-            create_response = await client.post("/recipes", json=recipe_data)
-
-            if create_response.status_code == 201:
-                created_recipe = create_response.json()
-                recipe_id = created_recipe["id"]
-
-                # Read back the recipe with full details
-                read_response = await client.get(f"/recipes/{recipe_id}")
-                assert read_response.status_code == 200
-                read_recipe = read_response.json()
-                assert "ingredients" in read_recipe
-                assert len(read_recipe["ingredients"]) == 2
-
-                # Update recipe instructions and add ingredient
-                update_data = {
-                    "instructions": "Updated: Stir gently with ice, double strain, express lemon peel"
-                }
-                update_response = await client.put(
-                    f"/recipes/{recipe_id}", json=update_data
-                )
-
-                if update_response.status_code == 200:
-                    updated_recipe = update_response.json()
-                    assert "Updated:" in updated_recipe["instructions"]
-
-                # Delete the recipe
-                delete_response = await client.delete(f"/recipes/{recipe_id}")
-                assert delete_response.status_code in [200, 204]
-
-        # Clean up the override
-        if require_authentication in app.dependency_overrides:
-            del app.dependency_overrides[require_authentication]
-
-
-class TestConcurrencyAndLocking:
-    """Test concurrent operations and data consistency"""
-
-    async def test_concurrent_recipe_updates(
-        self, test_client_with_data, mock_user, mocker
-    ):
-        """Test handling of concurrent recipe updates"""
-        mock_auth = mocker.patch("api.dependencies.auth.get_user_from_jwt")
-        from api.dependencies.auth import UserInfo
-
-        client, app = test_client_with_data
-        mock_auth.return_value = UserInfo(
-            user_id=mock_user["user_id"],
-            username=mock_user.get("username"),
-            email=mock_user.get("email"),
-            groups=mock_user.get("cognito:groups", []),
-            claims=mock_user,
-        )
-
-        # Create a recipe to test concurrent updates
-        recipe_data = {
-            "name": "Concurrency Test Recipe",
-            "instructions": "Original instructions",
-        }
-
-        create_response = await client.post("/recipes", json=recipe_data)
-
-        if create_response.status_code == 201:
-            recipe_id = create_response.json()["recipe_id"]
-
-            # Simulate concurrent updates
-            update1_data = {"instructions": "First concurrent update"}
-            update2_data = {"instructions": "Second concurrent update"}
-
-            # Both updates should succeed or handle conflicts gracefully
-            response1 = await client.put(f"/recipes/{recipe_id}", json=update1_data)
-            response2 = await client.put(f"/recipes/{recipe_id}", json=update2_data)
-
-            # At least one should succeed
-            assert response1.status_code == 200 or response2.status_code == 200
-
-            # Verify final state is consistent
-            final_response = await client.get(f"/recipes/{recipe_id}")
-            if final_response.status_code == 200:
-                final_recipe = final_response.json()
-                # Instructions should be one of the updates, not corrupted
-                assert final_recipe["instructions"] in [
-                    "First concurrent update",
-                    "Second concurrent update",
-                ]
-
-
-class TestComplexQueries:
-    """Test complex query operations and edge cases"""
-
-    async def test_deep_ingredient_hierarchy_queries(self, test_client_with_data):
-        client, app = test_client_with_data
-        """Test querying ingredients with deep hierarchy"""
-
-        # Get ingredients with hierarchy
-        response = await client.get("/ingredients")
-        if response.status_code == 200:
-            ingredients = response.json()
-
-            # Find ingredients with complex paths
-            complex_ingredients = [
-                ing
-                for ing in ingredients
-                if ing.get("path") and ing["path"].count("/") > 2
-            ]
-
-            # Test that hierarchy queries work for complex paths
-            for ingredient in complex_ingredients[
-                :3
-            ]:  # Test first 3 complex ingredients
-                ingredient_id = ingredient["id"]
-                detail_response = await client.get(f"/ingredients/{ingredient_id}")
-
-                if detail_response.status_code == 200:
-                    detailed_ingredient = detail_response.json()
-                    # Verify hierarchy information is preserved
-                    assert "path" in detailed_ingredient
-                    assert detailed_ingredient["path"] == ingredient["path"]
+    assert response.status_code == 200, response.text
+    assert response.json()["path"] == (
+        f"/{spirit['id']}/{whiskey['id']}/{bourbon['id']}/"
+    )
