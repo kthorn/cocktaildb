@@ -37,7 +37,10 @@ class Settings(BaseSettings):
             "## Rate Limits\n\n"
             "**60 requests per minute** per IP address (sliding window). "
             "Every response includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers. "
-            "A `429` response includes a `Retry-After` header with the number of seconds to wait."
+            "A `429` response includes a `Retry-After` header with the number of seconds to wait. "
+            "The MCP endpoint (`/api/v1/mcp`) has its own separate limit of "
+            "**300 requests per minute** per IP address; its `429` response body is a "
+            "JSON-RPC error."
         )
     )
 

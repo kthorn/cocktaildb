@@ -126,7 +126,9 @@ app = FastAPI(
 
 # Rate limiting first, then CORS wraps outermost (last registered = outermost).
 # This ensures 429 responses still get CORS headers.
-app.add_middleware(RateLimitMiddleware)
+app.add_middleware(
+    RateLimitMiddleware, mcp_max_requests=settings.mcp_rate_limit_per_minute
+)
 app.add_middleware(CORSHeaderMiddleware)
 
 # Add exception handlers
