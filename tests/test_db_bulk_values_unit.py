@@ -1,4 +1,3 @@
-import asyncio
 import importlib
 import unittest
 from decimal import Decimal
@@ -88,16 +87,14 @@ class TestBulkIngredientValueTransaction(unittest.TestCase):
             }
         )
 
-        response = asyncio.run(
-            upload_ingredient_values(
-                "ingredient_id,ingredient_name,field,value\n"
-                "7,Lime Juice,sugar_g_per_l,2\n"
-                "8,Rum,percent_abv,40\n"
-                "7,Lime Juice,titratable_acidity_g_per_l,46\n"
-                "7,Lime Juice,sugar_g_per_l,2\n",
-                db,
-                None,
-            )
+        response = upload_ingredient_values(
+            "ingredient_id,ingredient_name,field,value\n"
+            "7,Lime Juice,sugar_g_per_l,2\n"
+            "8,Rum,percent_abv,40\n"
+            "7,Lime Juice,titratable_acidity_g_per_l,46\n"
+            "7,Lime Juice,sugar_g_per_l,2\n",
+            db,
+            None,
         )
 
         self.assertEqual(
@@ -110,14 +107,12 @@ class TestBulkIngredientValueTransaction(unittest.TestCase):
         db = FakeDatabase({})
 
         with self.assertRaises(ValidationException) as raised:
-            asyncio.run(
-                upload_ingredient_values(
-                    "ingredient_id,ingredient_name,field,value\n"
-                    "7,Missing,sugar_g_per_l,2\n"
-                    "7,Missing,percent_abv,40\n",
-                    db,
-                    None,
-                )
+            upload_ingredient_values(
+                "ingredient_id,ingredient_name,field,value\n"
+                "7,Missing,sugar_g_per_l,2\n"
+                "7,Missing,percent_abv,40\n",
+                db,
+                None,
             )
 
         self.assertEqual(
@@ -167,13 +162,10 @@ class TestBulkIngredientValueTransaction(unittest.TestCase):
     def test_all_no_op_upload_is_transactionally_revalidated(self):
         db = FakeDatabase({7: ("Lime Juice", Decimal("45"), None, None)})
 
-        response = asyncio.run(
-            upload_ingredient_values(
-                "ingredient_id,ingredient_name,field,value\n"
-                "7,Lime Juice,percent_abv,45\n",
-                db,
-                None,
-            )
+        response = upload_ingredient_values(
+            "ingredient_id,ingredient_name,field,value\n7,Lime Juice,percent_abv,45\n",
+            db,
+            None,
         )
 
         self.assertEqual(

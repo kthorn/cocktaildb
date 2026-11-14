@@ -24,23 +24,23 @@ router = APIRouter(prefix="/ratings", tags=["ratings"])
 
 
 @router.get("/{recipe_id}", response_model=RatingSummaryResponse)
-async def get_recipe_ratings(
+def get_recipe_ratings(
     recipe_id: int,
     db: Database = Depends(get_db),
     user: UserInfo = Depends(get_current_user_optional),
 ):
     """Get ratings for a specific recipe"""
-    return await get_recipe_ratings_handler(recipe_id, db, user)
+    return get_recipe_ratings_handler(recipe_id, db, user)
 
 
 @router.post(
     "/{recipe_id}", response_model=RatingResponse, status_code=status.HTTP_201_CREATED
 )
-async def create_or_update_rating(
+def create_or_update_rating(
     recipe_id: int,
     rating_data: RatingCreate,
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_authentication),
 ):
     """Create or update a rating for a recipe (requires authentication)"""
-    return await create_or_update_rating_handler(recipe_id, rating_data, db, user)
+    return create_or_update_rating_handler(recipe_id, rating_data, db, user)

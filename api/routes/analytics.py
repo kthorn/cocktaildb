@@ -80,7 +80,7 @@ def add_cocktail_space_ratings(
 
 
 @router.get("/ingredient-usage")
-async def get_ingredient_usage_analytics(
+def get_ingredient_usage_analytics(
     level: int | None = None,
     parent_id: int | None = None,
     db: Database = Depends(get_db),
@@ -122,7 +122,7 @@ async def get_ingredient_usage_analytics(
 
 
 @router.get("/recipe-complexity")
-async def get_recipe_complexity_analytics(
+def get_recipe_complexity_analytics(
     db: Database = Depends(get_db),
     user: UserInfo | None = Depends(get_current_user_optional),
 ):
@@ -141,7 +141,7 @@ async def get_recipe_complexity_analytics(
 
 
 @router.get("/cocktail-space")
-async def get_cocktail_space_analytics(
+def get_cocktail_space_analytics(
     response: Response,
     db: Database = Depends(get_db),
     user: UserInfo | None = Depends(get_current_user_optional),
@@ -162,7 +162,7 @@ async def get_cocktail_space_analytics(
 
 
 @router.get("/cocktail-space-em")
-async def get_cocktail_space_em_analytics(
+def get_cocktail_space_em_analytics(
     response: Response,
     db: Database = Depends(get_db),
     user: UserInfo | None = Depends(get_current_user_optional),
@@ -183,7 +183,7 @@ async def get_cocktail_space_em_analytics(
 
 
 @router.get("/recipe-similar")
-async def get_recipe_similar(
+def get_recipe_similar(
     recipe_id: int = Query(..., description="Recipe ID to fetch similar cocktails for"),
     limit: int = Query(5, ge=1, description="Number of similar cocktails to return"),
     db: Database = Depends(get_db),
@@ -220,7 +220,7 @@ async def get_recipe_similar(
 
 
 @router.get("/ingredient-tree")
-async def get_ingredient_tree_analytics(
+def get_ingredient_tree_analytics(
     db: Database = Depends(get_db),
     user: UserInfo | None = Depends(get_current_user_optional),
 ):
@@ -243,7 +243,7 @@ async def get_ingredient_tree_analytics(
 
 
 @router.get("/recipe-distances-em/download")
-async def download_recipe_distances_em():
+def download_recipe_distances_em():
     """Download the EM pairwise recipe distance matrix."""
     try:
         storage_path = os.environ.get("ANALYTICS_PATH", "")

@@ -11,6 +11,7 @@ import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
 
+import anyio.to_thread
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -27,6 +28,7 @@ from core.exception_handlers import (
     validation_exception_handler,
 )
 from core.exceptions import CocktailDBException
+from db.db_core import Database
 from middleware.rate_limit import RateLimitMiddleware
 from routes import (
     analytics,
@@ -67,10 +69,23 @@ class CORSHeaderMiddleware(BaseHTTPMiddleware):
         return response
 
 
+def configure_threadpool() -> None:
+    """Bound concurrent sync handlers so they cannot exhaust the DB pool.
+
+    Route handlers are sync (psycopg2 blocks), so FastAPI runs them in anyio's
+    threadpool. psycopg2's pool raises rather than waits when exhausted.
+    """
+    limiter = anyio.to_thread.current_default_thread_limiter()
+    limiter.total_tokens = (
+        Database.POOL_MAX_CONNECTIONS // Database.MAX_CONNECTIONS_PER_REQUEST
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for FastAPI application"""
     # Startup
+    configure_threadpool()
     logger.info("Starting CocktailDB API")
     logger.info(f"Environment: {settings.environment}")
     logger.info(f"Database: {settings.db_host}:{settings.db_port}/{settings.db_name}")

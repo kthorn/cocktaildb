@@ -69,7 +69,7 @@ async def test_cached_analytics_routes_return_stored_data(
     storage = FakeStorage(stored_data)
     monkeypatch.setattr(analytics, "storage_manager", storage)
 
-    result = await endpoint(**_endpoint_kwargs(endpoint))
+    result = endpoint(**_endpoint_kwargs(endpoint))
 
     if endpoint in {get_cocktail_space_analytics, get_cocktail_space_em_analytics}:
         assert result["data"][0]["rating"] is None
@@ -95,7 +95,7 @@ async def test_cached_analytics_routes_report_unconfigured_storage(
     monkeypatch.setattr(analytics, "storage_manager", None)
 
     with pytest.raises(DatabaseException) as error:
-        await endpoint(**_endpoint_kwargs(endpoint))
+        endpoint(**_endpoint_kwargs(endpoint))
 
     assert error.value.message == "Analytics storage not configured"
     assert error.value.detail is None
@@ -118,7 +118,7 @@ async def test_cached_analytics_routes_report_missing_data(
     monkeypatch.setattr(analytics, "storage_manager", FakeStorage())
 
     with pytest.raises(DatabaseException) as error:
-        await endpoint(**_endpoint_kwargs(endpoint))
+        endpoint(**_endpoint_kwargs(endpoint))
 
     assert error.value.message == (
         "Analytics not generated. Please trigger analytics refresh."
@@ -141,7 +141,7 @@ async def test_ingredient_usage_drill_down_remains_computed(monkeypatch):
     database = FakeDatabase()
     monkeypatch.setattr(analytics, "AnalyticsQueries", FakeQueries)
 
-    result = await analytics.get_ingredient_usage_analytics(
+    result = analytics.get_ingredient_usage_analytics(
         level=2, parent_id=12, db=database
     )
 
@@ -181,7 +181,7 @@ async def test_cached_analytics_routes_wrap_storage_errors(
     )
 
     with pytest.raises(DatabaseException) as error:
-        await endpoint(**_endpoint_kwargs(endpoint))
+        endpoint(**_endpoint_kwargs(endpoint))
 
     assert error.value.message == wrapped_message
     assert error.value.detail == "storage read failed"

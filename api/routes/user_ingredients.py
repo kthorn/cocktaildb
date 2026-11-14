@@ -29,7 +29,7 @@ router = APIRouter(prefix="/user-ingredients", tags=["user-ingredients"])
 @router.post(
     "", response_model=UserIngredientResponse, status_code=status.HTTP_201_CREATED
 )
-async def add_user_ingredient(
+def add_user_ingredient(
     ingredient_data: UserIngredientAdd,
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_authentication),
@@ -63,7 +63,7 @@ async def add_user_ingredient(
 
 
 @router.delete("/bulk", response_model=UserIngredientBulkResponse)
-async def remove_user_ingredients_bulk(
+def remove_user_ingredients_bulk(
     bulk_data: UserIngredientBulkRemove,
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_authentication),
@@ -95,7 +95,7 @@ async def remove_user_ingredients_bulk(
 
 
 @router.delete("/{ingredient_id}", response_model=MessageResponse)
-async def remove_user_ingredient(
+def remove_user_ingredient(
     ingredient_id: int,
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_authentication),
@@ -125,7 +125,7 @@ async def remove_user_ingredient(
 
 
 @router.get("", response_model=UserIngredientListResponse)
-async def get_user_ingredients(
+def get_user_ingredients(
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_authentication),
 ):
@@ -164,7 +164,7 @@ async def get_user_ingredients(
     response_model=UserIngredientBulkResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def add_user_ingredients_bulk(
+def add_user_ingredients_bulk(
     bulk_data: UserIngredientBulkAdd,
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_authentication),
@@ -192,7 +192,7 @@ async def add_user_ingredients_bulk(
 
 
 @router.get("/recommendations", response_model=IngredientRecommendationListResponse)
-async def get_ingredient_recommendations(
+def get_ingredient_recommendations(
     limit: int = 20,
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_authentication),
