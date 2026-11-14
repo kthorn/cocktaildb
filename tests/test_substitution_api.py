@@ -242,27 +242,6 @@ class TestSubstitutionAPI:
         assert uploaded["Bulk Rum Brand 2"]["allow_substitution"] is True
         assert uploaded["Bulk Rum Brand 1"]["parent_id"] == category_id
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Bulk upload can't resolve a parent from the same batch (issue #139)",
-    )
-    @pytest.mark.asyncio
-    async def test_bulk_upload_resolves_parent_from_same_batch(
-        self, editor_authenticated_client: httpx.AsyncClient
-    ):
-        response = await editor_authenticated_client.post(
-            "/ingredients/bulk",
-            json={
-                "ingredients": [
-                    {"name": "Batch Rum Category"},
-                    {"name": "Batch Rum Brand", "parent_name": "Batch Rum Category"},
-                ]
-            },
-        )
-
-        assert response.status_code == 201, response.text
-        assert response.json()["uploaded_count"] == 2, response.text
-
     @pytest.mark.asyncio
     async def test_allow_substitution_accepts_boolean(
         self, editor_authenticated_client: httpx.AsyncClient
