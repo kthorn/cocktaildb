@@ -30,7 +30,11 @@ from core.exception_handlers import (
 )
 from core.exceptions import CocktailDBException
 from core.release_info import read_release_info
+from db.database import get_database
 from db.db_core import Database
+from mcp_tools.endpoint import McpEndpoint
+from mcp_tools.gate import DbGate
+from mcp_tools.server import build_mcp_server
 from middleware.rate_limit import RateLimitMiddleware
 from routes import (
     analytics,
@@ -71,6 +75,15 @@ class CORSHeaderMiddleware(BaseHTTPMiddleware):
         return response
 
 
+# One gate for the process so the MCP DB-concurrency limit is shared across restarts
+mcp_gate = DbGate(
+    settings.mcp_max_concurrent_db_calls, settings.mcp_db_slot_timeout_seconds
+)
+mcp_endpoint = McpEndpoint(
+    lambda: build_mcp_server(get_database, base_url=settings.base_url, gate=mcp_gate)
+)
+
+
 def configure_threadpool() -> None:
     """Bound concurrent sync handlers so they cannot exhaust the DB pool.
 
@@ -93,7 +106,8 @@ async def lifespan(app: FastAPI):
     logger.info(f"Database: {settings.db_host}:{settings.db_port}/{settings.db_name}")
     pages.frontend_assets.validate()
 
-    yield
+    async with mcp_endpoint.running():
+        yield
 
     # Shutdown
     logger.info("Shutting down CocktailDB API")
@@ -136,6 +150,11 @@ app.include_router(stats.router)
 app.include_router(analytics.router)
 app.include_router(pages.router)
 
+# Public read-only MCP endpoint (Caddy strips /api/v1, so this is /api/v1/mcp)
+app.add_route(
+    "/mcp", mcp_endpoint, methods=["GET", "POST", "DELETE"], include_in_schema=False
+)
+
 
 # Root endpoint
 @app.get("/")
@@ -150,6 +169,7 @@ async def root():
         "docs": "/api/v1/docs",
         "redoc": "/api/v1/redoc",
         "openapi": "/api/v1/openapi.json",
+        "mcp": "/api/v1/mcp",
         "endpoints": {
             "search_recipes": "/api/v1/recipes/search",
             "get_recipe": "/api/v1/recipes/{id}",

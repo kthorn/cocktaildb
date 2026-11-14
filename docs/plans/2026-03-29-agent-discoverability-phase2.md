@@ -71,6 +71,6 @@ Add server-rendered summaries to analytics pages (or break into distinct crawlab
 
 ## Future (out of scope)
 
-- **MCP server**: Wrap API in Model Context Protocol for direct tool-call access from Claude and other agents
+- **MCP server**: Implemented at `/api/v1/mcp`; see `docs/superpowers/specs/2026-11-14-public-mcp-server-design.md`
 - **`/.well-known/ai-plugin.json`**: Agent plugin manifest pointing to OpenAPI spec
 - **Prerendered homepage with live stats**: Inject recipe/ingredient counts at serve time instead of client-side JS
