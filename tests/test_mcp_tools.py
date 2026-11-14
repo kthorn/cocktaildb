@@ -3,9 +3,10 @@
 import os
 import sys
 import threading
-import time
 from unittest.mock import MagicMock
 
+import anyio
+import anyio.to_thread
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "api"))
@@ -243,34 +244,118 @@ def test_resolve_ingredient_name_picks_exact_casefold_match():
     assert resolve_ingredient_name(db, "rye") is None
 
 
-def test_gate_times_out_with_busy_message_when_full():
+# Built at import time, outside any event loop, as the app will do.
+MODULE_LEVEL_GATE = DbGate(1, 0.05)
+
+
+@pytest.mark.asyncio
+async def test_gate_built_outside_loop_works_in_each_loop():
+    assert await MODULE_LEVEL_GATE.run(lambda: 41 + 1) == 42
+
+
+@pytest.mark.asyncio
+async def test_gate_built_outside_loop_works_in_a_second_loop():
+    assert await MODULE_LEVEL_GATE.run(lambda: "ok") == "ok"
+
+
+@pytest.mark.asyncio
+async def test_gate_times_out_with_busy_message_when_full():
     gate = DbGate(1, 0.05)
-    with gate.slot():
+    release = threading.Event()
+    started = threading.Event()
+
+    def hold():
+        started.set()
+        release.wait(5)
+
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(gate.run, hold)
+        await anyio.to_thread.run_sync(started.wait, 5)
         with pytest.raises(ToolError, match="busy") as exc_info:
-            with gate.slot():
-                pass
-    assert str(exc_info.value) == BUSY_MESSAGE
+            await gate.run(lambda: None)
+        assert str(exc_info.value) == BUSY_MESSAGE
+        release.set()
 
 
-def test_gate_caps_concurrency_under_parallel_load():
-    gate = DbGate(2, 1.0)
+@pytest.mark.asyncio
+async def test_gate_releases_slot_when_function_raises():
+    gate = DbGate(1, 0.05)
+
+    def boom():
+        raise RuntimeError("x")
+
+    with pytest.raises(RuntimeError):
+        await gate.run(boom)
+    assert await gate.run(lambda: "after") == "after"
+
+
+@pytest.mark.asyncio
+async def test_gate_caps_concurrency_under_parallel_load():
+    gate = DbGate(2, 5.0)
     lock = threading.Lock()
     inside = 0
     peak = 0
+    two_inside = threading.Event()
 
-    def worker():
+    def work():
         nonlocal inside, peak
-        with gate.slot():
-            with lock:
-                inside += 1
-                peak = max(peak, inside)
-            time.sleep(0.02)
-            with lock:
-                inside -= 1
+        with lock:
+            inside += 1
+            peak = max(peak, inside)
+            if inside == 2:
+                two_inside.set()
+        # Each worker waits until two are inside at once, so overlap is certain.
+        two_inside.wait(5)
+        with lock:
+            inside -= 1
 
-    threads = [threading.Thread(target=worker) for _ in range(8)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
+    async with anyio.create_task_group() as tg:
+        for _ in range(8):
+            tg.start_soon(gate.run, work)
     assert peak == 2
+
+
+@pytest.mark.asyncio
+async def test_gate_waiters_do_not_occupy_worker_threads():
+    gate = DbGate(1, 2.0)
+    release = threading.Event()
+    started = threading.Event()
+    limiter = anyio.to_thread.current_default_thread_limiter()
+
+    def hold():
+        started.set()
+        release.wait(5)
+
+    async def waiter():
+        await gate.run(lambda: None)
+
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(gate.run, hold)
+        await anyio.to_thread.run_sync(started.wait, 5)
+        baseline = limiter.borrowed_tokens
+        for _ in range(10):
+            tg.start_soon(waiter)
+        await anyio.sleep(0.1)
+        assert limiter.borrowed_tokens == baseline
+        release.set()
+
+
+@pytest.mark.asyncio
+async def test_tool_call_reports_busy_when_gate_is_full(db):
+    gate = DbGate(1, 0.05)
+    server = build_mcp_server(lambda: db, base_url=BASE, gate=gate)
+    release = threading.Event()
+    started = threading.Event()
+
+    def hold():
+        started.set()
+        release.wait(5)
+
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(gate.run, hold)
+        await anyio.to_thread.run_sync(started.wait, 5)
+        err = await call_error(server, "get_recipe", {"recipe_id": 1})
+        release.set()
+    assert isinstance(err, ToolError)
+    assert BUSY_MESSAGE in str(err)
+    db.get_recipe.assert_not_called()

@@ -74,7 +74,7 @@ def build_mcp_server(
         ),
         annotations=_READ_ONLY,
     )
-    def search_recipes(
+    async def search_recipes(
         query: Annotated[
             str | None, Field(description="Text to match in recipe names")
         ] = None,
@@ -109,7 +109,7 @@ def build_mcp_server(
         if min_abv is not None and max_abv is not None and min_abv > max_abv:
             raise ToolError("min_abv cannot be greater than max_abv.")
 
-        with gate.slot():
+        def fetch() -> tuple[dict | None, list[str]]:
             db = get_db()
             specs: list[str] = []
             unresolved: list[str] = []
@@ -129,12 +129,7 @@ def build_mcp_server(
                     specs.append(f"{canonical}:MUST_NOT")
 
             if include_missing:
-                return RecipeSearchResult(
-                    recipes=[],
-                    has_more=False,
-                    offset=offset,
-                    unresolved_ingredients=unresolved,
-                )
+                return None, unresolved
 
             search_params: dict = {}
             if query:
@@ -158,7 +153,16 @@ def build_mcp_server(
                 user_id=None,
                 return_pagination=True,
             )
+            return result, unresolved
 
+        result, unresolved = await gate.run(fetch)
+        if result is None:
+            return RecipeSearchResult(
+                recipes=[],
+                has_more=False,
+                offset=offset,
+                unresolved_ingredients=unresolved,
+            )
         return RecipeSearchResult(
             recipes=[to_summary(r, base_url) for r in result["recipes"]],
             has_more=bool(result.get("has_next")),
@@ -176,11 +180,10 @@ def build_mcp_server(
         ),
         annotations=_READ_ONLY,
     )
-    def get_recipe(
+    async def get_recipe(
         recipe_id: Annotated[int, Field(description="Recipe id")],
     ) -> RecipeDetail:
-        with gate.slot():
-            recipe = get_db().get_recipe(recipe_id, None)
+        recipe = await gate.run(lambda: get_db().get_recipe(recipe_id, None))
         if recipe is None:
             raise ToolError(
                 f"No recipe with id {recipe_id}. Use search_recipes to find recipe ids."
@@ -201,14 +204,13 @@ def build_mcp_server(
         ),
         annotations=_READ_ONLY,
     )
-    def find_similar_recipes(
+    async def find_similar_recipes(
         recipe_id: Annotated[int, Field(description="Id of the original recipe")],
         limit: Annotated[
             int, Field(ge=1, le=10, description="Maximum similar recipes")
         ] = 5,
     ) -> SimilarRecipesResult:
-        with gate.slot():
-            row = get_db().get_recipe_similarity(recipe_id)
+        row = await gate.run(lambda: get_db().get_recipe_similarity(recipe_id))
         if not row:
             raise ToolError(
                 f"Similarity data isn't available for recipe {recipe_id}. "
@@ -226,7 +228,7 @@ def build_mcp_server(
         ),
         annotations=_READ_ONLY,
     )
-    def find_ingredients(
+    async def find_ingredients(
         query: Annotated[
             str, Field(min_length=1, description="Ingredient name or part of one")
         ],
@@ -234,11 +236,13 @@ def build_mcp_server(
             int, Field(ge=1, le=25, description="Maximum ingredients to return")
         ] = 10,
     ) -> IngredientSearchResult:
-        with gate.slot():
+        def fetch() -> tuple[list[dict], dict[int, str]]:
             db = get_db()
             rows = db.search_ingredients(query)[:limit]
             ids = {i for row in rows for i in path_ids(row.get("path"))}
-            names = db.get_ingredient_names(ids)
+            return rows, db.get_ingredient_names(ids)
+
+        rows, names = await gate.run(fetch)
 
         return IngredientSearchResult(
             ingredients=[
