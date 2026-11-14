@@ -204,3 +204,22 @@ def test_each_environment_has_one_explicit_inventory():
     assert "inventory/hosts.yml" not in (ANSIBLE / "ansible.cfg").read_text(
         encoding="utf-8"
     ), "the deploy must not fall back to a second, ambient inventory"
+
+
+def test_deploy_stages_the_release_identity_into_the_api_image():
+    tasks = _tasks(_play("deploy.yml"))
+    names = [task["name"] for task in tasks]
+
+    frozen = next(t for t in tasks if t["name"] == "Freeze deployment release ID")
+    facts = frozen["ansible.builtin.set_fact"]
+    assert "rev-parse HEAD" in facts["deployment_git_commit"]
+    assert "status --porcelain" in facts["deployment_git_dirty"]
+
+    staged = next(t for t in tasks if t["name"] == "Stage API release identity")
+    args = staged["ansible.builtin.copy"]
+    assert args["dest"] == "{{ release_root }}/api/release.json"
+    for key in ("release_id", "git_commit", "git_dirty"):
+        assert f"'{key}'" in args["content"]
+    # Staging the API code deletes files it does not carry, so the identity
+    # must be written after it.
+    assert names.index("Stage API code") < names.index("Stage API release identity")

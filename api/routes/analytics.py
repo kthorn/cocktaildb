@@ -91,34 +91,25 @@ def get_ingredient_usage_analytics(
     Root level data is cached in local storage. Hierarchical drill-down data is
     computed on-the-fly.
     """
-    try:
-        # For root level (no filters), use cached data from local storage
-        if level is None and parent_id is None:
-            return _load_cached_analytics("ingredient-usage")
+    # For root level (no filters), use cached data from local storage
+    if level is None and parent_id is None:
+        return _load_cached_analytics("ingredient-usage")
 
-        # For hierarchical drill-down, compute on-the-fly
-        else:
-            analytics_queries = AnalyticsQueries(db)
-            # Note: level filtering happens at API level, function only supports parent_id
-            result = analytics_queries.get_ingredient_usage_stats(parent_id=parent_id)
+    # For hierarchical drill-down, compute on-the-fly
+    else:
+        analytics_queries = AnalyticsQueries(db)
+        # Note: level filtering happens at API level, function only supports parent_id
+        result = analytics_queries.get_ingredient_usage_stats(parent_id=parent_id)
 
-            # Return in same format as cached data
-            return {
-                "data": result,
-                "metadata": {
-                    "computed_on_the_fly": True,
-                    "level": level,
-                    "parent_id": parent_id,
-                },
-            }
-
-    except DatabaseException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting ingredient usage analytics: {str(e)}")
-        raise DatabaseException(
-            "Failed to retrieve ingredient usage analytics", detail=str(e)
-        ) from e
+        # Return in same format as cached data
+        return {
+            "data": result,
+            "metadata": {
+                "computed_on_the_fly": True,
+                "level": level,
+                "parent_id": parent_id,
+            },
+        }
 
 
 @router.get("/recipe-complexity")
@@ -127,17 +118,8 @@ def get_recipe_complexity_analytics(
     user: UserInfo | None = Depends(get_current_user_optional),
 ):
     """Get recipe complexity distribution"""
-    try:
-        storage_key = "recipe-complexity"
-        return _load_cached_analytics(storage_key)
-
-    except DatabaseException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting recipe complexity analytics: {str(e)}")
-        raise DatabaseException(
-            "Failed to retrieve recipe complexity analytics", detail=str(e)
-        ) from e
+    storage_key = "recipe-complexity"
+    return _load_cached_analytics(storage_key)
 
 
 @router.get("/cocktail-space")
@@ -148,17 +130,9 @@ def get_cocktail_space_analytics(
 ):
     """Get UMAP embedding of recipe space based on ingredient similarity"""
     response.headers["Cache-Control"] = PRIVATE_CACHE_CONTROL
-    try:
-        storage_key = "cocktail-space"
-        stored_data = _load_cached_analytics(storage_key)
-        return add_cocktail_space_ratings(stored_data, db, user)
-    except DatabaseException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting cocktail space analytics: {str(e)}")
-        raise DatabaseException(
-            "Failed to retrieve cocktail space analytics", detail=str(e)
-        ) from e
+    storage_key = "cocktail-space"
+    stored_data = _load_cached_analytics(storage_key)
+    return add_cocktail_space_ratings(stored_data, db, user)
 
 
 @router.get("/cocktail-space-em")
@@ -169,17 +143,9 @@ def get_cocktail_space_em_analytics(
 ):
     """Get UMAP embedding of recipe space based on EM-learned distances with ingredient rollup"""
     response.headers["Cache-Control"] = PRIVATE_CACHE_CONTROL
-    try:
-        storage_key = "cocktail-space-em"
-        stored_data = _load_cached_analytics(storage_key)
-        return add_cocktail_space_ratings(stored_data, db, user)
-    except DatabaseException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting EM cocktail space analytics: {str(e)}")
-        raise DatabaseException(
-            "Failed to retrieve EM cocktail space analytics", detail=str(e)
-        ) from e
+    storage_key = "cocktail-space-em"
+    stored_data = _load_cached_analytics(storage_key)
+    return add_cocktail_space_ratings(stored_data, db, user)
 
 
 @router.get("/recipe-similar")
@@ -190,33 +156,25 @@ def get_recipe_similar(
     user: UserInfo | None = Depends(get_current_user_optional),
 ):
     """Get similar cocktails for a recipe from PostgreSQL."""
-    try:
-        result = db.get_recipe_similarity(recipe_id)
-        if not result:
-            raise NotFoundException(
-                "Similar recipe analytics missing for recipe",
-                detail=f"recipe_id={recipe_id}",
-            )
+    result = db.get_recipe_similarity(recipe_id)
+    if not result:
+        raise NotFoundException(
+            "Similar recipe analytics missing for recipe",
+            detail=f"recipe_id={recipe_id}",
+        )
 
-        neighbors = result.get("neighbors", [])
-        if isinstance(neighbors, list):
-            neighbors = sorted(
-                neighbors,
-                key=lambda neighbor: neighbor.get("distance", float("inf")),
-            )[:limit]
+    neighbors = result.get("neighbors", [])
+    if isinstance(neighbors, list):
+        neighbors = sorted(
+            neighbors,
+            key=lambda neighbor: neighbor.get("distance", float("inf")),
+        )[:limit]
 
-        return {
-            "recipe_id": result["recipe_id"],
-            "recipe_name": result["recipe_name"],
-            "neighbors": neighbors,
-        }
-    except NotFoundException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting similar recipes: {str(e)}")
-        raise DatabaseException(
-            "Failed to retrieve similar recipes", detail=str(e)
-        ) from e
+    return {
+        "recipe_id": result["recipe_id"],
+        "recipe_name": result["recipe_name"],
+        "neighbors": neighbors,
+    }
 
 
 @router.get("/ingredient-tree")
@@ -230,42 +188,26 @@ def get_ingredient_tree_analytics(
     and hierarchical_recipe_count for each node, suitable for tooltips and
     tree visualizations.
     """
-    try:
-        storage_key = "ingredient-tree"
-        return _load_cached_analytics(storage_key)
-    except DatabaseException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting ingredient tree analytics: {str(e)}")
-        raise DatabaseException(
-            "Failed to retrieve ingredient tree analytics", detail=str(e)
-        ) from e
+    storage_key = "ingredient-tree"
+    return _load_cached_analytics(storage_key)
 
 
 @router.get("/recipe-distances-em/download")
 def download_recipe_distances_em():
     """Download the EM pairwise recipe distance matrix."""
-    try:
-        storage_path = os.environ.get("ANALYTICS_PATH", "")
-        if not storage_path:
-            raise DatabaseException("Analytics storage not configured")
+    storage_path = os.environ.get("ANALYTICS_PATH", "")
+    if not storage_path:
+        raise DatabaseException("Analytics storage not configured")
 
-        file_path = get_em_distance_matrix_path(storage_path)
-        if not file_path.exists():
-            raise DatabaseException(
-                "Analytics not generated. Please trigger analytics refresh.",
-                detail="recipe-distances-em data not found in storage",
-            )
-
-        return FileResponse(
-            path=file_path,
-            media_type="application/octet-stream",
-            filename=file_path.name,
-        )
-    except DatabaseException:
-        raise
-    except Exception as e:
-        logger.error(f"Error downloading EM distance matrix: {str(e)}")
+    file_path = get_em_distance_matrix_path(storage_path)
+    if not file_path.exists():
         raise DatabaseException(
-            "Failed to download EM distance matrix", detail=str(e)
-        ) from e
+            "Analytics not generated. Please trigger analytics refresh.",
+            detail="recipe-distances-em data not found in storage",
+        )
+
+    return FileResponse(
+        path=file_path,
+        media_type="application/octet-stream",
+        filename=file_path.name,
+    )

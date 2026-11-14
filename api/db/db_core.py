@@ -201,7 +201,7 @@ class Database(GroupInventoryMixin):
                 )
                 new_row = cursor.fetchone()
                 if not new_row or new_row[0] is None:
-                    raise ValueError("Failed to get ingredient ID after insertion")
+                    raise RuntimeError("Failed to get ingredient ID after insertion")
                 new_id = new_row[0]
 
                 # Generate the path
@@ -749,7 +749,7 @@ class Database(GroupInventoryMixin):
             if "Invalid ingredient IDs" in str(e):
                 raise  # Re-raise our custom validation error
             logger.error(f"Error validating ingredient existence: {str(e)}")
-            raise ValueError("Failed to validate ingredient existence") from e
+            raise RuntimeError("Failed to validate ingredient existence") from e
 
     def create_recipe(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create a new recipe with its ingredients"""
@@ -796,7 +796,7 @@ class Database(GroupInventoryMixin):
             # Get the recipe ID
             recipe_row = cursor.fetchone()
             if not recipe_row or recipe_row[0] is None:
-                raise ValueError("Failed to get recipe ID after insertion")
+                raise RuntimeError("Failed to get recipe ID after insertion")
             recipe_id = recipe_row[0]
 
             # Add recipe ingredients
@@ -824,7 +824,7 @@ class Database(GroupInventoryMixin):
             # Return the created recipe
             recipe = self.get_recipe(recipe_id)
             if not recipe:
-                raise ValueError("Failed to retrieve created recipe")
+                raise RuntimeError("Failed to retrieve created recipe")
             return recipe
         except Exception as e:
             if conn:
@@ -1425,7 +1425,7 @@ class Database(GroupInventoryMixin):
                 )
                 rating_row = cursor.fetchone()
                 if not rating_row or rating_row[0] is None:
-                    raise ValueError("Failed to get rating ID after insertion")
+                    raise RuntimeError("Failed to get rating ID after insertion")
                 rating_id = rating_row[0]
 
             conn.commit()

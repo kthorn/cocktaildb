@@ -7,6 +7,7 @@ from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from models.responses import ErrorResponse
+from pydantic import ValidationError as PydanticValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,20 @@ async def cocktail_db_exception_handler(
     return JSONResponse(
         status_code=exc.status_code,
         content=ErrorResponse(error=exc.message, detail=exc.detail).model_dump(),
+    )
+
+
+async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
+    """Treat ValueError from the database layer as invalid client input."""
+    if isinstance(exc, PydanticValidationError):
+        # Pydantic's ValidationError subclasses ValueError, but here it means
+        # the server built an invalid model, not that the client sent bad input.
+        return await general_exception_handler(request, exc)
+    logger.warning(f"Rejected request: {exc}")
+
+    return JSONResponse(
+        status_code=400,
+        content=ErrorResponse(error=str(exc)).model_dump(),
     )
 
 

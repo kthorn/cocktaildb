@@ -153,35 +153,23 @@ async def test_ingredient_usage_drill_down_remains_computed(monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("endpoint", "wrapped_message"),
+    "endpoint",
     [
-        (
-            get_ingredient_usage_analytics,
-            "Failed to retrieve ingredient usage analytics",
-        ),
-        (
-            analytics.get_recipe_complexity_analytics,
-            "Failed to retrieve recipe complexity analytics",
-        ),
-        (get_cocktail_space_analytics, "Failed to retrieve cocktail space analytics"),
-        (
-            get_cocktail_space_em_analytics,
-            "Failed to retrieve EM cocktail space analytics",
-        ),
-        (get_ingredient_tree_analytics, "Failed to retrieve ingredient tree analytics"),
+        get_ingredient_usage_analytics,
+        analytics.get_recipe_complexity_analytics,
+        get_cocktail_space_analytics,
+        get_cocktail_space_em_analytics,
+        get_ingredient_tree_analytics,
     ],
 )
-async def test_cached_analytics_routes_wrap_storage_errors(
-    monkeypatch, endpoint, wrapped_message
-):
+async def test_cached_analytics_routes_propagate_storage_errors(monkeypatch, endpoint):
+    # Storage failures must not be swallowed or reported as missing analytics;
+    # the global handler turns them into a generic 500.
     monkeypatch.setattr(
         analytics,
         "storage_manager",
         FakeStorage(error=RuntimeError("storage read failed")),
     )
 
-    with pytest.raises(DatabaseException) as error:
+    with pytest.raises(RuntimeError, match="storage read failed"):
         endpoint(**_endpoint_kwargs(endpoint))
-
-    assert error.value.message == wrapped_message
-    assert error.value.detail == "storage read failed"

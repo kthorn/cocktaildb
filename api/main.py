@@ -26,8 +26,10 @@ from core.exception_handlers import (
     general_exception_handler,
     starlette_http_exception_handler,
     validation_exception_handler,
+    value_error_handler,
 )
 from core.exceptions import CocktailDBException
+from core.release_info import read_release_info
 from db.db_core import Database
 from middleware.rate_limit import RateLimitMiddleware
 from routes import (
@@ -115,6 +117,7 @@ app.add_middleware(CORSHeaderMiddleware)
 
 # Add exception handlers
 app.add_exception_handler(CocktailDBException, cocktail_db_exception_handler)
+app.add_exception_handler(ValueError, value_error_handler)
 app.add_exception_handler(Exception, general_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(StarletteHTTPException, starlette_http_exception_handler)
@@ -165,11 +168,19 @@ async def root():
     }
 
 
+# Read once at startup: the identity is fixed for the life of the image.
+RELEASE_INFO = read_release_info()
+
+
 # Health check endpoint
 @app.get("/health", tags=["health"])
 async def health_check():
     """Health check endpoint for container orchestration."""
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "release": RELEASE_INFO,
+    }
 
 
 # For local development

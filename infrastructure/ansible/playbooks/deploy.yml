@@ -22,6 +22,9 @@
       - name: Freeze deployment release ID
         ansible.builtin.set_fact:
             deployment_release_id: "{{ deployment_release_id | default(lookup('pipe', 'date -u +%Y%m%dT%H%M%SZ'), true) }}"
+            # Lookups run on the controller, whose working tree is what gets staged.
+            deployment_git_commit: "{{ lookup('pipe', 'git -C ' ~ (playbook_dir | quote) ~ ' rev-parse HEAD') }}"
+            deployment_git_dirty: "{{ lookup('pipe', 'git -C ' ~ (playbook_dir | quote) ~ ' status --porcelain') | length > 0 }}"
 
       - name: Validate frontend artifact before deployment lock
         delegate_to: localhost
@@ -122,6 +125,14 @@
         ansible.builtin.copy:
             src: '{{ frontend_artifact_dir }}/manifest.json'
             dest: '{{ release_root }}/api/frontend-manifest.json'
+            owner: '{{ app_user }}'
+            group: '{{ app_group }}'
+            mode: '0644'
+
+      - name: Stage API release identity
+        ansible.builtin.copy:
+            content: "{{ {'release_id': deployment_release_id, 'git_commit': deployment_git_commit, 'git_dirty': deployment_git_dirty | bool} | to_nice_json }}\n"
+            dest: '{{ release_root }}/api/release.json'
             owner: '{{ app_user }}'
             group: '{{ app_group }}'
             mode: '0644'

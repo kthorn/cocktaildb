@@ -33,6 +33,15 @@ npm ci && npm run build && npm run test:build
 curl --max-time 30 --fail --silent --show-error "$BASE_URL/health"
 ```
 
+`/health` reports the running release as `release`: the deploy's `release_id`,
+the controller's `git_commit`, and `git_dirty` (true when the controller had
+uncommitted changes, so the commit alone does not describe what was staged).
+It is `null` outside a deployed build. To check what an environment is running:
+
+```bash
+curl --max-time 30 --fail --silent --show-error "$BASE_URL/health" | python -m json.tool
+```
+
 Without `--frontend-artifact`, the wrapper runs the same `npm ci && npm run build`
 gate before passing the resulting `dist/` directory to Ansible. Ansible
 validates the artifact and public config before remote mutation, stages the API

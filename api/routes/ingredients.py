@@ -5,7 +5,6 @@ import logging
 from bulk_ingredient_values import BULK_VALUE_LIMITS, parse_bulk_ingredient_values
 from core.exceptions import (
     ConflictException,
-    DatabaseException,
     NotFoundException,
     ValidationException,
 )
@@ -37,13 +36,9 @@ def get_ingredients(
     user: UserInfo | None = Depends(get_current_user_optional),
 ):
     """Get all ingredients"""
-    try:
-        logger.info("Getting all ingredients")
-        ingredients = db.get_ingredients()
-        return [IngredientResponse(**ingredient) for ingredient in ingredients]
-    except Exception as e:
-        logger.error(f"Error getting ingredients: {str(e)}")
-        raise DatabaseException("Failed to retrieve ingredients", detail=str(e)) from e
+    logger.info("Getting all ingredients")
+    ingredients = db.get_ingredients()
+    return [IngredientResponse(**ingredient) for ingredient in ingredients]
 
 
 @router.get("/search", response_model=list[IngredientResponse])
@@ -53,13 +48,9 @@ def search_ingredients(
     user: UserInfo | None = Depends(get_current_user_optional),
 ):
     """Search ingredients by name"""
-    try:
-        logger.info(f"Searching ingredients with query: {q}")
-        ingredients = db.search_ingredients(q)
-        return [IngredientResponse(**ingredient) for ingredient in ingredients]
-    except Exception as e:
-        logger.error(f"Error searching ingredients: {str(e)}")
-        raise DatabaseException("Failed to search ingredients", detail=str(e)) from e
+    logger.info(f"Searching ingredients with query: {q}")
+    ingredients = db.search_ingredients(q)
+    return [IngredientResponse(**ingredient) for ingredient in ingredients]
 
 
 @router.post("", response_model=IngredientResponse, status_code=status.HTTP_201_CREATED)
@@ -69,23 +60,15 @@ def create_ingredient(
     user: UserInfo = Depends(require_editor_access),
 ):
     """Create a new ingredient (requires editor access)"""
-    try:
-        logger.info(f"Creating ingredient: {ingredient_data.name}")
+    logger.info(f"Creating ingredient: {ingredient_data.name}")
 
-        # Prepare data for database
-        ingredient_dict = ingredient_data.model_dump()
-        ingredient_dict["created_by"] = user.user_id
+    # Prepare data for database
+    ingredient_dict = ingredient_data.model_dump()
+    ingredient_dict["created_by"] = user.user_id
 
-        created_ingredient = db.create_ingredient(ingredient_dict)
+    created_ingredient = db.create_ingredient(ingredient_dict)
 
-        return IngredientResponse(**created_ingredient)
-
-    except ConflictException:
-        # Re-raise ConflictException to preserve the user-friendly error message
-        raise
-    except Exception as e:
-        logger.error(f"Error creating ingredient: {str(e)}")
-        raise DatabaseException("Failed to create ingredient", detail=str(e)) from e
+    return IngredientResponse(**created_ingredient)
 
 
 @router.get("/{ingredient_id}", response_model=IngredientResponse)
@@ -95,20 +78,13 @@ def get_ingredient(
     user: UserInfo | None = Depends(get_current_user_optional),
 ):
     """Get a specific ingredient by ID"""
-    try:
-        logger.info(f"Getting ingredient {ingredient_id}")
-        ingredient = db.get_ingredient(ingredient_id)
+    logger.info(f"Getting ingredient {ingredient_id}")
+    ingredient = db.get_ingredient(ingredient_id)
 
-        if not ingredient:
-            raise NotFoundException(f"Ingredient with ID {ingredient_id} not found")
+    if not ingredient:
+        raise NotFoundException(f"Ingredient with ID {ingredient_id} not found")
 
-        return IngredientResponse(**ingredient)
-
-    except NotFoundException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting ingredient {ingredient_id}: {str(e)}")
-        raise DatabaseException("Failed to retrieve ingredient", detail=str(e)) from e
+    return IngredientResponse(**ingredient)
 
 
 @router.put("/{ingredient_id}", response_model=IngredientResponse)
@@ -119,41 +95,34 @@ def update_ingredient(
     user: UserInfo = Depends(require_editor_access),
 ):
     """Update an ingredient (requires editor access)"""
-    try:
-        logger.info(f"Updating ingredient {ingredient_id}")
+    logger.info(f"Updating ingredient {ingredient_id}")
 
-        # Check if ingredient exists
-        existing_ingredient = db.get_ingredient(ingredient_id)
-        if not existing_ingredient:
-            raise NotFoundException(f"Ingredient with ID {ingredient_id} not found")
+    # Check if ingredient exists
+    existing_ingredient = db.get_ingredient(ingredient_id)
+    if not existing_ingredient:
+        raise NotFoundException(f"Ingredient with ID {ingredient_id} not found")
 
-        # Prepare data for database (only include non-None values)
-        update_dict = {
-            k: v for k, v in ingredient_data.model_dump().items() if v is not None
-        }
+    # Prepare data for database (only include non-None values)
+    update_dict = {
+        k: v for k, v in ingredient_data.model_dump().items() if v is not None
+    }
 
-        value_updates = {
-            field: update_dict.pop(field)
-            for field in BULK_VALUE_LIMITS
-            if field in update_dict
-        }
-        if update_dict:
-            db.update_ingredient(ingredient_id, update_dict)
-        if value_updates:
-            bulk_update_ingredient_values(
-                db, {ingredient_id: value_updates}, overwrite=True
-            )
+    value_updates = {
+        field: update_dict.pop(field)
+        for field in BULK_VALUE_LIMITS
+        if field in update_dict
+    }
+    if update_dict:
+        db.update_ingredient(ingredient_id, update_dict)
+    if value_updates:
+        bulk_update_ingredient_values(
+            db, {ingredient_id: value_updates}, overwrite=True
+        )
 
-        updated_ingredient = db.get_ingredient(ingredient_id)
-        if updated_ingredient is None:
-            raise NotFoundException(f"Ingredient with ID {ingredient_id} not found")
-        return IngredientResponse(**updated_ingredient)
-
-    except NotFoundException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating ingredient {ingredient_id}: {str(e)}")
-        raise DatabaseException("Failed to update ingredient", detail=str(e)) from e
+    updated_ingredient = db.get_ingredient(ingredient_id)
+    if updated_ingredient is None:
+        raise NotFoundException(f"Ingredient with ID {ingredient_id} not found")
+    return IngredientResponse(**updated_ingredient)
 
 
 @router.post("/bulk-values")
@@ -258,25 +227,16 @@ def delete_ingredient(
     user: UserInfo = Depends(require_editor_access),
 ):
     """Delete an ingredient (requires editor access)"""
-    try:
-        logger.info(f"Deleting ingredient {ingredient_id}")
+    logger.info(f"Deleting ingredient {ingredient_id}")
 
-        # Check if ingredient exists
-        existing_ingredient = db.get_ingredient(ingredient_id)
-        if not existing_ingredient:
-            raise NotFoundException(f"Ingredient with ID {ingredient_id} not found")
+    # Check if ingredient exists
+    existing_ingredient = db.get_ingredient(ingredient_id)
+    if not existing_ingredient:
+        raise NotFoundException(f"Ingredient with ID {ingredient_id} not found")
 
-        db.delete_ingredient(ingredient_id)
+    db.delete_ingredient(ingredient_id)
 
-        return MessageResponse(
-            message=f"Ingredient {ingredient_id} deleted successfully"
-        )
-
-    except NotFoundException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting ingredient {ingredient_id}: {str(e)}")
-        raise DatabaseException("Failed to delete ingredient", detail=str(e)) from e
+    return MessageResponse(message=f"Ingredient {ingredient_id} deleted successfully")
 
 
 @router.post(
@@ -293,206 +253,194 @@ def bulk_upload_ingredients(
     import time
 
     start_time = time.time()
-    try:
-        logger.info(
-            f"Bulk ingredient upload started: {len(bulk_data.ingredients)} ingredients"
-        )
+    logger.info(
+        f"Bulk ingredient upload started: {len(bulk_data.ingredients)} ingredients"
+    )
 
-        validation_errors = []
-        uploaded_ingredients = []
-        failed_ingredient_indices = set()
+    validation_errors = []
+    uploaded_ingredients = []
+    failed_ingredient_indices = set()
 
-        # Step 1: Validate all ingredients before creating any using batch operations
-        validation_start = time.time()
-        logger.info("Starting validation phase with batch operations")
+    # Step 1: Validate all ingredients before creating any using batch operations
+    validation_start = time.time()
+    logger.info("Starting validation phase with batch operations")
 
-        # Collect all unique names for batch validation
-        all_ingredient_names = [ingredient.name for ingredient in bulk_data.ingredients]
-        all_parent_names = list(
-            {
-                ingredient.parent_name
-                for ingredient in bulk_data.ingredients
-                if ingredient.parent_name is not None
-            }
-        )
+    # Collect all unique names for batch validation
+    all_ingredient_names = [ingredient.name for ingredient in bulk_data.ingredients]
+    all_parent_names = list(
+        {
+            ingredient.parent_name
+            for ingredient in bulk_data.ingredients
+            if ingredient.parent_name is not None
+        }
+    )
 
-        logger.info(
-            f"Batch validation: {len(all_ingredient_names)} ingredients, {len(all_parent_names)} unique parent names"
-        )
-        duplicate_names = db.check_ingredient_names_batch(all_ingredient_names)
-        valid_parents = (
-            db.search_ingredients_batch(all_parent_names) if all_parent_names else {}
-        )
-        batch_validation_duration = time.time() - validation_start
-        logger.info(f"Batch validation completed in {batch_validation_duration:.3f}s")
+    logger.info(
+        f"Batch validation: {len(all_ingredient_names)} ingredients, {len(all_parent_names)} unique parent names"
+    )
+    duplicate_names = db.check_ingredient_names_batch(all_ingredient_names)
+    valid_parents = (
+        db.search_ingredients_batch(all_parent_names) if all_parent_names else {}
+    )
+    batch_validation_duration = time.time() - validation_start
+    logger.info(f"Batch validation completed in {batch_validation_duration:.3f}s")
 
-        # Now validate each ingredient using the batch results
-        individual_validation_start = time.time()
+    # Now validate each ingredient using the batch results
+    individual_validation_start = time.time()
 
-        for idx, ingredient_data in enumerate(bulk_data.ingredients):
-            try:
-                ingredient_validation_start = time.time()
-                logger.info(f"Validating ingredient {idx}: {ingredient_data.name}")
+    for idx, ingredient_data in enumerate(bulk_data.ingredients):
+        try:
+            ingredient_validation_start = time.time()
+            logger.info(f"Validating ingredient {idx}: {ingredient_data.name}")
 
-                # Check if ingredient name already exists (using batch results)
-                if duplicate_names.get(ingredient_data.name, False):
+            # Check if ingredient name already exists (using batch results)
+            if duplicate_names.get(ingredient_data.name, False):
+                validation_errors.append(
+                    BulkIngredientUploadValidationError(
+                        ingredient_index=idx,
+                        ingredient_name=ingredient_data.name,
+                        error_type="duplicate_name",
+                        error_message=f"Ingredient with name '{ingredient_data.name}' already exists",
+                    )
+                )
+                failed_ingredient_indices.add(idx)
+                continue
+
+            # Check if parent exists (using batch results)
+            if ingredient_data.parent_name is not None:
+                if ingredient_data.parent_name not in valid_parents:
                     validation_errors.append(
                         BulkIngredientUploadValidationError(
                             ingredient_index=idx,
                             ingredient_name=ingredient_data.name,
-                            error_type="duplicate_name",
-                            error_message=f"Ingredient with name '{ingredient_data.name}' already exists",
+                            error_type="parent_not_found",
+                            error_message=f"No exact match found for parent ingredient '{ingredient_data.parent_name}'",
+                        )
+                    )
+                    failed_ingredient_indices.add(idx)
+                    continue
+            elif ingredient_data.parent_id is not None:
+                # Legacy parent ID validation (still needs individual query)
+                parent_exists = db.execute_query(
+                    "SELECT id FROM ingredients WHERE id = %s",
+                    (ingredient_data.parent_id,),
+                )
+                if not parent_exists:
+                    validation_errors.append(
+                        BulkIngredientUploadValidationError(
+                            ingredient_index=idx,
+                            ingredient_name=ingredient_data.name,
+                            error_type="invalid_parent",
+                            error_message=f"Parent ingredient with ID {ingredient_data.parent_id} does not exist",
                         )
                     )
                     failed_ingredient_indices.add(idx)
                     continue
 
-                # Check if parent exists (using batch results)
-                if ingredient_data.parent_name is not None:
-                    if ingredient_data.parent_name not in valid_parents:
-                        validation_errors.append(
-                            BulkIngredientUploadValidationError(
-                                ingredient_index=idx,
-                                ingredient_name=ingredient_data.name,
-                                error_type="parent_not_found",
-                                error_message=f"No exact match found for parent ingredient '{ingredient_data.parent_name}'",
-                            )
-                        )
-                        failed_ingredient_indices.add(idx)
-                        continue
-                elif ingredient_data.parent_id is not None:
-                    # Legacy parent ID validation (still needs individual query)
-                    parent_exists = db.execute_query(
-                        "SELECT id FROM ingredients WHERE id = %s",
-                        (ingredient_data.parent_id,),
-                    )
-                    if not parent_exists:
-                        validation_errors.append(
-                            BulkIngredientUploadValidationError(
-                                ingredient_index=idx,
-                                ingredient_name=ingredient_data.name,
-                                error_type="invalid_parent",
-                                error_message=f"Parent ingredient with ID {ingredient_data.parent_id} does not exist",
-                            )
-                        )
-                        failed_ingredient_indices.add(idx)
-                        continue
-
-                ingredient_validation_duration = (
-                    time.time() - ingredient_validation_start
-                )
-                logger.info(
-                    f"Ingredient {idx} validation took {ingredient_validation_duration:.3f}s"
-                )
-
-            except Exception as e:
-                validation_errors.append(
-                    BulkIngredientUploadValidationError(
-                        ingredient_index=idx,
-                        ingredient_name=ingredient_data.name,
-                        error_type="validation_error",
-                        error_message=f"Validation error: {str(e)}",
-                    )
-                )
-                failed_ingredient_indices.add(idx)
-
-        individual_validation_duration = time.time() - individual_validation_start
-        logger.info(
-            f"Individual validation completed in {individual_validation_duration:.3f}s"
-        )
-        validation_duration = time.time() - validation_start
-        logger.info(f"Validation phase completed in {validation_duration:.3f}s")
-
-        # Step 2: If there are validation errors, return them without creating any ingredients
-        if validation_errors:
-            total_duration = time.time() - start_time
-            logger.warning(
-                f"Bulk ingredient upload validation failed with {len(validation_errors)} errors in {total_duration:.3f}s"
-            )
-            return BulkIngredientUploadResponse(
-                uploaded_count=0,
-                failed_count=len(failed_ingredient_indices),
-                validation_errors=validation_errors,
-                uploaded_ingredients=[],
+            ingredient_validation_duration = time.time() - ingredient_validation_start
+            logger.info(
+                f"Ingredient {idx} validation took {ingredient_validation_duration:.3f}s"
             )
 
-        # Step 3: Create all ingredients (all validations passed)
-        creation_start = time.time()
-        logger.info("Starting ingredient creation phase")
-
-        for idx, ingredient_data in enumerate(bulk_data.ingredients):
-            try:
-                ingredient_creation_start = time.time()
-                logger.debug(f"Creating ingredient {idx}: {ingredient_data.name}")
-
-                # Convert parent name to ID if needed
-                parent_id = None
-                if ingredient_data.parent_name is not None:
-                    parent_data = valid_parents.get(ingredient_data.parent_name)
-                    if parent_data:
-                        parent_id = parent_data["id"]
-                    else:
-                        # This shouldn't happen since we validated above, but just in case
-                        raise ValueError(
-                            f"Parent ingredient '{ingredient_data.parent_name}' not found during conversion"
-                        )
-                elif ingredient_data.parent_id is not None:
-                    # Use parent ID directly (backward compatibility)
-                    parent_id = ingredient_data.parent_id
-
-                # Prepare data for database
-                ingredient_dict = {
-                    "name": ingredient_data.name,
-                    "description": ingredient_data.description,
-                    "parent_id": parent_id,
-                    "allow_substitution": ingredient_data.allow_substitution,
-                    "created_by": user.user_id,
-                }
-
-                # Create the ingredient
-                created_ingredient = db.create_ingredient(ingredient_dict)
-                uploaded_ingredients.append(IngredientResponse(**created_ingredient))
-
-                ingredient_creation_duration = time.time() - ingredient_creation_start
-                logger.debug(
-                    f"Ingredient {idx} creation took {ingredient_creation_duration:.3f}s"
+        except Exception as e:
+            validation_errors.append(
+                BulkIngredientUploadValidationError(
+                    ingredient_index=idx,
+                    ingredient_name=ingredient_data.name,
+                    error_type="validation_error",
+                    error_message=f"Validation error: {str(e)}",
                 )
+            )
+            failed_ingredient_indices.add(idx)
 
-            except Exception as e:
-                logger.error(
-                    f"Error creating ingredient {idx} ('{ingredient_data.name}'): {str(e)}"
-                )
-                validation_errors.append(
-                    BulkIngredientUploadValidationError(
-                        ingredient_index=idx,
-                        ingredient_name=ingredient_data.name,
-                        error_type="creation_error",
-                        error_message=f"Failed to create ingredient: {str(e)}",
-                    )
-                )
-                failed_ingredient_indices.add(idx)
+    individual_validation_duration = time.time() - individual_validation_start
+    logger.info(
+        f"Individual validation completed in {individual_validation_duration:.3f}s"
+    )
+    validation_duration = time.time() - validation_start
+    logger.info(f"Validation phase completed in {validation_duration:.3f}s")
 
-        creation_duration = time.time() - creation_start
+    # Step 2: If there are validation errors, return them without creating any ingredients
+    if validation_errors:
         total_duration = time.time() - start_time
-
-        logger.info(
-            f"Bulk ingredient upload completed: {len(uploaded_ingredients)} uploaded, {len(validation_errors)} failed"
+        logger.warning(
+            f"Bulk ingredient upload validation failed with {len(validation_errors)} errors in {total_duration:.3f}s"
         )
-        logger.info(f"Creation phase took {creation_duration:.3f}s")
-        logger.info(f"Total bulk upload took {total_duration:.3f}s")
-
         return BulkIngredientUploadResponse(
-            uploaded_count=len(uploaded_ingredients),
+            uploaded_count=0,
             failed_count=len(failed_ingredient_indices),
             validation_errors=validation_errors,
-            uploaded_ingredients=uploaded_ingredients,
+            uploaded_ingredients=[],
         )
 
-    except Exception as e:
-        total_duration = time.time() - start_time
-        logger.error(
-            f"Error in bulk ingredient upload after {total_duration:.3f}s: {str(e)}"
-        )
-        raise DatabaseException(
-            "Failed to bulk upload ingredients", detail=str(e)
-        ) from e
+    # Step 3: Create all ingredients (all validations passed)
+    creation_start = time.time()
+    logger.info("Starting ingredient creation phase")
+
+    for idx, ingredient_data in enumerate(bulk_data.ingredients):
+        try:
+            ingredient_creation_start = time.time()
+            logger.debug(f"Creating ingredient {idx}: {ingredient_data.name}")
+
+            # Convert parent name to ID if needed
+            parent_id = None
+            if ingredient_data.parent_name is not None:
+                parent_data = valid_parents.get(ingredient_data.parent_name)
+                if parent_data:
+                    parent_id = parent_data["id"]
+                else:
+                    # This shouldn't happen since we validated above, but just in case
+                    raise ValueError(
+                        f"Parent ingredient '{ingredient_data.parent_name}' not found during conversion"
+                    )
+            elif ingredient_data.parent_id is not None:
+                # Use parent ID directly (backward compatibility)
+                parent_id = ingredient_data.parent_id
+
+            # Prepare data for database
+            ingredient_dict = {
+                "name": ingredient_data.name,
+                "description": ingredient_data.description,
+                "parent_id": parent_id,
+                "allow_substitution": ingredient_data.allow_substitution,
+                "created_by": user.user_id,
+            }
+
+            # Create the ingredient
+            created_ingredient = db.create_ingredient(ingredient_dict)
+            uploaded_ingredients.append(IngredientResponse(**created_ingredient))
+
+            ingredient_creation_duration = time.time() - ingredient_creation_start
+            logger.debug(
+                f"Ingredient {idx} creation took {ingredient_creation_duration:.3f}s"
+            )
+
+        except Exception as e:
+            logger.error(
+                f"Error creating ingredient {idx} ('{ingredient_data.name}'): {str(e)}"
+            )
+            validation_errors.append(
+                BulkIngredientUploadValidationError(
+                    ingredient_index=idx,
+                    ingredient_name=ingredient_data.name,
+                    error_type="creation_error",
+                    error_message=f"Failed to create ingredient: {str(e)}",
+                )
+            )
+            failed_ingredient_indices.add(idx)
+
+    creation_duration = time.time() - creation_start
+    total_duration = time.time() - start_time
+
+    logger.info(
+        f"Bulk ingredient upload completed: {len(uploaded_ingredients)} uploaded, {len(validation_errors)} failed"
+    )
+    logger.info(f"Creation phase took {creation_duration:.3f}s")
+    logger.info(f"Total bulk upload took {total_duration:.3f}s")
+
+    return BulkIngredientUploadResponse(
+        uploaded_count=len(uploaded_ingredients),
+        failed_count=len(failed_ingredient_indices),
+        validation_errors=validation_errors,
+        uploaded_ingredients=uploaded_ingredients,
+    )
