@@ -5,6 +5,7 @@ import gzip
 import importlib.util
 import io
 import json
+import os
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -164,3 +165,77 @@ def test_merge_csv_quotes_paths_with_commas(pvc):
     merged = pvc.merge_csv("", DAY, [("TOTAL", 1, 1), ("/recipe/a,b", 1, 1)])
     rows = list(csv.reader(io.StringIO(merged)))
     assert rows[2] == ["2026-11-13", "/recipe/a,b", "1", "1"]
+
+
+@pytest.fixture
+def s3_calls(pvc, monkeypatch):
+    calls = {"download": [], "upload": [], "existing": ""}
+
+    def fake_download(bucket, key):
+        calls["download"].append((bucket, key))
+        return calls["existing"]
+
+    def fake_upload(bucket, key, text):
+        calls["upload"].append((bucket, key, text))
+
+    monkeypatch.setattr(pvc, "download_csv", fake_download)
+    monkeypatch.setattr(pvc, "upload_csv", fake_upload)
+    return calls
+
+
+def _write_log(log_dir: Path, entries) -> Path:
+    path = log_dir / "access.log"
+    path.write_text(
+        "".join(json.dumps(e) + "\n" for e in entries), encoding="utf-8"
+    )
+    return path
+
+
+def test_main_skips_without_bucket(pvc, s3_calls, monkeypatch, tmp_path, capsys):
+    monkeypatch.delenv("BACKUP_BUCKET", raising=False)
+    _write_log(tmp_path, [_entry()])
+    assert pvc.main(["--log-dir", str(tmp_path), "--date", "2026-11-13"]) == 0
+    assert s3_calls["upload"] == []
+    assert "skipping" in capsys.readouterr().out
+
+
+def test_main_fails_without_readable_logs(pvc, s3_calls, monkeypatch, tmp_path):
+    monkeypatch.setenv("BACKUP_BUCKET", "bucket")
+    assert pvc.main(["--log-dir", str(tmp_path), "--date", "2026-11-13"]) == 1
+    assert s3_calls["upload"] == []
+
+    if os.geteuid() == 0:
+        pytest.skip("root can read mode-000 files")
+    log = _write_log(tmp_path, [_entry()])
+    log.chmod(0)
+    try:
+        assert pvc.main(["--log-dir", str(tmp_path), "--date", "2026-11-13"]) == 1
+    finally:
+        log.chmod(0o644)
+    assert s3_calls["upload"] == []
+
+
+def test_main_merges_and_uploads(pvc, s3_calls, monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("BACKUP_BUCKET", "bucket")
+    s3_calls["existing"] = "date,path,views,visitors\r\n2026-11-12,TOTAL,7,5\r\n"
+    _write_log(tmp_path, [_entry(ip="10.0.0.1"), _entry(ip="10.0.0.2")])
+
+    assert pvc.main(["--log-dir", str(tmp_path), "--date", "2026-11-13"]) == 0
+
+    assert s3_calls["download"] == [("bucket", "traffic/page-views.csv")]
+    [(bucket, key, text)] = s3_calls["upload"]
+    assert (bucket, key) == ("bucket", "traffic/page-views.csv")
+    assert "2026-11-12,TOTAL,7,5" in text
+    assert "2026-11-13,TOTAL,2,2" in text
+    assert "2026-11-13: 2 views, 2 visitors" in capsys.readouterr().out
+
+
+def test_main_dry_run_does_not_touch_s3(pvc, s3_calls, monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("BACKUP_BUCKET", "bucket")
+    _write_log(tmp_path, [_entry()])
+    assert (
+        pvc.main(["--log-dir", str(tmp_path), "--date", "2026-11-13", "--dry-run"])
+        == 0
+    )
+    assert s3_calls["download"] == [] and s3_calls["upload"] == []
+    assert "TOTAL" in capsys.readouterr().out

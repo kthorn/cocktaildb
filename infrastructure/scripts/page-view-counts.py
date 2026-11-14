@@ -11,13 +11,17 @@ See docs/superpowers/specs/2026-11-14-page-view-counts-design.md.
 
 from __future__ import annotations
 
+import argparse
 import csv
 import gzip
 import io
 import json
+import os
 import re
+import subprocess
+import sys
 from collections import defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Iterator
 
@@ -136,3 +140,77 @@ def merge_csv(existing: str, day: date, rows: list[tuple[str, int, int]]) -> str
     writer.writerow(CSV_HEADER)
     writer.writerows(kept)
     return out.getvalue()
+
+
+def log_paths(log_dir: Path) -> list[Path]:
+    return sorted(log_dir.glob("access*.log*"))
+
+
+def download_csv(bucket: str, key: str) -> str:
+    """Return the CSV's text, or "" if the object does not exist yet."""
+    url = f"s3://{bucket}/{key}"
+    listing = subprocess.run(["aws", "s3", "ls", url], capture_output=True, text=True)
+    if listing.returncode == 1 and not listing.stdout.strip():
+        return ""
+    if listing.returncode != 0:
+        raise RuntimeError(f"aws s3 ls {url} failed: {listing.stderr.strip()}")
+    result = subprocess.run(
+        ["aws", "s3", "cp", url, "-"], capture_output=True, text=True, check=True
+    )
+    return result.stdout
+
+
+def upload_csv(bucket: str, key: str, text: str) -> None:
+    subprocess.run(
+        ["aws", "s3", "cp", "-", f"s3://{bucket}/{key}", "--content-type", "text/csv"],
+        input=text,
+        text=True,
+        check=True,
+    )
+
+
+def _parse_args(argv: list[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--date",
+        type=date.fromisoformat,
+        default=datetime.now(timezone.utc).date() - timedelta(days=1),
+        help="UTC day to count, YYYY-MM-DD (default: yesterday)",
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="print rows; do not touch S3"
+    )
+    parser.add_argument("--log-dir", type=Path, default=Path(DEFAULT_LOG_DIR))
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
+    bucket = os.environ.get("BACKUP_BUCKET", "")
+    if not bucket and not args.dry_run:
+        print("BACKUP_BUCKET not set; skipping")
+        return 0
+
+    paths = log_paths(args.log_dir)
+    if not paths:
+        print(f"no access logs found in {args.log_dir}", file=sys.stderr)
+        return 1
+    try:
+        rows = count_day(iter_log_entries(paths), args.date)
+    except OSError as exc:
+        print(f"cannot read access logs: {exc}", file=sys.stderr)
+        return 1
+
+    if args.dry_run:
+        print(merge_csv("", args.date, rows), end="")
+    else:
+        merged = merge_csv(download_csv(bucket, S3_KEY), args.date, rows)
+        upload_csv(bucket, S3_KEY, merged)
+
+    _, views, visitors = rows[0]
+    print(f"{args.date.isoformat()}: {views} views, {visitors} visitors")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
