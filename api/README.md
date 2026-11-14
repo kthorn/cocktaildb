@@ -51,7 +51,7 @@ A public, read-only [Model Context Protocol](https://modelcontextprotocol.io/) s
 
 Tools:
 
-- `search_recipes` - search recipes by name, ingredients, tags, and ABV range
+- `search_recipes` - search recipes by name, ingredients, tags, and ABV range (at most 10 ingredient/tag names of 100 characters each; queries up to 200 characters)
 - `get_recipe` - full recipe with ingredients, instructions, and ABV estimate
 - `find_similar_recipes` - recipes similar to a given recipe, with ingredient swaps
 - `find_ingredients` - look up canonical ingredient names and their hierarchy

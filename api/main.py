@@ -57,6 +57,8 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+# Stateless mode logs "Terminating session: None" at INFO on every request
+logging.getLogger("mcp.server.streamable_http").setLevel(logging.WARNING)
 
 
 class CORSHeaderMiddleware(BaseHTTPMiddleware):
@@ -155,6 +157,7 @@ app.include_router(pages.router)
 # Public read-only MCP endpoint (Caddy strips /api/v1, so this is /api/v1/mcp)
 # POST only: stateless mode has no server-initiated stream, so GET/DELETE get a 405
 app.add_route("/mcp", mcp_endpoint, methods=["POST"], include_in_schema=False)
+app.add_route("/mcp/", mcp_endpoint, methods=["POST"], include_in_schema=False)
 
 
 # Root endpoint

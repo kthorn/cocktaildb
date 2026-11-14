@@ -171,3 +171,24 @@ async def test_get_mcp_returns_405_without_opening_stream(mcp_client):
 async def test_delete_mcp_returns_405(mcp_client):
     resp = await mcp_client.delete("/mcp")
     assert resp.status_code == 405
+
+
+@pytest.mark.asyncio
+async def test_trailing_slash_serves_mcp_without_redirect(mcp_client):
+    body = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+    resp = await mcp_client.post("/mcp/", json=body, headers=HEADERS)
+    assert resp.status_code == 200
+    assert {t["name"] for t in resp.json()["result"]["tools"]} == EXPECTED_TOOLS
+
+
+@pytest.mark.asyncio
+async def test_real_app_lifespan_serves_mcp(test_client_with_data, monkeypatch):
+    """Drive the app's actual lifespan (not mcp_endpoint.running() directly)."""
+    from api.main import pages
+
+    client, app = test_client_with_data
+    monkeypatch.setattr(pages.frontend_assets, "validate", lambda: None)
+    async with app.router.lifespan_context(app):
+        resp = await mcp_post(client, "tools/list")
+    assert resp.status_code == 200
+    assert {t["name"] for t in resp.json()["result"]["tools"]} == EXPECTED_TOOLS

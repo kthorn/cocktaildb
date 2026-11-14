@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "api"))
 
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_tools.gate import BUSY_MESSAGE, DbGate
-from mcp_tools.server import build_mcp_server, resolve_ingredient_name
+from mcp_tools.server import build_mcp_server
 
 BASE = "https://mixology.tools"
 
@@ -40,10 +40,12 @@ async def call_error(server, name, args):
     return exc_info.value
 
 
-def _campari_lookup(name):
-    if name.lower() == "campari":
-        return [{"id": 4, "name": "Campari", "path": "/4/"}]
-    return []
+def _campari_batch(names):
+    return {
+        n: {"id": 4, "name": "Campari", "path": "/4/"}
+        for n in names
+        if n.casefold() == "campari"
+    }
 
 
 @pytest.mark.asyncio
@@ -62,7 +64,7 @@ async def test_lists_exactly_four_read_only_tools(server):
 
 @pytest.mark.asyncio
 async def test_search_resolves_names_case_insensitively(server, db):
-    db.search_ingredients.side_effect = _campari_lookup
+    db.search_ingredients_batch.side_effect = _campari_batch
     db.search_recipes_paginated.return_value = {
         "recipes": [],
         "has_next": False,
@@ -80,7 +82,7 @@ async def test_search_resolves_names_case_insensitively(server, db):
 
 @pytest.mark.asyncio
 async def test_search_builds_must_not_and_other_filters(server, db):
-    db.search_ingredients.side_effect = _campari_lookup
+    db.search_ingredients_batch.side_effect = _campari_batch
     db.search_recipes_paginated.return_value = {"recipes": [], "has_next": True}
     result = await call(
         server,
@@ -112,7 +114,7 @@ async def test_search_builds_must_not_and_other_filters(server, db):
 async def test_search_with_unresolved_include_returns_empty_without_querying(
     server, db
 ):
-    db.search_ingredients.return_value = []
+    db.search_ingredients_batch.return_value = {}
     result = await call(
         server, "search_recipes", {"include_ingredients": ["unobtainium"]}
     )
@@ -233,15 +235,75 @@ async def test_unexpected_db_error_hides_detail(server, db):
     assert "secret" not in str(err)
 
 
-def test_resolve_ingredient_name_picks_exact_casefold_match():
-    db = MagicMock()
-    db.search_ingredients.return_value = [
-        {"id": 1, "name": "Rye Whiskey Blend"},
-        {"id": 2, "name": "Rye Whiskey"},
-    ]
-    assert resolve_ingredient_name(db, " rye whiskey ") == "Rye Whiskey"
-    db.search_ingredients.return_value = [{"id": 1, "name": "Rye Whiskey Blend"}]
-    assert resolve_ingredient_name(db, "rye") is None
+@pytest.mark.asyncio
+async def test_resolution_is_one_batch_call_and_no_per_name_search(server, db):
+    db.search_ingredients_batch.side_effect = _campari_batch
+    db.search_recipes_paginated.return_value = {"recipes": [], "has_next": False}
+    await call(
+        server,
+        "search_recipes",
+        {"include_ingredients": ["campari"], "exclude_ingredients": ["Campari", "x"]},
+    )
+    assert db.search_ingredients_batch.call_count == 1
+    assert db.search_ingredients.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_duplicate_names_produce_one_spec_each(server, db):
+    db.search_ingredients_batch.side_effect = _campari_batch
+    db.search_recipes_paginated.return_value = {"recipes": [], "has_next": False}
+    await call(
+        server,
+        "search_recipes",
+        {"include_ingredients": ["campari", "CAMPARI", " Campari "]},
+    )
+    params = db.search_recipes_paginated.call_args.args[0]
+    assert params["ingredients"] == ["Campari:MUST"]
+
+
+@pytest.mark.asyncio
+async def test_eleven_item_include_list_is_rejected(server, db):
+    err = await call_error(
+        server, "search_recipes", {"include_ingredients": ["a"] * 11}
+    )
+    assert isinstance(err, ToolError)
+    db.search_ingredients_batch.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_blank_list_item_is_rejected(server, db):
+    for field in ("include_ingredients", "exclude_ingredients", "tags"):
+        err = await call_error(server, "search_recipes", {field: ["  "]})
+        assert isinstance(err, ToolError)
+
+
+@pytest.mark.asyncio
+async def test_overlong_item_and_query_are_rejected(server, db):
+    err = await call_error(server, "search_recipes", {"tags": ["x" * 101]})
+    assert isinstance(err, ToolError)
+    err = await call_error(server, "search_recipes", {"query": "x" * 201})
+    assert isinstance(err, ToolError)
+    err = await call_error(server, "find_ingredients", {"query": "x" * 201})
+    assert isinstance(err, ToolError)
+    err = await call_error(server, "find_ingredients", {"query": "   "})
+    assert isinstance(err, ToolError)
+
+
+@pytest.mark.asyncio
+async def test_recipe_id_below_one_is_rejected(server, db):
+    for name in ("get_recipe", "find_similar_recipes"):
+        err = await call_error(server, name, {"recipe_id": 0})
+        assert isinstance(err, ToolError)
+    db.get_recipe.assert_not_called()
+    db.get_recipe_similarity.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_descriptions_are_accurate(server):
+    tools = {t.name: t for t in await server.list_tools()}
+    desc = tools["search_recipes"].description
+    assert "name or text" not in desc
+    assert "random" in str(tools["search_recipes"].input_schema)
 
 
 # Built at import time, outside any event loop, as the app will do.

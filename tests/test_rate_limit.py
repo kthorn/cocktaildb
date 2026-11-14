@@ -105,7 +105,11 @@ def _small_app():
         return PlainTextResponse("ok")
 
     app = Starlette(
-        routes=[Route("/stats", ok), Route("/mcp", ok, methods=["GET", "POST"])]
+        routes=[
+            Route("/stats", ok),
+            Route("/mcp", ok, methods=["GET", "POST"]),
+            Route("/mcp/", ok, methods=["GET", "POST"]),
+        ]
     )
     app.add_middleware(RateLimitMiddleware, max_requests=2, mcp_max_requests=3)
     return app
@@ -130,6 +134,14 @@ class TestMcpBucket:
             # /mcp exhaustion does not affect a fresh IP's /stats
             fresh = await c.get("/stats", headers={"X-Real-IP": "2.2.2.2"})
             assert fresh.status_code == 200
+
+    async def test_trailing_slash_counts_against_mcp_bucket(self):
+        async with _client(_small_app()) as c:
+            ip = {"X-Real-IP": "3.3.3.3"}
+            codes = []
+            for path in ("/mcp", "/mcp/", "/mcp", "/mcp/"):
+                codes.append((await c.get(path, headers=ip)).status_code)
+            assert codes == [200, 200, 200, 429]
 
     async def test_mcp_exhaustion_leaves_api_remaining(self):
         async with _client(_small_app()) as c:

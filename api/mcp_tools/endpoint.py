@@ -53,4 +53,10 @@ class McpEndpoint:
         if app is None:
             await JSONResponse(NOT_READY_BODY, status_code=503)(scope, receive, send)
             return
+        if scope["type"] == "http" and scope.get("path") == "/mcp/":
+            # Serve /mcp/ like /mcp (a redirect would drop Caddy's /api/v1 prefix).
+            scope = {**scope, "path": "/mcp"}
+            raw_path = scope.get("raw_path")
+            if raw_path is not None:
+                scope["raw_path"] = raw_path.removesuffix(b"/")
         await app(scope, receive, send)

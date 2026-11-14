@@ -73,7 +73,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS" or request.url.path in EXEMPT_PATHS:
             return await call_next(request)
 
-        is_mcp = request.url.path == self.mcp_path
+        is_mcp = request.url.path.rstrip("/") == self.mcp_path
         bucket = "mcp" if is_mcp else "api"
         limit = self.mcp_max_requests if is_mcp else self.max_requests
         key = (bucket, self._get_client_ip(request))

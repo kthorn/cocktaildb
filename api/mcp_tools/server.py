@@ -7,7 +7,7 @@ from db.db_core import Database
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_types import ToolAnnotations
-from pydantic import Field
+from pydantic import Field, StringConstraints
 
 from .gate import DbGate
 from .models import (
@@ -45,13 +45,9 @@ _SORTS = {
 }
 
 
-def resolve_ingredient_name(db: Database, name: str) -> str | None:
-    """Return the canonical ingredient name for `name` (case-insensitive), or None."""
-    wanted = name.strip().casefold()
-    for row in db.search_ingredients(name.strip()):
-        if row["name"].casefold() == wanted:
-            return row["name"]
-    return None
+Name = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
+]
 
 
 def build_mcp_server(
@@ -62,7 +58,7 @@ def build_mcp_server(
     @server.tool(
         name="search_recipes",
         description=(
-            "Find cocktail recipes by name or text, ingredients, tags and ABV. "
+            "Find cocktail recipes by name, ingredients, tags and ABV. "
             "Use this to recommend drinks: for example, recipes containing gin "
             "but no vermouth, or low-ABV drinks sorted by rating. Ingredient "
             "names are matched case-insensitively against the database; use "
@@ -76,18 +72,26 @@ def build_mcp_server(
     )
     async def search_recipes(
         query: Annotated[
-            str | None, Field(description="Text to match in recipe names")
+            str | None,
+            Field(max_length=200, description="Text to match in recipe names"),
         ] = None,
         include_ingredients: Annotated[
-            list[str] | None,
-            Field(description="Ingredient names the recipe must contain"),
+            list[Name] | None,
+            Field(
+                max_length=10,
+                description="Ingredient names the recipe must contain (max 10)",
+            ),
         ] = None,
         exclude_ingredients: Annotated[
-            list[str] | None,
-            Field(description="Ingredient names the recipe must not contain"),
+            list[Name] | None,
+            Field(
+                max_length=10,
+                description="Ingredient names the recipe must not contain (max 10)",
+            ),
         ] = None,
         tags: Annotated[
-            list[str] | None, Field(description="Public tag names to filter by")
+            list[Name] | None,
+            Field(max_length=10, description="Public tag names to filter by (max 10)"),
         ] = None,
         min_abv: Annotated[
             int | None, Field(ge=0, le=100, description="Minimum ABV percent")
@@ -103,7 +107,15 @@ def build_mcp_server(
             int, Field(ge=1, le=25, description="Maximum recipes to return")
         ] = 10,
         offset: Annotated[
-            int, Field(ge=0, le=1000, description="Number of results to skip")
+            int,
+            Field(
+                ge=0,
+                le=1000,
+                description=(
+                    "Number of results to skip. Offset paging is not stable "
+                    'with sort="random" (each call is a fresh draw)'
+                ),
+            ),
         ] = 0,
     ) -> RecipeSearchResult:
         if min_abv is not None and max_abv is not None and min_abv > max_abv:
@@ -111,22 +123,26 @@ def build_mcp_server(
 
         def fetch() -> tuple[dict | None, list[str]]:
             db = get_db()
+            requested = [(n, True) for n in include_ingredients or []] + [
+                (n, False) for n in exclude_ingredients or []
+            ]
+            found = (
+                db.search_ingredients_batch([n for n, _ in requested])
+                if requested
+                else {}
+            )
             specs: list[str] = []
             unresolved: list[str] = []
             include_missing = False
-            for name in include_ingredients or []:
-                canonical = resolve_ingredient_name(db, name)
-                if canonical is None:
+            for name, is_include in requested:
+                row = found.get(name)
+                if row is None:
                     unresolved.append(name)
-                    include_missing = True
-                else:
-                    specs.append(f"{canonical}:MUST")
-            for name in exclude_ingredients or []:
-                canonical = resolve_ingredient_name(db, name)
-                if canonical is None:
-                    unresolved.append(name)
-                else:
-                    specs.append(f"{canonical}:MUST_NOT")
+                    include_missing = include_missing or is_include
+                    continue
+                spec = f"{row['name']}:{'MUST' if is_include else 'MUST_NOT'}"
+                if spec not in specs:
+                    specs.append(spec)
 
             if include_missing:
                 return None, unresolved
@@ -181,7 +197,7 @@ def build_mcp_server(
         annotations=_READ_ONLY,
     )
     async def get_recipe(
-        recipe_id: Annotated[int, Field(description="Recipe id")],
+        recipe_id: Annotated[int, Field(ge=1, description="Recipe id")],
     ) -> RecipeDetail:
         recipe = await gate.run(lambda: get_db().get_recipe(recipe_id, None))
         if recipe is None:
@@ -205,7 +221,7 @@ def build_mcp_server(
         annotations=_READ_ONLY,
     )
     async def find_similar_recipes(
-        recipe_id: Annotated[int, Field(description="Id of the original recipe")],
+        recipe_id: Annotated[int, Field(ge=1, description="Id of the original recipe")],
         limit: Annotated[
             int, Field(ge=1, le=10, description="Maximum similar recipes")
         ] = 5,
@@ -230,7 +246,9 @@ def build_mcp_server(
     )
     async def find_ingredients(
         query: Annotated[
-            str, Field(min_length=1, description="Ingredient name or part of one")
+            str,
+            StringConstraints(strip_whitespace=True, min_length=1, max_length=200),
+            Field(description="Ingredient name or part of one"),
         ],
         limit: Annotated[
             int, Field(ge=1, le=25, description="Maximum ingredients to return")
