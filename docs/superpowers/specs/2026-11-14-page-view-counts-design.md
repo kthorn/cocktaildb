@@ -51,8 +51,11 @@ so minimal beats polished.
 - **Output:** `s3://$BACKUP_BUCKET/traffic/page-views.csv` with columns
   `date,path,views,visitors`. Each day gets a `TOTAL` row plus one row per
   path. The script downloads the CSV, replaces any existing rows for the
-  target day, and uploads it again, so reruns are safe. The backup pruning
-  only touches `backup-*.sql.gz`, so this file is never removed.
+  target day, and uploads it again, so reruns are safe. The backup bucket
+  is public-read and had an unfiltered 30-day expiry rule. `template.yaml`
+  narrows both to the backup files (`backup-*`, `latest.*`), so `traffic/`
+  is private and never expires. This takes effect with a `cocktaildb-prod`
+  stack update.
 - **Schedule:** `cocktaildb-page-views.service` plus a `.timer` at about
   00:30 UTC daily with `Persistent=true`, modeled on the backup units. The
   timer is enabled in `deploy.yml`. If `BACKUP_BUCKET` is empty, the script

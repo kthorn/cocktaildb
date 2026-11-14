@@ -294,6 +294,8 @@ yesterday's Caddy access logs and merges page views and distinct-IP visitors
 into `s3://<backup bucket>/traffic/page-views.csv` (`date,path,views,visitors`,
 with a `TOTAL` row per day). It keeps no IPs. Bots, assets and API calls are
 excluded. On dev `BACKUP_BUCKET` is empty, so the job does nothing.
+Unlike the backups, `traffic/` is not publicly readable and does not expire
+(`BackupBucketPolicy` and `ExpireOldBackups` in `template.yaml`).
 
 ```bash
 # Read the counts

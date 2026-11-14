@@ -358,3 +358,62 @@ def test_deploy_makes_existing_caddy_logs_group_readable():
     assert command[:2] == ["find", "/var/log/caddy"]
     assert "access*.log*" in command
     assert "g+r" in command
+
+
+class _CfnLoader(yaml.SafeLoader):
+    """SafeLoader that reads CloudFormation short-form tags as plain values."""
+
+
+def _cfn_tag(loader, suffix, node):
+    if isinstance(node, yaml.ScalarNode):
+        return loader.construct_scalar(node)
+    if isinstance(node, yaml.SequenceNode):
+        return loader.construct_sequence(node)
+    return loader.construct_mapping(node)
+
+
+_CfnLoader.add_multi_constructor("!", _cfn_tag)
+
+
+def _backup_bucket_resources():
+    template = yaml.load(
+        (ROOT / "template.yaml").read_text(encoding="utf-8"), Loader=_CfnLoader
+    )
+    return template["Resources"]
+
+
+def _publicly_readable(key: str) -> bool:
+    from fnmatch import fnmatchcase
+
+    policy = _backup_bucket_resources()["BackupBucketPolicy"]["Properties"]
+    for statement in policy["PolicyDocument"]["Statement"]:
+        if statement["Effect"] != "Allow" or statement.get("Principal") != "*":
+            continue
+        resources = statement["Resource"]
+        resources = [resources] if isinstance(resources, str) else resources
+        for resource in resources:
+            pattern = resource.replace("${BackupBucket.Arn}/", "")
+            if fnmatchcase(key, pattern):
+                return True
+    return False
+
+
+def test_backup_bucket_keeps_downloads_public_but_not_traffic():
+    assert _publicly_readable("backup-2026-11-13_08-00-00.sql.gz")
+    assert _publicly_readable("latest.txt")
+    assert _publicly_readable("latest.json")
+    assert not _publicly_readable("traffic/page-views.csv")
+
+
+def test_backup_bucket_expiry_spares_traffic_history():
+    rules = _backup_bucket_resources()["BackupBucket"]["Properties"][
+        "LifecycleConfiguration"
+    ]["Rules"]
+    expiring = [
+        r for r in rules if r["Status"] == "Enabled" and "ExpirationInDays" in r
+    ]
+    assert expiring, "old backups must still expire"
+    for rule in expiring:
+        prefix = rule.get("Prefix", "")
+        assert "backup-2026-11-13_08-00-00.sql.gz".startswith(prefix)
+        assert not "traffic/page-views.csv".startswith(prefix)
