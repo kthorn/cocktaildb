@@ -178,10 +178,12 @@ Run the focused release gate with the documented interpreter:
 /home/kurtt/miniforge3/envs/cocktaildb/bin/python -m pre_commit run --all-files
 ```
 
-The repository API suite additionally needs its documented database fixture and
-normal coverage configuration. A known rating aggregation failure remains
-tracked in [`docs/plans/vite-validation-followups.md`](docs/plans/vite-validation-followups.md)
-and is reported separately from frontend release-gate results.
+The full suite (`python -m pytest -q`, as CI runs it) covers `tests/` and
+`packages/barcart/tests` and enforces the 80% API coverage gate in
+`pytest.ini`. Database tests start PostgreSQL through testcontainers, which
+needs Docker; without Docker, set `TEST_DB_HOST`, `TEST_DB_PORT`,
+`TEST_DB_NAME`, `TEST_DB_USER`, and `TEST_DB_PASSWORD` to point them at any
+PostgreSQL 15 database they may reset.
 
 ## License
 

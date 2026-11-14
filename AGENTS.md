@@ -5,7 +5,7 @@
 ## Environment
 
 - Python: `/home/kurtt/miniforge3/envs/cocktaildb/bin/python`. README "Python support" is the authoritative version policy.
-- Database-backed tests use testcontainers, so they need Docker. If Docker is unavailable, those tests error at setup: report them as not run, not as passing.
+- Database-backed tests use testcontainers, so they need Docker. Without Docker, set `TEST_DB_HOST`/`PORT`/`NAME`/`USER`/`PASSWORD` to a disposable PostgreSQL 15 database (the tests drop and recreate its tables). If neither is available, those tests error at setup: report them as not run, not as passing.
 - The root `package.json` is intentionally typeless; don't add `"type": "module"`.
 
 ## Checks
