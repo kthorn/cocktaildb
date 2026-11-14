@@ -211,55 +211,36 @@ class TestSubstitutionAPI:
         self, editor_authenticated_client: httpx.AsyncClient
     ):
         """Test POST /ingredients/bulk with allow_substitution"""
-
-        bulk_data = {
-            "ingredients": [
-                {
-                    "name": "Bulk Rum Category",
-                    "description": "Rum category for bulk test",
-                    "allow_substitution": True,
-                },
-                {
-                    "name": "Bulk Rum Brand 1",
-                    "description": "Specific rum brand",
-                    "parent_name": "Bulk Rum Category",
-                    "allow_substitution": False,
-                },
-                {
-                    "name": "Bulk Rum Brand 2",
-                    "description": "Another specific rum brand",
-                    "parent_name": "Bulk Rum Category",
-                    "allow_substitution": False,
-                },
-            ]
-        }
+        category = await editor_authenticated_client.post(
+            "/ingredients",
+            json={"name": "Bulk Rum Category", "allow_substitution": True},
+        )
+        assert category.status_code == 201, category.text
+        category_id = category.json()["id"]
 
         response = await editor_authenticated_client.post(
-            "/ingredients/bulk", json=bulk_data
+            "/ingredients/bulk",
+            json={
+                "ingredients": [
+                    {
+                        "name": "Bulk Rum Brand 1",
+                        "parent_name": "Bulk Rum Category",
+                        "allow_substitution": False,
+                    },
+                    {
+                        "name": "Bulk Rum Brand 2",
+                        "parent_name": "Bulk Rum Category",
+                        "allow_substitution": True,
+                    },
+                ]
+            },
         )
 
-        # Note: Bulk upload might have validation that prevents this test from working
-        # without proper parent relationships being created first
-
-        if response.status_code == 201:
-            result = response.json()
-
-            # Check that uploaded ingredients have correct allow_substitution values
-            uploaded = result.get("uploaded_ingredients", [])
-
-            # Find the category ingredient
-            category = next(
-                (ing for ing in uploaded if ing["name"] == "Bulk Rum Category"), None
-            )
-            if category:
-                assert category["allow_substitution"] is True
-
-            # Find brand ingredients
-            brand1 = next(
-                (ing for ing in uploaded if ing["name"] == "Bulk Rum Brand 1"), None
-            )
-            if brand1:
-                assert brand1["allow_substitution"] is False
+        assert response.status_code == 201, response.text
+        uploaded = {ing["name"]: ing for ing in response.json()["uploaded_ingredients"]}
+        assert uploaded["Bulk Rum Brand 1"]["allow_substitution"] is False
+        assert uploaded["Bulk Rum Brand 2"]["allow_substitution"] is True
+        assert uploaded["Bulk Rum Brand 1"]["parent_id"] == category_id
 
     @pytest.mark.asyncio
     async def test_allow_substitution_accepts_boolean(

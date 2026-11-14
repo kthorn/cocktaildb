@@ -208,10 +208,9 @@ class TestIngredientRecommendations:
         bitters_rec = next(
             (r for r in recommendations if r["name"] == "Test Bitters"), None
         )
-        if bitters_rec:
-            # Should unlock Old Fashioned and Manhattan
-            assert bitters_rec["recipes_unlocked"] >= 1
-            assert len(bitters_rec["recipe_names"]) == bitters_rec["recipes_unlocked"]
+        assert bitters_rec is not None, recommendations
+        assert bitters_rec["recipes_unlocked"] >= 1
+        assert len(bitters_rec["recipe_names"]) == bitters_rec["recipes_unlocked"]
 
     def test_recommendations_with_no_substitution(self, db_instance_with_data):
         """Test that allow_substitution=False requires exact match"""
@@ -240,10 +239,11 @@ class TestIngredientRecommendations:
             user_id, limit=10
         )
 
-        # Should recommend the specific brand since user only has generic
-        next((r for r in recommendations if r["id"] == 200), None)
-        # This recipe requires exact match, so generic rum shouldn't satisfy it
-        # (depending on implementation details, this might show up in recommendations)
+        # The recipe's rum has allow_substitution=False, so generic Rum doesn't
+        # satisfy it; the specific brand is what unlocks the recipe.
+        brand_rec = next((r for r in recommendations if r["id"] == 200), None)
+        assert brand_rec is not None, recommendations
+        assert "Special Daiquiri" in brand_rec["recipe_names"]
 
     def test_recommendations_with_sibling_substitution(self, db_instance_with_data):
         """Test that recommendations consider sibling substitution (bd-65 fix)"""
@@ -279,14 +279,10 @@ class TestIngredientRecommendations:
             user_id, limit=10
         )
 
-        # Should recommend Rye since:
-        # 1. User has Bourbon (allow_substitution=True)
-        # 2. Recipe needs Rye (allow_substitution=True)
-        # 3. Both are siblings under same parent
-        # 4. This tests the bd-65 fix for sibling matching
-        next((r for r in recommendations if r["id"] == 303), None)
-        # Note: This may or may not show up depending on substitution logic
-        # The test documents expected behavior for bd-65 fix
+        # Bourbon and Rye are siblings that both allow substitution, so the
+        # user can already make the recipe (docs/substitution-logic.md, path 4).
+        # Nothing should be recommended to unlock it.
+        assert all("Manhattan Rec" not in r["recipe_names"] for r in recommendations)
 
     def test_recommendations_with_recursive_ancestor(self, db_instance_with_data):
         """Test that recommendations consider recursive ancestor matching (bd-65 fix)"""
@@ -324,14 +320,10 @@ class TestIngredientRecommendations:
             user_id, limit=10
         )
 
-        # Should recommend Bourbon since:
-        # 1. User has Cognac (allow_substitution=True)
-        # 2. Recipe needs Bourbon (allow_substitution=True)
-        # 3. Both share common ancestor (Spirits) with allow_substitution=True
-        # 4. This tests the bd-65 fix for recursive ancestor matching
-        next((r for r in recommendations if r["id"] == 402), None)
-        # Note: This may or may not show up depending on substitution logic
-        # The test documents expected behavior for bd-65 fix
+        # Cognac and Bourbon share an ancestor that allows substitution with no
+        # blocking parent, so the user can already make the recipe
+        # (docs/substitution-logic.md, path 6). Nothing should unlock it.
+        assert all("Bourbon Sidecar" not in r["recipe_names"] for r in recommendations)
 
     def test_recommendations_blocked_by_false_substitution(self, db_instance_with_data):
         """Test that allow_substitution=False blocks recommendations"""

@@ -21,46 +21,38 @@ class TestModelsAndValidation:
 
     def test_ingredient_create_model(self):
         """Test ingredient creation model validation"""
-        try:
-            from api.models.requests import IngredientCreate
+        from api.models.requests import IngredientCreate
 
-            # Valid data
-            valid_data = {"name": "Test Ingredient"}
-            ingredient = IngredientCreate(**valid_data)
-            assert ingredient.name == "Test Ingredient"
+        # Valid data
+        valid_data = {"name": "Test Ingredient"}
+        ingredient = IngredientCreate(**valid_data)
+        assert ingredient.name == "Test Ingredient"
 
-            # Test with optional fields
-            full_data = {
-                "name": "Test Ingredient",
-                "description": "Test description",
-                "parent_id": 1,
-            }
-            ingredient = IngredientCreate(**full_data)
-            assert ingredient.description == "Test description"
-            assert ingredient.parent_id == 1
-
-        except ImportError:
-            pytest.skip("Request models not available")
+        # Test with optional fields
+        full_data = {
+            "name": "Test Ingredient",
+            "description": "Test description",
+            "parent_id": 1,
+        }
+        ingredient = IngredientCreate(**full_data)
+        assert ingredient.description == "Test description"
+        assert ingredient.parent_id == 1
 
     def test_recipe_create_model(self):
         """Test recipe creation model validation"""
-        try:
-            from api.models.requests import RecipeCreate
+        from api.models.requests import RecipeCreate
 
-            # Valid recipe data
-            recipe_data = {
-                "name": "Test Recipe",
-                "instructions": "Test instructions",
-                "ingredients": [{"ingredient_id": 1, "amount": 2.0, "unit_id": 1}],
-            }
+        # Valid recipe data
+        recipe_data = {
+            "name": "Test Recipe",
+            "instructions": "Test instructions",
+            "ingredients": [{"ingredient_id": 1, "amount": 2.0, "unit_id": 1}],
+        }
 
-            recipe = RecipeCreate(**recipe_data)
-            assert recipe.name == "Test Recipe"
-            assert len(recipe.ingredients) == 1
-            assert recipe.ingredients[0].ingredient_id == 1
-
-        except ImportError:
-            pytest.skip("Request models not available")
+        recipe = RecipeCreate(**recipe_data)
+        assert recipe.name == "Test Recipe"
+        assert len(recipe.ingredients) == 1
+        assert recipe.ingredients[0].ingredient_id == 1
 
 
 if __name__ == "__main__":

@@ -128,13 +128,9 @@ class TestRatingSearch:
             f"/recipes/search?min_rating={min_rating}&max_rating={max_rating}"
         )
 
-        # Should handle gracefully - either return 400 error or empty results
-        assert response.status_code in [200, 400]
-
-        if response.status_code == 200:
-            data = response.json()
-            # Should return no results since range is invalid
-            assert data["pagination"]["total_count"] == 0
+        # No range check exists for ratings; an inverted range matches nothing.
+        assert response.status_code == 200, response.text
+        assert response.json()["pagination"]["total_count"] == 0
 
     async def test_search_recipes_rating_boundary_values(self, test_client_with_data):
         """Test searching with rating boundary values (0, 5)"""
@@ -165,12 +161,8 @@ class TestRatingSearch:
         # Negative ratings should be handled gracefully
         response = await client.get("/recipes/search?min_rating=-1")
 
-        # Should either return 400 error or treat as 0
-        assert response.status_code in [200, 400, 422]
-
-        if response.status_code == 200:
-            data = response.json()
-            assert "recipes" in data
+        # Ratings are bounded to 0-5 by the query parameter definition.
+        assert response.status_code == 422, response.text
 
     async def test_search_recipes_rating_above_five(self, test_client_with_data):
         client, app = test_client_with_data
@@ -179,14 +171,8 @@ class TestRatingSearch:
         # Ratings above 5 should be handled gracefully
         response = await client.get("/recipes/search?min_rating=6")
 
-        # Should either return 400 error or return no results
-        assert response.status_code in [200, 400, 422]
-
-        if response.status_code == 200:
-            data = response.json()
-            assert "recipes" in data
-            # Likely no results since no recipe should have rating > 5
-            assert data["pagination"]["total_count"] == 0
+        # Ratings are bounded to 0-5 by the query parameter definition.
+        assert response.status_code == 422, response.text
 
     async def test_search_recipes_decimal_ratings(self, test_client_with_data):
         client, app = test_client_with_data
@@ -233,8 +219,8 @@ class TestRatingSearch:
         # Non-numeric rating values should be handled gracefully
         response = await client.get("/recipes/search?min_rating=abc")
 
-        # Should return 400 error for invalid parameter type
-        assert response.status_code in [200, 400, 422]
+        # FastAPI rejects a non-numeric float query parameter.
+        assert response.status_code == 422, response.text
 
     async def test_search_recipes_rating_filter_vs_no_filter(
         self, test_client_with_data

@@ -49,8 +49,8 @@ class TestIngredientEndpoints:
     ):
         """Test creating ingredient with authentication"""
         response = await editor_client.post("/ingredients", json=sample_ingredient_data)
-        # May fail due to database constraints in memory DB, but should not be unauthorized
-        assert response.status_code != status.HTTP_401_UNAUTHORIZED
+        assert response.status_code == status.HTTP_201_CREATED, response.text
+        assert response.json()["name"] == sample_ingredient_data["name"]
 
     async def test_update_ingredient_unauthorized(self, test_client_memory):
         """Test updating ingredient without authentication"""
@@ -73,10 +73,16 @@ class TestRecipeEndpoints:
         response = await test_client_memory.post("/recipes", json=recipe_data)
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    async def test_create_recipe_authorized(self, editor_client, sample_recipe_data):
+    async def test_create_recipe_authorized(
+        self, editor_client_with_data, sample_recipe_data
+    ):
         """Test creating recipe with authentication"""
-        response = await editor_client.post("/recipes", json=sample_recipe_data)
-        assert response.status_code != status.HTTP_401_UNAUTHORIZED
+        # sample_recipe_data references seeded ingredients 1 and 2.
+        response = await editor_client_with_data.post(
+            "/recipes", json=sample_recipe_data
+        )
+        assert response.status_code == status.HTTP_201_CREATED, response.text
+        assert response.json()["name"] == sample_recipe_data["name"]
 
 
 class TestAuthenticationEndpoints:
@@ -90,10 +96,8 @@ class TestAuthenticationEndpoints:
     async def test_auth_me_authorized(self, authenticated_client, mock_user):
         """Test /auth/me with authentication"""
         response = await authenticated_client.get("/auth/me")
-        if response.status_code == status.HTTP_200_OK:
-            data = response.json()
-            assert "user_id" in data
-            assert data["user_id"] == mock_user["user_id"]
+        assert response.status_code == status.HTTP_200_OK, response.text
+        assert response.json()["user_id"] == mock_user["user_id"]
 
 
 class TestPublicResourceEndpoints:
@@ -188,8 +192,8 @@ class TestTagAPIEndpoints:
         """Test creating public tag with authentication"""
         tag_data = {"name": "test-public-tag"}
         response = await authenticated_client.post("/tags/public", json=tag_data)
-        # Should not be unauthorized (may fail due to other reasons like database constraints)
-        assert response.status_code != status.HTTP_401_UNAUTHORIZED
+        assert response.status_code == status.HTTP_201_CREATED, response.text
+        assert response.json()["name"] == "test-public-tag"
 
     async def test_create_private_tag_unauthorized(self, test_client_memory):
         """Test creating private tag without authentication"""
@@ -205,33 +209,28 @@ class TestTagAPIEndpoints:
     async def test_get_private_tags_authorized(self, authenticated_client):
         """Test getting private tags with authentication"""
         response = await authenticated_client.get("/tags/private")
-        # Should not be unauthorized (may fail due to other reasons like database constraints)
-        assert response.status_code != status.HTTP_401_UNAUTHORIZED
-        if response.status_code == status.HTTP_200_OK:
-            data = response.json()
-            assert isinstance(data, list)
+        assert response.status_code == status.HTTP_200_OK, response.text
+        assert response.json() == []
 
     async def test_create_private_tag_authorized(self, authenticated_client):
         """Test creating private tag with authentication"""
         tag_data = {"name": "test-private-tag"}
         response = await authenticated_client.post("/tags/private", json=tag_data)
-        # Should not be unauthorized (may fail due to other reasons like database constraints)
-        assert response.status_code != status.HTTP_401_UNAUTHORIZED
+        assert response.status_code == status.HTTP_201_CREATED, response.text
+        assert response.json()["name"] == "test-private-tag"
 
     async def test_create_private_tag_response_structure(self, authenticated_client):
         """Test that private tag creation returns correct response structure"""
         tag_data = {"name": "response-structure-test-tag"}
         response = await authenticated_client.post("/tags/private", json=tag_data)
 
-        # Should succeed and return expected structure
-        if response.status_code == status.HTTP_201_CREATED:
-            data = response.json()
-            # Verify response has required fields for PrivateTagResponse
-            assert "id" in data
-            assert "name" in data
-            assert "cognito_user_id" in data
-            # Verify response does NOT have cognito_username field (this was the bug)
-            assert "cognito_username" not in data
+        assert response.status_code == status.HTTP_201_CREATED, response.text
+        data = response.json()
+        assert "id" in data
+        assert data["name"] == "response-structure-test-tag"
+        assert "cognito_user_id" in data
+        # Regression: the response must not carry a cognito_username field.
+        assert "cognito_username" not in data
 
     async def test_add_public_tag_to_recipe_unauthorized(self, test_client_memory):
         """Test adding public tag to recipe without authentication"""
@@ -279,6 +278,10 @@ class TestTagAPIEndpoints:
 class TestCORSFunctionality:
     """Test CORS functionality"""
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="Preflight OPTIONS returns 405 (issue #138)",
+    )
     async def test_cors_preflight_request(self, test_client_memory):
         """Test CORS preflight request"""
         headers = {
@@ -287,5 +290,5 @@ class TestCORSFunctionality:
             "Access-Control-Request-Headers": "Content-Type,Authorization",
         }
         response = await test_client_memory.options("/ingredients", headers=headers)
-        # Should not be 404 or 405 if CORS is properly configured
-        assert response.status_code != status.HTTP_404_NOT_FOUND
+        assert response.status_code == status.HTTP_200_OK, response.text
+        assert "access-control-allow-origin" in response.headers

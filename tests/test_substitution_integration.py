@@ -144,19 +144,7 @@ class TestSubstitutionIntegration:
         # Verify results
         recipe_names = [r["name"] for r in search_results]
 
-        # NOTE: This test currently may not work as expected because substitution logic is not yet implemented in recipe search
-        # TODO: Implement substitution logic in search_recipes_paginated
-
         # Should find Old Fashioned (calls for Bourbon category, user has Buffalo Trace brand)
-        if (
-            "Old Fashioned" not in recipe_names
-            or "Test Maker's Manhattan" not in recipe_names
-            or len(search_results) != 2
-        ):
-            pytest.skip(
-                "Substitution logic not yet implemented in recipe search - this test documents expected behavior"
-            )
-
         assert "Old Fashioned" in recipe_names, (
             "Should find Old Fashioned - recipe wants bourbon category, user has bourbon brand"
         )
@@ -250,12 +238,6 @@ class TestSubstitutionIntegration:
         print(f"Found {len(search_results)} recipes")
 
         # Should NOT find Paper Plane because no substitution allowed
-        # NOTE: This test currently FAILS because substitution logic is not yet implemented in recipe search
-        # TODO: Implement substitution logic in search_recipes_paginated
-        if len(search_results) != 0:
-            pytest.skip(
-                "Substitution logic not yet implemented in recipe search - this test documents expected behavior"
-            )
         assert len(search_results) == 0, (
             f"Should find 0 recipes (no substitution), but found {len(search_results)}"
         )
