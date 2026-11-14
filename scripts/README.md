@@ -9,7 +9,8 @@ EC2 deployment entry point.
   Ansible deployment
 - `frontend-artifact.mjs` - inventories, validates, and previews a disposable
   build artifact
-- `generate_config.py` - validates and generates public `web/js/config.js`
+- `generate_config.py` - generates and validates public `web/js/config.js` from
+  the Ansible inventory
 - `local-config.sh` - generates the localhost:8000 development config
 - `serve.sh` - starts the Vite development server on localhost:8000
 
@@ -165,13 +166,14 @@ inventories. Tabs older than that window may require refresh after pruning.
 
 ## Public config generation
 
-The generator accepts CloudFormation outputs, validates the six public fields,
-and serializes JSON safely:
+The generator reads the environment's Ansible inventory
+(`infrastructure/ansible/inventory/<env>.yml`), the same values the deployment
+writes, validates the six public fields, and serializes JSON safely:
 
 ```bash
-python scripts/generate_config.py cocktaildb-dev dev
-python scripts/generate_config.py cocktaildb-prod prod --region us-west-2
-python scripts/generate_config.py cocktaildb-dev dev --output custom/path/config.js
+python scripts/generate_config.py dev
+python scripts/generate_config.py prod --output custom/path/config.js
+python scripts/generate_config.py dev --app-url http://localhost:8000 --app-name "Local"
 ```
 
 Only public API and Cognito values are emitted. Database credentials, client
