@@ -23,34 +23,6 @@ VALID_CONFIG = {
 }
 
 
-def test_cloudformation_lookup_reports_missing_boto3_clearly():
-    script = """
-import sys
-
-class BlockBoto3:
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname == 'boto3' or fullname.startswith('boto3.'):
-            raise ModuleNotFoundError('blocked boto3 for lookup isolation')
-        return None
-
-sys.meta_path.insert(0, BlockBoto3())
-from scripts.generate_config import get_cloudformation_output
-
-assert get_cloudformation_output('stack', 'OutputKey') is None
-"""
-    result = subprocess.run(
-        [sys.executable, "-c", script],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "boto3" in result.stdout
-    assert "CloudFormation output OutputKey" in result.stdout
-
-
 def test_public_renderer_imports_without_boto3():
     script = """
 import sys
@@ -154,26 +126,6 @@ def test_public_config_rejects_unknown_non_secret_fields_too():
 def test_public_config_requires_string_values():
     with pytest.raises(ValueError, match="clientId"):
         render_public_config(dict(VALID_CONFIG, clientId=None))
-
-
-def test_generator_maps_cloudformation_names_to_public_names(tmp_path):
-    from scripts.generate_config import generate_config_js
-
-    output = tmp_path / "js" / "config.js"
-    values = {
-        "api_url": "https://dev.example/api",
-        "user_pool_id": "pool",
-        "client_id": "client",
-        "cognito_domain": "https://auth.example",
-        "app_url": "http://localhost:8000",
-    }
-
-    assert generate_config_js(values, "dev", str(output))
-    source = output.read_text(encoding="utf-8")
-    assert json.loads(source[len("export default ") :].rstrip(";\n")) == {
-        **VALID_CONFIG,
-        "appName": "Cocktail Database (dev)",
-    }
 
 
 def test_config_template_serializes_validated_public_dictionary():
@@ -359,7 +311,6 @@ def test_local_development_uses_fixed_vite_port_and_shared_generator():
     local_config = (ROOT / "scripts/local-config.sh").read_text(encoding="utf-8")
     serve = (ROOT / "scripts/serve.sh").read_text(encoding="utf-8")
 
-    assert "render_public_config" in local_config
     assert "npm run dev" in serve
     assert 'PORT="8000"' in serve or "PORT=8000" in serve
     assert "localhost:8000" in local_config
@@ -373,3 +324,81 @@ def test_vite_config_proxies_optional_ssr_to_explicit_backend_port():
     assert "proxy" in vite_config
     assert "/recipe" in vite_config
     assert "/ingredient" in vite_config
+
+
+INVENTORY = """
+all:
+    hosts:
+        cocktaildb:
+            ansible_host: example.dev
+            domain_name: example.dev
+            app_env: dev
+            user_pool_id: pool
+            app_client_id: client
+            cognito_domain: 'https://auth.example.dev'
+            db_password: "{{ lookup('env', 'COCKTAILDB_DB_PASSWORD') }}"
+"""
+
+
+def test_inventory_config_matches_deployed_public_config(tmp_path):
+    from scripts.generate_config import public_config_from_inventory
+
+    inventory = tmp_path / "dev.yml"
+    inventory.write_text(INVENTORY, encoding="utf-8")
+
+    assert public_config_from_inventory(inventory) == {
+        "apiUrl": "https://example.dev/api",
+        "userPoolId": "pool",
+        "clientId": "client",
+        "cognitoDomain": "https://auth.example.dev",
+        "appUrl": "https://example.dev",
+        "appName": "Cocktail Database (dev)",
+    }
+
+
+def test_inventory_config_can_point_a_local_app_at_the_remote_api(tmp_path):
+    from scripts.generate_config import public_config_from_inventory
+
+    inventory = tmp_path / "dev.yml"
+    inventory.write_text(INVENTORY, encoding="utf-8")
+
+    config = public_config_from_inventory(
+        inventory, app_url="http://localhost:8000", app_name="Local"
+    )
+
+    assert config["apiUrl"] == "https://example.dev/api"
+    assert config["appUrl"] == "http://localhost:8000"
+    assert config["appName"] == "Local"
+
+
+def test_local_config_script_writes_dev_config_without_aws(tmp_path):
+    project = tmp_path / "project"
+    (project / "scripts").mkdir(parents=True)
+    (project / "src/web/js").mkdir(parents=True)
+    (project / "infrastructure/ansible/inventory").mkdir(parents=True)
+    for relative in (
+        "scripts/local-config.sh",
+        "scripts/generate_config.py",
+        "infrastructure/ansible/inventory/dev.yml",
+    ):
+        shutil.copy(ROOT / relative, project / relative)
+    environment = dict(
+        os.environ, PATH="/usr/bin:/bin", PYTHON_BIN=sys.executable, PYTHONPATH=""
+    )
+
+    result = subprocess.run(
+        ["bash", str(project / "scripts/local-config.sh")],
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    source = (project / "src/web/js/config.js").read_text(encoding="utf-8")
+    config = json.loads(source[len("export default ") :].rstrip(";\n"))
+    domain = yaml.safe_load(
+        (ROOT / "infrastructure/ansible/inventory/dev.yml").read_text()
+    )["all"]["hosts"]["cocktaildb"]["domain_name"]
+    assert config["apiUrl"] == f"https://{domain}/api"
+    assert config["appUrl"] == "http://localhost:8000"

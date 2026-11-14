@@ -25,6 +25,7 @@ from core.exception_handlers import (
     general_exception_handler,
     starlette_http_exception_handler,
     validation_exception_handler,
+    value_error_handler,
 )
 from core.exceptions import CocktailDBException
 from core.release_info import read_release_info
@@ -101,6 +102,7 @@ app.add_middleware(CORSHeaderMiddleware)
 
 # Add exception handlers
 app.add_exception_handler(CocktailDBException, cocktail_db_exception_handler)
+app.add_exception_handler(ValueError, value_error_handler)
 app.add_exception_handler(Exception, general_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(StarletteHTTPException, starlette_http_exception_handler)
