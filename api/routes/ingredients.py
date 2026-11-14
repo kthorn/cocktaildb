@@ -102,10 +102,12 @@ async def update_ingredient(
     if not existing_ingredient:
         raise NotFoundException(f"Ingredient with ID {ingredient_id} not found")
 
-    # Prepare data for database (only include non-None values)
     update_dict = {
         k: v for k, v in ingredient_data.model_dump().items() if v is not None
     }
+    # The form sends url: null to clear it, so pass an explicit null through.
+    if "url" in ingredient_data.model_fields_set:
+        update_dict["url"] = ingredient_data.url
 
     value_updates = {
         field: update_dict.pop(field)

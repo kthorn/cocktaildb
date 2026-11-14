@@ -324,6 +324,10 @@ class Database(GroupInventoryMixin):
                     set_clauses.append("allow_substitution = %(allow_substitution)s")
                     query_params["allow_substitution"] = data.get("allow_substitution")
 
+                if "url" in data:
+                    set_clauses.append("url = %(url)s")
+                    query_params["url"] = data["url"]
+
                 # Update ingredient with new path
                 self.execute_query(
                     f"""
@@ -361,6 +365,10 @@ class Database(GroupInventoryMixin):
                 if "allow_substitution" in data:
                     set_clauses.append("allow_substitution = %(allow_substitution)s")
                     query_params["allow_substitution"] = data.get("allow_substitution")
+
+                if "url" in data:
+                    set_clauses.append("url = %(url)s")
+                    query_params["url"] = data["url"]
 
                 self.execute_query(
                     f"""
