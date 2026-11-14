@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Python interpreter: `/home/kurtt/miniforge3/envs/cocktaildb/bin/python`; syntax must stay 3.12-compatible.
+- Python interpreter: `/home/kurtt/miniforge3/envs/cocktaildb-py314/bin/python` (3.14.10, matches CI); syntax must stay 3.12-compatible.
 - Add `mcp==2.3.0` to `api/requirements.txt`; keep `pydantic==2.13.5` (mcp requires `pydantic>=2.12`).
 - The package must **not** be named `mcp` (it would shadow the SDK, since `api/` is on `sys.path`). Use `api/mcp_tools/`.
 - In mcp 2.x `FastMCP` is gone: import `MCPServer` from `mcp.server.mcpserver`, `ToolError` from `mcp.server.mcpserver.exceptions`, `ToolAnnotations` from `mcp_types`, `TransportSecuritySettings` from `mcp.server.transport_security`.
