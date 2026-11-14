@@ -46,6 +46,18 @@ class Settings(BaseSettings):
         default="https://mixology.tools", description="Public base URL for the site"
     )
 
+    # MCP server
+    mcp_rate_limit_per_minute: int = Field(
+        default=300, description="Per-client MCP requests allowed per minute"
+    )
+    mcp_max_concurrent_db_calls: int = Field(
+        default=4, description="Maximum concurrent database calls from MCP tools"
+    )
+    mcp_db_slot_timeout_seconds: float = Field(
+        default=5.0,
+        description="Seconds an MCP tool waits for a database slot before failing",
+    )
+
     # Environment
     environment: str = Field(default="dev", description="Environment (dev/prod)")
     debug: bool = Field(default=False, description="Debug mode")
