@@ -287,6 +287,31 @@ fields status
 sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status
 ```
 
+### Traffic Counts (Prod)
+
+`cocktaildb-page-views.timer` runs at about 00:30 UTC each day. It reads
+yesterday's Caddy access logs and merges page views and distinct-IP visitors
+into `s3://<backup bucket>/traffic/page-views.csv` (`date,path,views,visitors`,
+with a `TOTAL` row per day). It keeps no IPs. Bots, assets and API calls are
+excluded. On dev `BACKUP_BUCKET` is empty, so the job does nothing.
+
+```bash
+# Read the counts
+aws s3 cp s3://cocktaildbbackups-<account>-prod/traffic/page-views.csv -
+
+# On EC2: status, last run, and re-running a day (reruns replace that day)
+systemctl list-timers cocktaildb-page-views.timer
+journalctl -u cocktaildb-page-views -n 20
+sudo -u cocktaildb -g caddy env $(grep ^BACKUP_BUCKET= /opt/cocktaildb/.env) \
+    /usr/bin/python3 /opt/cocktaildb/scripts/page-view-counts.py --date YYYY-MM-DD
+```
+
+The job can only count days that are still in the local logs (5 rotated
+10 MB files). After the first deploy with this job, `ls -l /var/log/caddy`
+should show `-rw-r-----` files with group `caddy`. If the existing
+`access.log` is still `0600`, run `sudo chmod 0640 /var/log/caddy/access.log`
+once.
+
 ---
 
 ## 3. Database Operations

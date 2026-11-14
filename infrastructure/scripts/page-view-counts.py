@@ -21,9 +21,9 @@ import re
 import subprocess
 import sys
 from collections import defaultdict
+from collections.abc import Iterable, Iterator
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Iterable, Iterator
 
 CSV_HEADER = ["date", "path", "views", "visitors"]
 S3_KEY = "traffic/page-views.csv"

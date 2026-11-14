@@ -6,17 +6,19 @@ import importlib.util
 import io
 import json
 import os
-from datetime import date, datetime, timezone
+import re
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = ROOT / "infrastructure" / "scripts" / "page-view-counts.py"
 
 DAY = date(2026, 11, 13)
-NOON = datetime(2026, 11, 13, 12, 0, tzinfo=timezone.utc).timestamp()
-NEXT_DAY_NOON = datetime(2026, 11, 14, 12, 0, tzinfo=timezone.utc).timestamp()
+NOON = datetime(2026, 11, 13, 12, 0, tzinfo=UTC).timestamp()
+NEXT_DAY_NOON = datetime(2026, 11, 14, 12, 0, tzinfo=UTC).timestamp()
 
 
 @pytest.fixture
@@ -185,9 +187,7 @@ def s3_calls(pvc, monkeypatch):
 
 def _write_log(log_dir: Path, entries) -> Path:
     path = log_dir / "access.log"
-    path.write_text(
-        "".join(json.dumps(e) + "\n" for e in entries), encoding="utf-8"
-    )
+    path.write_text("".join(json.dumps(e) + "\n" for e in entries), encoding="utf-8")
     return path
 
 
@@ -234,8 +234,47 @@ def test_main_dry_run_does_not_touch_s3(pvc, s3_calls, monkeypatch, tmp_path, ca
     monkeypatch.setenv("BACKUP_BUCKET", "bucket")
     _write_log(tmp_path, [_entry()])
     assert (
-        pvc.main(["--log-dir", str(tmp_path), "--date", "2026-11-13", "--dry-run"])
-        == 0
+        pvc.main(["--log-dir", str(tmp_path), "--date", "2026-11-13", "--dry-run"]) == 0
     )
     assert s3_calls["download"] == [] and s3_calls["upload"] == []
     assert "TOTAL" in capsys.readouterr().out
+
+
+SYSTEMD = ROOT / "infrastructure" / "systemd"
+
+
+def test_page_view_units_exist_and_run_script():
+    service = (SYSTEMD / "cocktaildb-page-views.service").read_text(encoding="utf-8")
+    timer = (SYSTEMD / "cocktaildb-page-views.timer").read_text(encoding="utf-8")
+    assert "SupplementaryGroups=caddy" in service
+    assert "/opt/cocktaildb/scripts/page-view-counts.py" in service
+    assert "OnCalendar=*-*-* 00:30:00" in timer
+    assert "Persistent=true" in timer
+
+
+def test_caddy_access_log_is_group_readable():
+    caddyfile = (ROOT / "infrastructure" / "caddy" / "Caddyfile").read_text(
+        encoding="utf-8"
+    )
+    block = re.search(
+        r"output file /var/log/caddy/access\.log \{(.*?)\}", caddyfile, re.DOTALL
+    )
+    assert block, "HTTPS site must log to /var/log/caddy/access.log"
+    assert re.search(r"^\s*mode 0640\s*$", block.group(1), re.MULTILINE)
+
+
+def test_deploy_enables_page_view_timer():
+    play = yaml.safe_load(
+        (ROOT / "infrastructure" / "ansible" / "playbooks" / "deploy.yml").read_text(
+            encoding="utf-8"
+        )
+    )[0]
+    timers = [
+        task["systemd"]
+        for task in play["tasks"]
+        if isinstance(task.get("systemd"), dict)
+        and task["systemd"].get("name") == "cocktaildb-page-views.timer"
+    ]
+    assert len(timers) == 1
+    assert timers[0]["enabled"] is True
+    assert timers[0]["state"] == "started"

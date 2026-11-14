@@ -1,0 +1,23 @@
+# infrastructure/systemd/cocktaildb-page-views.service
+[Unit]
+Description=CocktailDB Daily Page-View Counts
+After=network.target
+
+[Service]
+Type=oneshot
+User=cocktaildb
+Group=cocktaildb
+# Caddy's access logs are mode 0640, group caddy
+SupplementaryGroups=caddy
+
+# Provides BACKUP_BUCKET (empty on dev, where the job is a no-op)
+EnvironmentFile=/opt/cocktaildb/.env
+
+ExecStart=/usr/bin/python3 /opt/cocktaildb/scripts/page-view-counts.py
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cocktaildb-page-views
+
+TimeoutStartSec=600
+Restart=no

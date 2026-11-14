@@ -225,6 +225,7 @@
             - backup-postgres.sh
             - deploy-cutover.sh
             - frontend-release.py
+            - page-view-counts.py
             - run-migrations.sh
             - smoke-test.sh
             - trigger-analytics.sh
@@ -388,6 +389,12 @@
             enabled: yes
             state: started
             daemon_reload: yes
+
+      - name: Enable page view counts timer
+        systemd:
+            name: cocktaildb-page-views.timer
+            enabled: yes
+            state: started
 
       - name: Enable analytics timer
         systemd:

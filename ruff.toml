@@ -15,6 +15,11 @@ required-version = "==0.16.5"
 line-length = 88
 target-version = "py312"
 
+# Runs on the EC2 host's system python3 (Amazon Linux 2023: Python 3.9), so
+# pyupgrade must not rewrite it to 3.10+ APIs such as datetime.UTC.
+[per-file-target-version]
+"infrastructure/scripts/page-view-counts.py" = "py39"
+
 [lint]
 select = [
     "E",   # pycodestyle errors
