@@ -278,3 +278,83 @@ def test_deploy_enables_page_view_timer():
     assert len(timers) == 1
     assert timers[0]["enabled"] is True
     assert timers[0]["state"] == "started"
+
+
+class _Run:
+    """Fake subprocess.run returning scripted results per aws subcommand."""
+
+    def __init__(self, results):
+        self.results = results
+        self.calls = []
+
+    def __call__(self, cmd, **kwargs):
+        self.calls.append(cmd)
+        rc, out, err = self.results[cmd[2]]
+        if kwargs.get("check") and rc != 0:
+            raise pvc_subprocess_error(rc, cmd)
+        return type("Done", (), {"returncode": rc, "stdout": out, "stderr": err})()
+
+
+def pvc_subprocess_error(rc, cmd):
+    import subprocess
+
+    return subprocess.CalledProcessError(rc, cmd)
+
+
+LS_LINE = "2026-11-13 00:31:02       1234 page-views.csv\n"
+
+
+def test_download_csv_missing_object_returns_empty(pvc, monkeypatch):
+    run = _Run({"ls": (1, "", "")})
+    monkeypatch.setattr(pvc.subprocess, "run", run)
+    assert pvc.download_csv("bucket", "traffic/page-views.csv") == ""
+    assert [c[2] for c in run.calls] == ["ls"]
+
+
+def test_download_csv_ignores_prefix_matches(pvc, monkeypatch):
+    run = _Run({"ls": (0, "2026-11-13 00:31:02 9 page-views.csv.bak\n", "")})
+    monkeypatch.setattr(pvc.subprocess, "run", run)
+    assert pvc.download_csv("bucket", "traffic/page-views.csv") == ""
+    assert [c[2] for c in run.calls] == ["ls"]
+
+
+def test_download_csv_returns_existing_text(pvc, monkeypatch):
+    run = _Run({"ls": (0, LS_LINE, ""), "cp": (0, "date,path\r\n", "")})
+    monkeypatch.setattr(pvc.subprocess, "run", run)
+    assert pvc.download_csv("bucket", "traffic/page-views.csv") == "date,path\r\n"
+
+
+@pytest.mark.parametrize(
+    "ls_result",
+    [
+        (1, "", "An error occurred (AccessDenied)"),
+        (254, "", "Unable to locate credentials"),
+        (255, "", "Could not connect"),
+    ],
+)
+def test_download_csv_raises_on_aws_errors(pvc, monkeypatch, ls_result):
+    run = _Run({"ls": ls_result})
+    monkeypatch.setattr(pvc.subprocess, "run", run)
+    with pytest.raises(RuntimeError):
+        pvc.download_csv("bucket", "traffic/page-views.csv")
+
+
+def test_deploy_makes_existing_caddy_logs_group_readable():
+    tasks = yaml.safe_load(
+        (ROOT / "infrastructure" / "ansible" / "playbooks" / "deploy.yml").read_text(
+            encoding="utf-8"
+        )
+    )[0]["tasks"]
+    names = [t.get("name") for t in tasks]
+    timer_index = next(
+        i
+        for i, t in enumerate(tasks)
+        if isinstance(t.get("systemd"), dict)
+        and t["systemd"].get("name") == "cocktaildb-page-views.timer"
+    )
+    fix_index = names.index("Make existing Caddy access logs group-readable")
+    assert fix_index < timer_index
+    command = tasks[fix_index]["ansible.builtin.command"]["argv"]
+    assert command[:2] == ["find", "/var/log/caddy"]
+    assert "access*.log*" in command
+    assert "g+r" in command

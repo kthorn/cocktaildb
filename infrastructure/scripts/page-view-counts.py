@@ -150,10 +150,19 @@ def download_csv(bucket: str, key: str) -> str:
     """Return the CSV's text, or "" if the object does not exist yet."""
     url = f"s3://{bucket}/{key}"
     listing = subprocess.run(["aws", "s3", "ls", url], capture_output=True, text=True)
-    if listing.returncode == 1 and not listing.stdout.strip():
-        return ""
-    if listing.returncode != 0:
+    # `aws s3 ls` exits 1 with no output when nothing matches. Anything else
+    # nonzero is an error; treating it as "missing" would overwrite history.
+    missing = listing.returncode == 1 and not (
+        listing.stdout.strip() or listing.stderr.strip()
+    )
+    if listing.returncode != 0 and not missing:
         raise RuntimeError(f"aws s3 ls {url} failed: {listing.stderr.strip()}")
+    # `ls` matches by prefix, so require the exact object name.
+    name = key.rsplit("/", 1)[-1]
+    if missing or not any(
+        line.split()[-1:] == [name] for line in listing.stdout.splitlines()
+    ):
+        return ""
     result = subprocess.run(
         ["aws", "s3", "cp", url, "-"], capture_output=True, text=True, check=True
     )

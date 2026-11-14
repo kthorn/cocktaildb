@@ -302,15 +302,17 @@ aws s3 cp s3://cocktaildbbackups-<account>-prod/traffic/page-views.csv -
 # On EC2: status, last run, and re-running a day (reruns replace that day)
 systemctl list-timers cocktaildb-page-views.timer
 journalctl -u cocktaildb-page-views -n 20
-sudo -u cocktaildb -g caddy env $(grep ^BACKUP_BUCKET= /opt/cocktaildb/.env) \
+sudo systemd-run --wait --pipe --collect \
+    -p User=cocktaildb -p Group=cocktaildb -p SupplementaryGroups=caddy \
+    -p EnvironmentFile=/opt/cocktaildb/.env \
     /usr/bin/python3 /opt/cocktaildb/scripts/page-view-counts.py --date YYYY-MM-DD
 ```
 
 The job can only count days that are still in the local logs (5 rotated
-10 MB files). After the first deploy with this job, `ls -l /var/log/caddy`
-should show `-rw-r-----` files with group `caddy`. If the existing
-`access.log` is still `0600`, run `sudo chmod 0640 /var/log/caddy/access.log`
-once.
+10 MB files). Caddy writes them `0640` with group `caddy`, and deploy fixes up
+older `0600` files. If `journalctl` shows `cannot read access logs`, check
+`ls -l /var/log/caddy` and run
+`sudo find /var/log/caddy -name 'access*.log*' -exec chmod g+r {} +`.
 
 ---
 
