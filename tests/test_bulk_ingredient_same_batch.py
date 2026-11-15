@@ -8,8 +8,9 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from ingredient_hierarchy import MAX_INGREDIENT_DEPTH
 from models.requests import BulkIngredientUpload
-from routes.ingredients import MAX_INGREDIENT_DEPTH, bulk_upload_ingredients
+from routes.ingredients import bulk_upload_ingredients
 
 EDITOR = SimpleNamespace(user_id="editor-1")
 

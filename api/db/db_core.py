@@ -7,6 +7,11 @@ from typing import Any, cast
 
 import psycopg2
 from core.exceptions import ConflictException, ValidationException
+from ingredient_hierarchy import (
+    MAX_INGREDIENT_DEPTH,
+    depth_exceeded_message,
+    path_depth,
+)
 from psycopg2 import pool
 from psycopg2.extras import RealDictCursor
 from recipe_abv import format_recipe_abv
@@ -172,6 +177,9 @@ class Database(GroupInventoryMixin):
                         f"Parent ingredient with ID {data.get('parent_id')} does not exist"
                     )
                 parent_path = parent[0]["path"]
+                new_depth = path_depth(parent_path) + 1
+                if new_depth > MAX_INGREDIENT_DEPTH:
+                    raise ValidationException(depth_exceeded_message(new_depth))
 
             # Insert the ingredient first
             conn = None
@@ -301,6 +309,18 @@ class Database(GroupInventoryMixin):
 
                     # Calculate new path
                     new_path = f"{parent[0]['path']}{ingredient_id}/"
+
+                    # The whole subtree moves, so its deepest row must still fit.
+                    subtree_height = max(
+                        (
+                            path_depth(d["path"]) - path_depth(old_path)
+                            for d in descendants
+                        ),
+                        default=0,
+                    )
+                    deepest = path_depth(new_path) + subtree_height
+                    if deepest > MAX_INGREDIENT_DEPTH:
+                        raise ValidationException(depth_exceeded_message(deepest))
                 else:
                     # Root level ingredient
                     new_path = f"/{ingredient_id}/"

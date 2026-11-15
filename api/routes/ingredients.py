@@ -18,6 +18,11 @@ from dependencies.auth import (
     require_editor_access,
 )
 from fastapi import APIRouter, Body, Depends, status
+from ingredient_hierarchy import (
+    MAX_INGREDIENT_DEPTH,
+    depth_exceeded_message,
+    path_depth,
+)
 from models.requests import BulkIngredientUpload, IngredientCreate, IngredientUpdate
 from models.responses import (
     BulkIngredientUploadResponse,
@@ -242,16 +247,6 @@ def delete_ingredient(
     return MessageResponse(message=f"Ingredient {ingredient_id} deleted successfully")
 
 
-# Maximum number of levels in the ingredient hierarchy, counting the
-# top-level ingredient as level 1. The deepest chain today is about 4.
-MAX_INGREDIENT_DEPTH = 10
-
-
-def _path_depth(path: str | None) -> int:
-    """Number of levels in a materialized path such as '/1/5/12/'."""
-    return len([segment for segment in (path or "").split("/") if segment])
-
-
 @router.post(
     "/bulk",
     response_model=BulkIngredientUploadResponse,
@@ -323,7 +318,7 @@ def bulk_upload_ingredients(
             db_parent = db_parents_by_key.get(parent_key)
             if db_parent is not None:
                 db_parent_id[idx] = db_parent["id"]
-                parent_depth[idx] = _path_depth(db_parent["path"])
+                parent_depth[idx] = path_depth(db_parent["path"])
             elif parent_key in first_index_by_key:
                 batch_parent[idx] = first_index_by_key[parent_key]
             else:
@@ -340,7 +335,7 @@ def bulk_upload_ingredients(
             )
             if parent_rows:
                 db_parent_id[idx] = ingredient.parent_id
-                parent_depth[idx] = _path_depth(parent_rows[0]["path"])
+                parent_depth[idx] = path_depth(parent_rows[0]["path"])
             else:
                 fail(
                     idx,
@@ -392,8 +387,7 @@ def bulk_upload_ingredients(
                 fail(
                     member,
                     "depth_exceeded",
-                    f"Ingredient would be at hierarchy level {member_depth}; "
-                    f"the maximum is {MAX_INGREDIENT_DEPTH}",
+                    depth_exceeded_message(member_depth),
                 )
                 depth[member] = None
             else:
