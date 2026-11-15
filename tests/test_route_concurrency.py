@@ -61,17 +61,31 @@ def _uses_database(dependant, get_database) -> bool:
     )
 
 
+def _api_routes(routes):
+    """Every APIRoute, including those inside included routers.
+
+    Newer FastAPI keeps each include_router as a nested route (exposing
+    original_router) instead of copying its routes into app.routes.
+    """
+    from fastapi.routing import APIRoute
+
+    for route in routes:
+        if isinstance(route, APIRoute):
+            yield route
+        elif (nested := getattr(route, "original_router", None)) is not None:
+            yield from _api_routes(nested.routes)
+
+
 def test_database_route_handlers_are_sync():
     """psycopg2 blocks, so handlers using it must run in FastAPI's threadpool."""
     from db.database import get_database
-    from fastapi.routing import APIRoute
 
     from api.main import app
 
     db_routes = [
         route
-        for route in app.routes
-        if isinstance(route, APIRoute) and _uses_database(route.dependant, get_database)
+        for route in _api_routes(app.routes)
+        if _uses_database(route.dependant, get_database)
     ]
     assert len(db_routes) > 40
     async_routes = [
