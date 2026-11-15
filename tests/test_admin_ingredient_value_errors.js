@@ -127,6 +127,7 @@ const context = vm.createContext({
     api: { bulkUploadIngredientValues: async () => Promise.reject(conflict) },
     console: { ...console, error: () => {} },
     setTimeout: () => {},
+    showNotification: () => {},
 });
 vm.runInContext(source, context, { filename: sourcePath });
 

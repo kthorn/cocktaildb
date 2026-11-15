@@ -66,7 +66,7 @@ test('ingredient tree delegation invokes the local edit action for a rendered bu
     ];
     const elements = new Map(ids.map((id) => [id, new Element()]));
     const container = elements.get('ingredients-container');
-    const alerts = [];
+    const notifications = [];
     const document = {
         getElementById: (id) => elements.get(id),
         querySelector: (selector) =>
@@ -83,7 +83,8 @@ test('ingredient tree delegation invokes the local edit action for a rendered bu
         },
         document,
         window: {},
-        alert: (message) => alerts.push(message),
+        showNotification: (message, type) => notifications.push({ message, type }),
+        dismissNotification: () => {},
         confirm: () => true,
         console,
         setTimeout,
@@ -100,7 +101,10 @@ test('ingredient tree delegation invokes the local edit action for a rendered bu
     };
     container._listeners.get('click')({ target });
 
-    assert.deepEqual(alerts, [
-        'Editor access required. Only editors and admins can edit ingredients.',
+    assert.deepEqual(notifications, [
+        {
+            message: 'Editor access required. Only editors and admins can edit ingredients.',
+            type: 'error',
+        },
     ]);
 });

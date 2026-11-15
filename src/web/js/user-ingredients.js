@@ -5,6 +5,7 @@ import {
     getIngredientId,
     renderHierarchyHTML,
 } from './components/ingredientTree.js';
+import { showNotification } from './notifications.js';
 
 function currentUserId() {
     try {
@@ -474,27 +475,11 @@ class UserIngredientsManager {
     }
 
     showSuccess(message) {
-        // Create a simple toast notification
-        const toast = document.createElement('div');
-        toast.className = 'toast toast-success';
-        toast.textContent = message;
-        document.body.appendChild(toast);
-
-        setTimeout(() => {
-            toast.remove();
-        }, 3000);
+        showNotification(message, 'success');
     }
 
     showError(message) {
-        // Create a simple toast notification
-        const toast = document.createElement('div');
-        toast.className = 'toast toast-error';
-        toast.textContent = message;
-        document.body.appendChild(toast);
-
-        setTimeout(() => {
-            toast.remove();
-        }, 5000);
+        showNotification(message, 'error');
     }
 
     // Private tag management methods
