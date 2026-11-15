@@ -11,7 +11,7 @@ ALLOWED_VALUE_FIELDS = {
 
 def bulk_update_ingredient_values(
     db: Database,
-    updates: dict[int, dict[str, Decimal]],
+    updates: dict[int, dict[str, Decimal | None]],
     *,
     overwrite: bool = False,
     expected_names: dict[int, str] | None = None,
