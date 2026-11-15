@@ -35,6 +35,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ingredients", tags=["ingredients"])
 
+# Fields an update can set to null: parent_id null moves to the top level.
+CLEARABLE_FIELDS = {"parent_id", "url", *BULK_VALUE_LIMITS}
+
 
 @router.get("", response_model=list[IngredientResponse])
 def get_ingredients(
@@ -108,12 +111,13 @@ def update_ingredient(
     if not existing_ingredient:
         raise NotFoundException(f"Ingredient with ID {ingredient_id} not found")
 
+    # The form sends null to mean "empty", so an explicitly sent null clears a
+    # clearable field. Omitted fields, and nulls for other fields, are left alone.
     update_dict = {
-        k: v for k, v in ingredient_data.model_dump().items() if v is not None
+        k: v
+        for k, v in ingredient_data.model_dump(exclude_unset=True).items()
+        if v is not None or k in CLEARABLE_FIELDS
     }
-    # The form sends url: null to clear it, so pass an explicit null through.
-    if "url" in ingredient_data.model_fields_set:
-        update_dict["url"] = ingredient_data.url
 
     value_updates = {
         field: update_dict.pop(field)

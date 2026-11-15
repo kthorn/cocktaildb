@@ -73,6 +73,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const ingredient = await api.getIngredient(id);
+            // Load the parent before touching the form. If it fails, the error
+            // propagates and the form is left alone: opening it with a blank
+            // parent would move the ingredient to the top level on save.
+            const parentIngredient = ingredient.parent_id
+                ? await api.getIngredient(ingredient.parent_id)
+                : null;
             document.getElementById('ingredient-name').value = ingredient.name;
             document.getElementById('ingredient-description').value = ingredient.description || '';
             document.getElementById('ingredient-url').value = ingredient.url || '';
@@ -89,14 +95,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 allowSubstitutionCheckbox.checked = ingredient.allow_substitution || false;
             }
 
-            if (ingredient.parent_id) {
-                try {
-                    const parentIngredient = await api.getIngredient(ingredient.parent_id);
-                    parentSelect.value = parentIngredient.id;
-                    parentSearchInput.value = parentIngredient.name;
-                } catch (error) {
-                    console.error('Error loading parent ingredient:', error);
-                }
+            if (parentIngredient) {
+                parentSelect.value = parentIngredient.id;
+                parentSearchInput.value = parentIngredient.name;
             } else {
                 parentSelect.value = '';
                 parentSearchInput.value = '';
@@ -253,7 +254,9 @@ document.addEventListener('DOMContentLoaded', () => {
             ? allowSubstitutionCheckbox.checked
             : false;
 
-        // Find parent ingredient id based on the search input value
+        // Find parent ingredient id based on the search input value. An empty
+        // parent sends null, which moves the ingredient to the top level, so a
+        // name that matches nothing must not fall back to null.
         let parentId = null;
         const parentName = parentSearchInput.value.trim();
 
@@ -262,9 +265,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 (ing) => ing.name.toLowerCase() === parentName.toLowerCase(),
             );
 
-            if (parentIngredient) {
-                parentId = parentIngredient.id;
+            if (!parentIngredient) {
+                showNotification(
+                    `No ingredient named "${parentName}". Pick a parent from the list, or clear the field to make this a top-level ingredient.`,
+                    'error',
+                );
+                return;
             }
+            parentId = parentIngredient.id;
         }
 
         const ingredientData = {
