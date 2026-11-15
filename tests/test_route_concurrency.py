@@ -130,3 +130,17 @@ def test_concurrent_first_requests_share_one_database(monkeypatch):
 
     assert len(built) == 1
     assert all(instance is built[0] for instance in instances)
+
+
+@pytest.mark.asyncio
+async def test_mcp_cap_leaves_most_threads_for_the_website():
+    """MCP tool DB work runs in the same bounded threadpool as sync routes."""
+    from core.config import settings
+
+    from api.main import configure_threadpool
+
+    configure_threadpool()
+
+    limiter = anyio.to_thread.current_default_thread_limiter()
+    assert settings.mcp_max_concurrent_db_calls >= 1
+    assert settings.mcp_max_concurrent_db_calls <= limiter.total_tokens // 2

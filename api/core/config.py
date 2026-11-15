@@ -53,8 +53,10 @@ class Settings(BaseSettings):
     mcp_rate_limit_per_minute: int = Field(
         default=300, description="Per-client MCP requests allowed per minute"
     )
+    # MCP DB work shares the threadpool bounded by configure_threadpool();
+    # keep it to at most half so website routes keep most of the threads.
     mcp_max_concurrent_db_calls: int = Field(
-        default=4, description="Maximum concurrent database calls from MCP tools"
+        default=2, description="Maximum concurrent database calls from MCP tools"
     )
     mcp_db_slot_timeout_seconds: float = Field(
         default=5.0,

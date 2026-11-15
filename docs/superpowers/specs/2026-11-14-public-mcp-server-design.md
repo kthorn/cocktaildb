@@ -204,11 +204,14 @@ bucket. The owner chose a separate MCP budget plus a database concurrency cap:
   MCP requests neither consume nor are blocked by the website's bucket, and
   vice versa. Every request is still limited — nothing bypasses rate
   limiting.
-- **Concurrency cap on MCP database work**: at most 4 concurrent MCP tool
+- **Concurrency cap on MCP database work**: at most 2 concurrent MCP tool
   DB calls per worker (configurable). The psycopg2 pool allows 10 connections
   per worker and raises when empty rather than waiting
-  (`api/db/db_core.py` `_init_pool`), so this cap keeps MCP from taking
-  connections the website needs. Excess MCP calls wait briefly for a slot;
+  (`api/db/db_core.py` `_init_pool`); `configure_threadpool()` in
+  `api/main.py` therefore bounds the shared threadpool to 5 threads, and MCP
+  DB work runs in that same pool. Capping MCP at 2 keeps at least 3 threads
+  for website routes. *(Originally 4; lowered when the threadpool bound
+  landed on main.)* Excess MCP calls wait briefly for a slot;
   if they can't get one within a short timeout, return a tool error saying
   the service is busy.
 - When the MCP bucket is exhausted, respond 429 with `Retry-After` and a
