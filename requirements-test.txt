@@ -28,5 +28,5 @@ psycopg2-binary>=2.9.0
 
 # Local deployment harness (Python 3.14, matching the API runtime).
 # The full Ansible distribution includes collections used by deploy.yml.
-ansible==13.1.0
+ansible==13.8.0
 PyYAML==6.0.3
