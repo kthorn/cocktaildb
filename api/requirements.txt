@@ -10,7 +10,7 @@ PyJWT==2.15.1
 cryptography==50.0.2
 requests==2.34.2
 numpy>=2.5.4
-pandas>=3.0.6
+pandas>=3.1.1
 scikit-learn>=1.9.1,<1.10
 umap-learn>=0.5.12
 POT>=0.9.7.post1
