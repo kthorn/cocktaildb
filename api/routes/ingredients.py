@@ -11,7 +11,7 @@ from core.exceptions import (
 )
 from db.database import get_database as get_db
 from db.db_bulk_values import bulk_update_ingredient_values
-from db.db_core import Database
+from db.db_core import Database, IngredientBatchInsertError
 from dependencies.auth import (
     UserInfo,
     get_current_user_optional,
@@ -403,34 +403,45 @@ async def bulk_upload_ingredients(
             uploaded_ingredients=[],
         )
 
-    # Step 4: create rows shallowest first, so every same-upload parent is
-    # created before its children.
-    created: dict[int, dict] = {}
-    for idx in sorted(range(len(ingredients)), key=lambda i: (depth[i], i)):
+    # Step 4: create every row in one transaction, shallowest first so each
+    # same-upload parent exists before its children. If any insert fails,
+    # nothing from this upload is created.
+    creation_order = sorted(range(len(ingredients)), key=lambda i: (depth[i], i))
+    position = {idx: pos for pos, idx in enumerate(creation_order)}
+    rows = []
+    for idx in creation_order:
         ingredient = ingredients[idx]
         parent = batch_parent[idx]
-        if parent is not None and parent not in created:
-            fail(
-                idx,
-                "creation_error",
-                f"Not created because parent ingredient '{ingredient.parent_name}' "
-                "failed to create",
-            )
-            continue
-        parent_id = created[parent]["id"] if parent is not None else db_parent_id[idx]
-        try:
-            created[idx] = db.create_ingredient(
-                {
-                    "name": ingredient.name,
-                    "description": ingredient.description,
-                    "parent_id": parent_id,
-                    "allow_substitution": ingredient.allow_substitution,
-                    "created_by": user.user_id,
-                }
-            )
-        except Exception as e:
-            logger.error(f"Error creating ingredient {idx} ('{ingredient.name}'): {e}")
-            fail(idx, "creation_error", f"Failed to create ingredient: {e}")
+        rows.append(
+            {
+                "name": ingredient.name,
+                "description": ingredient.description,
+                "parent_id": db_parent_id[idx],
+                "parent_index": position[parent] if parent is not None else None,
+                "allow_substitution": ingredient.allow_substitution,
+                "created_by": user.user_id,
+            }
+        )
+    try:
+        created_rows = db.create_ingredients_batch(rows)
+    except IngredientBatchInsertError as e:
+        idx = creation_order[e.index]
+        logger.error(
+            f"Error creating ingredient {idx} ('{ingredients[idx].name}'): {e}"
+        )
+        fail(
+            idx,
+            "creation_error",
+            f"Failed to create ingredient: {e.reason}. "
+            "No ingredients from this upload were created.",
+        )
+        return BulkIngredientUploadResponse(
+            uploaded_count=0,
+            failed_count=len(errors),
+            validation_errors=[errors[idx]],
+            uploaded_ingredients=[],
+        )
+    created = dict(zip(creation_order, created_rows, strict=True))
 
     logger.info(
         f"Bulk ingredient upload completed: {len(created)} uploaded, "
