@@ -5,6 +5,8 @@ path management, and relationship validation
 """
 
 import pytest
+from core.exceptions import ValidationException
+from ingredient_hierarchy import MAX_INGREDIENT_DEPTH, path_depth
 
 
 class TestIngredientCRUD:
@@ -527,3 +529,60 @@ class TestIngredientEdgeCases:
         )
 
         assert result["name"] == special_name
+
+
+class TestIngredientDepthLimit:
+    """The hierarchy may not exceed MAX_INGREDIENT_DEPTH levels"""
+
+    @staticmethod
+    def _chain(db, prefix, levels, parent_id=None):
+        """Create a chain of `levels` ingredients and return them top first."""
+        rows = []
+        for level in range(levels):
+            row = db.create_ingredient(
+                {"name": f"{prefix} {level + 1}", "parent_id": parent_id}
+            )
+            rows.append(row)
+            parent_id = row["id"]
+        return rows
+
+    def test_create_at_max_depth_is_allowed(self, db_instance):
+        rows = self._chain(db_instance, "Level", MAX_INGREDIENT_DEPTH)
+
+        assert path_depth(rows[-1]["path"]) == MAX_INGREDIENT_DEPTH
+
+    def test_create_below_max_depth_is_rejected(self, db_instance):
+        rows = self._chain(db_instance, "Level", MAX_INGREDIENT_DEPTH)
+
+        with pytest.raises(ValidationException, match="maximum"):
+            db_instance.create_ingredient(
+                {"name": "Too Deep", "parent_id": rows[-1]["id"]}
+            )
+        assert db_instance.get_ingredient_by_name("Too Deep") is None
+
+    def test_reparent_that_pushes_subtree_too_deep_is_rejected(self, db_instance):
+        deep = self._chain(db_instance, "Deep", MAX_INGREDIENT_DEPTH - 2)
+        subtree = self._chain(db_instance, "Sub", 3)
+
+        with pytest.raises(ValidationException, match="maximum"):
+            db_instance.update_ingredient(
+                subtree[0]["id"], {"parent_id": deep[-1]["id"]}
+            )
+        unchanged = db_instance.get_ingredient(subtree[0]["id"])
+        assert unchanged["parent_id"] is None
+
+    def test_reparent_that_fits_is_allowed(self, db_instance):
+        deep = self._chain(db_instance, "Deep", MAX_INGREDIENT_DEPTH - 3)
+        subtree = self._chain(db_instance, "Sub", 3)
+
+        db_instance.update_ingredient(subtree[0]["id"], {"parent_id": deep[-1]["id"]})
+
+        leaf = db_instance.get_ingredient(subtree[-1]["id"])
+        assert path_depth(leaf["path"]) == MAX_INGREDIENT_DEPTH
+
+    def test_update_without_reparent_is_not_checked(self, db_instance):
+        rows = self._chain(db_instance, "Level", MAX_INGREDIENT_DEPTH)
+
+        db_instance.update_ingredient(rows[-1]["id"], {"description": "still fine"})
+
+        assert db_instance.get_ingredient(rows[-1]["id"])["description"] == "still fine"
