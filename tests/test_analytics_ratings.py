@@ -81,6 +81,6 @@ async def test_cocktail_space_responses_are_not_cacheable(monkeypatch, endpoint)
     monkeypatch.setattr(analytics, "storage_manager", FakeStorage())
     response = Response()
 
-    await endpoint(response=response, db=FakeDatabase([]), user=None)
+    endpoint(response=response, db=FakeDatabase([]), user=None)
 
     assert response.headers["Cache-Control"] == "private, no-store"

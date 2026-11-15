@@ -32,7 +32,7 @@ router = APIRouter(prefix="/ingredients", tags=["ingredients"])
 
 
 @router.get("", response_model=list[IngredientResponse])
-async def get_ingredients(
+def get_ingredients(
     db: Database = Depends(get_db),
     user: UserInfo | None = Depends(get_current_user_optional),
 ):
@@ -43,7 +43,7 @@ async def get_ingredients(
 
 
 @router.get("/search", response_model=list[IngredientResponse])
-async def search_ingredients(
+def search_ingredients(
     q: str,
     db: Database = Depends(get_db),
     user: UserInfo | None = Depends(get_current_user_optional),
@@ -55,7 +55,7 @@ async def search_ingredients(
 
 
 @router.post("", response_model=IngredientResponse, status_code=status.HTTP_201_CREATED)
-async def create_ingredient(
+def create_ingredient(
     ingredient_data: IngredientCreate,
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_editor_access),
@@ -73,7 +73,7 @@ async def create_ingredient(
 
 
 @router.get("/{ingredient_id}", response_model=IngredientResponse)
-async def get_ingredient(
+def get_ingredient(
     ingredient_id: int,
     db: Database = Depends(get_db),
     user: UserInfo | None = Depends(get_current_user_optional),
@@ -89,7 +89,7 @@ async def get_ingredient(
 
 
 @router.put("/{ingredient_id}", response_model=IngredientResponse)
-async def update_ingredient(
+def update_ingredient(
     ingredient_id: int,
     ingredient_data: IngredientUpdate,
     db: Database = Depends(get_db),
@@ -129,7 +129,7 @@ async def update_ingredient(
 
 
 @router.post("/bulk-values")
-async def upload_ingredient_values(
+def upload_ingredient_values(
     csv_text: str = Body(..., media_type="text/csv"),
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_editor_access),
@@ -224,7 +224,7 @@ async def upload_ingredient_values(
 
 
 @router.delete("/{ingredient_id}", response_model=MessageResponse)
-async def delete_ingredient(
+def delete_ingredient(
     ingredient_id: int,
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_editor_access),
@@ -257,7 +257,7 @@ def _path_depth(path: str | None) -> int:
     response_model=BulkIngredientUploadResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def bulk_upload_ingredients(
+def bulk_upload_ingredients(
     bulk_data: BulkIngredientUpload,
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_editor_access),

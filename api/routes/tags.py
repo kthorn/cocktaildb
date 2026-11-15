@@ -19,7 +19,7 @@ router = APIRouter(prefix="/tags", tags=["tags"])
 
 
 @router.get("/public", response_model=list[PublicTagResponse])
-async def get_public_tags(db: Database = Depends(get_db)):
+def get_public_tags(db: Database = Depends(get_db)):
     """Get all public tags"""
     logger.info("Getting public tags")
     tags = db.get_public_tags()
@@ -29,7 +29,7 @@ async def get_public_tags(db: Database = Depends(get_db)):
 @router.post(
     "/public", response_model=PublicTagResponse, status_code=status.HTTP_201_CREATED
 )
-async def create_public_tag(
+def create_public_tag(
     tag_data: TagCreate,
     db: Database = Depends(get_db),
     user: UserInfo = Depends(
@@ -60,7 +60,7 @@ async def create_public_tag(
 
 
 @router.get("/private", response_model=list[PrivateTagResponse])
-async def get_private_tags(
+def get_private_tags(
     db: Database = Depends(get_db), user: UserInfo = Depends(require_authentication)
 ):
     """Get private tags for the authenticated user"""
@@ -72,7 +72,7 @@ async def get_private_tags(
 @router.post(
     "/private", response_model=PrivateTagResponse, status_code=status.HTTP_201_CREATED
 )
-async def create_private_tag(
+def create_private_tag(
     tag_data: TagCreate,
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_authentication),
@@ -100,7 +100,7 @@ async def create_private_tag(
 
 
 @router.delete("/public/{tag_id}", response_model=MessageResponse)
-async def delete_public_tag(
+def delete_public_tag(
     tag_id: int,
     db: Database = Depends(get_db),
     user: UserInfo = Depends(
@@ -119,7 +119,7 @@ async def delete_public_tag(
 
 
 @router.delete("/private/{tag_id}", response_model=MessageResponse)
-async def delete_private_tag(
+def delete_private_tag(
     tag_id: int,
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_authentication),
@@ -145,7 +145,7 @@ recipe_tags_router = APIRouter(prefix="/recipes", tags=["recipe-tags"])
     response_model=MessageResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def add_public_tag_to_recipe(
+def add_public_tag_to_recipe(
     recipe_id: int,
     tag_association: RecipeTagAssociation,
     db: Database = Depends(get_db),
@@ -206,7 +206,7 @@ async def add_public_tag_to_recipe(
 @recipe_tags_router.delete(
     "/{recipe_id}/public_tags/{tag_id}", response_model=MessageResponse
 )
-async def remove_public_tag_from_recipe(
+def remove_public_tag_from_recipe(
     recipe_id: int,
     tag_id: int,
     db: Database = Depends(get_db),
@@ -229,7 +229,7 @@ async def remove_public_tag_from_recipe(
     response_model=MessageResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def add_private_tag_to_recipe(
+def add_private_tag_to_recipe(
     recipe_id: int,
     tag_association: RecipeTagAssociation,
     db: Database = Depends(get_db),
@@ -263,7 +263,7 @@ async def add_private_tag_to_recipe(
 @recipe_tags_router.delete(
     "/{recipe_id}/private_tags/{tag_id}", response_model=MessageResponse
 )
-async def remove_private_tag_from_recipe(
+def remove_private_tag_from_recipe(
     recipe_id: int,
     tag_id: int,
     db: Database = Depends(get_db),

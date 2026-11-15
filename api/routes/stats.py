@@ -20,7 +20,7 @@ class StatsResponse(BaseModel):
 
 
 @router.get("", response_model=StatsResponse)
-async def get_stats(db: Database = Depends(get_db)) -> StatsResponse:
+def get_stats(db: Database = Depends(get_db)) -> StatsResponse:
     """Get database statistics including total counts of recipes and ingredients"""
     try:
         recipes_count = db.get_recipes_count()

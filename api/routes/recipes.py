@@ -59,7 +59,7 @@ def check_duplicate_ingredients(ingredients: list) -> list[int]:
 
 
 @router.get("/search", response_model=PaginatedSearchResponse)
-async def search_recipes(
+def search_recipes(
     q: str | None = Query(None, description="Search query"),
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     limit: int = Query(20, ge=1, le=1000, description="Number of items per page"),
@@ -214,7 +214,7 @@ async def search_recipes(
 
 
 @router.get("/search/authenticated", response_model=PaginatedSearchResponse)
-async def search_recipes_authenticated(
+def search_recipes_authenticated(
     q: str | None = Query(None, description="Search query"),
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     limit: int = Query(20, ge=1, le=1000, description="Number of items per page"),
@@ -258,7 +258,7 @@ async def search_recipes_authenticated(
 ):
     """Search recipes with authentication (required) - includes user ratings and optional inventory filtering"""
     # Reuse the existing search_recipes function
-    return await search_recipes(
+    return search_recipes(
         q=q,
         page=page,
         limit=limit,
@@ -280,7 +280,7 @@ async def search_recipes_authenticated(
 
 
 @router.post("", response_model=RecipeResponse, status_code=status.HTTP_201_CREATED)
-async def create_recipe(
+def create_recipe(
     recipe_data: RecipeCreate,
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_editor_access),
@@ -317,7 +317,7 @@ async def create_recipe(
 
 
 @router.get("/{recipe_id}", response_model=RecipeResponse)
-async def get_recipe(
+def get_recipe(
     recipe_id: int,
     response: Response,
     db: Database = Depends(get_db),
@@ -342,7 +342,7 @@ async def get_recipe(
 
 
 @router.put("/{recipe_id}", response_model=RecipeResponse)
-async def update_recipe(
+def update_recipe(
     recipe_id: int,
     recipe_data: RecipeUpdate,
     db: Database = Depends(get_db),
@@ -367,7 +367,7 @@ async def update_recipe(
 
 
 @router.delete("/{recipe_id}", response_model=MessageResponse)
-async def delete_recipe(
+def delete_recipe(
     recipe_id: int,
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_editor_access),
@@ -388,7 +388,7 @@ async def delete_recipe(
 @router.post(
     "/bulk", response_model=BulkUploadResponse, status_code=status.HTTP_201_CREATED
 )
-async def bulk_upload_recipes(
+def bulk_upload_recipes(
     bulk_data: BulkRecipeUpload,
     db: Database = Depends(get_db),
     user: UserInfo = Depends(require_editor_access),

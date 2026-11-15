@@ -104,7 +104,7 @@ def _build_ingredient_json_ld(ingredient: dict, base_url: str) -> dict:
 
 
 @router.get("/recipe/by-name", response_class=HTMLResponse)
-async def recipe_by_name(
+def recipe_by_name(
     request: Request,
     name: str = Query(..., description="Recipe name to look up"),
     db: Database = Depends(get_database),
@@ -124,7 +124,7 @@ async def recipe_by_name(
 
 
 @router.get("/recipe/{recipe_id:int}", response_class=HTMLResponse)
-async def recipe_page(
+def recipe_page(
     request: Request,
     recipe_id: int,
     db: Database = Depends(get_database),
@@ -163,7 +163,7 @@ async def recipe_page(
 
 
 @router.get("/ingredient/{ingredient_id:int}", response_class=HTMLResponse)
-async def ingredient_page(
+def ingredient_page(
     request: Request,
     ingredient_id: int,
     db: Database = Depends(get_database),
@@ -208,7 +208,7 @@ async def ingredient_page(
 
 
 @router.get("/sitemap.xml")
-async def sitemap(db: Database = Depends(get_database)):
+def sitemap(db: Database = Depends(get_database)):
     """Dynamic sitemap generated from database content."""
     base_url = settings.base_url
 

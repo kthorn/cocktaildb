@@ -30,6 +30,10 @@ logger.setLevel(logging.DEBUG)
 class Database(GroupInventoryMixin):
     # Class-level connection pool (shared across instances)
     _pool: pool.ThreadedConnectionPool | None = None
+    POOL_MAX_CONNECTIONS = 10
+    # Some writes check out a second connection (execute_query, get_recipe)
+    # while holding their transaction's connection.
+    MAX_CONNECTIONS_PER_REQUEST = 2
 
     def __init__(self):
         """Initialize the database connection to PostgreSQL"""
@@ -62,7 +66,7 @@ class Database(GroupInventoryMixin):
         if Database._pool is None:
             logger.info("Creating new PostgreSQL connection pool")
             Database._pool = pool.ThreadedConnectionPool(
-                minconn=1, maxconn=10, **self.conn_params
+                minconn=1, maxconn=self.POOL_MAX_CONNECTIONS, **self.conn_params
             )
 
     def _test_connection(self):

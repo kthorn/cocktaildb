@@ -11,7 +11,7 @@ from models.responses import RatingResponse, RatingSummaryResponse
 logger = logging.getLogger(__name__)
 
 
-async def get_recipe_ratings_handler(
+def get_recipe_ratings_handler(
     recipe_id: int, db: Database, user: UserInfo | None = None
 ) -> RatingSummaryResponse:
     """Get ratings for a specific recipe"""
@@ -39,7 +39,7 @@ async def get_recipe_ratings_handler(
     )
 
 
-async def create_or_update_rating_handler(
+def create_or_update_rating_handler(
     recipe_id: int, rating_data: RatingCreate, db: Database, user: UserInfo
 ) -> RatingResponse:
     """Create or update a rating for a recipe (requires authentication)"""

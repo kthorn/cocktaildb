@@ -17,7 +17,7 @@ router = APIRouter(prefix="/units", tags=["units"])
 
 
 @router.get("", response_model=list[UnitResponse])
-async def get_units(
+def get_units(
     db: Database = Depends(get_db),
     user: UserInfo | None = Depends(get_current_user_optional),
 ):

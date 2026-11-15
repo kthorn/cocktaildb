@@ -36,7 +36,7 @@ async def test_authenticated_recipe_view_forwards_identity_and_disables_caching(
     db = FakeRecipeDatabase(_recipe())
     response = Response()
 
-    result = await recipes.get_recipe(
+    result = recipes.get_recipe(
         recipe_id=7,
         response=response,
         db=db,
@@ -53,7 +53,7 @@ async def test_anonymous_recipe_view_stays_public_and_cacheable():
     db = FakeRecipeDatabase(_recipe())
     response = Response()
 
-    result = await recipes.get_recipe(recipe_id=7, response=response, db=db, user=None)
+    result = recipes.get_recipe(recipe_id=7, response=response, db=db, user=None)
 
     assert db.calls == [(7, None)]
     assert result.id == 7

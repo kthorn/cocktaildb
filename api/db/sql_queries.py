@@ -38,6 +38,9 @@ ORDER BY recipe_id, sort_volume DESC, recipe_ingredient_id
 #   - i_user.id, i_user.path, i_user.allow_substitution (user's ingredient)
 #   - i_recipe.id, i_recipe.path, i_recipe.parent_id, i_recipe.allow_substitution (recipe's ingredient)
 # Uses STARTS_WITH() instead of LIKE with % wildcard to avoid psycopg2 parameter format conflicts
+# An ingredient's ancestors-or-self are exactly the ids in its path ('/1/10/388/'),
+# so ancestor lookups go through the primary key instead of scanning ingredients;
+# STARTS_WITH stays as the defining condition.
 INGREDIENT_SUBSTITUTION_MATCH = """
     -- Direct match
     i_user.id = i_recipe.id
@@ -49,7 +52,8 @@ INGREDIENT_SUBSTITUTION_MATCH = """
         (STARTS_WITH(i_recipe.path, i_user.path)
          AND NOT EXISTS (
              SELECT 1 FROM ingredients blocking
-             WHERE STARTS_WITH(i_recipe.path, blocking.path)  -- blocking is ancestor of recipe ingredient
+             WHERE blocking.id = ANY(string_to_array(btrim(i_recipe.path, '/'), '/')::integer[])
+             AND STARTS_WITH(i_recipe.path, blocking.path)    -- blocking is ancestor of recipe ingredient
              AND STARTS_WITH(blocking.path, i_user.path)      -- blocking is descendant of user ingredient
              AND blocking.id != i_user.id                     -- not the user ingredient itself
              AND blocking.allow_substitution = FALSE          -- blocks substitution
@@ -66,14 +70,16 @@ INGREDIENT_SUBSTITUTION_MATCH = """
         -- Recursive: user has common ancestor with recipe ingredient
         EXISTS (
             SELECT 1 FROM ingredients anc
-            WHERE STARTS_WITH(i_user.path, anc.path)
+            WHERE anc.id = ANY(string_to_array(btrim(i_user.path, '/'), '/')::integer[])
+            AND STARTS_WITH(i_user.path, anc.path)
             AND STARTS_WITH(i_recipe.path, anc.path)
             AND anc.allow_substitution = TRUE
             AND LENGTH(anc.path) - LENGTH(REPLACE(anc.path, '/', '')) <= 6
             -- Ensure no blocking parents between common ancestor and recipe ingredient
             AND NOT EXISTS (
                 SELECT 1 FROM ingredients blocking
-                WHERE STARTS_WITH(i_recipe.path, blocking.path)
+                WHERE blocking.id = ANY(string_to_array(btrim(i_recipe.path, '/'), '/')::integer[])
+                AND STARTS_WITH(i_recipe.path, blocking.path)
                 AND STARTS_WITH(blocking.path, anc.path)
                 AND blocking.id != anc.id
                 AND blocking.allow_substitution = FALSE
@@ -90,37 +96,38 @@ MINOR_INGREDIENT_MAX_FRACTION = 0.02
 def build_inventory_filter_sql(ignore_minor: bool = False) -> str:
     """Clause keeping recipes whose ingredients the user's group can cover.
 
+    Whether a group ingredient satisfies a recipe ingredient depends only on the
+    pair of ingredients, so the covered ingredients are found once per query
+    (an uncorrelated subquery) rather than re-matched for every recipe row.
+
     Leaves the {substitution_match} placeholder for the caller's format().
     """
     minor_skip = ""
     if ignore_minor:
         minor_skip = f"""
-                AND NOT COALESCE(
-                    (
-                        SELECT v_missing.volume_ml
-                        FROM recipe_ingredient_volumes v_missing
-                        WHERE v_missing.recipe_ingredient_id = ri_missing.id
-                    ) <= {MINOR_INGREDIENT_MAX_FRACTION} * (
-                        SELECT SUM(v_total.volume_ml)
-                        FROM recipe_ingredient_volumes v_total
-                        WHERE v_total.recipe_id = r_inv.id
-                    ),
-                    FALSE
-                )"""
+            AND NOT COALESCE(
+                (
+                    SELECT v_missing.volume_ml
+                    FROM recipe_ingredient_volumes v_missing
+                    WHERE v_missing.recipe_ingredient_id = ri_missing.id
+                ) <= {MINOR_INGREDIENT_MAX_FRACTION} * (
+                    SELECT SUM(v_total.volume_ml)
+                    FROM recipe_ingredient_volumes v_total
+                    WHERE v_total.recipe_id = r.id
+                ),
+                FALSE
+            )"""
     return (
-        """ AND r.id IN (
-            SELECT r_inv.id
-            FROM recipes r_inv
-            WHERE r_inv.id = r.id
-            AND NOT EXISTS (
-                SELECT 1 FROM recipe_ingredients ri_missing
-                LEFT JOIN ingredients i_recipe ON ri_missing.ingredient_id = i_recipe.id
-                WHERE ri_missing.recipe_id = r_inv.id"""
+        """ AND NOT EXISTS (
+            SELECT 1 FROM recipe_ingredients ri_missing
+            WHERE ri_missing.recipe_id = r.id"""
         + minor_skip
         + """
-                AND NOT EXISTS (
+            AND ri_missing.ingredient_id NOT IN (
+                SELECT i_recipe.id FROM ingredients i_recipe
+                WHERE EXISTS (
                     SELECT 1 FROM group_ingredients ui_check
-                    LEFT JOIN ingredients i_user ON ui_check.ingredient_id = i_user.id
+                    JOIN ingredients i_user ON ui_check.ingredient_id = i_user.id
                     WHERE ui_check.group_id = %(group_id)s
                     AND (
                         {substitution_match}
@@ -214,11 +221,7 @@ def build_search_recipes_paginated_sql(
         LEFT JOIN
             tags t ON rt.tag_id = t.id
         LEFT JOIN
-            ratings ur ON r.id = ur.recipe_id AND ur.cognito_user_id = %(cognito_user_id)s
-        LEFT JOIN
-            recipe_ingredients ri ON r.id = ri.recipe_id
-        LEFT JOIN
-            ingredients i ON ri.ingredient_id = i.id"""
+            ratings ur ON r.id = ur.recipe_id AND ur.cognito_user_id = %(cognito_user_id)s"""
     if abv_filter:
         base_sql += ABV_FILTER_JOIN
     base_sql += f"""
@@ -353,11 +356,7 @@ def build_search_recipes_keyset_sql(
         LEFT JOIN
             tags t ON rt.tag_id = t.id
         LEFT JOIN
-            ratings ur ON r.id = ur.recipe_id AND ur.cognito_user_id = %(cognito_user_id)s
-        LEFT JOIN
-            recipe_ingredients ri ON r.id = ri.recipe_id
-        LEFT JOIN
-            ingredients i ON ri.ingredient_id = i.id"""
+            ratings ur ON r.id = ur.recipe_id AND ur.cognito_user_id = %(cognito_user_id)s"""
     if abv_filter:
         base_sql += ABV_FILTER_JOIN
     base_sql += f"""
@@ -435,98 +434,46 @@ def build_search_recipes_keyset_sql(
 # This query finds ingredients the user doesn't have that would unlock the most "almost makeable" recipes
 # (recipes where user has all but one ingredient), respecting allow_substitution rules.
 def get_ingredient_recommendations_sql() -> str:
-    """Build SQL query for ingredient recommendations with substitution logic"""
+    """Build SQL query for ingredient recommendations with substitution logic.
 
-    # Need to adapt variable names for the CTE context:
-    # In recipe search: i_user and i_recipe
-    # In recommendations CTE: ui (from user_inventory) and rr (from recipe_requirements)
-    # We'll create a modified version of the substitution match for this context
-    # IMPORTANT: Replace more specific patterns FIRST to avoid partial matches
-
-    substitution_match_adapted = (
-        INGREDIENT_SUBSTITUTION_MATCH.replace(
-            "i_user.allow_substitution", "ui.user_allow_substitution"
-        )
-        .replace("i_user.parent_id", "ui.parent_id")
-        .replace("i_user.path", "ui.path")
-        .replace("i_user.id", "ui.ingredient_id")
-        .replace("i_recipe.allow_substitution", "rr.required_allow_substitution")
-        .replace("i_recipe.parent_id", "rr.required_parent_id")
-        .replace("i_recipe.path", "rr.required_ingredient_path")
-        .replace("i_recipe.id", "rr.required_ingredient_id")
-    )
-
-    query = f"""
+    Whether the group covers a recipe ingredient depends only on the ingredient,
+    so each ingredient is matched against the inventory once, not once per
+    recipe that uses it.
+    """
+    return f"""
     WITH
-    -- Get user's ingredient IDs and their hierarchy info
-    user_inventory AS (
-        SELECT
-            ui.ingredient_id,
-            i.path,
-            i.parent_id,
-            COALESCE(i.allow_substitution, FALSE) as user_allow_substitution
-        FROM group_ingredients ui
-        JOIN ingredients i ON ui.ingredient_id = i.id
-        WHERE ui.group_id = %(group_id)s
+    -- Ingredients the group's inventory covers, directly or by substitution.
+    -- MATERIALIZED: inlined, the match would rerun for every recipe row.
+    satisfied_ingredients AS MATERIALIZED (
+        SELECT i_recipe.id
+        FROM ingredients i_recipe
+        WHERE EXISTS (
+            SELECT 1 FROM group_ingredients ui_check
+            JOIN ingredients i_user ON ui_check.ingredient_id = i_user.id
+            WHERE ui_check.group_id = %(group_id)s
+            AND ({INGREDIENT_SUBSTITUTION_MATCH})
+        )
     ),
-    -- For each recipe, find all required ingredients
-    recipe_requirements AS (
-        SELECT
-            ri.recipe_id,
-            ri.ingredient_id as required_ingredient_id,
-            i.name as required_ingredient_name,
-            i.path as required_ingredient_path,
-            i.parent_id as required_parent_id,
-            COALESCE(i.allow_substitution, FALSE) as required_allow_substitution
-        FROM recipe_ingredients ri
-        JOIN ingredients i ON ri.ingredient_id = i.id
-    ),
-    -- Check each recipe requirement against user inventory
-    requirement_satisfaction AS (
-        SELECT
-            rr.recipe_id,
-            rr.required_ingredient_id,
-            rr.required_ingredient_name,
-            CASE
-                WHEN EXISTS (
-                    SELECT 1 FROM user_inventory ui
-                    WHERE
-                        {substitution_match_adapted}
-                ) THEN 1
-                ELSE 0
-            END as is_satisfied
-        FROM recipe_requirements rr
-    ),
-    -- Find recipes where user has all but exactly 1 ingredient
+    -- Recipes where exactly one required row is not covered, and that row
     almost_makeable_recipes AS (
         SELECT
-            recipe_id,
-            COUNT(*) as total_requirements,
-            SUM(is_satisfied) as satisfied_count,
-            COUNT(*) - SUM(is_satisfied) as missing_count
-        FROM requirement_satisfaction
-        GROUP BY recipe_id
-        HAVING COUNT(*) - SUM(is_satisfied) = 1
-    ),
-    -- Find the missing ingredient for each almost-makeable recipe
-    missing_ingredients AS (
-        SELECT
-            rs.recipe_id,
-            rs.required_ingredient_id as missing_ingredient_id,
-            rs.required_ingredient_name as missing_ingredient_name
-        FROM requirement_satisfaction rs
-        JOIN almost_makeable_recipes amr ON rs.recipe_id = amr.recipe_id
-        WHERE rs.is_satisfied = 0
+            ri.recipe_id,
+            MIN(ri.ingredient_id) FILTER (WHERE s.id IS NULL) AS missing_ingredient_id
+        FROM recipe_ingredients ri
+        JOIN ingredients i ON ri.ingredient_id = i.id
+        LEFT JOIN satisfied_ingredients s ON s.id = ri.ingredient_id
+        GROUP BY ri.recipe_id
+        HAVING COUNT(*) FILTER (WHERE s.id IS NULL) = 1
     ),
     -- Aggregate: count recipes unlocked by each missing ingredient
     ingredient_impact AS (
         SELECT
-            mi.missing_ingredient_id,
+            amr.missing_ingredient_id,
             COUNT(*) as recipes_unlocked,
             STRING_AGG(r.name, '|||') as recipe_names
-        FROM missing_ingredients mi
-        JOIN recipes r ON mi.recipe_id = r.id
-        GROUP BY mi.missing_ingredient_id
+        FROM almost_makeable_recipes amr
+        JOIN recipes r ON amr.recipe_id = r.id
+        GROUP BY amr.missing_ingredient_id
         ORDER BY recipes_unlocked DESC
         LIMIT %(limit)s
     )
@@ -544,5 +491,3 @@ def get_ingredient_recommendations_sql() -> str:
     JOIN ingredients i ON ii.missing_ingredient_id = i.id
     ORDER BY ii.recipes_unlocked DESC
     """
-
-    return query
