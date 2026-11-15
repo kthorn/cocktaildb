@@ -32,6 +32,15 @@ logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 
+class IngredientBatchInsertError(Exception):
+    """One row of ``Database.create_ingredients_batch`` failed to insert."""
+
+    def __init__(self, index: int, cause: Exception):
+        self.index = index
+        self.reason = str(cause).splitlines()[0] if str(cause) else type(cause).__name__
+        super().__init__(f"Row {index} failed to insert: {self.reason}")
+
+
 class Database(GroupInventoryMixin):
     # Class-level connection pool (shared across instances)
     _pool: pool.ThreadedConnectionPool | None = None
@@ -185,45 +194,8 @@ class Database(GroupInventoryMixin):
             conn = None
             try:
                 conn = self._get_connection()
-                cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    INSERT INTO ingredients (
-                        name, description, parent_id, allow_substitution, created_by,
-                        percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url
-                    )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING id
-                    """,
-                    (
-                        data.get("name"),
-                        data.get("description"),
-                        data.get("parent_id"),
-                        data.get("allow_substitution", False),
-                        data.get("created_by"),
-                        data.get("percent_abv"),
-                        data.get("sugar_g_per_l"),
-                        data.get("titratable_acidity_g_per_l"),
-                        data.get("url"),
-                    ),
-                )
-                new_row = cursor.fetchone()
-                if not new_row or new_row[0] is None:
-                    raise RuntimeError("Failed to get ingredient ID after insertion")
-                new_id = new_row[0]
-
-                # Generate the path
-                if parent_path:
-                    path = f"{parent_path}{new_id}/"
-                else:
-                    path = f"/{new_id}/"
-
-                # Update the path
-                cursor.execute(
-                    "UPDATE ingredients SET path = %s WHERE id = %s",
-                    (path, new_id),
-                )
-
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
+                new_id, _ = self._insert_ingredient_row(cursor, data, parent_path)
                 conn.commit()
 
                 # Fetch the created ingredient
@@ -260,6 +232,106 @@ class Database(GroupInventoryMixin):
         except Exception as e:
             logger.error(f"Error creating ingredient: {str(e)}")
             raise
+
+    @staticmethod
+    def _insert_ingredient_row(
+        cursor, data: dict[str, Any], parent_path: str | None
+    ) -> tuple[int, str]:
+        """Insert one ingredient and set its path. Returns (id, path).
+
+        Runs on the caller's cursor and does not commit. ``cursor`` must be a
+        RealDictCursor.
+        """
+        cursor.execute(
+            """
+            INSERT INTO ingredients (
+                name, description, parent_id, allow_substitution, created_by,
+                percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                data.get("name"),
+                data.get("description"),
+                data.get("parent_id"),
+                data.get("allow_substitution", False),
+                data.get("created_by"),
+                data.get("percent_abv"),
+                data.get("sugar_g_per_l"),
+                data.get("titratable_acidity_g_per_l"),
+                data.get("url"),
+            ),
+        )
+        new_row = cursor.fetchone()
+        if not new_row or new_row["id"] is None:
+            raise RuntimeError("Failed to get ingredient ID after insertion")
+        new_id = new_row["id"]
+        path = f"{parent_path or '/'}{new_id}/"
+        cursor.execute(
+            "UPDATE ingredients SET path = %s WHERE id = %s",
+            (path, new_id),
+        )
+        return new_id, path
+
+    def create_ingredients_batch(
+        self, rows: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Create several ingredients in one transaction: all or none.
+
+        Each row takes the same fields as ``create_ingredient``. Instead of
+        ``parent_id`` a row may give ``parent_index``, the position of an
+        earlier row in ``rows``. Rows are inserted in list order, so a parent
+        must come before its children.
+
+        Returns the created ingredients in input order. If a row fails, raises
+        IngredientBatchInsertError naming it, and nothing is committed.
+        """
+        conn = self._get_connection()
+        try:
+            with conn:  # commits on success, rolls back on any exception
+                with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                    ids: list[int] = []
+                    paths: list[str] = []
+                    for index, row in enumerate(rows):
+                        try:
+                            parent_index = row.get("parent_index")
+                            if parent_index is not None:
+                                parent_id = ids[parent_index]
+                                parent_path: str | None = paths[parent_index]
+                            else:
+                                parent_id = row.get("parent_id")
+                                parent_path = None
+                                if parent_id is not None:
+                                    cursor.execute(
+                                        "SELECT path FROM ingredients WHERE id = %s",
+                                        (parent_id,),
+                                    )
+                                    parent = cursor.fetchone()
+                                    if parent is None:
+                                        raise ValueError(
+                                            f"Parent ingredient with ID {parent_id} does not exist"
+                                        )
+                                    parent_path = parent["path"]
+                            new_depth = path_depth(parent_path) + 1
+                            if new_depth > MAX_INGREDIENT_DEPTH:
+                                raise ValueError(depth_exceeded_message(new_depth))
+                            new_id, path = self._insert_ingredient_row(
+                                cursor, {**row, "parent_id": parent_id}, parent_path
+                            )
+                        except (psycopg2.Error, ValueError) as e:
+                            raise IngredientBatchInsertError(index, e) from e
+                        ids.append(new_id)
+                        paths.append(path)
+
+                    cursor.execute(
+                        "SELECT id, name, description, parent_id, path, allow_substitution, percent_abv, sugar_g_per_l, titratable_acidity_g_per_l, url, created_by FROM ingredients WHERE id = ANY(%s)",
+                        (ids,),
+                    )
+                    by_id = {row["id"]: dict(row) for row in cursor.fetchall()}
+            return [by_id[ingredient_id] for ingredient_id in ids]
+        finally:
+            self._return_connection(conn)
 
     def update_ingredient(
         self, ingredient_id: int, data: dict[str, Any]

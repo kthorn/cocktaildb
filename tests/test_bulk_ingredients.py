@@ -3,10 +3,59 @@ Tests for bulk ingredient upload functionality
 """
 
 import pytest
+from ingredient_hierarchy import MAX_INGREDIENT_DEPTH
+
+from api.db.db_core import IngredientBatchInsertError
 
 
 class TestBulkIngredientUploadDatabaseLayer:
     """Test database layer functionality for bulk ingredient upload"""
+
+    def test_create_ingredients_batch_links_parents_by_index(self, db_instance):
+        spirits = db_instance.create_ingredient({"name": "Batch Spirits"})
+
+        created = db_instance.create_ingredients_batch(
+            [
+                {"name": "Batch Gin", "parent_id": spirits["id"]},
+                {"name": "Batch London Dry", "parent_index": 0},
+                {"name": "Batch Brand", "parent_index": 1},
+            ]
+        )
+
+        gin, london_dry, brand = created
+        assert gin["parent_id"] == spirits["id"]
+        assert gin["path"] == f"{spirits['path']}{gin['id']}/"
+        assert london_dry["parent_id"] == gin["id"]
+        assert brand["path"] == f"{london_dry['path']}{brand['id']}/"
+
+    def test_create_ingredients_batch_is_all_or_nothing(self, db_instance):
+        db_instance.create_ingredient({"name": "Batch Existing"})
+
+        with pytest.raises(IngredientBatchInsertError) as excinfo:
+            db_instance.create_ingredients_batch(
+                [
+                    {"name": "Batch First"},
+                    {"name": "Batch Child", "parent_index": 0},
+                    {"name": "batch existing"},
+                ]
+            )
+
+        assert excinfo.value.index == 2
+        assert db_instance.get_ingredient_by_name("Batch First") is None
+        assert db_instance.get_ingredient_by_name("Batch Child") is None
+
+    def test_create_ingredients_batch_enforces_depth_limit(self, db_instance):
+        rows = [{"name": "Batch Level 1"}] + [
+            {"name": f"Batch Level {level}", "parent_index": level - 2}
+            for level in range(2, MAX_INGREDIENT_DEPTH + 2)
+        ]
+
+        with pytest.raises(IngredientBatchInsertError) as excinfo:
+            db_instance.create_ingredients_batch(rows)
+
+        assert excinfo.value.index == MAX_INGREDIENT_DEPTH
+        assert "maximum" in excinfo.value.reason
+        assert db_instance.get_ingredient_by_name("Batch Level 1") is None
 
     def test_check_ingredient_names_batch(self, db_instance):
         """Test batch checking of ingredient names for duplicates"""

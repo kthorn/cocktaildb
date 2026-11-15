@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from db.db_core import IngredientBatchInsertError
 from ingredient_hierarchy import MAX_INGREDIENT_DEPTH
 from models.requests import BulkIngredientUpload
 from routes.ingredients import bulk_upload_ingredients
@@ -55,16 +56,17 @@ class FakeBulkIngredientDB:
     def execute_query(self, *_args: Any, **_kwargs: Any) -> list[dict[str, Any]]:
         raise AssertionError("bulk upload should not issue per-row queries")
 
-    def create_ingredient(self, data: dict[str, Any]) -> dict[str, Any]:
+    def _insert(self, data: dict[str, Any], staged: dict[int, dict]) -> dict:
         if data["name"] in self.fail_on:
             raise RuntimeError(f"insert failed for {data['name']}")
-        if self._find(data["name"]) is not None:
+        all_rows = {**self.rows, **staged}
+        if any(r["name"].lower() == data["name"].lower() for r in all_rows.values()):
             raise RuntimeError(f"duplicate key value: {data['name']}")
         ingredient_id = self._next_id
         self._next_id += 1
         parent_id = data.get("parent_id")
-        parent_path = self.rows[parent_id]["path"] if parent_id else "/"
-        row = {
+        parent_path = all_rows[parent_id]["path"] if parent_id else "/"
+        return {
             "id": ingredient_id,
             "name": data["name"],
             "description": data.get("description"),
@@ -77,9 +79,24 @@ class FakeBulkIngredientDB:
             "url": None,
             "created_by": data.get("created_by"),
         }
-        self.rows[ingredient_id] = row
-        self.created.append(row)
-        return row
+
+    def create_ingredients_batch(self, rows: list[dict[str, Any]]) -> list[dict]:
+        """All-or-nothing, like the real transaction."""
+        staged: dict[int, dict] = {}
+        result: list[dict] = []
+        for index, data in enumerate(rows):
+            parent_index = data.get("parent_index")
+            if parent_index is not None:
+                data = {**data, "parent_id": result[parent_index]["id"]}
+            try:
+                row = self._insert(data, staged)
+            except RuntimeError as e:
+                raise IngredientBatchInsertError(index, e) from e
+            staged[row["id"]] = row
+            result.append(row)
+        self.rows.update(staged)
+        self.created.extend(result)
+        return result
 
 
 async def _upload(db: FakeBulkIngredientDB, ingredients: list[dict[str, Any]]) -> Any:
@@ -300,22 +317,22 @@ async def test_depth_limit_counts_existing_ancestors():
 
 
 @pytest.mark.asyncio
-async def test_children_of_a_parent_that_fails_to_create_are_skipped():
+async def test_failed_insert_creates_nothing_from_the_upload():
     db = FakeBulkIngredientDB(fail_on={"Cat"})
 
     response = await _upload(
         db,
         [
+            {"name": "Other"},
             {"name": "Brand", "parent_name": "Cat"},
             {"name": "Cat"},
-            {"name": "Other"},
         ],
     )
 
     errors = _errors_by_index(response)
-    assert errors[1][0] == "creation_error"
-    assert errors[0][0] == "creation_error"
-    assert "parent ingredient 'Cat' failed to create" in errors[0][1]
-    assert [row["name"] for row in db.created] == ["Other"]
-    assert response.uploaded_count == 1
-    assert response.failed_count == 2
+    assert list(errors) == [2]
+    assert errors[2][0] == "creation_error"
+    assert "No ingredients from this upload were created" in errors[2][1]
+    assert response.uploaded_count == 0
+    assert response.uploaded_ingredients == []
+    assert db.created == []
