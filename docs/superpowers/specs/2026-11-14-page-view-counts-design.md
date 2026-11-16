@@ -79,3 +79,21 @@ Use pytest unit tests for the parsing and counting function with fixture log
 lines: page vs asset vs API, bot user agents, non-200, query strings, a
 day-boundary filter, and replace-day merging of an existing CSV. No
 database is needed.
+
+## Addendum (2026-11-16): likely-human columns
+
+The first production day counted 717 views from 617 IPs. Most of these came
+from scrapers with ordinary browser user agents. One user agent alone had
+161 IPs, and none of them fetched anything but HTML. Referrers didn't help:
+crawlers following links also send internal referrers.
+
+The CSV gains `human_views,human_visitors`. A view counts as likely human when
+its IP made a successful (200/304) GET for a script or stylesheet on the same
+UTC day: `/assets/*`, `/js/*`, or any `.css`/`.js` file. API calls and failed
+probes don't qualify.
+
+Every page revalidates `/js/config.js` (served `no-cache`), so returning
+visitors with cached hashed assets still qualify. On real logs, 69 of 72 page
+views from IPs that load static files were followed within 10 seconds by
+such a request. The first day re-scored as 66 likely-human views from 48
+visitors. Existing 4-column rows are padded with empty values.

@@ -6,6 +6,10 @@ successful GET requests for HTML pages from non-bot user agents, and counts
 views and distinct client IPs per path for one UTC day. Only counts leave
 this process; IPs and user agents are never written anywhere.
 
+"Likely human" views come from IPs that also loaded a static file (JS or CSS)
+that day. Browsers do this on every page load (/js/config.js is revalidated
+each time), while HTML-only scrapers with browser-like user agents never do.
+
 See docs/superpowers/specs/2026-11-14-page-view-counts-design.md.
 """
 
@@ -25,7 +29,7 @@ from collections.abc import Iterable, Iterator
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-CSV_HEADER = ["date", "path", "views", "visitors"]
+CSV_HEADER = ["date", "path", "views", "visitors", "human_views", "human_visitors"]
 S3_KEY = "traffic/page-views.csv"
 DEFAULT_LOG_DIR = "/var/log/caddy"
 TOTAL = "TOTAL"
@@ -95,6 +99,20 @@ def is_page_view(entry: dict) -> bool:
     return _is_page_path(_path(entry))
 
 
+def _is_static_load(entry: dict) -> bool:
+    """A successful browser fetch of a script or stylesheet."""
+    if _request(entry).get("method") != "GET":
+        return False
+    if entry.get("status") not in PAGE_STATUSES:
+        return False
+    path = _path(entry)
+    return (
+        path.startswith("/assets/")
+        or path.startswith("/js/")
+        or path.endswith((".js", ".css"))
+    )
+
+
 def entry_day(entry: dict) -> date | None:
     try:
         return datetime.fromtimestamp(float(entry["ts"]), tz=timezone.utc).date()
@@ -102,36 +120,49 @@ def entry_day(entry: dict) -> date | None:
         return None
 
 
-def count_day(entries: Iterable[dict], day: date) -> list[tuple[str, int, int]]:
-    """Return [(TOTAL, views, visitors), (path, views, visitors), ...]."""
-    views: dict[str, int] = defaultdict(int)
-    visitors: dict[str, set[str]] = defaultdict(set)
-    all_visitors: set[str] = set()
-    for entry in entries:
-        if entry_day(entry) != day or not is_page_view(entry):
-            continue
-        path = _path(entry)
-        ip = _client_ip(entry)
-        views[path] += 1
-        visitors[path].add(ip)
-        all_visitors.add(ip)
+Row = tuple[str, int, int, int, int]
 
+
+def count_day(entries: Iterable[dict], day: date) -> list[Row]:
+    """Return [(TOTAL, ...), (path, views, visitors, human_views, human_visitors), ...]."""
+    page_views: list[tuple[str, str]] = []
+    static_ips: set[str] = set()
+    for entry in entries:
+        if entry_day(entry) != day:
+            continue
+        if is_page_view(entry):
+            page_views.append((_path(entry), _client_ip(entry)))
+        elif _is_static_load(entry):
+            static_ips.add(_client_ip(entry))
+
+    def tally(views: list[tuple[str, str]]) -> tuple[int, int, int, int]:
+        human = [ip for _, ip in views if ip in static_ips]
+        ips = {ip for _, ip in views}
+        return len(views), len(ips), len(human), len(set(human))
+
+    by_path: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for view in page_views:
+        by_path[view[0]].append(view)
     per_path = sorted(
-        ((path, views[path], len(visitors[path])) for path in views),
+        ((path, *tally(views)) for path, views in by_path.items()),
         key=lambda row: (-row[1], row[0]),
     )
-    return [(TOTAL, sum(views.values()), len(all_visitors))] + per_path
+    return [(TOTAL, *tally(page_views))] + per_path
 
 
-def merge_csv(existing: str, day: date, rows: list[tuple[str, int, int]]) -> str:
-    """Replace `day`'s rows in the CSV text and return the full new CSV."""
+def merge_csv(existing: str, day: date, rows: list[Row]) -> str:
+    """Replace `day`'s rows in the CSV text and return the full new CSV.
+
+    Rows written before a column existed are padded with empty values.
+    """
     day_str = day.isoformat()
+    width = len(CSV_HEADER)
     kept = [
-        row
+        (row + [""] * width)[:width]
         for row in csv.reader(io.StringIO(existing))
-        if row and row != CSV_HEADER and row[0] != day_str
+        if row and row[0] != CSV_HEADER[0] and row[0] != day_str
     ]
-    kept += [[day_str, path, str(v), str(u)] for path, v, u in rows]
+    kept += [[day_str, *map(str, row)] for row in rows]
     # Stable sort keeps each day's row order.
     kept.sort(key=lambda row: row[0])
 
@@ -216,8 +247,11 @@ def main(argv: list[str] | None = None) -> int:
         merged = merge_csv(download_csv(bucket, S3_KEY), args.date, rows)
         upload_csv(bucket, S3_KEY, merged)
 
-    _, views, visitors = rows[0]
-    print(f"{args.date.isoformat()}: {views} views, {visitors} visitors")
+    _, views, visitors, human_views, human_visitors = rows[0]
+    print(
+        f"{args.date.isoformat()}: {views} views, {visitors} visitors"
+        f" (likely human: {human_views} views, {human_visitors} visitors)"
+    )
     return 0
 
 
