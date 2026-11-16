@@ -84,6 +84,10 @@ port 8001 with `FRONTEND_ASSET_MODE=development`; Vite proxies `/recipe/*`,
 `http://localhost:8000`, not directly through port 8001. The runtime `appUrl`
 remains `http://localhost:8000`, and `apiUrl` is the Vite `/api` proxy.
 
+The dev instance is often stopped to save costs, and API requests fail
+while it is down. Check it with `./infrastructure/scripts/ec2-status.sh dev`
+and start it with `./infrastructure/scripts/start-ec2.sh dev`.
+
 No browser automation is installed in this repository. Manual smoke steps are:
 
 1. Open `/`, `/search.html`, and `/analytics.html`; confirm styles and the
