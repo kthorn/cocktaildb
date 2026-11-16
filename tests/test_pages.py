@@ -26,6 +26,12 @@ class TestRecipePage:
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
 
+    async def test_recipe_page_footer_links_to_mcp_docs(self, test_client_with_data):
+        """Crawlers and agents without JS still find the MCP server docs"""
+        client, app = test_client_with_data
+        response = await client.get("/recipe/1")
+        assert "/about.html#ai-assistants" in response.text
+
     async def test_recipe_page_contains_recipe_name(self, test_client_with_data):
         """Recipe page includes the recipe name in an h1"""
         client, app = test_client_with_data
