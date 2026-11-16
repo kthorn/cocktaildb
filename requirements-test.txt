@@ -21,7 +21,7 @@ ruff==0.16.5
 pyright==1.1.408
 
 # PostgreSQL testing with Docker containers
-testcontainers>=4.0.0
+testcontainers>=4.15.0
 
 # PostgreSQL driver (should already be installed via psycopg2)
 psycopg2-binary>=2.9.0
