@@ -2415,15 +2415,73 @@ input[type="radio"]:focus {
 /* Notification system
    ========================================================================== */
 
+/* Fixed to the viewport so messages are visible wherever the page is
+   scrolled. Above the navigation and modals; the empty region lets clicks
+   through. */
+.notification-region {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + var(--space-md));
+    right: var(--mobile-padding);
+    z-index: 2100;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    width: min(24rem, calc(100vw - 2 * var(--mobile-padding)));
+    pointer-events: none;
+}
+
+.notification-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.notification-stack:empty {
+    display: none;
+}
+
 .notification {
-    padding: var(--space-md) var(--space-md);
-    margin-bottom: var(--mobile-padding);
-    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    padding: var(--space-md);
+    border-radius: var(--radius-md);
     color: white;
     font-weight: 500;
-    position: relative;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    pointer-events: auto;
     animation: slideIn 0.3s ease-out;
+}
+
+.notification-message {
+    flex: 1;
+    margin: 0;
+    line-height: var(--line-height-normal);
+    overflow-wrap: anywhere;
+}
+
+.notification-dismiss {
+    flex: none;
+    min-width: 2rem;
+    min-height: 2rem;
+    margin: calc(-1 * var(--space-xs)) calc(-1 * var(--space-xs)) 0 0;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: inherit;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.notification-dismiss:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.notification-dismiss:focus-visible {
+    outline: 2px solid white;
+    outline-offset: 1px;
 }
 
 .notification.success {
@@ -2435,32 +2493,20 @@ input[type="radio"]:focus {
 }
 
 .notification.info {
-    background-color: var(--info-color);
+    /* Darker than --info-color so white text meets WCAG AA contrast. */
+    background-color: #1565c0;
 }
 
-.notification.fade-out {
-    animation: fadeOut 0.5s ease-out forwards;
-    visibility: hidden;
+.notification.is-leaving {
+    animation: fadeOut 0.3s ease-out forwards;
+    pointer-events: none;
 }
 
-/* Toast notifications */
-.toast {
-    position: fixed;
-    top: var(--mobile-padding);
-    right: var(--mobile-padding);
-    padding: var(--space-md);
-    border-radius: var(--radius-md);
-    color: white;
-    z-index: 1000;
-    animation: slideIn 0.3s ease-out;
-}
-
-.toast-success {
-    background-color: var(--success-color);
-}
-
-.toast-error {
-    background-color: var(--danger-color);
+@media (prefers-reduced-motion: reduce) {
+    .notification,
+    .notification.is-leaving {
+        animation: none;
+    }
 }
 
 /* Page-specific components
