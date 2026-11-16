@@ -9,14 +9,12 @@ from core.exception_handlers import (
 )
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
-from main import CORSHeaderMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
 @pytest.mark.asyncio
-async def test_error_responses_with_cors_middleware():
+async def test_error_response_contracts():
     app = FastAPI()
-    app.add_middleware(CORSHeaderMiddleware)
     app.add_exception_handler(StarletteHTTPException, starlette_http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(Exception, general_exception_handler)
@@ -44,7 +42,6 @@ async def test_error_responses_with_cors_middleware():
         ]:
             response = await client.get(path)
             assert response.status_code == status
-            assert response.headers["access-control-allow-origin"] == "*"
             assert response.json()["detail"]
         response = await client.get("/crash")
         assert response.status_code == 500

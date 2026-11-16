@@ -44,12 +44,6 @@ class TestRateLimiting:
             response = await test_client_memory.get("/health")
         assert response.status_code == 200
 
-    async def test_options_request_exempt(self, test_client_memory):
-        """OPTIONS (CORS preflight) should not be rate limited"""
-        for _ in range(65):
-            response = await test_client_memory.options("/stats")
-        assert response.status_code != 429
-
     async def test_different_ips_have_separate_limits(self, test_client_memory):
         """Different X-Real-IP values should have independent rate limits"""
         # Exhaust limit for IP "1.2.3.4"
@@ -84,12 +78,3 @@ class TestRateLimitHeaders:
         assert response.status_code == 429
         assert int(response.headers["Retry-After"]) > 0
         assert response.json()["detail"] == "Rate limit exceeded. Please slow down."
-
-    async def test_429_includes_cors_headers(self, test_client_memory):
-        """429 responses should still include CORS headers"""
-        for _ in range(60):
-            await test_client_memory.get("/stats")
-
-        response = await test_client_memory.get("/stats")
-        assert response.status_code == 429
-        assert response.headers.get("Access-Control-Allow-Origin") == "*"

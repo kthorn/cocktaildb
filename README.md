@@ -67,8 +67,9 @@ npm run preview -- /path/to/config.js
 
 ## Frontend-only local development
 
-Generate a config pointing at the remote development API, then run Vite on its
-strict localhost port:
+Generate a local config, then run Vite on its strict localhost port. The API
+sends no CORS headers, so the browser calls `http://localhost:8000/api` and
+Vite proxies `/api/` to the dev host from the dev inventory:
 
 ```bash
 ./scripts/local-config.sh
@@ -81,15 +82,14 @@ database. For optional server-rendered development, run FastAPI separately on
 port 8001 with `FRONTEND_ASSET_MODE=development`; Vite proxies `/recipe/*`,
 `/ingredient/*`, and `/sitemap.xml` to that process. Browse those pages through
 `http://localhost:8000`, not directly through port 8001. The runtime `appUrl`
-remains `http://localhost:8000`, while `apiUrl` remains the configured remote
-API URL.
+remains `http://localhost:8000`, and `apiUrl` is the Vite `/api` proxy.
 
 No browser automation is installed in this repository. Manual smoke steps are:
 
 1. Open `/`, `/search.html`, and `/analytics.html`; confirm styles and the
    analytics D3 CDN script load once.
 2. Exercise a search and an analytics view; inspect the network panel and verify
-   requests use the configured API URL.
+   requests go to `localhost:8000/api` and succeed through the proxy.
 3. Open `/recipe/<known-id>` and `/ingredient/<known-id>` through Vite or Caddy,
    including a nested URL, and verify hashed scripts/styles return 200.
 4. Open `/login.html`, `/callback.html`, and `/logout.html`; verify the Cognito

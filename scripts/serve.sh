@@ -40,7 +40,7 @@ echo "💡 Tips:"
 echo "  - Press Ctrl+C to stop the server"
 echo "  - Changes to HTML/CSS/JS will be visible with hot reload"
 echo "  - Authentication will use the dev Cognito user pool"
-echo "  - API requests will go to the configured remote dev backend"
+echo "  - API requests are proxied from /api to the dev backend"
 echo "  - Optional SSR proxy targets a local FastAPI server on port 8001"
 echo ""
 

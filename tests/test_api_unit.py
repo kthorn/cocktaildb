@@ -275,20 +275,12 @@ class TestTagAPIEndpoints:
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
-class TestCORSFunctionality:
-    """Test CORS functionality"""
+class TestNoCrossOriginAccess:
+    """The API is same-origin only and sends no CORS headers (issue #138)."""
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Preflight OPTIONS returns 405 (issue #138)",
-    )
-    async def test_cors_preflight_request(self, test_client_memory):
-        """Test CORS preflight request"""
-        headers = {
-            "Origin": "http://localhost:3000",
-            "Access-Control-Request-Method": "POST",
-            "Access-Control-Request-Headers": "Content-Type,Authorization",
-        }
-        response = await test_client_memory.options("/ingredients", headers=headers)
-        assert response.status_code == status.HTTP_200_OK, response.text
-        assert "access-control-allow-origin" in response.headers
+    async def test_responses_have_no_cors_headers(self, test_client_memory):
+        response = await test_client_memory.get(
+            "/ingredients", headers={"Origin": "https://example.com"}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert not any(h.startswith("access-control-") for h in response.headers)

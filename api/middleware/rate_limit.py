@@ -59,8 +59,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             del self._requests[ip]
 
     async def dispatch(self, request: Request, call_next):
-        # Exempt OPTIONS (CORS preflight) and health checks
-        if request.method == "OPTIONS" or request.url.path in EXEMPT_PATHS:
+        # Exempt health checks
+        if request.url.path in EXEMPT_PATHS:
             return await call_next(request)
 
         client_ip = self._get_client_ip(request)

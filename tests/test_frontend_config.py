@@ -326,6 +326,14 @@ def test_vite_config_proxies_optional_ssr_to_explicit_backend_port():
     assert "/ingredient" in vite_config
 
 
+def test_vite_config_proxies_api_to_dev_inventory_domain():
+    vite_config = (ROOT / "vite.config.mjs").read_text(encoding="utf-8")
+
+    assert "'/api/'" in vite_config
+    assert "changeOrigin: true" in vite_config
+    assert "inventory', 'dev.yml'" in vite_config
+
+
 INVENTORY = """
 all:
     hosts:
@@ -356,17 +364,20 @@ def test_inventory_config_matches_deployed_public_config(tmp_path):
     }
 
 
-def test_inventory_config_can_point_a_local_app_at_the_remote_api(tmp_path):
+def test_inventory_config_can_point_a_local_app_at_a_local_api_proxy(tmp_path):
     from scripts.generate_config import public_config_from_inventory
 
     inventory = tmp_path / "dev.yml"
     inventory.write_text(INVENTORY, encoding="utf-8")
 
     config = public_config_from_inventory(
-        inventory, app_url="http://localhost:8000", app_name="Local"
+        inventory,
+        app_url="http://localhost:8000",
+        app_name="Local",
+        api_url="http://localhost:8000/api",
     )
 
-    assert config["apiUrl"] == "https://example.dev/api"
+    assert config["apiUrl"] == "http://localhost:8000/api"
     assert config["appUrl"] == "http://localhost:8000"
     assert config["appName"] == "Local"
 
@@ -397,8 +408,5 @@ def test_local_config_script_writes_dev_config_without_aws(tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
     source = (project / "src/web/js/config.js").read_text(encoding="utf-8")
     config = json.loads(source[len("export default ") :].rstrip(";\n"))
-    domain = yaml.safe_load(
-        (ROOT / "infrastructure/ansible/inventory/dev.yml").read_text()
-    )["all"]["hosts"]["cocktaildb"]["domain_name"]
-    assert config["apiUrl"] == f"https://{domain}/api"
+    assert config["apiUrl"] == "http://localhost:8000/api"
     assert config["appUrl"] == "http://localhost:8000"

@@ -87,8 +87,9 @@ use the coordinated post-write recovery procedure below.
 ./scripts/serve.sh
 ```
 
-Vite listens on strict `http://localhost:8000`; the generated config uses the
-remote development API and local FastAPI/database are optional. For integrated
+Vite listens on strict `http://localhost:8000` and proxies `/api/` to the
+development host (the API sends no CORS headers, so it must be same-origin);
+local FastAPI/database are optional. For integrated
 SSR development, start FastAPI on port 8001 with
 `FRONTEND_ASSET_MODE=development`, then browse recipe, ingredient, and sitemap
 routes through Vite on port 8000. Direct browser access to port 8001 is not a

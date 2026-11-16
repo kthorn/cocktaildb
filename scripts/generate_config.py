@@ -60,12 +60,14 @@ def render_public_config(config: dict) -> str:
     return f"export default {json.dumps(public_config)};\n"
 
 
-def public_config_from_inventory(inventory_path, app_url=None, app_name=None):
+def public_config_from_inventory(
+    inventory_path, app_url=None, app_name=None, api_url=None
+):
     """Build the public config from an Ansible inventory file.
 
     Mirrors ``public_frontend_config`` in infrastructure/ansible/playbooks/
-    deploy.yml. ``app_url``/``app_name`` override the deployed values, e.g. to
-    point a local frontend at the remote API.
+    deploy.yml. ``app_url``/``app_name``/``api_url`` override the deployed
+    values, e.g. for a local frontend that proxies API calls to the remote host.
     """
     import yaml
 
@@ -73,7 +75,7 @@ def public_config_from_inventory(inventory_path, app_url=None, app_name=None):
     host_vars = next(iter(inventory["all"]["hosts"].values()))
     domain = host_vars["domain_name"]
     return {
-        "apiUrl": f"https://{domain}/api",
+        "apiUrl": api_url or f"https://{domain}/api",
         "userPoolId": host_vars["user_pool_id"],
         "clientId": host_vars["app_client_id"],
         "cognitoDomain": host_vars["cognito_domain"],
@@ -89,6 +91,7 @@ def main():
     parser.add_argument("target_env", choices=["dev", "prod"])
     parser.add_argument("--app-url", help="Override appUrl (e.g. a local server)")
     parser.add_argument("--app-name", help="Override appName")
+    parser.add_argument("--api-url", help="Override apiUrl (e.g. a local proxy)")
     parser.add_argument(
         "--output",
         default=str(ROOT / "src" / "web" / "js" / "config.js"),
@@ -101,6 +104,7 @@ def main():
             INVENTORY_DIR / f"{args.target_env}.yml",
             app_url=args.app_url,
             app_name=args.app_name,
+            api_url=args.api_url,
         )
         content = render_public_config(config)
     except (KeyError, OSError, TypeError, ValueError) as error:
