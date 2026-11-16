@@ -64,9 +64,11 @@ def build_mcp_server(
             "names are matched case-insensitively against the database; use "
             "find_ingredients first if you are unsure of the exact name. Names "
             "that match nothing are listed in unresolved_ingredients (an "
-            "unmatched include name yields no recipes). Returns compact "
-            "summaries; call get_recipe with an id for the full recipe. Page "
-            "with offset while has_more is true."
+            "unmatched include name yields no recipes). When query is given, "
+            "recipes whose whole name equals it are returned first in "
+            "exact_matches (for example the classic Negroni rather than its "
+            "variations). Returns compact summaries; call get_recipe with an "
+            "id for the full recipe. Page with offset while has_more is true."
         ),
         annotations=_READ_ONLY,
     )
@@ -121,7 +123,7 @@ def build_mcp_server(
         if min_abv is not None and max_abv is not None and min_abv > max_abv:
             raise ToolError("min_abv cannot be greater than max_abv.")
 
-        def fetch() -> tuple[dict | None, list[str]]:
+        def fetch() -> tuple[dict | None, list[str], list[dict]]:
             db = get_db()
             requested = [(n, True) for n in include_ingredients or []] + [
                 (n, False) for n in exclude_ingredients or []
@@ -145,7 +147,7 @@ def build_mcp_server(
                     specs.append(spec)
 
             if include_missing:
-                return None, unresolved
+                return None, unresolved, []
 
             search_params: dict = {}
             if query:
@@ -169,9 +171,23 @@ def build_mcp_server(
                 user_id=None,
                 return_pagination=True,
             )
-            return result, unresolved
+            exact: list[dict] = []
+            if query and query.strip():
+                exact_ids = db.get_recipe_ids_by_exact_name(query.strip())
+                if exact_ids:
+                    # Exact matches never repeat in the paged list, on any page.
+                    result["recipes"] = [
+                        r for r in result["recipes"] if r["id"] not in exact_ids
+                    ]
+                    if offset == 0:
+                        exact = [
+                            recipe
+                            for recipe_id in exact_ids
+                            if (recipe := db.get_recipe(recipe_id, None)) is not None
+                        ]
+            return result, unresolved, exact
 
-        result, unresolved = await gate.run(fetch)
+        result, unresolved, exact = await gate.run(fetch)
         if result is None:
             return RecipeSearchResult(
                 recipes=[],
@@ -180,6 +196,7 @@ def build_mcp_server(
                 unresolved_ingredients=unresolved,
             )
         return RecipeSearchResult(
+            exact_matches=[to_summary(r, base_url) for r in exact],
             recipes=[to_summary(r, base_url) for r in result["recipes"]],
             has_more=bool(result.get("has_next")),
             offset=offset,
@@ -215,8 +232,9 @@ def build_mcp_server(
             "the same ingredient profile and lower means more similar. It "
             "reflects ingredients only, not taste notes or technique. Each "
             "result lists swaps, read as 'swap from_ingredient for "
-            "to_ingredient', with a weight for how much of the recipe the swap "
-            "accounts for."
+            "to_ingredient', with weight = the fraction of the drink's volume "
+            "moved. Only swaps of at least 5% are listed; an empty swaps list "
+            "means the recipes differ mainly in proportions, not ingredients."
         ),
         annotations=_READ_ONLY,
     )

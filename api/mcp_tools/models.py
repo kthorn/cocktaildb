@@ -42,7 +42,16 @@ class RecipeDetail(BaseModel):
 
 
 class RecipeSearchResult(BaseModel):
-    recipes: list[RecipeSummary] = Field(description="Matching recipes")
+    exact_matches: list[RecipeSummary] = Field(
+        default_factory=list,
+        description=(
+            "Recipes whose whole name equals the query (first page only); "
+            "prefer these when the user names a specific drink"
+        ),
+    )
+    recipes: list[RecipeSummary] = Field(
+        description="Matching recipes, excluding exact_matches"
+    )
     has_more: bool = Field(description="True if more results exist after this page")
     offset: int = Field(description="Offset of the first result")
     unresolved_ingredients: list[str] = Field(
@@ -53,7 +62,9 @@ class RecipeSearchResult(BaseModel):
 class IngredientSwap(BaseModel):
     from_ingredient: str = Field(description="Ingredient in the original recipe")
     to_ingredient: str = Field(description="Ingredient in the similar recipe")
-    weight: float = Field(description="How much of the recipe this swap accounts for")
+    weight: float = Field(
+        description="Fraction of the drink's volume this swap moves (0-1)"
+    )
 
 
 class SimilarRecipe(BaseModel):
@@ -61,7 +72,12 @@ class SimilarRecipe(BaseModel):
     name: str = Field(description="Recipe name")
     url: str = Field(description="Link to the recipe page")
     distance: float = Field(description="Distance from the original; lower is closer")
-    swaps: list[IngredientSwap] = Field(description="Main ingredient differences")
+    swaps: list[IngredientSwap] = Field(
+        description=(
+            "Main ingredient substitutions (at least 5% of the drink's volume). "
+            "Empty means the recipes differ mainly in proportions."
+        )
+    )
 
 
 class SimilarRecipesResult(BaseModel):

@@ -9,6 +9,10 @@ from .models import (
     SimilarRecipesResult,
 )
 
+# Transport-plan mass is the fraction of the drink's volume moved between two
+# ingredients. Below this, a "swap" is a proportion tweak, not a substitution.
+MIN_SWAP_WEIGHT = 0.05
+
 
 def recipe_url(base_url: str, recipe_id: int) -> str:
     return f"{base_url.rstrip('/')}/recipe/{recipe_id}"
@@ -85,6 +89,8 @@ def to_similar(row: dict, base_url: str, limit: int) -> SimilarRecipesResult:
                 for s in sorted(
                     n.get("transport_plan") or [], key=lambda s: s["mass"], reverse=True
                 )
+                if s["mass"] >= MIN_SWAP_WEIGHT
+                and s["from_ingredient_name"] != s["to_ingredient_name"]
             ],
         )
         for n in neighbors[:limit]

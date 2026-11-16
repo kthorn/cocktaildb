@@ -124,6 +124,57 @@ async def test_search_with_unresolved_include_returns_empty_without_querying(
     assert result["unresolved_ingredients"] == ["unobtainium"]
 
 
+def _recipe(recipe_id, name):
+    return {
+        "id": recipe_id,
+        "name": name,
+        "ingredients": [],
+        "tags": [],
+        "abv": None,
+        "avg_rating": None,
+        "rating_count": 0,
+    }
+
+
+@pytest.mark.asyncio
+async def test_search_query_returns_exact_name_match_separately(server, db):
+    db.get_recipe_ids_by_exact_name.return_value = [7]
+    db.get_recipe.return_value = _recipe(7, "Negroni")
+    db.search_recipes_paginated.return_value = {
+        "recipes": [_recipe(3, "Anthony Schmidt's Negroni"), _recipe(7, "Negroni")],
+        "has_next": True,
+    }
+    result = await call(server, "search_recipes", {"query": " negroni "})
+    db.get_recipe_ids_by_exact_name.assert_called_once_with("negroni")
+    db.get_recipe.assert_called_once_with(7, None)
+    assert [r["name"] for r in result["exact_matches"]] == ["Negroni"]
+    assert result["exact_matches"][0]["url"] == "https://mixology.tools/recipe/7"
+    # The exact match is not repeated in the paged results.
+    assert [r["id"] for r in result["recipes"]] == [3]
+    assert result["has_more"] is True
+
+
+@pytest.mark.asyncio
+async def test_exact_matches_only_on_first_page_but_always_excluded(server, db):
+    db.get_recipe_ids_by_exact_name.return_value = [7]
+    db.search_recipes_paginated.return_value = {
+        "recipes": [_recipe(7, "Negroni"), _recipe(9, "Negroni Sbagliato")],
+        "has_next": False,
+    }
+    result = await call(server, "search_recipes", {"query": "Negroni", "offset": 10})
+    db.get_recipe.assert_not_called()
+    assert result["exact_matches"] == []
+    assert [r["id"] for r in result["recipes"]] == [9]
+
+
+@pytest.mark.asyncio
+async def test_search_without_query_skips_exact_lookup(server, db):
+    db.search_recipes_paginated.return_value = {"recipes": [], "has_next": False}
+    result = await call(server, "search_recipes", {"tags": ["classic"]})
+    db.get_recipe_ids_by_exact_name.assert_not_called()
+    assert result["exact_matches"] == []
+
+
 @pytest.mark.asyncio
 async def test_search_sort_rating_maps_to_avg_rating_desc(server, db):
     db.search_recipes_paginated.return_value = {"recipes": [], "has_next": False}

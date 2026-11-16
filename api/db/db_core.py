@@ -1070,6 +1070,30 @@ class Database(GroupInventoryMixin):
                 recipe_bounds, rows_by_recipe.get(recipe["id"], [])
             )
 
+    def get_recipe_ids_by_exact_name(self, name: str) -> list[int]:
+        """Ids of recipes whose whole name equals `name`.
+
+        Case, accents and surrounding whitespace are ignored; LIKE wildcards
+        are not interpreted.
+        """
+        name = name.strip()
+        if not name:
+            return []
+        try:
+            rows = cast(
+                list[dict[str, Any]],
+                self.execute_query(
+                    "SELECT id FROM recipes "
+                    "WHERE lower(unaccent(btrim(name::text))) = lower(unaccent(%s)) "
+                    "ORDER BY id LIMIT 3",
+                    (name,),
+                ),
+            )
+            return [row["id"] for row in rows]
+        except Exception as e:
+            logger.error(f"Error looking up recipe by exact name: {str(e)}")
+            raise
+
     def get_recipe(
         self, recipe_id: int, cognito_user_id: str | None = None
     ) -> dict[str, Any] | None:

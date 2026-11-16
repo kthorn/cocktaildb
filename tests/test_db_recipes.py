@@ -641,3 +641,26 @@ class TestRecipeEdgeCases:
         assert result["name"] == "Piña Colada 🍹"
         assert result["instructions"] == "Mix with piña and add 🥥"
         assert result["description"] == "A tropical drink with piña (pineapple)"
+
+
+class TestRecipeExactNameLookup:
+    """get_recipe_ids_by_exact_name matches whole names only"""
+
+    def test_matches_ignoring_case_accents_and_outer_spaces(self, db_instance):
+        db = db_instance
+        negroni = db.create_recipe({"name": "Negroni"})
+        colada = db.create_recipe({"name": "Piña Colada"})
+        db.create_recipe({"name": "Negroni Sbagliato"})
+
+        assert db.get_recipe_ids_by_exact_name("negroni") == [negroni["id"]]
+        assert db.get_recipe_ids_by_exact_name("  NEGRONI ") == [negroni["id"]]
+        assert db.get_recipe_ids_by_exact_name("pina colada") == [colada["id"]]
+
+    def test_partial_names_and_wildcards_do_not_match(self, db_instance):
+        db = db_instance
+        db.create_recipe({"name": "Negroni"})
+
+        assert db.get_recipe_ids_by_exact_name("Negron") == []
+        assert db.get_recipe_ids_by_exact_name("Negron_") == []
+        assert db.get_recipe_ids_by_exact_name("%") == []
+        assert db.get_recipe_ids_by_exact_name("") == []

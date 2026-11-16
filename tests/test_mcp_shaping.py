@@ -119,3 +119,42 @@ def test_hierarchy_names_from_path():
         "Bourbon",
     ]
     assert hierarchy_names(None, {}) == []
+
+
+def _neighbor(neighbor_id, name, distance, plan):
+    return {
+        "neighbor_recipe_id": neighbor_id,
+        "neighbor_name": name,
+        "distance": distance,
+        "transport_plan": [
+            {"from_ingredient_name": a, "to_ingredient_name": b, "mass": m}
+            for a, b, m in plan
+        ],
+    }
+
+
+def test_similar_drops_small_and_self_swaps():
+    row = {
+        "recipe_id": 1,
+        "recipe_name": "Negroni",
+        "neighbors": [
+            _neighbor(
+                2,
+                "Variant",
+                0.02,
+                [
+                    ("Gin", "Sweet Vermouth", 0.008),
+                    ("Gin", "Gin", 0.3),
+                    ("Campari", "Aperol", 0.05),
+                ],
+            ),
+            _neighbor(3, "Ratio Tweak", 0.03, [("Gin", "Campari", 0.01)]),
+        ],
+    }
+    r = to_similar(row, BASE, limit=5)
+    assert [(s.from_ingredient, s.to_ingredient) for s in r.similar[0].swaps] == [
+        ("Campari", "Aperol")
+    ]
+    # A neighbour whose differences are all small stays listed, with no swaps.
+    assert r.similar[1].name == "Ratio Tweak"
+    assert r.similar[1].swaps == []
