@@ -18,8 +18,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """Sliding-window per-IP rate limiter.
 
     Requests to the MCP path are tracked in their own bucket with their
-    own limit; all other requests share the "api" bucket. OPTIONS requests
-    and health checks are exempt. Rate limiting is per-process — with
+    own limit; all other requests share the "api" bucket. Health checks
+    are exempt. Rate limiting is per-process — with
     multiple uvicorn workers, the effective limit per IP is
     max_requests * num_workers.
     """
@@ -69,8 +69,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             del self._requests[k]
 
     async def dispatch(self, request: Request, call_next):
-        # Exempt OPTIONS (CORS preflight) and health checks
-        if request.method == "OPTIONS" or request.url.path in EXEMPT_PATHS:
+        # Exempt health checks
+        if request.url.path in EXEMPT_PATHS:
             return await call_next(request)
 
         is_mcp = request.url.path.rstrip("/") == self.mcp_path

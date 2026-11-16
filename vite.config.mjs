@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { rename } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,6 +23,19 @@ const explicitEntries = [
 ].map((entry) => [entry, path.join(webRoot, entry)]);
 const outputDirectory = path.join(projectRoot, 'dist', 'web');
 const ssrProxyTarget = 'http://localhost:8001';
+const devInventory = path.join(projectRoot, 'infrastructure', 'ansible', 'inventory', 'dev.yml');
+
+// The API sends no CORS headers, so the local frontend reaches the dev API
+// through this same-origin proxy (scripts/local-config.sh sets apiUrl to
+// http://localhost:8000/api). The target is the dev inventory's domain_name.
+function devApiProxyTarget() {
+    if (!existsSync(devInventory)) {
+        return undefined;
+    }
+    const match = readFileSync(devInventory, 'utf8').match(/^\s*domain_name:\s*['"]?([^'"\s#]+)/m);
+    return match ? `https://${match[1]}` : undefined;
+}
+const apiProxyTarget = devApiProxyTarget();
 
 export default defineConfig({
     server: {
@@ -30,6 +43,9 @@ export default defineConfig({
             '/recipe/': { target: ssrProxyTarget },
             '/ingredient/': { target: ssrProxyTarget },
             '/sitemap.xml': { target: ssrProxyTarget },
+            ...(apiProxyTarget && {
+                '/api/': { target: apiProxyTarget, changeOrigin: true },
+            }),
         },
     },
     plugins: [

@@ -58,7 +58,7 @@ Tools:
 
 To use it, add `https://mixology.tools/api/v1/mcp` as a custom connector in an assistant that supports remote MCP servers (for example Claude: Settings, Connectors, Add custom connector).
 
-The endpoint has a separate per-IP limit of 300 requests/minute. Browser-based MCP clients are not supported (CORS is not configured for it).
+The endpoint has a separate per-IP limit of 300 requests/minute. Browser-based MCP clients are not supported: the API sends no CORS headers.
 
 ## Deployment
 

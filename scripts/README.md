@@ -51,8 +51,10 @@ npm run preview -- /path/to/config.js
 ./scripts/serve.sh
 ```
 
-Vite owns port 8000 with strict-port behavior and the generated config points
-at the remote development API. A local FastAPI process and database are not
+Vite owns port 8000 with strict-port behavior. The generated config sets
+`apiUrl` to `http://localhost:8000/api`, and Vite proxies `/api/` to the
+development host named in the dev inventory, because the API sends no CORS
+headers. A local FastAPI process and database are not
 required. For optional SSR integration, start FastAPI on port 8001 with
 `FRONTEND_ASSET_MODE=development`; Vite proxies recipe, ingredient, and sitemap
 routes to it. Always browse through Vite on port 8000 so root-absolute source

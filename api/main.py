@@ -12,10 +12,9 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 
 import anyio.to_thread
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.middleware.base import BaseHTTPMiddleware
 
 # Add current directory to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -59,22 +58,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 # Stateless mode logs "Terminating session: None" at INFO on every request
 logging.getLogger("mcp.server.streamable_http").setLevel(logging.WARNING)
-
-
-class CORSHeaderMiddleware(BaseHTTPMiddleware):
-    """Add CORS headers to all responses"""
-
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-
-        # Add CORS headers to all responses
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = (
-            "Content-Type,Authorization,Accept"
-        )
-
-        return response
 
 
 # One gate for the process so the MCP DB-concurrency limit is shared across restarts
@@ -126,12 +109,11 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# Rate limiting first, then CORS wraps outermost (last registered = outermost).
-# This ensures 429 responses still get CORS headers.
+# The frontend, API, and MCP server share one origin behind Caddy, so the API
+# sends no CORS headers; cross-origin browser access is unsupported (#138).
 app.add_middleware(
     RateLimitMiddleware, mcp_max_requests=settings.mcp_rate_limit_per_minute
 )
-app.add_middleware(CORSHeaderMiddleware)
 
 # Add exception handlers
 app.add_exception_handler(CocktailDBException, cocktail_db_exception_handler)

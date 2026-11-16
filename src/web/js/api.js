@@ -52,8 +52,7 @@ export class CocktailAPI {
     getFetchOptions(method = 'GET', body = null, requiresAuth = false) {
         const options = {
             method,
-            mode: 'cors',
-            credentials: 'omit', // Must be 'omit' for a server with wildcard CORS origin
+            credentials: 'omit', // Auth is a bearer token, never cookies
             headers: {},
         };
 
