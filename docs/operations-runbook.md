@@ -292,9 +292,12 @@ sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status
 
 `cocktaildb-page-views.timer` runs at about 00:30 UTC each day. It reads
 yesterday's Caddy access logs and merges page views and distinct-IP visitors
-into `s3://<backup bucket>/traffic/page-views.csv` (`date,path,views,visitors`,
-with a `TOTAL` row per day). It keeps no IPs. Bots, assets and API calls are
-excluded. On dev `BACKUP_BUCKET` is empty, so the job does nothing.
+into `s3://<backup bucket>/traffic/page-views.csv`
+(`date,path,views,visitors,human_views,human_visitors`, with a `TOTAL` row per
+day). It keeps no IPs. Bots, assets and API calls are excluded. Many scrapers
+use browser user agents, so trust `human_*` over the raw counts. Those columns
+count only views from IPs that also loaded JS or CSS that day, which browsers
+do on every page load. Rows from before 2026-11-16 have them empty. On dev `BACKUP_BUCKET` is empty, so the job does nothing.
 Unlike the backups, `traffic/` is not publicly readable and does not expire
 (`BackupBucketPolicy` and `ExpireOldBackups` in `template.yaml`).
 

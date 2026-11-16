@@ -117,9 +117,9 @@ def test_count_day_filters_day_and_counts(pvc):
         _entry(uri="/assets/app.js", ip="10.0.0.5"),
     ]
     assert pvc.count_day(entries, DAY) == [
-        ("TOTAL", 4, 3),
-        ("/recipe/1", 3, 2),
-        ("/", 1, 1),
+        ("TOTAL", 4, 3, 0, 0),
+        ("/recipe/1", 3, 2, 0, 0),
+        ("/", 1, 1, 0, 0),
     ]
 
 
@@ -129,19 +129,50 @@ def test_count_day_strips_query_strings(pvc):
         _entry(uri="/search.html?q=b", ip="10.0.0.2"),
     ]
     assert pvc.count_day(entries, DAY) == [
-        ("TOTAL", 2, 2),
-        ("/search.html", 2, 2),
+        ("TOTAL", 2, 2, 0, 0),
+        ("/search.html", 2, 2, 0, 0),
     ]
 
 
 def test_count_day_empty_still_has_total(pvc):
-    assert pvc.count_day([], DAY) == [("TOTAL", 0, 0)]
+    assert pvc.count_day([], DAY) == [("TOTAL", 0, 0, 0, 0)]
+
+
+def test_count_day_human_views_need_a_same_day_static_load(pvc):
+    entries = [
+        # browser: page plus a revalidated config.js -> human
+        _entry(uri="/recipe/1", ip="10.0.0.1"),
+        _entry(uri="/recipe/2", ip="10.0.0.1"),
+        _entry(uri="/js/config.js", status=304, ip="10.0.0.1"),
+        # HTML-only scraper -> not human
+        _entry(uri="/recipe/1", ip="10.0.0.2"),
+        # API calls and failed probes are not browser static loads
+        _entry(uri="/recipe/1", ip="10.0.0.3"),
+        _entry(uri="/api/v1/recipes", ip="10.0.0.3"),
+        _entry(uri="/recipe/1", ip="10.0.0.4"),
+        _entry(uri="/assets/missing.js", status=404, ip="10.0.0.4"),
+        # static load on a different day does not count
+        _entry(uri="/recipe/1", ip="10.0.0.5"),
+        _entry(uri="/assets/app.css", ip="10.0.0.5", ts=NEXT_DAY_NOON),
+        # hashed asset and plain stylesheet both count
+        _entry(uri="/", ip="10.0.0.6"),
+        _entry(uri="/assets/index-abc.js", ip="10.0.0.6"),
+        _entry(uri="/", ip="10.0.0.7"),
+        _entry(uri="/styles.css", ip="10.0.0.7"),
+    ]
+    assert pvc.count_day(entries, DAY) == [
+        ("TOTAL", 8, 7, 4, 3),
+        ("/recipe/1", 5, 5, 1, 1),
+        ("/", 2, 2, 2, 2),
+        ("/recipe/2", 1, 1, 1, 1),
+    ]
 
 
 def test_merge_csv_from_empty(pvc):
     assert (
-        pvc.merge_csv("", DAY, [("TOTAL", 1, 1)])
-        == "date,path,views,visitors\r\n2026-11-13,TOTAL,1,1\r\n"
+        pvc.merge_csv("", DAY, [("TOTAL", 1, 1, 1, 1)])
+        == "date,path,views,visitors,human_views,human_visitors\r\n"
+        "2026-11-13,TOTAL,1,1,1,1\r\n"
     )
 
 
@@ -153,20 +184,23 @@ def test_merge_csv_replaces_day_and_keeps_others(pvc):
         "2026-11-12,TOTAL,5,4\r\n"
         "2026-11-12,/,5,4\r\n"
     )
-    merged = pvc.merge_csv(existing, DAY, [("TOTAL", 2, 1), ("/", 2, 1)])
+    merged = pvc.merge_csv(existing, DAY, [("TOTAL", 2, 1, 1, 1), ("/", 2, 1, 1, 1)])
+    # Rows written before the human columns existed are padded, not dropped.
     assert merged == (
-        "date,path,views,visitors\r\n"
-        "2026-11-12,TOTAL,5,4\r\n"
-        "2026-11-12,/,5,4\r\n"
-        "2026-11-13,TOTAL,2,1\r\n"
-        "2026-11-13,/,2,1\r\n"
+        "date,path,views,visitors,human_views,human_visitors\r\n"
+        "2026-11-12,TOTAL,5,4,,\r\n"
+        "2026-11-12,/,5,4,,\r\n"
+        "2026-11-13,TOTAL,2,1,1,1\r\n"
+        "2026-11-13,/,2,1,1,1\r\n"
     )
 
 
 def test_merge_csv_quotes_paths_with_commas(pvc):
-    merged = pvc.merge_csv("", DAY, [("TOTAL", 1, 1), ("/recipe/a,b", 1, 1)])
+    merged = pvc.merge_csv(
+        "", DAY, [("TOTAL", 1, 1, 0, 0), ("/recipe/a,b", 1, 1, 0, 0)]
+    )
     rows = list(csv.reader(io.StringIO(merged)))
-    assert rows[2] == ["2026-11-13", "/recipe/a,b", "1", "1"]
+    assert rows[2] == ["2026-11-13", "/recipe/a,b", "1", "1", "0", "0"]
 
 
 @pytest.fixture
@@ -218,16 +252,26 @@ def test_main_fails_without_readable_logs(pvc, s3_calls, monkeypatch, tmp_path):
 def test_main_merges_and_uploads(pvc, s3_calls, monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("BACKUP_BUCKET", "bucket")
     s3_calls["existing"] = "date,path,views,visitors\r\n2026-11-12,TOTAL,7,5\r\n"
-    _write_log(tmp_path, [_entry(ip="10.0.0.1"), _entry(ip="10.0.0.2")])
+    _write_log(
+        tmp_path,
+        [
+            _entry(ip="10.0.0.1"),
+            _entry(uri="/js/config.js", ip="10.0.0.1"),
+            _entry(ip="10.0.0.2"),
+        ],
+    )
 
     assert pvc.main(["--log-dir", str(tmp_path), "--date", "2026-11-13"]) == 0
 
     assert s3_calls["download"] == [("bucket", "traffic/page-views.csv")]
     [(bucket, key, text)] = s3_calls["upload"]
     assert (bucket, key) == ("bucket", "traffic/page-views.csv")
-    assert "2026-11-12,TOTAL,7,5" in text
-    assert "2026-11-13,TOTAL,2,2" in text
-    assert "2026-11-13: 2 views, 2 visitors" in capsys.readouterr().out
+    assert "2026-11-12,TOTAL,7,5,," in text
+    assert "2026-11-13,TOTAL,2,2,1,1" in text
+    assert (
+        "2026-11-13: 2 views, 2 visitors (likely human: 1 views, 1 visitors)"
+        in capsys.readouterr().out
+    )
 
 
 def test_main_dry_run_does_not_touch_s3(pvc, s3_calls, monkeypatch, tmp_path, capsys):
