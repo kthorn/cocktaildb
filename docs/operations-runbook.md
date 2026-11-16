@@ -229,6 +229,8 @@ ssh -i ~/.ssh/id_ed25519 ec2-user@dev.mixology.tools "sudo journalctl -u postgre
 
 Caddy access logs are shipped to CloudWatch via the CloudWatch Agent. Log group: `/cocktaildb/prod/caddy-access`. Retention: 30 days.
 
+These are raw requests, including scrapers, assets and API calls. For how much the site is actually used, see [Traffic Counts (Prod)](#traffic-counts-prod).
+
 **Quick check — recent requests:**
 
 ```bash
@@ -290,21 +292,38 @@ sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status
 
 ### Traffic Counts (Prod)
 
-`cocktaildb-page-views.timer` runs at about 00:30 UTC each day. It reads
-yesterday's Caddy access logs and merges page views and distinct-IP visitors
-into `s3://<backup bucket>/traffic/page-views.csv`
-(`date,path,views,visitors,human_views,human_visitors`, with a `TOTAL` row per
-day). It keeps no IPs. Bots, assets and API calls are excluded. Many scrapers
-use browser user agents, so trust `human_*` over the raw counts. Those columns
-count only views from IPs that also loaded JS or CSS that day, which browsers
-do on every page load. Rows from before 2026-11-16 have them empty. On dev `BACKUP_BUCKET` is empty, so the job does nothing.
-Unlike the backups, `traffic/` is not publicly readable and does not expire
-(`BackupBucketPolicy` and `ExpireOldBackups` in `template.yaml`).
+**How much is the site used?** Read the daily `TOTAL` rows, and go by the
+`human_*` columns:
 
 ```bash
-# Read the counts
-aws s3 cp s3://cocktaildbbackups-<account>-prod/traffic/page-views.csv -
+aws s3 cp s3://cocktaildbbackups-<account-id>-prod/traffic/page-views.csv - \
+  | awk -F, 'NR == 1 || $2 == "TOTAL"'
+```
 
+Each night at about 00:30 UTC, `cocktaildb-page-views.timer` reads the
+previous UTC day's Caddy access logs. It writes one `TOTAL` row and one row
+per page path into `traffic/page-views.csv` in the prod backup bucket. Re-running
+a day replaces that day's rows. History starts on 2026-11-15.
+
+| Column | Meaning |
+| --- | --- |
+| `views` | `GET` 200/304 for `/`, `*.html`, `/recipe/*` or `/ingredient/*`, with bot user agents, assets and API calls excluded. Query strings are stripped. |
+| `visitors` | Distinct client IPs behind `views`. |
+| `human_views` | The subset of `views` whose IP also loaded a script or stylesheet that day. Browsers do this on every page load, because `/js/config.js` is revalidated each time. |
+| `human_visitors` | Distinct IPs behind `human_views`. |
+
+**Use the `human_*` columns.** Most raw views are scrapers that send ordinary
+browser user agents but fetch only HTML. On the first day there were 717
+views but 66 human views. Shared and changing IPs make visitor counts
+approximate.
+
+The file holds counts only, never IPs or user agents. Unlike the backups,
+`traffic/` is not publicly readable and does not expire (`BackupBucketPolicy`
+and `ExpireOldBackups` in `template.yaml`). On dev, `BACKUP_BUCKET` is empty,
+so the job does nothing. Design and rationale are in
+`docs/superpowers/specs/2026-11-14-page-view-counts-design.md`.
+
+```bash
 # On EC2: status, last run, and re-running a day (reruns replace that day)
 systemctl list-timers cocktaildb-page-views.timer
 journalctl -u cocktaildb-page-views -n 20
