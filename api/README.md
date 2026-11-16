@@ -51,9 +51,9 @@ A public, read-only [Model Context Protocol](https://modelcontextprotocol.io/) s
 
 Tools:
 
-- `search_recipes` - search recipes by name, ingredients, tags, and ABV range (at most 10 ingredient/tag names of 100 characters each; queries up to 200 characters)
+- `search_recipes` - search recipes by name, ingredients, tags, and ABV range (at most 10 ingredient/tag names of 100 characters each; queries up to 200 characters). Recipes whose whole name equals the query are returned separately in `exact_matches`
 - `get_recipe` - full recipe with ingredients, instructions, and ABV estimate
-- `find_similar_recipes` - recipes similar to a given recipe, with ingredient swaps
+- `find_similar_recipes` - recipes similar to a given recipe, with ingredient swaps that move at least 5% of the drink's volume
 - `find_ingredients` - look up canonical ingredient names and their hierarchy
 
 To use it, add `https://mixology.tools/api/v1/mcp` as a custom connector in an assistant that supports remote MCP servers (for example Claude: Settings, Connectors, Add custom connector).
