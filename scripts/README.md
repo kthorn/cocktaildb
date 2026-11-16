@@ -60,6 +60,10 @@ required. For optional SSR integration, start FastAPI on port 8001 with
 routes to it. Always browse through Vite on port 8000 so root-absolute source
 assets use the correct origin.
 
+The dev instance is often stopped to save costs, and API requests fail
+while it is down. Check it with `./infrastructure/scripts/ec2-status.sh dev`
+and start it with `./infrastructure/scripts/start-ec2.sh dev`.
+
 ## Deployment wrapper
 
 Deployment remains an explicit human action after review and merge:

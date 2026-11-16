@@ -362,6 +362,10 @@ For local frontend-only testing:
 ./scripts/serve.sh                 # http://localhost:8000
 ```
 
+The dev instance is often stopped to save costs, and API requests fail
+while it is down. Check it with `./infrastructure/scripts/ec2-status.sh dev`
+and start it with `./infrastructure/scripts/start-ec2.sh dev`.
+
 Check index, search, and analytics; exercise an API request; open nested recipe
 and ingredient URLs; and walk through login, callback, and logout while watching
 network requests and console errors. For SSR development, run FastAPI on port

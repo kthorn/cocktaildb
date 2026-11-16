@@ -87,6 +87,10 @@ use the coordinated post-write recovery procedure below.
 ./scripts/serve.sh
 ```
 
+The dev instance is often stopped to save costs, and API requests fail
+while it is down. Check it with `./infrastructure/scripts/ec2-status.sh dev`
+and start it with `./infrastructure/scripts/start-ec2.sh dev`.
+
 Vite listens on strict `http://localhost:8000` and proxies `/api/` to the
 development host (the API sends no CORS headers, so it must be same-origin);
 local FastAPI/database are optional. For integrated
