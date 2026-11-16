@@ -22,6 +22,7 @@ import pytest
         "tests/test_search_abv_params.mjs",
         "tests/test_admin_ingredient_value_errors.js",
         "tests/test_bulk_ingredient_value_api.mjs",
+        "tests/test_desktop_nav.mjs",
     ],
 )
 def test_frontend_contract(script):
