@@ -225,6 +225,7 @@
             - backup-postgres.sh
             - deploy-cutover.sh
             - frontend-release.py
+            - page-view-counts.py
             - run-migrations.sh
             - smoke-test.sh
             - trigger-analytics.sh
@@ -388,6 +389,35 @@
             enabled: yes
             state: started
             daemon_reload: yes
+
+      # Caddy now writes access logs 0640 (Caddyfile `mode`), but files created
+      # or rotated before that are 0600 and would make every count run fail.
+      - name: Make existing Caddy access logs group-readable
+        ansible.builtin.command:
+            argv:
+                - find
+                - /var/log/caddy
+                - -name
+                - access*.log*
+                - -perm
+                - -u=r
+                - '!'
+                - -perm
+                - -g=r
+                - -print
+                - -exec
+                - chmod
+                - g+r
+                - '{}'
+                - +
+        register: caddy_log_perms
+        changed_when: caddy_log_perms.stdout != ''
+
+      - name: Enable page view counts timer
+        systemd:
+            name: cocktaildb-page-views.timer
+            enabled: yes
+            state: started
 
       - name: Enable analytics timer
         systemd:

@@ -287,6 +287,35 @@ fields status
 sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status
 ```
 
+### Traffic Counts (Prod)
+
+`cocktaildb-page-views.timer` runs at about 00:30 UTC each day. It reads
+yesterday's Caddy access logs and merges page views and distinct-IP visitors
+into `s3://<backup bucket>/traffic/page-views.csv` (`date,path,views,visitors`,
+with a `TOTAL` row per day). It keeps no IPs. Bots, assets and API calls are
+excluded. On dev `BACKUP_BUCKET` is empty, so the job does nothing.
+Unlike the backups, `traffic/` is not publicly readable and does not expire
+(`BackupBucketPolicy` and `ExpireOldBackups` in `template.yaml`).
+
+```bash
+# Read the counts
+aws s3 cp s3://cocktaildbbackups-<account>-prod/traffic/page-views.csv -
+
+# On EC2: status, last run, and re-running a day (reruns replace that day)
+systemctl list-timers cocktaildb-page-views.timer
+journalctl -u cocktaildb-page-views -n 20
+sudo systemd-run --wait --pipe --collect \
+    -p User=cocktaildb -p Group=cocktaildb -p SupplementaryGroups=caddy \
+    -p EnvironmentFile=/opt/cocktaildb/.env \
+    /usr/bin/python3 /opt/cocktaildb/scripts/page-view-counts.py --date YYYY-MM-DD
+```
+
+The job can only count days that are still in the local logs (5 rotated
+10 MB files). Caddy writes them `0640` with group `caddy`, and deploy fixes up
+older `0600` files. If `journalctl` shows `cannot read access logs`, check
+`ls -l /var/log/caddy` and run
+`sudo find /var/log/caddy -name 'access*.log*' -exec chmod g+r {} +`.
+
 ---
 
 ## 3. Database Operations

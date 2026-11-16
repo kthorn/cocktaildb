@@ -1,0 +1,13 @@
+# infrastructure/systemd/cocktaildb-page-views.timer
+[Unit]
+Description=Count CocktailDB Page Views Daily
+
+[Timer]
+# Shortly after midnight UTC, so the previous UTC day is complete
+OnCalendar=*-*-* 00:30:00
+# Run on boot if last run was missed
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
