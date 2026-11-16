@@ -6,14 +6,14 @@ updates:
       schedule:
           interval: weekly
       cooldown:
-          default-days: 4
+          default-days: 7
 
     - package-ecosystem: pip
       directory: /packages/barcart
       schedule:
           interval: weekly
       cooldown:
-          default-days: 4
+          default-days: 7
       # ruff is pinned once, to required-version in ruff.toml, and the pre-commit
       # hook, requirements-test.txt and barcart's dev extra must all match it.
       # Bumping barcart's copy alone only makes it disagree, so ruff upgrades
@@ -26,4 +26,30 @@ updates:
       schedule:
           interval: weekly
       cooldown:
-          default-days: 4
+          default-days: 7
+
+    # requirements-test.txt pulls in api/requirements.txt with -r, so without an
+    # allow list this entry would duplicate the /api entry's PRs. Only the
+    # test-only tools are listed; ruff is left out for the reason given above.
+    - package-ecosystem: pip
+      directory: /
+      schedule:
+          interval: weekly
+      cooldown:
+          default-days: 7
+      allow:
+          - dependency-name: pytest
+          - dependency-name: pytest-asyncio
+          - dependency-name: pytest-mock
+          - dependency-name: pytest-cov
+          - dependency-name: pyright
+          - dependency-name: testcontainers
+          - dependency-name: ansible
+          - dependency-name: pyyaml
+
+    - package-ecosystem: npm
+      directory: /
+      schedule:
+          interval: weekly
+      cooldown:
+          default-days: 7
