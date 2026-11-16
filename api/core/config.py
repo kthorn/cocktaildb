@@ -37,13 +37,30 @@ class Settings(BaseSettings):
             "## Rate Limits\n\n"
             "**60 requests per minute** per IP address (sliding window). "
             "Every response includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers. "
-            "A `429` response includes a `Retry-After` header with the number of seconds to wait."
+            "A `429` response includes a `Retry-After` header with the number of seconds to wait. "
+            "The MCP endpoint (`/api/v1/mcp`) has its own separate limit of "
+            "**300 requests per minute** per IP address; its `429` response body is a "
+            "JSON-RPC error."
         )
     )
 
     # Site URL (for canonical links, sitemaps, JSON-LD)
     base_url: str = Field(
         default="https://mixology.tools", description="Public base URL for the site"
+    )
+
+    # MCP server
+    mcp_rate_limit_per_minute: int = Field(
+        default=300, description="Per-client MCP requests allowed per minute"
+    )
+    # MCP DB work shares the threadpool bounded by configure_threadpool();
+    # keep it to at most half so website routes keep most of the threads.
+    mcp_max_concurrent_db_calls: int = Field(
+        default=2, description="Maximum concurrent database calls from MCP tools"
+    )
+    mcp_db_slot_timeout_seconds: float = Field(
+        default=5.0,
+        description="Seconds an MCP tool waits for a database slot before failing",
     )
 
     # Environment

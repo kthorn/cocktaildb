@@ -45,6 +45,21 @@ When running locally, you can access:
 - `GET /units` - Get all units
 - `GET /units?type={type}` - Get units filtered by type
 
+## MCP server
+
+A public, read-only [Model Context Protocol](https://modelcontextprotocol.io/) server is served at `https://mixology.tools/api/v1/mcp` (streamable HTTP, stateless, JSON responses). No authentication is required and no user data is exposed. Design: `docs/superpowers/specs/2026-11-14-public-mcp-server-design.md`.
+
+Tools:
+
+- `search_recipes` - search recipes by name, ingredients, tags, and ABV range (at most 10 ingredient/tag names of 100 characters each; queries up to 200 characters)
+- `get_recipe` - full recipe with ingredients, instructions, and ABV estimate
+- `find_similar_recipes` - recipes similar to a given recipe, with ingredient swaps
+- `find_ingredients` - look up canonical ingredient names and their hierarchy
+
+To use it, add `https://mixology.tools/api/v1/mcp` as a custom connector in an assistant that supports remote MCP servers (for example Claude: Settings, Connectors, Add custom connector).
+
+The endpoint has a separate per-IP limit of 300 requests/minute. Browser-based MCP clients are not supported (CORS is not configured for it).
+
 ## Deployment
 
 The API runs on EC2 with `uvicorn` and is typically reverse-proxied by Caddy. See `scripts/deploy-ec2.sh` and `infrastructure/ansible/` for deployment workflows.

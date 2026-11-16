@@ -381,6 +381,19 @@ curl --fail --silent --show-error https://dev.mixology.tools/health
 curl --fail --silent --show-error https://mixology.tools/health
 ```
 
+### MCP Endpoint Smoke Test
+
+After a deploy, confirm the MCP endpoint lists its four tools (`find_ingredients`, `find_similar_recipes`, `get_recipe`, `search_recipes`):
+
+```bash
+curl --fail --silent --show-error -X POST https://mixology.tools/api/v1/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+The endpoint is stateless, so no `initialize` call is needed first. A `503` with a JSON-RPC error means the endpoint is not ready yet; retry shortly.
+
 ---
 
 ## 6. Troubleshooting

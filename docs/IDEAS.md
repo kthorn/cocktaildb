@@ -128,9 +128,7 @@ The API is free, open, and has a full OpenAPI spec + Swagger UI — stronger tha
 
 ## MCP Server
 
-Wrap the cocktail API in the [Model Context Protocol](https://modelcontextprotocol.io/) so agents like Claude, Cursor, and Windsurf can call it directly as tools rather than discovering and constructing HTTP requests manually.
-
-FastAPI already generates an OpenAPI spec at `/api/v1/openapi.json`, which could drive generation of the MCP tool definitions. The read-only public endpoints (search recipes, get ingredients, analytics) are natural fits for MCP tools.
+**Implemented.** A public, read-only [Model Context Protocol](https://modelcontextprotocol.io/) server is served at `/api/v1/mcp` with four tools (search recipes, get recipe, find similar recipes, find ingredients). See `docs/superpowers/specs/2026-11-14-public-mcp-server-design.md` and the "MCP server" section of `api/README.md`.
 
 ---
 
