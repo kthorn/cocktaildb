@@ -18,7 +18,7 @@ pytest-cov==7.1.0
 ruff==0.16.5
 
 # Focused database typing regression check
-pyright==1.1.408
+pyright==1.1.414
 
 # PostgreSQL testing with Docker containers. The psycopg2-binary driver comes
 # from api/requirements.txt.
