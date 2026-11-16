@@ -358,6 +358,28 @@ class TestRecipeUpdate:
         ]
         assert len(vermouth_ingredients) == 0
 
+    def test_update_recipe_null_ingredients_keeps_existing(self, db_instance):
+        """ingredients=None means "not provided", matching the other fields"""
+        db = db_instance
+
+        gin = db.create_ingredient(
+            {"name": "Gin2", "description": "Gin2", "parent_id": None}
+        )
+        original = db.create_recipe(
+            {
+                "name": "Gin Neat",
+                "instructions": "Pour",
+                "ingredients": [{"ingredient_id": gin["id"], "amount": 2.0}],
+            }
+        )
+
+        updated = db.update_recipe(
+            original["id"], {"instructions": "Pour gently", "ingredients": None}
+        )
+
+        assert updated["instructions"] == "Pour gently"
+        assert [ing["ingredient_id"] for ing in updated["ingredients"]] == [gin["id"]]
+
     def test_update_recipe_partial_fields(self, db_instance):
         """Test updating only some recipe fields"""
         db = db_instance

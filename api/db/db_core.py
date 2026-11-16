@@ -1381,7 +1381,7 @@ class Database(GroupInventoryMixin):
             )
             if not existing:
                 return None
-            if "ingredients" in data and data["ingredients"] is not None:
+            if data.get("ingredients") is not None:
                 self._validate_convertible_recipe_ingredient_amounts(
                     data["ingredients"]
                 )
@@ -1411,7 +1411,7 @@ class Database(GroupInventoryMixin):
             )
 
             # Update ingredients if provided
-            if "ingredients" in data:
+            if data.get("ingredients") is not None:
                 # Delete existing ingredients for this recipe
                 cursor.execute(
                     "DELETE FROM recipe_ingredients WHERE recipe_id = %s",
