@@ -50,4 +50,3 @@ def test_openapi_description_mentions_mcp():
     description = Settings().api_description
     assert "/api/v1/mcp" in description
     assert ABOUT_ANCHOR in description
-
