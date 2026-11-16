@@ -135,6 +135,10 @@ export function updateNavigationAuth() {
 export function loadFooter() {
     const footer = document.createElement('footer');
     footer.innerHTML = `
+    <p>
+      <a href="/api/v1/docs">API</a> &middot;
+      <a href="/about.html#ai-assistants">Use with AI assistants (MCP)</a>
+    </p>
     <p>&copy; ${new Date().getFullYear()} Kurt Thorn</p>
   `;
 

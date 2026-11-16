@@ -1,6 +1,20 @@
 # Mixology Tools
 
-> Cocktail recipe database with a public API. Search cocktails by name, ingredient, or category. Hierarchical ingredient taxonomy with analytics.
+> Cocktail recipe database with a public API and an MCP server for AI assistants. Search cocktails by name, ingredient, or category. Hierarchical ingredient taxonomy with analytics.
+
+## MCP server
+
+AI assistants can query this database directly over the Model Context Protocol. The server is read-only and needs no account or API key.
+
+- Endpoint (streamable HTTP, POST): https://mixology.tools/api/v1/mcp
+- Setup instructions: https://mixology.tools/about.html#ai-assistants
+- Tools:
+  - search_recipes: find recipes by name, ingredients, tags and ABV
+  - get_recipe: full recipe with amounts, units, instructions and ABV estimate
+  - find_similar_recipes: similar recipes with their main ingredient swaps
+  - find_ingredients: resolve ingredient names and their place in the hierarchy
+- Every result includes the canonical recipe or ingredient page URL; please link to it.
+- Rate limit: 300 requests per minute per IP, separate from the REST API limit.
 
 ## Site
 

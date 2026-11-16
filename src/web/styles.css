@@ -563,6 +563,10 @@ footer {
     margin-top: var(--space-xl);
 }
 
+footer a {
+    color: inherit;
+}
+
 .stats-footer {
     margin: var(--space-xl) 0;
     padding: var(--space-md);
@@ -2522,6 +2526,11 @@ input[type="radio"]:focus {
 .about-content li {
     margin-bottom: var(--space-xs);
     line-height: var(--line-height-normal);
+}
+
+/* Long URLs and config snippets must wrap on narrow screens */
+.about-content code {
+    overflow-wrap: anywhere;
 }
 
 /* User ingredients page */

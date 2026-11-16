@@ -7,3 +7,4 @@ Sitemap: https://mixology.tools/sitemap.xml
 # llms.txt: https://mixology.tools/llms.txt
 # OpenAPI spec: https://mixology.tools/api/v1/openapi.json
 # Interactive docs: https://mixology.tools/api/v1/docs
+# MCP server (for AI assistants): https://mixology.tools/api/v1/mcp

@@ -122,6 +122,57 @@
                         your feedback.
                     </p>
 
+                    <h3 id="ai-assistants">Use It From Your AI Assistant</h3>
+                    <p>
+                        Mixology Tools runs a public
+                        <a href="https://modelcontextprotocol.io/">Model Context Protocol</a> (MCP)
+                        server, so AI assistants can look up real recipes from this database instead
+                        of answering from memory. It is read-only and free, and it needs no account
+                        or API key. Add this URL to any assistant that supports remote MCP servers:
+                    </p>
+                    <p><code>https://mixology.tools/api/v1/mcp</code></p>
+                    <ul>
+                        <li>
+                            <strong>Claude</strong>: add it as a custom connector. In Claude Code:
+                            <code
+                                >claude mcp add --transport http mixology-tools
+                                https://mixology.tools/api/v1/mcp</code
+                            >
+                        </li>
+                        <li>
+                            <strong>Editors such as Cursor</strong>: add it to your MCP
+                            configuration, for example
+                            <code
+                                >{"mcpServers": {"mixology-tools": {"url":
+                                "https://mixology.tools/api/v1/mcp"}}}</code
+                            >
+                        </li>
+                    </ul>
+                    <p>The server offers four tools:</p>
+                    <ul>
+                        <li>
+                            <code>search_recipes</code>: find cocktails by name, ingredients, tags
+                            and ABV
+                        </li>
+                        <li>
+                            <code>get_recipe</code>: the full recipe, with amounts, instructions and
+                            an ABV estimate
+                        </li>
+                        <li>
+                            <code>find_similar_recipes</code>: similar cocktails and the main
+                            ingredient swaps between them
+                        </li>
+                        <li>
+                            <code>find_ingredients</code>: look up ingredients and where they sit in
+                            the hierarchy
+                        </li>
+                    </ul>
+                    <p>
+                        Every result links back to its recipe or ingredient page here. Requests are
+                        limited to 300 per minute per IP address. Browser-based MCP clients are not
+                        supported. The regular <a href="/api/v1/docs">REST API</a> is also public.
+                    </p>
+
                     <h3>Open Source & Open Data</h3>
                     <p>
                         This is both an open source and open data project. The code is available on
