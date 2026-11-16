@@ -125,8 +125,11 @@ Resources:
                 - !Ref 'AWS::NoValue'
             LifecycleConfiguration:
                 Rules:
+                    # Only database dumps expire; traffic/page-views.csv keeps
+                    # its full history.
                     - Id: ExpireOldBackups
                       Status: Enabled
+                      Prefix: backup-
                       ExpirationInDays: 30
             Tags:
                 - Key: Environment
@@ -144,12 +147,16 @@ Resources:
             PolicyDocument:
                 Version: '2012-10-17'
                 Statement:
+                    # Public DB downloads (About page) only; traffic/ stays private.
                     - Sid: PublicReadBackups
                       Effect: Allow
                       Principal: '*'
                       Action:
                           - s3:GetObject
-                      Resource: !Sub '${BackupBucket.Arn}/*'
+                      Resource:
+                          - !Sub '${BackupBucket.Arn}/backup-*'
+                          - !Sub '${BackupBucket.Arn}/latest.txt'
+                          - !Sub '${BackupBucket.Arn}/latest.json'
 
     # =============================================================================
     # IAM - EC2 Role and Instance Profile

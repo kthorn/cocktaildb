@@ -2,6 +2,7 @@ import base64
 import json
 import logging
 import os
+from collections.abc import Iterable
 from datetime import datetime
 from typing import Any, cast
 
@@ -666,6 +667,24 @@ class Database(GroupInventoryMixin):
             return final_results
         except Exception as e:
             logger.error(f"Error in batch ingredient name check: {str(e)}")
+            raise
+
+    def get_ingredient_names(self, ids: Iterable[int]) -> dict[int, str]:
+        """Map ingredient ids to names with a single query"""
+        id_list = sorted(set(ids))
+        if not id_list:
+            return {}
+        try:
+            rows = cast(
+                list[dict[str, Any]],
+                self.execute_query(
+                    "SELECT id, name FROM ingredients WHERE id = ANY(%s)",
+                    (id_list,),
+                ),
+            )
+            return {row["id"]: row["name"] for row in rows}
+        except Exception as e:
+            logger.error(f"Error getting ingredient names: {str(e)}")
             raise
 
     def get_ingredient(self, ingredient_id: int) -> dict[str, Any] | None:
@@ -2078,10 +2097,12 @@ class Database(GroupInventoryMixin):
                     # Parse ingredient specification: "name" or "name:MUST" or "name:MUST_NOT"
                     ingredient_spec = ingredient_spec.strip()
 
-                    if ":" in ingredient_spec:
-                        ingredient_name, operator = ingredient_spec.split(":", 1)
-                        ingredient_name = ingredient_name.strip()
-                        operator = operator.strip().upper()
+                    # Only a trailing MUST/MUST_NOT is an operator, so names that
+                    # contain colons (e.g. "Amaro: Nonino") stay intact.
+                    head, sep, tail = ingredient_spec.rpartition(":")
+                    if sep and tail.strip().upper() in ("MUST", "MUST_NOT"):
+                        ingredient_name = head.strip()
+                        operator = tail.strip().upper()
                     else:
                         ingredient_name = ingredient_spec
                         operator = "MUST"  # Default to MUST if no operator specified

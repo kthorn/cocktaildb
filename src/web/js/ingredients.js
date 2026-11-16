@@ -1,5 +1,6 @@
 import { api } from './api.js';
 import { buildHierarchy, renderHierarchyHTML } from './components/ingredientTree.js';
+import { dismissNotification, showNotification } from './notifications.js';
 
 // Update page elements based on authentication and editor status
 function updatePageBasedOnAuth() {
@@ -13,23 +14,6 @@ function updatePageBasedOnAuth() {
         if (titleElement) titleElement.textContent = 'Ingredients';
         if (formSection) formSection.style.display = 'none';
     }
-}
-
-// Display notification to the user
-function showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
-
-    // Add to the DOM
-    const container = document.querySelector('.container') || document.body;
-    container.insertBefore(notification, container.firstChild);
-
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-        notification.classList.add('fade-out');
-        setTimeout(() => notification.remove(), 500);
-    }, 5000);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -57,10 +41,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     let availableIngredients = [];
+    // The last save error, cleared when the form is submitted again.
+    let saveError = null;
+    const PARENT_ERROR_ID = 'ingredient-parent-error';
+
+    // An unknown parent name is reported next to the field rather than as a
+    // page notification: the field is marked invalid and focused, so the
+    // message is read with it.
+    function showParentError(message) {
+        clearParentError();
+        const error = document.createElement('div');
+        error.id = PARENT_ERROR_ID;
+        error.className = 'field-error';
+        error.textContent = message;
+        const group = parentSearchInput.closest('.form-group');
+        (group || parentSearchInput.parentElement).appendChild(error);
+        group?.classList.add('has-error');
+        parentSearchInput.setAttribute('aria-invalid', 'true');
+        parentSearchInput.setAttribute('aria-describedby', PARENT_ERROR_ID);
+        parentSearchInput.focus({ preventScroll: true });
+        parentSearchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function clearParentError() {
+        parentSearchInput.removeAttribute('aria-invalid');
+        parentSearchInput.removeAttribute('aria-describedby');
+        parentSearchInput.closest('.form-group')?.classList.remove('has-error');
+        document.getElementById(PARENT_ERROR_ID)?.remove();
+    }
 
     async function editIngredient(id) {
         if (!api.isEditor()) {
-            alert('Editor access required. Only editors and admins can edit ingredients.');
+            showNotification(
+                'Editor access required. Only editors and admins can edit ingredients.',
+                'error',
+            );
             return;
         }
 
@@ -103,19 +118,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 parentSearchInput.value = '';
             }
 
+            clearParentError();
             form.dataset.mode = 'edit';
             form.dataset.id = id;
             if (submitButton) submitButton.textContent = 'Update Ingredient';
             form.scrollIntoView({ behavior: 'smooth' });
         } catch (error) {
             console.error('Error loading ingredient:', error);
-            alert('Failed to load ingredient. Please try again.');
+            showNotification('Failed to load ingredient. Please try again.', 'error');
         }
     }
 
     async function deleteIngredient(id) {
         if (!api.isEditor()) {
-            alert('Editor access required. Only editors and admins can delete ingredients.');
+            showNotification(
+                'Editor access required. Only editors and admins can delete ingredients.',
+                'error',
+            );
             return;
         }
 
@@ -123,10 +142,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             await api.deleteIngredient(id);
+            showNotification('Ingredient deleted.', 'success');
             await loadIngredients();
         } catch (error) {
             console.error('Error deleting ingredient:', error);
-            alert('Failed to delete ingredient. Please try again.');
+            showNotification(
+                error.message || 'Failed to delete ingredient. Please try again.',
+                'error',
+            );
         }
     }
 
@@ -226,11 +249,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Handle form submission
     ingredientForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        dismissNotification(saveError);
+        saveError = null;
+        clearParentError();
 
         // Check editor permissions first
         if (!api.isEditor()) {
-            alert(
+            saveError = showNotification(
                 'Editor access required. Only editors and admins can create or edit ingredients.',
+                'error',
             );
             return;
         }
@@ -266,9 +293,8 @@ document.addEventListener('DOMContentLoaded', () => {
             );
 
             if (!parentIngredient) {
-                showNotification(
+                showParentError(
                     `No ingredient named "${parentName}". Pick a parent from the list, or clear the field to make this a top-level ingredient.`,
-                    'error',
                 );
                 return;
             }
@@ -287,14 +313,12 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         try {
-            let response;
             if (ingredientForm.dataset.mode === 'edit') {
-                response = await api.updateIngredient(ingredientForm.dataset.id, ingredientData);
+                await api.updateIngredient(ingredientForm.dataset.id, ingredientData);
+                showNotification(`Updated "${name}".`, 'success');
             } else {
-                response = await api.createIngredient(ingredientData);
-                if (response.message) {
-                    showNotification(response.message, 'success');
-                }
+                await api.createIngredient(ingredientData);
+                showNotification(`Added "${name}".`, 'success');
             }
             ingredientForm.reset();
             parentSearchInput.value = '';
@@ -318,7 +342,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error saving ingredient:', error);
             // Display the error message from the backend (now reliably user-friendly)
             const errorMsg = error.message || 'Failed to save ingredient. Please try again.';
-            showNotification(errorMsg, 'error');
+            saveError = showNotification(errorMsg, 'error');
         }
     });
 
@@ -424,6 +448,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.addEventListener('click', () => {
                     parentSearchInput.value = ingredient.name;
                     parentSelect.value = ingredient.id;
+                    clearParentError();
                     parentAutocompleteDropdown.style.display = 'none';
                 });
 
@@ -461,6 +486,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (activeParentIndex >= 0 && activeParentIndex < items.length) {
                 const selectedValue = items[activeParentIndex].textContent;
                 parentSearchInput.value = selectedValue;
+                clearParentError();
 
                 // Find and set the corresponding parent ID
                 const parent = availableIngredients.find((ing) => ing.name === selectedValue);
@@ -474,6 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Input event listener for parent search
         parentSearchInput.addEventListener('input', function () {
+            clearParentError();
             updateParentAutocomplete();
         });
 
@@ -528,6 +555,7 @@ document.addEventListener('DOMContentLoaded', () => {
         parentSearchInput.addEventListener('dblclick', () => {
             parentSearchInput.value = '';
             parentSelect.value = '';
+            clearParentError();
         });
     }
 

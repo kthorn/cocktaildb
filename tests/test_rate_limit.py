@@ -78,3 +78,97 @@ class TestRateLimitHeaders:
         assert response.status_code == 429
         assert int(response.headers["Retry-After"]) > 0
         assert response.json()["detail"] == "Rate limit exceeded. Please slow down."
+
+
+def _small_app():
+    from middleware.rate_limit import RateLimitMiddleware
+    from starlette.applications import Starlette
+    from starlette.responses import PlainTextResponse
+    from starlette.routing import Route
+
+    async def ok(request):
+        return PlainTextResponse("ok")
+
+    app = Starlette(
+        routes=[
+            Route("/stats", ok),
+            Route("/mcp", ok, methods=["GET", "POST"]),
+            Route("/mcp/", ok, methods=["GET", "POST"]),
+        ]
+    )
+    app.add_middleware(RateLimitMiddleware, max_requests=2, mcp_max_requests=3)
+    return app
+
+
+def _client(app):
+    import httpx
+
+    return httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://t"
+    )
+
+
+class TestMcpBucket:
+    async def test_mcp_and_api_buckets_are_independent(self):
+        async with _client(_small_app()) as c:
+            ip = {"X-Real-IP": "1.1.1.1"}
+            api = [(await c.get("/stats", headers=ip)).status_code for _ in range(3)]
+            assert api == [200, 200, 429]
+            mcp = [(await c.get("/mcp", headers=ip)).status_code for _ in range(4)]
+            assert mcp == [200, 200, 200, 429]
+            # /mcp exhaustion does not affect a fresh IP's /stats
+            fresh = await c.get("/stats", headers={"X-Real-IP": "2.2.2.2"})
+            assert fresh.status_code == 200
+
+    async def test_trailing_slash_counts_against_mcp_bucket(self):
+        async with _client(_small_app()) as c:
+            ip = {"X-Real-IP": "3.3.3.3"}
+            codes = []
+            for path in ("/mcp", "/mcp/", "/mcp", "/mcp/"):
+                codes.append((await c.get(path, headers=ip)).status_code)
+            assert codes == [200, 200, 200, 429]
+
+    async def test_mcp_exhaustion_leaves_api_remaining(self):
+        async with _client(_small_app()) as c:
+            ip = {"X-Real-IP": "3.3.3.3"}
+            for _ in range(4):
+                await c.get("/mcp", headers=ip)
+            r = await c.get("/stats", headers=ip)
+            assert r.status_code == 200
+            assert r.headers["X-RateLimit-Limit"] == "2"
+            assert r.headers["X-RateLimit-Remaining"] == "1"
+
+    async def test_mcp_headers_reflect_mcp_bucket(self):
+        async with _client(_small_app()) as c:
+            r = await c.get("/mcp")
+            assert r.headers["X-RateLimit-Limit"] == "3"
+            assert r.headers["X-RateLimit-Remaining"] == "2"
+
+    async def test_mcp_429_is_jsonrpc_shaped(self):
+        async with _client(_small_app()) as c:
+            for _ in range(3):
+                await c.get("/mcp")
+            r = await c.get("/mcp")
+            assert r.status_code == 429
+            assert "Retry-After" in r.headers
+            body = r.json()
+            assert body["jsonrpc"] == "2.0"
+            assert body["id"] is None
+            assert body["error"]["code"] == -32000
+            assert "Rate limit exceeded" in body["error"]["message"]
+
+    async def test_app_uses_configured_mcp_limit(self, test_client_memory):
+        from middleware.rate_limit import RateLimitMiddleware
+
+        from api.main import app
+
+        await test_client_memory.get("/health")  # builds the middleware stack
+        layer = app.middleware_stack
+        found = None
+        while layer is not None:
+            if isinstance(layer, RateLimitMiddleware):
+                found = layer
+                break
+            layer = getattr(layer, "app", None)
+        assert found is not None
+        assert found.mcp_max_requests == 300

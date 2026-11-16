@@ -1,5 +1,6 @@
 import { api } from './api.js';
 import { isAuthenticated } from './auth.js';
+import { showNotification } from './notifications.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     setupAdminPage();
@@ -105,28 +106,6 @@ function updateUIBasedOnAuth() {
     }
 }
 
-function showMessage(message, type = 'info') {
-    // Create message element using existing notification styles
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `notification ${type}`;
-    messageDiv.textContent = message;
-
-    // Insert at top of main section
-    const mainSection = document.querySelector('main section') || document.body;
-    if (mainSection.firstChild) {
-        mainSection.insertBefore(messageDiv, mainSection.firstChild);
-    } else {
-        mainSection.appendChild(messageDiv);
-    }
-
-    // Remove message after 5 seconds
-    setTimeout(() => {
-        if (messageDiv.parentNode) {
-            messageDiv.parentNode.removeChild(messageDiv);
-        }
-    }, 5000);
-}
-
 // Bulk upload functionality
 function downloadTemplate() {
     const template = {
@@ -190,7 +169,7 @@ function downloadTemplate() {
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
 
-    showMessage('Template downloaded successfully!', 'success');
+    showNotification('Template downloaded successfully!', 'success');
 }
 
 function getRecipeUploadConfig() {
@@ -239,7 +218,7 @@ function handleFileSelection(event, config) {
     if (file) {
         // Validate file type
         if (!file.name.toLowerCase().endsWith(fileExtension)) {
-            showMessage(`Please select a ${fileLabel} file`, 'error');
+            showNotification(`Please select a ${fileLabel} file`, 'error');
             event.target.value = '';
             uploadBtn.disabled = true;
             return;
@@ -247,7 +226,7 @@ function handleFileSelection(event, config) {
 
         // Validate file size (limit to 5MB)
         if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
-            showMessage(
+            showNotification(
                 `File too large. Please select a file smaller than ${MAX_UPLOAD_MB}MB`,
                 'error',
             );
@@ -265,13 +244,13 @@ function handleFileSelection(event, config) {
 async function handleBulkUpload(config) {
     const fileInput = document.getElementById(config.fileInputId);
     if (!fileInput) {
-        showMessage('Upload input not found.', 'error');
+        showNotification('Upload input not found.', 'error');
         return;
     }
     const file = fileInput.files[0];
 
     if (!file) {
-        showMessage('Please select a file first', 'error');
+        showNotification('Please select a file first', 'error');
         return;
     }
 
@@ -283,7 +262,7 @@ async function handleBulkUpload(config) {
         try {
             uploadData = JSON.parse(fileText);
         } catch (error) {
-            showMessage('Invalid JSON file. Please check the file format.', 'error');
+            showNotification('Invalid JSON file. Please check the file format.', 'error');
             return;
         }
 
@@ -294,7 +273,7 @@ async function handleBulkUpload(config) {
 
         const items = uploadData[config.itemsKey];
         if (items.length > config.maxItems) {
-            showMessage(
+            showNotification(
                 `Upload limit is ${config.maxItems} ${pluralize(config.maxItems, config.itemLabel)} per file.`,
                 'error',
             );
@@ -325,7 +304,7 @@ async function handleBulkUpload(config) {
     } catch (error) {
         showUploadProgress(false, '', config);
         console.error(`Error uploading ${config.itemLabel}s:`, error);
-        showMessage(`Error uploading ${config.itemLabel}s: ${error.message}`, 'error');
+        showNotification(`Error uploading ${config.itemLabel}s: ${error.message}`, 'error');
     }
 }
 
@@ -356,7 +335,7 @@ async function handleBulkValueUpload(config) {
     const fileInput = document.getElementById(config.fileInputId);
     const file = fileInput?.files[0];
     if (!file) {
-        showMessage('Please select a file first', 'error');
+        showNotification('Please select a file first', 'error');
         return;
     }
 
@@ -384,7 +363,7 @@ async function handleBulkValueUpload(config) {
                 config,
             );
         } else {
-            showMessage(`Error uploading ingredient values: ${error.message}`, 'error');
+            showNotification(`Error uploading ingredient values: ${error.message}`, 'error');
         }
     } finally {
         showUploadProgress(false, '', config);
@@ -396,12 +375,12 @@ async function handleBulkValueUpload(config) {
 function validateJsonStructure(data) {
     // Check if it has the recipes array
     if (!data || !Array.isArray(data.recipes)) {
-        showMessage('JSON file must contain a "recipes" array', 'error');
+        showNotification('JSON file must contain a "recipes" array', 'error');
         return false;
     }
 
     if (data.recipes.length === 0) {
-        showMessage('Recipes array cannot be empty', 'error');
+        showNotification('Recipes array cannot be empty', 'error');
         return false;
     }
 
@@ -410,17 +389,17 @@ function validateJsonStructure(data) {
         const recipe = data.recipes[i];
 
         if (!recipe.name || typeof recipe.name !== 'string') {
-            showMessage(`Recipe ${i + 1} must have a "name" field`, 'error');
+            showNotification(`Recipe ${i + 1} must have a "name" field`, 'error');
             return false;
         }
 
         if (!Array.isArray(recipe.ingredients)) {
-            showMessage(`Recipe "${recipe.name}" must have an "ingredients" array`, 'error');
+            showNotification(`Recipe "${recipe.name}" must have an "ingredients" array`, 'error');
             return false;
         }
 
         if (recipe.ingredients.length === 0) {
-            showMessage(`Recipe "${recipe.name}" must have at least one ingredient`, 'error');
+            showNotification(`Recipe "${recipe.name}" must have at least one ingredient`, 'error');
             return false;
         }
 
@@ -429,7 +408,7 @@ function validateJsonStructure(data) {
             const ingredient = recipe.ingredients[j];
 
             if (!ingredient.ingredient_name || typeof ingredient.ingredient_name !== 'string') {
-                showMessage(
+                showNotification(
                     `Recipe "${recipe.name}" ingredient ${j + 1} must have an "ingredient_name" field`,
                     'error',
                 );
@@ -441,7 +420,7 @@ function validateJsonStructure(data) {
                 ingredient.amount === null ||
                 ingredient.amount === ''
             ) {
-                showMessage(
+                showNotification(
                     `Recipe "${recipe.name}" ingredient "${ingredient.ingredient_name}" is missing an "amount" field`,
                     'error',
                 );
@@ -449,7 +428,7 @@ function validateJsonStructure(data) {
             }
 
             if (typeof ingredient.amount !== 'number' || isNaN(ingredient.amount)) {
-                showMessage(
+                showNotification(
                     `Recipe "${recipe.name}" ingredient "${ingredient.ingredient_name}" must have a numeric "amount" value`,
                     'error',
                 );
@@ -457,7 +436,7 @@ function validateJsonStructure(data) {
             }
 
             if (!ingredient.unit_name || typeof ingredient.unit_name !== 'string') {
-                showMessage(
+                showNotification(
                     `Recipe "${recipe.name}" ingredient "${ingredient.ingredient_name}" is missing a "unit_name" field`,
                     'error',
                 );
@@ -477,7 +456,7 @@ function validateJsonStructure(data) {
             }
         });
         if (duplicates.size > 0) {
-            showMessage(
+            showNotification(
                 `Recipe "${recipe.name}" has duplicate ingredients: ${Array.from(duplicates).join(', ')}`,
                 'error',
             );
@@ -594,14 +573,14 @@ function displayUploadResults(result, config) {
 
     // Show appropriate message
     if (uploadedCount > 0) {
-        showMessage(
+        showNotification(
             `Successfully uploaded ${uploadedCount} ${pluralize(uploadedCount, config.itemLabel)}!`,
             'success',
         );
     }
 
     if (failedCount > 0) {
-        showMessage(
+        showNotification(
             `${failedCount} ${pluralize(failedCount, config.itemLabel)} failed validation. See details below.`,
             'error',
         );
@@ -643,18 +622,18 @@ function downloadIngredientTemplate() {
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
 
-    showMessage('Ingredient template downloaded successfully!', 'success');
+    showNotification('Ingredient template downloaded successfully!', 'success');
 }
 
 function validateIngredientJsonStructure(data) {
     // Check if it has the ingredients array
     if (!data || !Array.isArray(data.ingredients)) {
-        showMessage('JSON file must contain an "ingredients" array', 'error');
+        showNotification('JSON file must contain an "ingredients" array', 'error');
         return false;
     }
 
     if (data.ingredients.length === 0) {
-        showMessage('Ingredients array cannot be empty', 'error');
+        showNotification('Ingredients array cannot be empty', 'error');
         return false;
     }
 
@@ -663,24 +642,30 @@ function validateIngredientJsonStructure(data) {
         const ingredient = data.ingredients[i];
 
         if (!ingredient.name || typeof ingredient.name !== 'string') {
-            showMessage(`Ingredient ${i + 1} must have a "name" field`, 'error');
+            showNotification(`Ingredient ${i + 1} must have a "name" field`, 'error');
             return false;
         }
 
         // Optional fields validation
         if (ingredient.description && typeof ingredient.description !== 'string') {
-            showMessage(`Ingredient "${ingredient.name}" description must be a string`, 'error');
+            showNotification(
+                `Ingredient "${ingredient.name}" description must be a string`,
+                'error',
+            );
             return false;
         }
 
         if (ingredient.parent_name && typeof ingredient.parent_name !== 'string') {
-            showMessage(`Ingredient "${ingredient.name}" parent_name must be a string`, 'error');
+            showNotification(
+                `Ingredient "${ingredient.name}" parent_name must be a string`,
+                'error',
+            );
             return false;
         }
 
         if (ingredient.allow_substitution !== undefined && ingredient.allow_substitution !== null) {
             if (typeof ingredient.allow_substitution !== 'boolean') {
-                showMessage(
+                showNotification(
                     `Ingredient "${ingredient.name}" allow_substitution must be a boolean (true or false)`,
                     'error',
                 );
@@ -766,7 +751,7 @@ async function loadPublicTags() {
     } catch (error) {
         console.error('Error loading public tags:', error);
         renderPublicTagStatus(tagsList, 'error-message', 'Error loading tags. Please try again.');
-        showMessage('Error loading public tags', 'error');
+        showNotification('Error loading public tags', 'error');
     } finally {
         if (refreshBtn) {
             refreshBtn.disabled = false;
@@ -801,7 +786,7 @@ async function handleDeletePublicTag(event) {
             tagItem.remove();
         }
 
-        showMessage(`Public tag "${tagName}" deleted successfully`, 'success');
+        showNotification(`Public tag "${tagName}" deleted successfully`, 'success');
 
         // Check if list is now empty
         const tagsList = document.getElementById('public-tags-list');
@@ -810,7 +795,7 @@ async function handleDeletePublicTag(event) {
         }
     } catch (error) {
         console.error('Error deleting public tag:', error);
-        showMessage(
+        showNotification(
             `Error deleting tag "${tagName}": ${error.message || 'Please try again'}`,
             'error',
         );
