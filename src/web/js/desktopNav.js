@@ -44,10 +44,8 @@ export class DesktopNav {
      * Render the desktop navigation
      */
     render() {
-        // Remove existing navigation if present
-        if (this.container) {
-            this.container.remove();
-        }
+        // Re-renders replace the mounted nav in place; the first render is inserted by common.js.
+        const previous = this.container;
 
         // Create navigation container
         this.container = document.createElement('nav');
@@ -83,6 +81,10 @@ export class DesktopNav {
         }
 
         this.container.appendChild(primaryList);
+
+        if (previous) {
+            previous.replaceWith(this.container);
+        }
     }
 
     /**
